@@ -18,8 +18,7 @@ jobs:
         echo `pwd`/mdbook >> $GITHUB_PATH
     - name: Deploy GitHub Pages
       run: |
-        # This assumes your book is in the root of your repository.
-        # Just add a `cd` here if you need to change to another directory.
+        cd book
         mdbook build
         git worktree add gh-pages gh-pages
         git config user.name "Deploy from CI"
