@@ -7,6 +7,9 @@ license = "Apache-2.0/MIT"
 repository = "https://github.com/bholley/cargo-vet"
 homepage = "https://bholley.net/cargo-vet"
 description = "Supply-chain security for Rust"
+exclude = [
+  "book/*",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
