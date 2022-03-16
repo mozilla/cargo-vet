@@ -4,6 +4,22 @@ This section serves to document the rationale behind various design choices and
 highlight some alternatives considered. This should be considered supplementary
 to the [Rationale & Design](./rationale.md) section.
 
+## What about crates where I trust the author?
+
+You might find yourself using a crate authored either by someone you personally
+know or by a well-known member the community, in which case you might see low
+value in an additional audit. In this situation, you are of course free to
+simply leave the crate in `unaudited.toml` indefinitely, perhaps with a comment
+indicating that this specific audit is a low priority.
+
+There are, of course, dangers in being too permissive in these cases. Crates are
+often a collaborative effort, and it may not be the case that this trusted
+individual personally reviewed every contribution to date and will continue to do
+so forever. If the author meets the criteria specified in your `Policy.md` for
+certifying audits, a better approach is to have them contribue the audit
+directly to your `audited.toml`.
+
+
 ## Why does `cargo vet init` automatically exempt all existing dependencies?
 
 A key goal of `cargo vet` is to make it very easy to go from first learning

@@ -3,31 +3,6 @@
 The fastest way to shrink `unaudited.toml` is to encode information about who
 you trust in `trusted.toml`. There are two mechanisms for this.
 
-## The `crates` directive
-
-This directive allows you to specify that you have enough trust in a crate's
-release process (and the change process for that release process) that you
-consider any version of that crate safe without audit.
-
-For example, you could write:
-```
-crates = [
-  "atomic_refcell",
-  "rayon",
-]
-```
-
-A potential pitfall is for ownership of a crate to change hands from an original
-trusted party to someone else. To guard against this, `cargo vet` records the
-current crates.io owner(s) in `owners.lock`. If ownership changes, `cargo vet`
-will fail until the lock file is manually updated to reflect current ownership.
-
-While this provides some protection, it is not fool-proof. The original owner may
-not be as trustworthy as you believed, or the crates.io owners may choose to release
-changes that they did not personally author or review. Library authors are encouraged to
-keep crates.io ownership synchronized with repository commit access, and document
-their code review and release policies to assist others in assessing risk.
-
 ## The `audits` directive
 
 This directive allows you to virtually merge audit lists from other

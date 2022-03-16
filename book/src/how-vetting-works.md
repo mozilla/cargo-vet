@@ -49,14 +49,9 @@ is invoked.
 
 First, the project's [configuration](./config.md) is be parsed and loaded.
 
-If not running in locked mode:
-* Each of the URLs listed in the `audits` key of `trusted.toml` is then
-fetched. These files are then merged and stored in `trusted.lock`.
-* Crates.io is queried to retrieve the owners of each entry in the `crates`
-key of `trusted.toml`. If there is no corresponding entry in `owners.lock`,
-one is added. If there is an existing entry and the entry differs from the
-response received from crates.io, an error is thrown.
-
+If not running in locked mode, each of the URLs listed in the `audits` key of
+`trusted.toml` is then fetched. These files are then merged and stored in
+`trusted.lock`.
 
 `audit.toml`, `trusted.lock`, and  `unaudited.toml` are then parsed. If any of the
 three are not well-formed, an error is thrown.
