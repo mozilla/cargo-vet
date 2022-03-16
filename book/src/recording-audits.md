@@ -22,29 +22,30 @@ the right-hand-side can be either a subsequent or previous version.
 Lexographic ordering is enforced.
 
 If, in the course of your auditing, you find a crate that is _not_ safe, you
-can note this as well with the "!" modifier. In these scenarios `cargo vet`
+can note this as well with the "!" modifier, generally along with either a
+star-matched version or a version range interval. In these scenarios `cargo vet`
 will reject the dependency even if it's listed in `unaudited.toml`.
 
 A sample `audited.toml` looks like this:
 ```
 bar = [
-  "1.2.3", # Bobby Holley
-  "1.2.3 -> 1.2.4", # Till Schneidereit
-  "2.1.3", # Alex Crichton
-  "2.1.3 -> 2.1.1", # Alex Crichton
+  "1.2.3", # Alice
+  "1.2.3 -> 1.2.4", # Bob
+  "2.1.3", # Alice
+  "2.1.3 -> 2.1.1", # Alice
 ]
 
 foo = [
-  "0.2.1 -> 0.3.1", # Till Schneidereit
+  "0.2.1 -> 0.3.1", # Bob
 ]
 
 malicious_crate = [
-  "!*" # Bobby Holley
+  "!*" # Alice
 ]
 
 partially_vulnerable_crate = [
-  "1.3", # Till Schneidereit
-  "!1.2*" # Till Schneidereit
+  "1.3", # Bob
+  "![0-1.3)" # Bob
 ]
 ```
 

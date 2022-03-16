@@ -12,3 +12,4 @@
   - [Configuration](./config.md)
   - [How Vetting Works](./how-vetting-works.md)
   - [Platform-specific Dependencies](./platform-specific.md)
+  - [Design Choice FAQ](./design-choice-faq.md)

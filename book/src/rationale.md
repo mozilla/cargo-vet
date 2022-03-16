@@ -28,13 +28,14 @@ speaking, it usually just doesn't happen — even at large well-resourced compan
 ### Tackling This in Rust
 There are two properties of Rust that make this problem more tractable.
 
-First, it's relatively easy to quickly skim most Rust code and determine whether or
-not it's malicious. Unlike C/C++, Rust code is memory-safe by default, and unlike
-JavaScript, there is no highly-dynamic shared global environment. This means that you
-don't need to internalize all the invariants to conclude that an average Rust module
-is safe — mostly, you need to look for `unsafe` blocks and powerful library imports
-like `std::fs`. This property also makes it easier to conclude that a new version is
-safe based on a diff from a prior trusted version.
+First, it's relatively easy to audit Rust code. Unlike C/C++, Rust code is
+memory-safe by default, and unlike JavaScript, there is no highly-dynamic shared
+global environment. This means that you can often reason at a high level about
+the range of a module's potential behavior without carefully studying all of its
+internal invariants. For example, a complicated string parser with a narrow
+interface, no unsafe code, and no powerful imports has limited means to
+compromise the rest of the program. This also makes it easier to conclude that a
+new version is safe based on a diff from a prior trusted version.
 
 Second, nearly everyone in the Rust ecosystem relies on the same set of basic tooling
 — Cargo and crates.io — to import and manage third-party components, and there is high
