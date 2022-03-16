@@ -25,3 +25,12 @@ Note that there is intentionally no way to import an external `trusted.toml`. Th
 keeps trust relationships direct and easy to reason about. That said, you can always
 inspect the `trusted.toml` of other projects for inspiration, and explicitly adopt
 any entries that meet your requirements.
+
+## Multiple Repositories
+
+The `audits` directive can also be used to coordinate audits across a single
+organization with multiple repositories. There are two primary approaches:
+* Record audits in a central repository, and have each repository reference that
+  central audit set in its `trusted.toml`.
+* Record audits in the repository where they're first needed, and have each
+  repository reference each other repository.
