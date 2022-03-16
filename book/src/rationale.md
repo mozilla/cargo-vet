@@ -39,10 +39,13 @@ new version is safe based on a diff from a prior trusted version.
 
 Second, nearly everyone in the Rust ecosystem relies on the same set of basic tooling
 — Cargo and crates.io — to import and manage third-party components, and there is high
-overlap in the dependency sets. For example, at the time of writing, the Bytecode Alliance's [wasmtime](https://github.com/bytecodealliance/wasmtime)
-project [specified](https://github.com/bytecodealliance/wasmtime/blob/49c2b1e60a87623796046176500bed6afa956d2f/Cargo.lock)
-326 crates.io dependencies. Ignoring version, exactly 50% of these crates (163) were also
-[dependencies of Firefox](https://hg.mozilla.org/mozilla-central/file/add572d6012047244d022436e0b5c578b3dd7cf7/Cargo.lock).
+overlap in the dependency sets. For example, at the time of writing,
+[Firefox](https://hg.mozilla.org/mozilla-central/file/add572d6012047244d022436e0b5c578b3dd7cf7/Cargo.lock),
+[wasmtime](https://github.com/bytecodealliance/wasmtime/blob/49c2b1e60a87623796046176500bed6afa956d2f/Cargo.lock),
+and [the Rust compiler](https://github.com/rust-lang/rust/blob/532d3cda90b8a729cd982548649d32803d265052/Cargo.lock)
+specified 406, 310, and 357 crates.io dependencies respectively[^1]. Ignoring
+version, each project shares about half of its dependencies with at least one of
+the other two projects, and 107 dependencies are common across all three.
 
 This creates opportunities to share the analysis burden in an systematic way. If you're able to
 discover that a trusted party has already audited the exact crate release you're using,
@@ -80,3 +83,13 @@ approach can be a useful low-effort way to protect a mature projects from future
 supply-chain attacks. By simply enforcing that any future imports are differentially
 audited, you can reliably prevent future attacks while deferring verification against past
 compromise (which may be a larger undertaking).
+
+## Footnotes
+
+[^1]: The following command string computes the names of the crates.io packages
+  specified in `Cargo.lock`. Note the filtering for path and git dependencies,
+  along with removing duplicates due to different versions of the same crate:
+
+```
+cat Cargo.lock | grep -e "name = " -e "source = \"registry" | awk '/source =/ { print prv_line; next } { prv_line = $0 }' | sort | uniq
+```
