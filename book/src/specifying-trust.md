@@ -1,7 +1,7 @@
 # Specifying Trust
 
 The fastest way to shrink `unaudited.toml` is to encode information about who
-you trust in `trusted.toml`. There are two mechanisms for this.
+you trust in `trusted.toml` via the `audits` directive.
 
 ## The `audits` directive
 

@@ -1,6 +1,9 @@
 # Recording Audits
 
-Audits performed by you or your teammates are recorded in `audited.toml`.
+Audits performed by you or your teammates are recorded in your project's
+`audited.toml`. Note that your dependencies may have their own `audited.toml`
+files, but these have no effect on your project unless you explicitly import
+them in `trusted.toml`.
 
 ## `audited.toml`
 
