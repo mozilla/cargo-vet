@@ -97,6 +97,6 @@ $ cargo vet suggest
     baz:1.5 (5033 lines)
 ```
 
-From there, you can use the `fetch, diff, and certify` subcommands to tackle items
-on the list.
+From there, you can use the `fetch`, `diff`, and `certify` subcommands to tackle
+items on the list.
 
