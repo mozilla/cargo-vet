@@ -1,17 +1,17 @@
 # Recording Audits
 
 Audits performed by you or your teammates are recorded in your project's
-`audited.toml`. Note that your dependencies may have their own `audited.toml`
+`audits.toml`. Note that your dependencies may have their own `audits.toml`
 files, but these have no effect on your project unless you explicitly import
-them in `trusted.toml`.
+them in `config.toml`.
 
-## `audited.toml`
+## `audits.toml`
 
 Listing a crate here means that the you've inspected it and
 determined it to be suitable for inclusion. The standard for suitability,
 and consequently the procedure for inspection, are ultimately up to you
 to determine. It is recommended that both be documented in a `Policy.md`
-file alongside `audited.toml` so that other individuals and organizations
+file alongside `audits.toml` so that other individuals and organizations
 can understand the degree of rigor that was applied during the recorded
 audits.
 
@@ -21,34 +21,42 @@ audited that version in its entirety. Specifying a `delta` means that the owner
 has audited the diff between the two versions, and determined the
 right-hand-side version to be suitable if the left-hand-side is assumed to be
 suitable. Relative to the left-hand-side, the right-hand-side can be either a
-subsequent or previous version.  Lexographic ordering is enforced.
+subsequent or previous version.  Lexographic ordering of crates is enforced.
 
 If, in the course of your auditing, you find a crate that is _not_ safe, you
 can note this as well with `forbidden`, generally along with either a
 star-matched version or a version range interval. In these scenarios `cargo vet`
-will reject the dependency even if it's listed in `unaudited.toml`.
+will reject the dependency even if it's listed in the `unaudited` table.
 
-A sample `audited.toml` looks like this:
+A sample `audits.toml` looks like this:
 ```
-bar = [
-  { version = "1.2.3", who = "Alice" },
-  { delta = "1.2.3 -> 1.2.4", who = "Bob" },
-  { version = "2.1.3", who = "Alice" },
-  { delta = "2.1.3 -> 2.1.1", who = "Alice" },
-]
+[[audits.bar]]
+version = "1.2.3"
+who = "Alice"
 
-foo = [
-  { version = "0.2.1 -> 0.3.1", who = "Bob" },
-]
+[[audits.bar]]
+delta = "1.2.3 -> 1.2.4"
+who = "Bob"
 
-malicious_crate = [
-  { forbidden = "*" }
-]
+[[audits.bar]]
+version = "2.1.3"
+who = "Alice"
 
-partially_vulnerable_crate = [
-  { version = "1.3", who = "Bob" },
-  { forbidden = "[0-1.3)" }
-]
+[[audits.bar]]
+delta = "2.1.3 -> 2.1.1"
+who = "Alice"
+
+[[audits.foo]]
+version = "0.2.1 -> 0.3.1"
+who = "Bob"
+
+[[audits.malicious_crate]]
+forbidden = "*"
+
+[[audits.partially_vulnerable_crate]]
+version = "1.3"
+who = "Bob"
+forbidden = "[0-1.3)"
 ```
 
 Exactly one of `version`, `delta`, or `forbidden` must be specified.  The `who`
@@ -64,15 +72,10 @@ audit is determined to have violated the audit policy or a more
 restrictive policy is adopted. Even if the owner no longer uses the specified
 crates, the audit records can still prove useful to others in the ecosystem.
 
-## `unaudited.toml`
+## The `unaudited` table in `config.toml`
 
-This file enumerates the dependencies that have not been audited, but which
-the project is nonetheless using. The format is generally the same as
-`audited.toml`, aside from a few specific differences:
-
-* **Relative versions** (i.e. `{ delta: ... }`) are not supported.
-
-* **Forbidden versions** (i.e. `{ forbidden: ... }`) are not supported.
-
-* **Star-matched versions** (e.g. "1.*") are supported. This is useful
-  for managing [unused dependencies](./platform-specific.md).
+This table enumerates the dependencies that have not been audited, but which the
+project is nonetheless using. The structure is generally the same as
+`audits.toml`, but only the `version` and `notes` fields are supported.
+Moreover, the version field supports star-matched versions (e.g. "1.*"), which
+is useful for managing [unused dependencies](./platform-specific.md).

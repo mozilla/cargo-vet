@@ -49,23 +49,22 @@ is invoked.
 
 First, the project's [configuration](./config.md) is be parsed and loaded.
 
-If not running in locked mode, each of the URLs listed in the `audits` key of
-`trusted.toml` is then fetched. These files are then merged and stored in
-`trusted.lock`.
+If not running in locked mode, each of the URLs listed in the `imports` key of
+`config.toml` is then fetched. These files are then merged and stored in
+`imports.lock`.
 
-`audit.toml`, `trusted.lock`, and  `unaudited.toml` are then parsed. If any of the
+`audits.toml`, `imports.lock`, and  `config.toml` are then parsed. If any of the
 three are not well-formed, an error is thrown.
 
-Next, the files are ingested in order into a table, indexed by crate name. Each table
-entry contains a list of absolute versions, a list of version deltas, a list of forbidden versions, and a boolean
-indicating whether the crate appeared in the `crates` list in `trusted.toml`. Each insertion checks
-for overlap between the set of audited versions and forbidden versions; if overlap is created, an error is thrown.
+Next, the files are ingested in order into a table, indexed by crate name. Each
+table entry contains a list of absolute versions, a list of version deltas, a
+list of forbidden versions. Each insertion checks for overlap between the set of
+audited versions and forbidden versions; if overlap is created, an error is
+thrown.
 
 The list of crates to be verified is then enumerated. For each such crates, the following steps are performed:
 
 * The crate name is looked up in the table. If there is no entry, verification fails.
-
-* If the boolean is set to True, verification succeeds.
 
 * If the crate version matches the list of forbidden versions, verification fails.
 
@@ -81,5 +80,5 @@ verification succeeds.
 If verification fails, an error is generated, along with a list of any versions of the
 same crate that would have passed verification. These can be used as inputs to `cargo vet diff`.
 
-If any entries in `unaudited.toml` are superfluous — i.e. verification would succed without them — a
+If any entries in `unaudited` are superfluous — i.e. verification would succed without them — a
 warning is generated so that the list can be pared down.

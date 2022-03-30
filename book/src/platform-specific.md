@@ -12,9 +12,9 @@ This is generally a problem with Cargo itself, where `Cargo.lock` lists all
 packages for all platforms, irrespective of whether the top-level project is
 ever built for that platform.
 
-The easiest way to address this is to add the platform-specific crates to
-`unaudited.toml`. To facilitate this use-case, `unaudited.toml` allows
-dependency versions to be star-matched like so:
+The easiest way to address this is to add the platform-specific crates to your
+`unaudited` list. To facilitate this use-case, the list allows dependency
+versions to be star-matched like so:
 
 ```
 foo = [

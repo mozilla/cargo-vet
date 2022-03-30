@@ -34,9 +34,10 @@ will be multiple ways to perform the review: either from scratch, or relative to
 one or more already-audited versions. In these cases, `cargo vet`
 computes all the possible approaches and selects the smallest one.
 
-You can, of course, choose to add one or more unvetted dependencies to
-`unaudited.toml` instead of auditing it. This may be expedient in some situations,
-though doing so frequently undermines the value provided by the tool.
+You can, of course, choose to add one or more unvetted dependencies to the
+`unaudited` list instead of auditing them. This may be expedient in some
+situations, though doing so frequently undermines the value provided by the
+tool.
 
 ## Reviewing Crates
 
@@ -48,7 +49,7 @@ packages on crates.io aren't easy to download manually.
 
 To make this easy, the `cargo vet fetch` subcommand will download the relevant
 crate to a temporary directory. When you finish the audit, you can use
-`cargo vet certify` to add the entry to `audited.toml`:
+`cargo vet certify` to add the entry to `audits.toml`:
 
 ```
 $ cargo vet fetch baz 1.3
@@ -82,21 +83,21 @@ a richer display of the differences between public crates. However, since
 auditing for security vulnerabilities is usually a much lighter-weight process
 than full code review, this functionality is not essential.
 
-## Shrinking `unaudited.toml`
+## Shrinking the `unaudited` List
 
-Even when your project is passing `cargo vet`, lingering entries in `unaudited.toml`
+Even when your project is passing `cargo vet`, lingering entries in `unaudited`
 could still leave you vulnerable. As such, shrinking it is a worthwhile endeavor.
 
 Any malicious crate can compromise your program, but not every crate requires
 the same amount of effort to verify. Some crates are larger than others, and
 different versions of the same crate are usually quite similar. To take
 advantage of this, `cargo vet suggest` can estimate the lowest-effort audits
-you can perform to reduce the number of entries in `unaudited.toml`, and
+you can perform to reduce the number of entries in `unaudited`, and
 consequently, your attack surface.
 
 More precisely, `cargo vet suggest` computes the number of lines that would
 need to be reviewed for each not-yet-audited dependency, and displays them
-in order. This is the same information you'd get if you deleted `unaudited.toml`
+in order. This is the same information you'd get if you emptied out `unaudited`
 and re-ran `cargo vet`:
 ```
 $ cargo vet suggest

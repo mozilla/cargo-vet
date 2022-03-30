@@ -4,7 +4,7 @@
   - [Rationale & Design](./rationale.md)
   - [Installation](./install.md)
   - [Setup](./setup.md)
-  - [Specifying Trust](./specifying-trust.md)
+  - [Importing Audits](./importing-audits.md)
   - [Recording Audits](./recording-audits.md)
   - [Performing Audits](./performing-audits.md)
   - [Configuring CI](./configuring-ci.md)

@@ -18,10 +18,11 @@ To get started, you can invoke:
 $ cargo vet init
 ```
 
-This creates and populates the `supply-chain` directory. It contains three files:
-`audited.toml` (empty), `trusted.toml` (skeleton), and `unaudited.toml` (populated
-with the full list of third-party crates currently used by the project). The files
-in this directory should be added to version control along with `Cargo.lock`.
+This creates and populates the `supply-chain` directory. It contains two files:
+`audits.toml` and `config.toml`. The `unaudited` table of `config.toml` is
+populated with the full list of third-party crates currently used by the
+project. The files in this directory should be added to version control along
+with `Cargo.lock`.
 
 Now, try vetting again:
 
@@ -31,6 +32,6 @@ $ cargo vet
 ```
 
 You're now up and running, though with an empty audit set: vetting only succeeds
-because `unaudited.toml` (your list of exceptions) contains the exact set of
-current dependencies used in your project. Generally speaking, you should try to
-avoid anything more to `unaudited.toml`, and ideally seek to shrink it over time.
+because your list of exceptions contains the exact set of current dependencies
+used in your project. Generally speaking, you should try to avoid more
+exceptions, and ideally seek to shrink the list over time.
