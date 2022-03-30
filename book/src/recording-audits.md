@@ -7,13 +7,10 @@ them in `config.toml`.
 
 ## `audits.toml`
 
-Listing a crate here means that the you've inspected it and
-determined it to be suitable for inclusion. The standard for suitability,
-and consequently the procedure for inspection, are ultimately up to you
-to determine. It is recommended that both be documented in a `Policy.md`
-file alongside `audits.toml` so that other individuals and organizations
-can understand the degree of rigor that was applied during the recorded
-audits.
+Listing a crate in `audits.toml` means that the you've inspected it and
+determined that it meets your criteria. Usually these will be the [default
+criteria](defining-criteria.md), but you can also specify that a given audit was
+performed against other criteria.
 
 For each crate in the audit list, the owner supplies a list of one or more
 absolute or relative versions. Specifying a `version` means that the owner has
@@ -30,6 +27,10 @@ will reject the dependency even if it's listed in the `unaudited` table.
 
 A sample `audits.toml` looks like this:
 ```
+[criteria]
+
+...
+
 [[audits.bar]]
 version = "1.2.3"
 who = "Alice"
@@ -45,6 +46,11 @@ who = "Alice"
 [[audits.bar]]
 delta = "2.1.3 -> 2.1.1"
 who = "Alice"
+
+[[audits.baz]]
+version = "0.2"
+who = "Alice"
+criteria = "safe_to_run_locally"
 
 [[audits.foo]]
 version = "0.2.1 -> 0.3.1"
@@ -67,10 +73,10 @@ global git config) for two reasons:
 * It emphasizes to the author that they are signing off on having performed the
   audit.
 
-The expectation is that this file should never be pruned unless a previously-recorded
-audit is determined to have violated the audit policy or a more
-restrictive policy is adopted. Even if the owner no longer uses the specified
-crates, the audit records can still prove useful to others in the ecosystem.
+The expectation is that this file should never be pruned unless a
+previously-recorded audit is determined to have violated the audit criteria.
+Even if the owner no longer uses the specified crates, the audit records can
+still prove useful to others in the ecosystem.
 
 ## The `unaudited` table in `config.toml`
 

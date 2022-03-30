@@ -1,25 +1,32 @@
 # Importing Audits
 
 The fastest way to shrink the `unaudited` list is to pull in the audit sets from
-other projects that you trust via the `imports` directive in `config.toml`.
+other projects that you trust via `import` directives in `config.toml`.
 
-## The `imports` directive
+## Specifying Imports
 
-This directive allows you to virtually merge audit lists from other
-projects into your own. This may or may not be a reciprocal relationship,
-since it's fine to import audits from another party with a stricter audit policy,
-but not the other way around.
+This directive allows you to virtually merge audit lists from other projects
+into your own:
 
-For example:
 ```
-imports = [
-  "https://raw.githubusercontent.com/rust-lang/cargo-trust-store/audits.toml",
-  "https://hg.example.org/example/raw-file/tip/audits.toml"
-]
+[imports.foo]
+url = "https://raw.githubusercontent.com/foo-team/foo/main/supply-chain/audits.toml"
+criteria_map = { theirs: "a", ours: "x" }
 ```
 
-Upon invocation, `cargo vet` will fetch these audit files, merge them, and store
-the resulting data in `imports.lock`. Similar to `cargo vendor`, passing
+The criteria map allows `cargo vet` to associate the imported audits with the
+criteria used by your project. This will often be a simple 1:1 mapping, but more
+complex relationships are also supported:
+
+```
+[imports.bar]
+url = "https://hg.bar.org/repo/raw-file/tip/supply-chain/audits.toml"
+criteria_map = [ { theirs: "b", ours: ["y", "z"] },
+                 { theirs: ["c", "d"], ours: "z" } ]
+```
+
+Upon invocation, `cargo vet` will fetch each url, extract the relevant data, and
+store the information in `imports.lock`. Similar to `cargo vendor`, passing
 `--locked` will skip the fetch.
 
 Note that this mechanism is not transitive — you can't directly import someone

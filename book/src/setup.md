@@ -8,9 +8,10 @@ $ cargo vet
   error: cargo vet is not configured
 ```
 
-To start verifying crates you need to first need to specify the criteria to
-vet against. By default, this information is stored next to `Cargo.lock` in a directory
-called `supply-chain`. This location is [configurable](./config.md).
+To be useful, `cargo vet` needs to know which audits have been performed and
+what policy should be enforced. By default, this information is stored next to
+`Cargo.lock` in a directory called `supply-chain`. This location is
+[configurable](./config.md).
 
 To get started, you can invoke:
 

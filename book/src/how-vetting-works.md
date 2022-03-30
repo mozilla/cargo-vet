@@ -50,8 +50,11 @@ is invoked.
 First, the project's [configuration](./config.md) is be parsed and loaded.
 
 If not running in locked mode, each of the URLs listed in the `imports` key of
-`config.toml` is then fetched. These files are then merged and stored in
-`imports.lock`.
+`config.toml` is then fetched. These files are then processed and the resulting
+data is stored in `imports.lock`. The descriptions for any mapped criteria are
+stored as well, and any changes to previously-recorded descriptions will cause
+`cargo vet` to fail and require `cargo vet accept-criteria-change` to be run.
+Any unmapped criteria (and audits under those criteria) are discarded.
 
 `audits.toml`, `imports.lock`, and  `config.toml` are then parsed. If any of the
 three are not well-formed, an error is thrown.

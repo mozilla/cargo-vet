@@ -4,6 +4,7 @@
   - [Rationale & Design](./rationale.md)
   - [Installation](./install.md)
   - [Setup](./setup.md)
+  - [Defining Criteria](./defining-criteria.md)
   - [Importing Audits](./importing-audits.md)
   - [Recording Audits](./recording-audits.md)
   - [Performing Audits](./performing-audits.md)
@@ -12,4 +13,5 @@
   - [Configuration](./config.md)
   - [How Vetting Works](./how-vetting-works.md)
   - [Platform-specific Dependencies](./platform-specific.md)
+  - [Sample Criteria](./sample-criteria.md)
   - [Design Choice FAQ](./design-choice-faq.md)

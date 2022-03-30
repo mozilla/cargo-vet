@@ -14,10 +14,10 @@ note indicating that this specific audit is a low priority.
 
 There are, of course, dangers in being too permissive in these cases. Crates are
 often a collaborative effort, and it may not be the case that this trusted
-individual personally reviewed every contribution to date and will continue to do
-so forever. If the author meets the criteria specified in your `Policy.md` for
-certifying audits, a better approach is to have them contribue the audit
-directly to your `audits.toml`.
+individual personally reviewed every contribution to date and will continue to
+do so forever. If the author has the authority to certify audits for your
+project, a better approach is to have them contribue the audit directly to your
+`audits.toml`.
 
 
 ## Why does `cargo vet init` automatically exempt all existing dependencies?

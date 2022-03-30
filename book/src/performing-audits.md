@@ -58,7 +58,11 @@ $ ...
 $ cargo vet certify baz 1.3
 
   I, Alice, certify that I have audited version 1.3 of baz in accordance with
-  the criteria described in /path/to/Policy.md (type "yes" to certify): yes
+  the following criteria:
+
+  ...
+
+ (type "yes" to certify): yes
 
   Recorded full audit of baz version 1.3
 ```
@@ -72,7 +76,10 @@ $ ...
 $ cargo vet certify foo 1.2 1.2.1
 
   I, Alice, certify that I have audited the changes between versions 1.2 and
-  1.2.1 of baz in accordance with the criteria described in /path/to/Policy.md
+  1.2.1 of baz in accordance with the following criteria:
+
+  ...
+
   (type "yes" to certify): yes
 
   Recorded relative audit between foo versions 1.2 and 1.2.1
