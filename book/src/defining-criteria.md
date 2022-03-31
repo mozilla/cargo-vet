@@ -38,7 +38,5 @@ criteria:
   another project want to audit for B and C, defining separate sets of criteria
   for A, B, and C allows the two projects to partially share work.
 
-You can define as many separate sets of criteria as you like. If you have more
-than one, you'll need to also designate one or more of them in the top-level
-`default-criteria` field. Any audit that does not specify the `criteria` field
-is associated with this default.
+You can define as many separate sets of criteria as you like, so long as you
+[designate a default](audits-toml.md).

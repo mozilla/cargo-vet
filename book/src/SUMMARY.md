@@ -11,6 +11,7 @@
   - [Configuring CI](./configuring-ci.md)
 - [Reference](./reference.md)
   - [Configuration](./config.md)
+  - [Audit Entries](./audit-entries.md)
   - [How Vetting Works](./how-vetting-works.md)
   - [Platform-specific Dependencies](./platform-specific.md)
   - [Sample Criteria](./sample-criteria.md)

@@ -81,7 +81,5 @@ still prove useful to others in the ecosystem.
 ## The `unaudited` table in `config.toml`
 
 This table enumerates the dependencies that have not been audited, but which the
-project is nonetheless using. The structure is generally the same as
-`audits.toml`, but only the `version` and `notes` fields are supported.
-Moreover, the version field supports star-matched versions (e.g. "1.*"), which
-is useful for managing [unused dependencies](./platform-specific.md).
+project is nonetheless using. The structure is generally the same as the
+`audits` table, with a [few differences](config.md#the-unaudited-table).
