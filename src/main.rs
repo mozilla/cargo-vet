@@ -669,6 +669,26 @@ fn cmd_vet(
         unimplemented!("fetching audits not yet implemented!");
     }
 
+    // TODO: do proper resolution on the 3 inputs.
+    //
+    // Relevant entries:
+    // * unaudited.version: this entire version is unaudited, but implicitly trusted
+    // * audited.forbid: this version is bad, do not use
+    // * audited.version: this entire version has been reviewed
+    // * audited.delta(x -> y): the changes from x to y 
+    // * trusted.*: I think the same as audited.* but separate for logistics
+    //   probably audited "overrides" trusted if they disagree? (via forbid?)
+    //
+    // If not for deltas, resolving packages would be fairly trivial.
+    // *With* deltas I think we want to have some DAG-like analysis where you start
+    // at the current version and look for a 'delta.to' that matches that version,
+    // and then recursively check `delta.from'
+    //
+    // One thing that's unclear is what should happen if 'delta' hops *over* a version
+    // i.e. if we have `audited.version = 5` and `audited.delta = 3 -> 7', does that
+    // allow us to accept version 7? This is kind of an incoherent state but it seems
+    // plausible with 'trusted' inputs imported from elsewhere!
+
     let mut all_good = true;
     // Actually vet the dependencies
     'all_packages: for package in foreign_packages(metadata) {
