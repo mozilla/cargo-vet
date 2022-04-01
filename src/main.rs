@@ -7,7 +7,7 @@ use std::path::Path;
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package};
-use clap::{ArgEnum, Parser, Subcommand};
+use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
 use log::{error, info, trace};
 use serde::de::Visitor;
 use serde::{de, de::Deserialize, ser::Serialize};
@@ -69,6 +69,8 @@ enum Commands {
     Suggest(SuggestArgs),
     /// ??? List audits mechanisms ???
     Audits(AuditsArgs),
+    /// Print --help as markdown (for generating docs)
+    HelpMarkdown(HelpMarkdownArgs),
 }
 
 #[derive(clap::Args)]
@@ -102,6 +104,9 @@ struct SuggestArgs {}
 
 #[derive(clap::Args)]
 struct AuditsArgs {}
+
+#[derive(clap::Args)]
+struct HelpMarkdownArgs {}
 
 /// Logging verbosity levels
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -490,6 +495,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(Commands::Suggest(sub_args)) => cmd_suggest(out, &cli, &config, &metadata, sub_args),
         Some(Commands::Diff(sub_args)) => cmd_diff(out, &cli, &config, &metadata, sub_args),
         Some(Commands::Audits(sub_args)) => cmd_audits(out, &cli, &config, &metadata, sub_args),
+        Some(Commands::HelpMarkdown(sub_args)) => cmd_help_markdown(out, &cli, &config, &metadata, sub_args),
         None => cmd_vet(out, &cli, &config, &metadata),
     }
 }
@@ -713,6 +719,85 @@ fn cmd_vet(
 
     // Fetch audits
     writeln!(out, "All crates vetted!")?;
+
+    Ok(())
+}
+
+
+fn cmd_help_markdown(
+    _out: &mut dyn Write,
+    _cli: &Cli,
+    _config: &Configs,
+    _metadata: &Metadata,
+    _sub_args: &HelpMarkdownArgs,
+) -> Result<(), Box<dyn Error>> {
+    let mut help_buf = Vec::new();
+
+    // Make a new App to get the help message this time.
+    Cli::command().write_long_help(&mut help_buf).unwrap();
+    let help = String::from_utf8(help_buf).unwrap();
+
+    println!("# cargo-vet CLI manual");
+    println!();
+    println!("> This manual can be regenerated with `cargo vet help-markdown`");
+    println!();
+
+    // First line is --version
+    let mut lines = help.lines();
+    println!("Version: `{}`", lines.next().unwrap());
+    println!();
+
+    let mut in_subcommands = false;
+    for line in lines {
+        // Use a trailing colon to indicate a heading
+        if let Some(heading) = line.strip_suffix(':') {
+            if !line.starts_with(' ') {
+                // SCREAMING headers are Main headings
+                if heading.to_ascii_uppercase() == heading {
+                    if heading == "SUBCOMMANDS" {
+                        in_subcommands = true;
+                    }
+                    println!("# {}", heading);
+                } else {
+                    println!("## {}", heading);
+                }
+                continue;
+            }
+        }
+
+        // Usage strings get wrapped in full code blocks
+        if line.starts_with("cargo-vet ") {
+            println!("```");
+            println!("{}", line);
+            println!("```");
+            continue;
+        }
+
+        if in_subcommands {
+            if !line.starts_with("     ") {
+                 // subcommand names are subheadings
+                println!("\n## `{}`", line.trim());
+                continue;
+            }
+        }
+        // The rest is indented, get rid of that
+        let line = line.trim();
+
+        // argument names are subheadings
+        if line.starts_with('-') || line.starts_with('<') {
+            println!("### `{}`", line);
+            continue;
+        }
+
+        // escape default/value strings
+        if line.starts_with('[') {
+            println!("\\{}", line);
+            continue;
+        }
+
+        // Normal paragraph text
+        println!("{}", line);
+    }
 
     Ok(())
 }
