@@ -86,6 +86,7 @@ Process all packages in the workspace
 * [init](#cargo-vet-init): initialize cargo-vet for your project
 * [suggest](#cargo-vet-suggest): Suggest some low-hanging fruit to review
 
+<br><br><br>
 ## cargo vet help 
 Print this message or the help of the given subcommand(s)
 
@@ -96,6 +97,7 @@ help [SUBCOMMAND]...
 #### `<SUBCOMMAND>...`
 The subcommand whose help message to display
 
+<br><br><br>
 ## cargo vet help-markdown 
 Print --help as markdown (for generating docs)
 
@@ -109,6 +111,7 @@ Print help information
 #### `-V, --version`
 Print version information
 
+<br><br><br>
 ## cargo vet audits 
 ??? List audits mechanisms ???
 
@@ -122,6 +125,7 @@ Print help information
 #### `-V, --version`
 Print version information
 
+<br><br><br>
 ## cargo vet suggest 
 Suggest some low-hanging fruit to review
 
@@ -135,6 +139,7 @@ Print help information
 #### `-V, --version`
 Print version information
 
+<br><br><br>
 ## cargo vet forbid 
 Mark `$crate $version` as unacceptable with `$message`
 
@@ -155,6 +160,7 @@ forbid <KRATE> <VERSION> <MESSAGE>
 #### `-h, --help`
 Print help information
 
+<br><br><br>
 ## cargo vet certify 
 Mark `$crate $version` as reviewed with `$message`
 
@@ -175,6 +181,7 @@ certify <KRATE> <VERSION> <MESSAGE>
 #### `-h, --help`
 Print help information
 
+<br><br><br>
 ## cargo vet diff 
 Yield a diff against the last reviewed version
 
@@ -188,6 +195,7 @@ Print help information
 #### `-V, --version`
 Print version information
 
+<br><br><br>
 ## cargo vet fetch 
 Fetch the source of `$crate $version`
 
@@ -205,6 +213,7 @@ fetch <KRATE> <VERSION>
 #### `-h, --help`
 Print help information
 
+<br><br><br>
 ## cargo vet init 
 initialize cargo-vet for your project
 
@@ -217,3 +226,5 @@ Print help information
 
 #### `-V, --version`
 Print version information
+
+

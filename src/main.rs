@@ -762,6 +762,8 @@ fn cmd_help_markdown(
             writeln!(out)?;
             subcommand_name = String::new();
         } else {
+            // Give subcommands some breathing room
+            writeln!(out, "<br><br><br>")?;
             writeln!(out, "## {}", subcommand_name)?;
         }
 
