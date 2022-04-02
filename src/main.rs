@@ -762,7 +762,7 @@ fn cmd_help_markdown(
             writeln!(out)?;
             subcommand_name = String::new();
         } else {
-            writeln!(out, "# {}", subcommand_name)?;
+            writeln!(out, "## {}", subcommand_name)?;
         }
 
         let mut in_subcommands_listing = false;
@@ -775,9 +775,9 @@ fn cmd_help_markdown(
                         if heading == "SUBCOMMANDS" {
                             in_subcommands_listing = true;
                         }
-                        writeln!(out, "# {subcommand_name}{heading}")?;
+                        writeln!(out, "### {subcommand_name}{heading}")?;
                     } else {
-                        writeln!(out, "## {heading}")?;
+                        writeln!(out, "### {heading}")?;
                     }
                     continue;
                 }
@@ -804,7 +804,7 @@ fn cmd_help_markdown(
 
             // argument names are subheadings
             if line.starts_with('-') || line.starts_with('<') {
-                writeln!(out, "### `{}`", line)?;
+                writeln!(out, "#### `{}`", line)?;
                 continue;
             }
 
