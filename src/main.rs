@@ -40,7 +40,7 @@ struct Cli {
     locked: bool,
 
     /// How verbose logging should be (log level).
-    #[clap(short, long, arg_enum)]
+    #[clap(long, arg_enum)]
     #[clap(default_value_t = Verbose::Warn)]
     verbose: Verbose,
 
@@ -56,20 +56,36 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// initialize cargo-vet for your project
+    #[clap(disable_version_flag = true)]
     Init(InitArgs),
+    
     /// Fetch the source of `$crate $version`
+    #[clap(disable_version_flag = true)]
     Fetch(FetchArgs),
+    
     /// Yield a diff against the last reviewed version.
+    #[clap(disable_version_flag = true)]
     Diff(DiffArgs),
+    
     /// Mark `$crate $version` as reviewed with `$message`
+    #[clap(disable_version_flag = true)]
     Certify(CertifyArgs),
+    
     /// Mark `$crate $version` as unacceptable with `$message`
+    #[clap(disable_version_flag = true)]
     Forbid(ForbidArgs),
+    
     /// Suggest some low-hanging fruit to review
+    #[clap(disable_version_flag = true)]
     Suggest(SuggestArgs),
+    
     /// ??? List audits mechanisms ???
+    #[clap(disable_version_flag = true)]
     Audits(AuditsArgs),
+
     /// Print --help as markdown (for generating docs)
+    #[clap(disable_version_flag = true)]
+    #[clap(hide = true)]
     HelpMarkdown(HelpMarkdownArgs),
 }
 
@@ -724,6 +740,7 @@ fn cmd_vet(
 }
 
 
+/// Perform crimes on clap long_help to generate markdown docs
 fn cmd_help_markdown(
     out: &mut dyn Write,
     _cli: &Cli,
@@ -774,9 +791,8 @@ fn cmd_help_markdown(
                 if !line.starts_with(' ') {
                     // SCREAMING headers are Main headings
                     if heading.to_ascii_uppercase() == heading {
-                        if heading == "SUBCOMMANDS" {
-                            in_subcommands_listing = true;
-                        }
+                        in_subcommands_listing = heading == "SUBCOMMANDS";
+
                         writeln!(out, "### {subcommand_name}{heading}")?;
                     } else {
                         writeln!(out, "### {heading}")?;
@@ -785,17 +801,9 @@ fn cmd_help_markdown(
                 }
             }
 
-            // Usage strings get wrapped in full code blocks
-            if line.starts_with("cargo-vet ") {
-                writeln!(out, "```")?;
-                writeln!(out, "{}", line)?;
-                writeln!(out, "```")?;
-                continue;
-            }
-
             if in_subcommands_listing {
                 if !line.starts_with("     ") {
-                    // subcommand names are subheadings
+                    // subcommand names are list items
                     let own_subcommand_name = line.trim();
                     write!(out, "* [{own_subcommand_name}](#cargo-vet-{own_subcommand_name}): ")?;
                     continue;
@@ -803,6 +811,14 @@ fn cmd_help_markdown(
             }
             // The rest is indented, get rid of that
             let line = line.trim();
+
+            // Usage strings get wrapped in full code blocks
+            if line.starts_with("cargo-vet ") {
+                writeln!(out, "```")?;
+                writeln!(out, "{}", line)?;
+                writeln!(out, "```")?;
+                continue;
+            }
 
             // argument names are subheadings
             if line.starts_with('-') || line.starts_with('<') {

@@ -30,7 +30,9 @@ Version: `cargo-vet 0.1.0`
 Supply-chain security for Rust
 
 ### USAGE
+```
 cargo-vet [OPTIONS] [SUBCOMMAND]
+```
 
 ### OPTIONS
 #### `--all-features`
@@ -63,14 +65,14 @@ Instead of stdout, write output to this file
 #### `-p, --package <SPEC>`
 Package to process (see `cargo help pkgid`)
 
-#### `-v, --verbose <VERBOSE>`
+#### `-V, --version`
+Print version information
+
+#### `--verbose <VERBOSE>`
 How verbose logging should be (log level)
 
 \[default: warn]
 \[possible values: off, error, warn, info, debug, trace]
-
-#### `-V, --version`
-Print version information
 
 #### `--workspace`
 Process all packages in the workspace
@@ -82,7 +84,6 @@ Process all packages in the workspace
 * [fetch](#cargo-vet-fetch): Fetch the source of `$crate $version`
 * [forbid](#cargo-vet-forbid): Mark `$crate $version` as unacceptable with `$message`
 * [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
-* [help-markdown](#cargo-vet-help-markdown): Print --help as markdown (for generating docs)
 * [init](#cargo-vet-init): initialize cargo-vet for your project
 * [suggest](#cargo-vet-suggest): Suggest some low-hanging fruit to review
 
@@ -108,9 +109,6 @@ help-markdown
 #### `-h, --help`
 Print help information
 
-#### `-V, --version`
-Print version information
-
 <br><br><br>
 ## cargo vet audits 
 ??? List audits mechanisms ???
@@ -122,9 +120,6 @@ audits
 #### `-h, --help`
 Print help information
 
-#### `-V, --version`
-Print version information
-
 <br><br><br>
 ## cargo vet suggest 
 Suggest some low-hanging fruit to review
@@ -135,9 +130,6 @@ suggest
 ### cargo vet suggest OPTIONS
 #### `-h, --help`
 Print help information
-
-#### `-V, --version`
-Print version information
 
 <br><br><br>
 ## cargo vet forbid 
@@ -192,9 +184,6 @@ diff
 #### `-h, --help`
 Print help information
 
-#### `-V, --version`
-Print version information
-
 <br><br><br>
 ## cargo vet fetch 
 Fetch the source of `$crate $version`
@@ -223,8 +212,5 @@ init
 ### cargo vet init OPTIONS
 #### `-h, --help`
 Print help information
-
-#### `-V, --version`
-Print version information
 
 
