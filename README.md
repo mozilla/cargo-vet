@@ -21,7 +21,7 @@ cargo-vet helps you vet your dependencies and rely on the vetting done by other 
 
 
 
-# cargo-vet CLI manual
+# cargo vet CLI manual
 
 > This manual can be regenerated with `cargo vet help-markdown`
 
@@ -71,8 +71,8 @@ Print version information
 #### `--verbose <VERBOSE>`
 How verbose logging should be (log level)
 
-\[default: warn]
-\[possible values: off, error, warn, info, debug, trace]
+\[default: warn]  
+\[possible values: off, error, warn, info, debug, trace]  
 
 #### `--workspace`
 Process all packages in the workspace
@@ -92,7 +92,9 @@ Process all packages in the workspace
 Print this message or the help of the given subcommand(s)
 
 ### cargo vet help USAGE
-help [SUBCOMMAND]...
+```
+cargo vet help [SUBCOMMAND]...
+```
 
 ### cargo vet help ARGS
 #### `<SUBCOMMAND>...`
@@ -103,7 +105,9 @@ The subcommand whose help message to display
 Print --help as markdown (for generating docs)
 
 ### cargo vet help-markdown USAGE
-help-markdown
+```
+cargo vet help-markdown
+```
 
 ### cargo vet help-markdown OPTIONS
 #### `-h, --help`
@@ -114,7 +118,9 @@ Print help information
 ??? List audits mechanisms ???
 
 ### cargo vet audits USAGE
-audits
+```
+cargo vet audits
+```
 
 ### cargo vet audits OPTIONS
 #### `-h, --help`
@@ -125,7 +131,9 @@ Print help information
 Suggest some low-hanging fruit to review
 
 ### cargo vet suggest USAGE
-suggest
+```
+cargo vet suggest
+```
 
 ### cargo vet suggest OPTIONS
 #### `-h, --help`
@@ -136,7 +144,9 @@ Print help information
 Mark `$crate $version` as unacceptable with `$message`
 
 ### cargo vet forbid USAGE
-forbid <KRATE> <VERSION> <MESSAGE>
+```
+cargo vet forbid <KRATE> <VERSION> <MESSAGE>
+```
 
 ### cargo vet forbid ARGS
 #### `<KRATE>`
@@ -157,7 +167,9 @@ Print help information
 Mark `$crate $version` as reviewed with `$message`
 
 ### cargo vet certify USAGE
-certify <KRATE> <VERSION> <MESSAGE>
+```
+cargo vet certify <KRATE> <VERSION> <MESSAGE>
+```
 
 ### cargo vet certify ARGS
 #### `<KRATE>`
@@ -178,7 +190,9 @@ Print help information
 Yield a diff against the last reviewed version
 
 ### cargo vet diff USAGE
-diff
+```
+cargo vet diff
+```
 
 ### cargo vet diff OPTIONS
 #### `-h, --help`
@@ -189,7 +203,9 @@ Print help information
 Fetch the source of `$crate $version`
 
 ### cargo vet fetch USAGE
-fetch <KRATE> <VERSION>
+```
+cargo vet fetch <KRATE> <VERSION>
+```
 
 ### cargo vet fetch ARGS
 #### `<KRATE>`
@@ -207,7 +223,9 @@ Print help information
 initialize cargo-vet for your project
 
 ### cargo vet init USAGE
-init
+```
+cargo vet init
+```
 
 ### cargo vet init OPTIONS
 #### `-h, --help`

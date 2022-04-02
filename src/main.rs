@@ -749,13 +749,15 @@ fn cmd_help_markdown(
     _metadata: &Metadata,
     _sub_args: &HelpMarkdownArgs,
 ) -> Result<(), Box<dyn Error>> {
+    let app_name = "cargo-vet";
+    let pretty_app_name = "cargo vet";
     // Make a new App to get the help message this time.
 
-    writeln!(out, "# cargo-vet CLI manual")?;
+    writeln!(out, "# {pretty_app_name} CLI manual")?;
     writeln!(out)?;
     writeln!(
         out,
-        "> This manual can be regenerated with `cargo vet help-markdown`"
+        "> This manual can be regenerated with `{pretty_app_name} help-markdown`"
     )?;
     writeln!(out)?;
 
@@ -771,19 +773,22 @@ fn cmd_help_markdown(
         // First line is --version
         let mut lines = help.lines();
         let version_line = lines.next().unwrap();
-        let mut subcommand_name = format!("cargo vet {} ", command.get_name());
+        let subcommand_name = command.get_name();
+        let pretty_subcommand_name;
 
         if is_full_command {
+            pretty_subcommand_name = String::new();
             writeln!(out, "Version: `{version_line}`")?;
             writeln!(out)?;
-            subcommand_name = String::new();
         } else {
+            pretty_subcommand_name = format!("{pretty_app_name} {subcommand_name} ");
             // Give subcommands some breathing room
             writeln!(out, "<br><br><br>")?;
-            writeln!(out, "## {}", subcommand_name)?;
+            writeln!(out, "## {pretty_subcommand_name}")?;
         }
 
         let mut in_subcommands_listing = false;
+        let mut in_usage = false;
         for line in lines {
             // Use a trailing colon to indicate a heading
             if let Some(heading) = line.strip_suffix(':') {
@@ -791,8 +796,9 @@ fn cmd_help_markdown(
                     // SCREAMING headers are Main headings
                     if heading.to_ascii_uppercase() == heading {
                         in_subcommands_listing = heading == "SUBCOMMANDS";
+                        in_usage = heading == "USAGE";
 
-                        writeln!(out, "### {subcommand_name}{heading}")?;
+                        writeln!(out, "### {pretty_subcommand_name}{heading}")?;
                     } else {
                         writeln!(out, "### {heading}")?;
                     }
@@ -805,7 +811,7 @@ fn cmd_help_markdown(
                 let own_subcommand_name = line.trim();
                 write!(
                     out,
-                    "* [{own_subcommand_name}](#cargo-vet-{own_subcommand_name}): "
+                    "* [{own_subcommand_name}](#{app_name}-{own_subcommand_name}): "
                 )?;
                 continue;
             }
@@ -813,27 +819,32 @@ fn cmd_help_markdown(
             let line = line.trim();
 
             // Usage strings get wrapped in full code blocks
-            if line.starts_with("cargo-vet ") {
+            if in_usage && line.starts_with(&subcommand_name) {
                 writeln!(out, "```")?;
-                writeln!(out, "{}", line)?;
+                if is_full_command {
+                    writeln!(out, "{line}")?;
+                } else {
+                    writeln!(out, "{pretty_app_name} {line}")?;
+                }
+
                 writeln!(out, "```")?;
                 continue;
             }
 
             // argument names are subheadings
             if line.starts_with('-') || line.starts_with('<') {
-                writeln!(out, "#### `{}`", line)?;
+                writeln!(out, "#### `{line}`")?;
                 continue;
             }
 
             // escape default/value strings
             if line.starts_with('[') {
-                writeln!(out, "\\{}", line)?;
+                writeln!(out, "\\{line}  ")?;
                 continue;
             }
 
             // Normal paragraph text
-            writeln!(out, "{}", line)?;
+            writeln!(out, "{line}")?;
         }
         writeln!(out)?;
 
