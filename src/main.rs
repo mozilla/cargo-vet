@@ -58,27 +58,27 @@ enum Commands {
     /// initialize cargo-vet for your project
     #[clap(disable_version_flag = true)]
     Init(InitArgs),
-    
+
     /// Fetch the source of `$crate $version`
     #[clap(disable_version_flag = true)]
     Fetch(FetchArgs),
-    
+
     /// Yield a diff against the last reviewed version.
     #[clap(disable_version_flag = true)]
     Diff(DiffArgs),
-    
+
     /// Mark `$crate $version` as reviewed with `$message`
     #[clap(disable_version_flag = true)]
     Certify(CertifyArgs),
-    
+
     /// Mark `$crate $version` as unacceptable with `$message`
     #[clap(disable_version_flag = true)]
     Forbid(ForbidArgs),
-    
+
     /// Suggest some low-hanging fruit to review
     #[clap(disable_version_flag = true)]
     Suggest(SuggestArgs),
-    
+
     /// ??? List audits mechanisms ???
     #[clap(disable_version_flag = true)]
     Audits(AuditsArgs),
@@ -511,7 +511,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(Commands::Suggest(sub_args)) => cmd_suggest(out, &cli, &config, &metadata, sub_args),
         Some(Commands::Diff(sub_args)) => cmd_diff(out, &cli, &config, &metadata, sub_args),
         Some(Commands::Audits(sub_args)) => cmd_audits(out, &cli, &config, &metadata, sub_args),
-        Some(Commands::HelpMarkdown(sub_args)) => cmd_help_markdown(out, &cli, &config, &metadata, sub_args),
+        Some(Commands::HelpMarkdown(sub_args)) => {
+            cmd_help_markdown(out, &cli, &config, &metadata, sub_args)
+        }
         None => cmd_vet(out, &cli, &config, &metadata),
     }
 }
@@ -572,7 +574,7 @@ fn cmd_init(
         trace!("initializing {:#?}", unaudited_path);
 
         let mut dependencies = BTreeMap::new();
-        for package in foreign_packages(&metadata) {
+        for package in foreign_packages(metadata) {
             dependencies.insert(
                 package.name.clone(),
                 vec![DependencyEntry {
@@ -697,7 +699,7 @@ fn cmd_vet(
     // * unaudited.version: this entire version is unaudited, but implicitly trusted
     // * audited.forbid: this version is bad, do not use
     // * audited.version: this entire version has been reviewed
-    // * audited.delta(x -> y): the changes from x to y 
+    // * audited.delta(x -> y): the changes from x to y
     // * trusted.*: I think the same as audited.* but separate for logistics
     //   probably audited "overrides" trusted if they disagree? (via forbid?)
     //
@@ -739,7 +741,6 @@ fn cmd_vet(
     Ok(())
 }
 
-
 /// Perform crimes on clap long_help to generate markdown docs
 fn cmd_help_markdown(
     out: &mut dyn Write,
@@ -748,27 +749,25 @@ fn cmd_help_markdown(
     _metadata: &Metadata,
     _sub_args: &HelpMarkdownArgs,
 ) -> Result<(), Box<dyn Error>> {
-
     // Make a new App to get the help message this time.
-
 
     writeln!(out, "# cargo-vet CLI manual")?;
     writeln!(out)?;
-    writeln!(out, "> This manual can be regenerated with `cargo vet help-markdown`")?;
+    writeln!(
+        out,
+        "> This manual can be regenerated with `cargo vet help-markdown`"
+    )?;
     writeln!(out)?;
 
-
-
     let mut full_command = Cli::command();
-
-    
     let mut todo = vec![&mut full_command];
     let mut is_full_command = true;
+
     while let Some(command) = todo.pop() {
         let mut help_buf = Vec::new();
         command.write_long_help(&mut help_buf).unwrap();
         let help = String::from_utf8(help_buf).unwrap();
-        
+
         // First line is --version
         let mut lines = help.lines();
         let version_line = lines.next().unwrap();
@@ -801,13 +800,14 @@ fn cmd_help_markdown(
                 }
             }
 
-            if in_subcommands_listing {
-                if !line.starts_with("     ") {
-                    // subcommand names are list items
-                    let own_subcommand_name = line.trim();
-                    write!(out, "* [{own_subcommand_name}](#cargo-vet-{own_subcommand_name}): ")?;
-                    continue;
-                }
+            if in_subcommands_listing && !line.starts_with("     ") {
+                // subcommand names are list items
+                let own_subcommand_name = line.trim();
+                write!(
+                    out,
+                    "* [{own_subcommand_name}](#cargo-vet-{own_subcommand_name}): "
+                )?;
+                continue;
             }
             // The rest is indented, get rid of that
             let line = line.trim();

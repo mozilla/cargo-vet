@@ -21,7 +21,6 @@ use std::process::{Command, Stdio};
 // in `target`.
 // const TEST_TMP: &str = "../target/testdata/";
 
-
 #[test]
 fn test_version() {
     let bin = env!("CARGO_BIN_EXE_cargo-vet");
