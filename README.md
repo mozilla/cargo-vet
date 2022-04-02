@@ -76,33 +76,146 @@ Print version information
 Process all packages in the workspace
 
 # SUBCOMMANDS
+* [audits](#cargo-vet-audits): ??? List audits mechanisms ???
+* [certify](#cargo-vet-certify): Mark `$crate $version` as reviewed with `$message`
+* [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
+* [fetch](#cargo-vet-fetch): Fetch the source of `$crate $version`
+* [forbid](#cargo-vet-forbid): Mark `$crate $version` as unacceptable with `$message`
+* [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
+* [help-markdown](#cargo-vet-help-markdown): Print --help as markdown (for generating docs)
+* [init](#cargo-vet-init): initialize cargo-vet for your project
+* [suggest](#cargo-vet-suggest): Suggest some low-hanging fruit to review
 
-## `audits`
-??? List audits mechanisms ???
-
-## `certify`
-Mark `$crate $version` as reviewed with `$message`
-
-## `diff`
-Yield a diff against the last reviewed version
-
-## `fetch`
-Fetch the source of `$crate $version`
-
-## `forbid`
-Mark `$crate $version` as unacceptable with `$message`
-
-## `help`
+# cargo vet help 
 Print this message or the help of the given subcommand(s)
 
-## `help-markdown`
+# cargo vet help USAGE
+help [SUBCOMMAND]...
+
+# cargo vet help ARGS
+### `<SUBCOMMAND>...`
+The subcommand whose help message to display
+
+# cargo vet help-markdown 
 Print --help as markdown (for generating docs)
 
-## `init`
-initialize cargo-vet for your project
+# cargo vet help-markdown USAGE
+help-markdown
 
-## `suggest`
+# cargo vet help-markdown OPTIONS
+### `-h, --help`
+Print help information
+
+### `-V, --version`
+Print version information
+
+# cargo vet audits 
+??? List audits mechanisms ???
+
+# cargo vet audits USAGE
+audits
+
+# cargo vet audits OPTIONS
+### `-h, --help`
+Print help information
+
+### `-V, --version`
+Print version information
+
+# cargo vet suggest 
 Suggest some low-hanging fruit to review
 
+# cargo vet suggest USAGE
+suggest
+
+# cargo vet suggest OPTIONS
+### `-h, --help`
+Print help information
+
+### `-V, --version`
+Print version information
+
+# cargo vet forbid 
+Mark `$crate $version` as unacceptable with `$message`
+
+# cargo vet forbid USAGE
+forbid <KRATE> <VERSION> <MESSAGE>
+
+# cargo vet forbid ARGS
+### `<KRATE>`
+
+
+### `<VERSION>`
+
+
+### `<MESSAGE>`
+
+
+# cargo vet forbid OPTIONS
+### `-h, --help`
+Print help information
+
+# cargo vet certify 
+Mark `$crate $version` as reviewed with `$message`
+
+# cargo vet certify USAGE
+certify <KRATE> <VERSION> <MESSAGE>
+
+# cargo vet certify ARGS
+### `<KRATE>`
+
+
+### `<VERSION>`
+
+
+### `<MESSAGE>`
+
+
+# cargo vet certify OPTIONS
+### `-h, --help`
+Print help information
+
+# cargo vet diff 
+Yield a diff against the last reviewed version
+
+# cargo vet diff USAGE
+diff
+
+# cargo vet diff OPTIONS
+### `-h, --help`
+Print help information
+
+### `-V, --version`
+Print version information
+
+# cargo vet fetch 
+Fetch the source of `$crate $version`
+
+# cargo vet fetch USAGE
+fetch <KRATE> <VERSION>
+
+# cargo vet fetch ARGS
+### `<KRATE>`
+
+
+### `<VERSION>`
+
+
+# cargo vet fetch OPTIONS
+### `-h, --help`
+Print help information
+
+# cargo vet init 
+initialize cargo-vet for your project
+
+# cargo vet init USAGE
+init
+
+# cargo vet init OPTIONS
+### `-h, --help`
+Print help information
+
+### `-V, --version`
+Print version information
 
 

@@ -725,78 +725,102 @@ fn cmd_vet(
 
 
 fn cmd_help_markdown(
-    _out: &mut dyn Write,
+    out: &mut dyn Write,
     _cli: &Cli,
     _config: &Configs,
     _metadata: &Metadata,
     _sub_args: &HelpMarkdownArgs,
 ) -> Result<(), Box<dyn Error>> {
-    let mut help_buf = Vec::new();
 
     // Make a new App to get the help message this time.
-    Cli::command().write_long_help(&mut help_buf).unwrap();
-    let help = String::from_utf8(help_buf).unwrap();
 
-    println!("# cargo-vet CLI manual");
-    println!();
-    println!("> This manual can be regenerated with `cargo vet help-markdown`");
-    println!();
 
-    // First line is --version
-    let mut lines = help.lines();
-    println!("Version: `{}`", lines.next().unwrap());
-    println!();
+    writeln!(out, "# cargo-vet CLI manual")?;
+    writeln!(out)?;
+    writeln!(out, "> This manual can be regenerated with `cargo vet help-markdown`")?;
+    writeln!(out)?;
 
-    let mut in_subcommands = false;
-    for line in lines {
-        // Use a trailing colon to indicate a heading
-        if let Some(heading) = line.strip_suffix(':') {
-            if !line.starts_with(' ') {
-                // SCREAMING headers are Main headings
-                if heading.to_ascii_uppercase() == heading {
-                    if heading == "SUBCOMMANDS" {
-                        in_subcommands = true;
+
+
+    let mut full_command = Cli::command();
+
+    
+    let mut todo = vec![&mut full_command];
+    let mut is_full_command = true;
+    while let Some(command) = todo.pop() {
+        let mut help_buf = Vec::new();
+        command.write_long_help(&mut help_buf).unwrap();
+        let help = String::from_utf8(help_buf).unwrap();
+        
+        // First line is --version
+        let mut lines = help.lines();
+        let version_line = lines.next().unwrap();
+        let mut subcommand_name = format!("cargo vet {} ", command.get_name());
+
+        if is_full_command {
+            writeln!(out, "Version: `{version_line}`")?;
+            writeln!(out)?;
+            subcommand_name = String::new();
+        } else {
+            writeln!(out, "# {}", subcommand_name)?;
+        }
+
+        let mut in_subcommands_listing = false;
+        for line in lines {
+            // Use a trailing colon to indicate a heading
+            if let Some(heading) = line.strip_suffix(':') {
+                if !line.starts_with(' ') {
+                    // SCREAMING headers are Main headings
+                    if heading.to_ascii_uppercase() == heading {
+                        if heading == "SUBCOMMANDS" {
+                            in_subcommands_listing = true;
+                        }
+                        writeln!(out, "# {subcommand_name}{heading}")?;
+                    } else {
+                        writeln!(out, "## {heading}")?;
                     }
-                    println!("# {}", heading);
-                } else {
-                    println!("## {}", heading);
+                    continue;
                 }
+            }
+
+            // Usage strings get wrapped in full code blocks
+            if line.starts_with("cargo-vet ") {
+                writeln!(out, "```")?;
+                writeln!(out, "{}", line)?;
+                writeln!(out, "```")?;
                 continue;
             }
-        }
 
-        // Usage strings get wrapped in full code blocks
-        if line.starts_with("cargo-vet ") {
-            println!("```");
-            println!("{}", line);
-            println!("```");
-            continue;
-        }
+            if in_subcommands_listing {
+                if !line.starts_with("     ") {
+                    // subcommand names are subheadings
+                    let own_subcommand_name = line.trim();
+                    write!(out, "* [{own_subcommand_name}](#cargo-vet-{own_subcommand_name}): ")?;
+                    continue;
+                }
+            }
+            // The rest is indented, get rid of that
+            let line = line.trim();
 
-        if in_subcommands {
-            if !line.starts_with("     ") {
-                 // subcommand names are subheadings
-                println!("\n## `{}`", line.trim());
+            // argument names are subheadings
+            if line.starts_with('-') || line.starts_with('<') {
+                writeln!(out, "### `{}`", line)?;
                 continue;
             }
-        }
-        // The rest is indented, get rid of that
-        let line = line.trim();
 
-        // argument names are subheadings
-        if line.starts_with('-') || line.starts_with('<') {
-            println!("### `{}`", line);
-            continue;
-        }
+            // escape default/value strings
+            if line.starts_with('[') {
+                writeln!(out, "\\{}", line)?;
+                continue;
+            }
 
-        // escape default/value strings
-        if line.starts_with('[') {
-            println!("\\{}", line);
-            continue;
+            // Normal paragraph text
+            writeln!(out, "{}", line)?;
         }
+        writeln!(out)?;
 
-        // Normal paragraph text
-        println!("{}", line);
+        todo.extend(command.get_subcommands_mut());
+        is_full_command = false;
     }
 
     Ok(())
