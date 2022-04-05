@@ -137,13 +137,12 @@ enum Verbose {
 }
 
 #[derive(serde::Deserialize)]
-struct Config {
+struct MetadataVet {
     // Reserved for future use, if not present version=1 assumed.
     // (not sure whether this versions the format, or semantics, or...
     // for now assuming this species global semantics of some kind.
     version: Option<u64>,
     store: Option<Store>,
-    audits: Option<Vec<String>>,
 }
 #[derive(serde::Deserialize)]
 struct Store {
@@ -157,9 +156,9 @@ struct Store {
 
 /// All available configuration files, overlaying eachother.
 /// Generally contains: `[Default, Workspace, Package]`
-struct Configs(Vec<Config>);
+struct MetadataVets(Vec<MetadataVet>);
 
-impl Configs {
+impl MetadataVets {
     fn store_path(&self) -> &Path {
         // Last config gets priority to set this
         for config in self.0.iter().rev() {
@@ -170,13 +169,6 @@ impl Configs {
             }
         }
         unreachable!("Default config didn't define store.path???");
-    }
-    fn audits(&self) -> Vec<&str> {
-        self.0
-            .iter()
-            .flat_map(|cfg| cfg.audits.iter().flatten())
-            .map(|a| &**a)
-            .collect::<Vec<_>>()
     }
     fn version(&self) -> u64 {
         // Last config gets priority to set this
@@ -497,7 +489,7 @@ fn main() -> Result<(), VetError> {
     // Parse out our own configuration
     //////////////////////////////////////////////////////
 
-    let default_config = Config {
+    let default_config = MetadataVet {
         version: Some(1),
         store: Some(Store {
             path: Some(
@@ -507,12 +499,11 @@ fn main() -> Result<(), VetError> {
                     .into_std_path_buf(),
             ),
         }),
-        audits: None,
     };
 
-    let workspace_config = || -> Option<Config> {
+    let workspace_config = || -> Option<MetadataVet> {
         // FIXME: what is `store.path` relative to here?
-        Config::deserialize(metadata.workspace_metadata.get(WORKSPACE_VET_CONFIG)?)
+        MetadataVet::deserialize(metadata.workspace_metadata.get(WORKSPACE_VET_CONFIG)?)
             .map_err(|e| {
                 error!(
                     "Workspace had [{WORKSPACE_VET_CONFIG}] but it was malformed: {}",
@@ -523,9 +514,9 @@ fn main() -> Result<(), VetError> {
             .ok()
     }();
 
-    let package_config = || -> Option<Config> {
+    let package_config = || -> Option<MetadataVet> {
         // FIXME: what is `store.path` relative to here?
-        Config::deserialize(metadata.root_package()?.metadata.get(PACKAGE_VET_CONFIG)?)
+        MetadataVet::deserialize(metadata.root_package()?.metadata.get(PACKAGE_VET_CONFIG)?)
             .map_err(|e| {
                 error!(
                     "Root package had [{PACKAGE_VET_CONFIG}] but it was malformed: {}",
@@ -548,12 +539,11 @@ fn main() -> Result<(), VetError> {
     if let Some(cfg) = package_config {
         configs.push(cfg);
     }
-    let config = Configs(configs);
+    let config = MetadataVets(configs);
 
-    info!("Final Config: ");
+    info!("Final Metadata Config: ");
     info!("  - version: {}", config.version());
     info!("  - store.path: {:#?}", config.store_path());
-    info!("  - audits: {:#?}", config.audits());
 
     //////////////////////////////////////////////////////
     // Run the actual command
@@ -594,7 +584,7 @@ fn main() -> Result<(), VetError> {
 fn cmd_init(
     _out: &mut dyn Write,
     _cli: &Cli,
-    config: &Configs,
+    config: &MetadataVets,
     metadata: &Metadata,
     _sub_args: &InitArgs,
 ) -> Result<(), Box<dyn Error>> {
@@ -702,7 +692,7 @@ fn cmd_init(
 fn cmd_fetch(
     _out: &mut dyn Write,
     _cli: &Cli,
-    _config: &Configs,
+    _config: &MetadataVets,
     _metadata: &Metadata,
     __sub_args: &FetchArgs,
 ) -> Result<(), Box<dyn Error>> {
@@ -713,7 +703,7 @@ fn cmd_fetch(
 fn cmd_certify(
     _out: &mut dyn Write,
     _cli: &Cli,
-    _config: &Configs,
+    _config: &MetadataVets,
     _metadata: &Metadata,
     _sub_args: &CertifyArgs,
 ) -> Result<(), Box<dyn Error>> {
@@ -724,7 +714,7 @@ fn cmd_certify(
 fn cmd_forbid(
     _out: &mut dyn Write,
     _cli: &Cli,
-    _config: &Configs,
+    _config: &MetadataVets,
     _metadata: &Metadata,
     _sub_args: &ForbidArgs,
 ) -> Result<(), Box<dyn Error>> {
@@ -735,7 +725,7 @@ fn cmd_forbid(
 fn cmd_audits(
     _out: &mut dyn Write,
     _cli: &Cli,
-    _config: &Configs,
+    _config: &MetadataVets,
     _metadata: &Metadata,
     _sub_args: &AuditsArgs,
 ) -> Result<(), Box<dyn Error>> {
@@ -745,7 +735,7 @@ fn cmd_audits(
 fn cmd_suggest(
     _out: &mut dyn Write,
     _cli: &Cli,
-    _config: &Configs,
+    _config: &MetadataVets,
     _metadata: &Metadata,
     _sub_args: &SuggestArgs,
 ) -> Result<(), Box<dyn Error>> {
@@ -755,7 +745,7 @@ fn cmd_suggest(
 fn cmd_diff(
     _out: &mut dyn Write,
     _cli: &Cli,
-    _config: &Configs,
+    _config: &MetadataVets,
     _metadata: &Metadata,
     _sub_args: &DiffArgs,
 ) -> Result<(), Box<dyn Error>> {
@@ -766,21 +756,20 @@ fn cmd_diff(
 fn cmd_vet(
     out: &mut dyn Write,
     cli: &Cli,
-    config: &Configs,
+    config: &MetadataVets,
     metadata: &Metadata,
 ) -> Result<(), Box<dyn Error>> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
     let store_path = config.store_path();
-    let audit_inputs = config.audits();
 
     let audits = load_audits(store_path)?;
     let config = load_config(store_path)?;
     let imports = load_imports(store_path)?;
 
     // Update audits (trusted.toml)
-    if !cli.locked && !audit_inputs.is_empty() {
+    if !cli.locked && !config.imports.is_empty() {
         unimplemented!("fetching audits not yet implemented!");
     }
 
@@ -885,7 +874,7 @@ fn cmd_vet(
 fn cmd_help_markdown(
     out: &mut dyn Write,
     _cli: &Cli,
-    _config: &Configs,
+    _config: &MetadataVets,
     _metadata: &Metadata,
     _sub_args: &HelpMarkdownArgs,
 ) -> Result<(), Box<dyn Error>> {
@@ -997,7 +986,7 @@ fn cmd_help_markdown(
 
 // Utils
 
-fn is_init(config: &Configs) -> bool {
+fn is_init(config: &MetadataVets) -> bool {
     // Probably want to do more here later...
     config.store_path().exists()
 }
