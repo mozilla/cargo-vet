@@ -1,0 +1,11 @@
+
+# cargo-vet audited code
+#
+# Helpful Comment Explaining Format
+
+[criteria]
+reviewed = 'the code was reviewed'
+
+[audits]
+
+
