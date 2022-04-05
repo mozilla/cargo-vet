@@ -68,6 +68,42 @@ criteria listed in the `theirs` key, it is associated with the local criteria
 specified in the `ours` key. Any imported audits that do not match any mappings
 are discarded.
 
+### the `policy` Table
+
+By default, invoking `cargo vet` will recursively check every top-level crate in
+the workspace against the default criteria for all possible platforms. These
+defaults can be overridden as needed with entries in the `policy` table. The
+table is indexed by top-level crate name, and each entry has the following
+fields.
+
+#### `criteria`
+
+A string or array of strings specifying the criteria that should be enforced for
+this crate and its dependency tree.
+
+Defaults to the `default-criteria` in `audits.toml`.
+
+#### `build-and-dev-criteria`
+
+Same as the above, but applied to build-dependencies and dev-dependencies.
+
+Defaults to the same value as `criteria`.
+
+#### `targets`
+
+A string or array of target specifiers for the platforms of interest for this
+top-level crate. These are the platforms that `cargo vet` will require audits
+for when traversing the subtree (audits can optionally [restrict their
+validity](audit-entries.md#targets) to a set of targets).
+
+Defaults to all platforms.
+
+#### `build-and-dev-targets`
+
+Same as the above, but applied to build-dependencies and dev-dependencies.
+
+Defaults to the same value as `targets`.
+
 ### The `unaudited` Table
 
 This table enumerates the set of crates which are being used despite missing the
