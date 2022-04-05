@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::io::{BufReader, Read};
@@ -6,7 +5,7 @@ use std::ops::Deref;
 use std::path::Path;
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
-use cargo_metadata::{Metadata, Package};
+use cargo_metadata::{Metadata, Package, Version, VersionReq};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
 use log::{error, info, trace};
 use serde::de::Visitor;
@@ -16,7 +15,8 @@ use simplelog::{
     ColorChoice, ConfigBuilder, Level, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
 
-type Version = cargo_metadata::Version;
+type StableMap<K, V> = linked_hash_map::LinkedHashMap<K, V>;
+type VetError = Box<dyn Error>;
 
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
@@ -188,50 +188,99 @@ impl Configs {
     }
 }
 
-type Dependencies = BTreeMap<String, Vec<DependencyEntry>>;
+type AuditedDependencies = StableMap<String, Vec<AuditEntry>>;
+
+/// audits.toml
+#[derive(serde::Serialize, serde::Deserialize)]
+struct AuditsFile {
+    /// The assumed criteria for any audit that doesn't specify it.
+    /// This key may be absent if there is only one criteria.
+    #[serde(rename = "default-criteria")]
+    default_criteria: Option<Vec<String>>,
+    /// A map of criteria_name to criteria_description.
+    criteria: StableMap<String, String>,
+    /// Actual audits.
+    audits: AuditedDependencies,
+}
+
+/// config.toml
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ConfigFile {
+    /// Remote audits.toml's that we trust and want to import.
+    imports: StableMap<String, RemoteImport>,
+    /// All of the "foreign" dependencies that we rely on but haven't audited yet.
+    /// Foreign dependencies are just "things on crates.io", everything else
+    /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
+    unaudited: StableMap<String, UnauditedDependency>,
+}
+
+/// imports.lock, not sure what I want to put in here yet.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ImportsFile {
+    imported: StableMap<String, RemoteImport>,
+    // Probably AuditedDependencies???
+}
+
+/// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
+#[derive(serde::Serialize, serde::Deserialize)]
+struct RemoteImport {
+    /// URL of the foreign audits.toml
+    url: String,
+    /// A list of criteria that are implied by foreign criteria
+    criteria_map: Vec<CriteriaMapping>,
+}
+
+/// Translations of foreign criteria to local criteria.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct CriteriaMapping {
+    /// This local criteria is implied...
+    ours: String,
+    /// If all of these foreign criteria apply
+    theirs: Vec<String>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct Audited(Dependencies);
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct Unaudited(Dependencies);
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct Trusted(Dependencies);
+struct UnauditedDependency {
+    /// The version(s) of the crate that we are currently "fine" with leaving unaudited.
+    /// For the sake of consistency, I'm making this a proper Cargo VersionReq:
+    /// https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html
+    ///
+    /// One significant implication of this is that x.y.z is *not* one version. It is
+    /// ^x.y.z, per Cargo convention. You must use =x.y.z to be that specific. We will
+    /// do this for you when we do `cargo vet init`, so this shouldn't be a big deal?
+    version: VersionReq,
+    /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
+    notes: Option<String>,
+}
 
 /// This is just a big vague ball initially. It's up to the Audits/Unuadited/Trusted wrappers
 /// to validate if it "makes sense" for their particular function.
 #[derive(serde::Serialize, serde::Deserialize)]
-struct DependencyEntry {
-    forbidden: Option<Version>,
+struct AuditEntry {
     version: Option<Version>,
     delta: Option<Delta>,
+    forbidden: Option<Version>,
     who: Option<String>,
+    notes: Option<String>,
+    extra: Option<String>,
+    criteria: Option<Vec<String>>,
+    dependency_rules: Option<Vec<DependencyRule>>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct DependencyRule {
+    /// ???
+    require_criteria: Option<()>,
+    /// ???
+    pin_version: Option<()>,
+    /// ???
+    fold_audit: Option<()>,
 }
 
 /// A "VERSION -> VERSION"
 struct Delta {
     from: Version,
     to: Version,
-}
-
-impl Audited {
-    fn new(deps: Dependencies) -> Self {
-        // FIXME: produce errors for invalid DependencyEntries
-        Self(deps)
-    }
-}
-impl Unaudited {
-    fn new(deps: Dependencies) -> Self {
-        // FIXME: produce errors for invalid DependencyEntries
-        Self(deps)
-    }
-}
-impl Trusted {
-    fn new(deps: Dependencies) -> Self {
-        // FIXME: produce errors for invalid DependencyEntries
-        Self(deps)
-    }
 }
 
 impl<'de> Deserialize<'de> for Delta {
@@ -274,6 +323,25 @@ impl Serialize for Delta {
     }
 }
 
+impl ConfigFile {
+    fn validate(&self) -> Result<(), VetError> {
+        // TODO
+        Ok(())
+    }
+}
+impl ImportsFile {
+    fn validate(&self) -> Result<(), VetError> {
+        // TODO
+        Ok(())
+    }
+}
+impl AuditsFile {
+    fn validate(&self) -> Result<(), VetError> {
+        // TODO
+        Ok(())
+    }
+}
+
 static CARGO_ENV: &str = "CARGO";
 static DEFAULT_STORE: &str = "supply-chain";
 // package.metadata.vet
@@ -281,9 +349,9 @@ static PACKAGE_VET_CONFIG: &str = "vet";
 // workspace.metadata.vet
 static WORKSPACE_VET_CONFIG: &str = "vet";
 
-static AUDITED_TOML: &str = "audited.toml";
-static UNAUDITED_TOML: &str = "unaudited.toml";
-static TRUSTED_TOML: &str = "trusted.toml";
+static AUDITS_TOML: &str = "audits.toml";
+static CONFIG_TOML: &str = "config.toml";
+static IMPORTS_LOCK: &str = "imports.lock";
 
 // store = { path = './supply-chain' }
 // audits = [
@@ -296,7 +364,7 @@ static TRUSTED_TOML: &str = "trusted.toml";
 // - trusted.toml
 // - unaudited.toml
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), VetError> {
     let cli = Cli::parse();
 
     //////////////////////////////////////////////////////
@@ -468,6 +536,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             .ok()
     }();
 
+    if workspace_config.is_some() && package_config.is_some() {
+        error!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!");
+        std::process::exit(-1);
+    }
+
     let mut configs = vec![default_config];
     if let Some(cfg) = workspace_config {
         configs.push(cfg);
@@ -530,9 +603,9 @@ fn cmd_init(
 
     let store_path = config.store_path();
 
-    let audited_path = store_path.join(AUDITED_TOML);
-    let trusted_path = store_path.join(TRUSTED_TOML);
-    let unaudited_path = store_path.join(UNAUDITED_TOML);
+    let audits_path = store_path.join(AUDITS_TOML);
+    let config_path = store_path.join(CONFIG_TOML);
+    let imports_path = store_path.join(IMPORTS_LOCK);
 
     // Create store_path
     // - audited.toml (empty)
@@ -545,60 +618,82 @@ fn cmd_init(
     std::fs::create_dir_all(store_path)?;
 
     {
-        trace!("initializing {:#?}", audited_path);
-        let mut audited = File::create(&audited_path)?;
+        trace!("initializing {:#?}", audits_path);
+
+        let audits_struct = AuditsFile {
+            default_criteria: None,
+            criteria: [("reviewed".to_string(), "the code was reviewed".to_string())]
+                .into_iter()
+                .collect(),
+            audits: StableMap::new(),
+        };
+        let audits_toml = toml::to_string_pretty(&audits_struct)?;
+
+        let mut audits = File::create(&audits_path)?;
+
         writeln!(
-            audited,
+            audits,
             r####"
 # cargo-vet audited code
 #
-# Helpful Comment Explaining Format                
+# Helpful Comment Explaining Format
+
+{audits_toml}
 "####
         )?;
     }
 
     {
-        trace!("initializing {:#?}", trusted_path);
-        let mut trusted = File::create(&trusted_path)?;
+        trace!("initializing {:#?}", imports_path);
+        let imports_struct = ImportsFile {
+            imported: StableMap::new(),
+        };
+        let imports_toml = toml::to_string_pretty(&imports_struct)?;
+        let mut imports = File::create(&imports_path)?;
         writeln!(
-            trusted,
+            imports,
             r####"
-# cargo-vet trusted code
+# cargo-vet imports lockfile
 #
-# Helpful Comment Explaining Format                
+# Helpful Comment Explaining Format
+
+{imports_toml}
 "####
         )?;
     }
 
     {
-        trace!("initializing {:#?}", unaudited_path);
+        trace!("initializing {:#?}", config_path);
 
-        let mut dependencies = BTreeMap::new();
+        let mut dependencies = StableMap::new();
         for package in foreign_packages(metadata) {
             dependencies.insert(
                 package.name.clone(),
-                vec![DependencyEntry {
-                    version: Some(package.version.clone()),
-                    who: None,
-                    forbidden: None,
-                    delta: None,
-                }],
+                UnauditedDependency {
+                    version: VersionReq::parse(&format!("={}", package.version))
+                        .expect("Version wasn't a valid VersionReq??"),
+                    notes: Some("automatically imported by 'cargo vet init'".to_string()),
+                },
             );
         }
         // FIXME: probably shouldn't recycle this type, but just getting things working.
-        let dependencies = Audited::new(dependencies);
-        let output = toml::to_string(&dependencies).unwrap();
+        let config_struct = ConfigFile {
+            imports: StableMap::new(),
+            unaudited: dependencies,
+        };
+        let config_toml = toml::to_string_pretty(&config_struct).unwrap();
 
-        let mut unaudited = File::create(&unaudited_path)?;
+        let mut config = File::create(&config_path)?;
         writeln!(
-            unaudited,
+            config,
             r####"
-# cargo-vet unaudited code
+# cargo-vet config.toml
 #
-# Helpful Comment Explaining Format                
+# Helpful Comment Explaining Format
+
+{config_toml}
 "####
         )?;
-        writeln!(unaudited, "{output}")?;
     }
 
     Ok(())
@@ -680,13 +775,9 @@ fn cmd_vet(
     let store_path = config.store_path();
     let audit_inputs = config.audits();
 
-    let audited_path = store_path.join(AUDITED_TOML);
-    let trusted_path = store_path.join(TRUSTED_TOML);
-    let unaudited_path = store_path.join(UNAUDITED_TOML);
-
-    let _audited = Audited::new(load_deps_toml(&audited_path)?);
-    let unaudited = Unaudited::new(load_deps_toml(&unaudited_path)?);
-    let _trusted = Trusted::new(load_deps_toml(&trusted_path)?);
+    let _audits = load_audits(store_path)?;
+    let config = load_config(store_path)?;
+    let _imports = load_imports(store_path)?;
 
     // Update audits (trusted.toml)
     if !cli.locked && !audit_inputs.is_empty() {
@@ -716,11 +807,9 @@ fn cmd_vet(
     let mut all_good = true;
     // Actually vet the dependencies
     'all_packages: for package in foreign_packages(metadata) {
-        if let Some(entries) = unaudited.0.get(&package.name) {
-            for entry in entries {
-                if entry.version.is_some() && entry.version.as_ref().unwrap() == &package.version {
-                    continue 'all_packages;
-                }
+        if let Some(entry) = config.unaudited.get(&package.name) {
+            if entry.version.matches(&package.version) {
+                continue 'all_packages;
             }
         }
 
@@ -873,10 +962,34 @@ fn foreign_packages(metadata: &Metadata) -> impl Iterator<Item = &Package> {
     })
 }
 
-fn load_deps_toml(path: &Path) -> Result<Dependencies, Box<dyn Error>> {
+fn load_toml<T>(path: &Path) -> Result<T, VetError>
+where
+    T: for<'a> Deserialize<'a>,
+{
     let mut reader = BufReader::new(File::open(path)?);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
     let toml = toml::from_str(&string)?;
     Ok(toml)
+}
+
+fn load_audits(store_path: &Path) -> Result<AuditsFile, VetError> {
+    let path = store_path.join(AUDITS_TOML);
+    let file: AuditsFile = load_toml(&path)?;
+    file.validate()?;
+    Ok(file)
+}
+
+fn load_config(store_path: &Path) -> Result<ConfigFile, VetError> {
+    let path = store_path.join(CONFIG_TOML);
+    let file: ConfigFile = load_toml(&path)?;
+    file.validate()?;
+    Ok(file)
+}
+
+fn load_imports(store_path: &Path) -> Result<ImportsFile, VetError> {
+    let path = store_path.join(IMPORTS_LOCK);
+    let file: ImportsFile = load_toml(&path)?;
+    file.validate()?;
+    Ok(file)
 }
