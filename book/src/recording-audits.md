@@ -15,10 +15,9 @@ performed against other criteria.
 For each crate in the audit list, the owner supplies a list of one or more
 absolute or relative versions. Specifying a `version` means that the owner has
 audited that version in its entirety. Specifying a `delta` means that the owner
-has audited the diff between the two versions, and determined the
-right-hand-side version to be suitable if the left-hand-side is assumed to be
-suitable. Relative to the left-hand-side, the right-hand-side can be either a
-subsequent or previous version.  Lexographic ordering of crates is enforced.
+has audited the diff between the two versions, and determined that the changes
+preserve the relevant properties. Deltas can go both forward and backward in the
+version sequence.
 
 If, in the course of your auditing, you find a crate that is _not_ safe, you
 can note this as well with `forbidden`, generally along with either a

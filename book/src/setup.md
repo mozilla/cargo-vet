@@ -29,7 +29,7 @@ Now, try vetting again:
 
 ```
 $ cargo vet
-  All crates vetted!
+  Vetting Succeeded (0 audited, X unaudited)
 ```
 
 You're now up and running, though with an empty audit set: vetting only succeeds

@@ -83,5 +83,5 @@ verification succeeds.
 If verification fails, an error is generated, along with a list of any versions of the
 same crate that would have passed verification. These can be used as inputs to `cargo vet diff`.
 
-If any entries in `unaudited` are superfluous — i.e. verification would succed without them — a
-warning is generated so that the list can be pared down.
+If any entries in `unaudited` are superfluous — i.e. verification would succeed
+without them — a warning is generated so that the list can be pared down.

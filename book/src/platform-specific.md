@@ -14,16 +14,9 @@ ever built for that platform.
 
 The easiest way to address this is to add the platform-specific crates to your
 `unaudited` list. To facilitate this use-case, the list allows dependency
-versions to be star-matched like so:
-
-```
-foo = [
-  "1.*"
-]
-```
-
-Which allows you to avoid constantly fiddling with the version numbers of crates
-you've confirmed are not actually built for your project. The downside of this
-approach, of course, is that your dependency graph might change in the future
-such that these crates are in fact built. For that reason, the more conservative
-approach is to audit these crates like any other.
+versions to be [star-matched](config.md#the-unaudited-table). This allows you to
+avoid constantly fiddling with the version numbers of crates you've confirmed
+are not actually built for your project. The downside of this approach, of
+course, is that your dependency graph might change in the future such that these
+crates are in fact built. For that reason, the more conservative approach is to
+audit these crates like any other.
