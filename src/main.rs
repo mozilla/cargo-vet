@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::io::{BufReader, Read};
@@ -217,8 +218,7 @@ struct ConfigFile {
 /// imports.lock, not sure what I want to put in here yet.
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ImportsFile {
-    imported: StableMap<String, RemoteImport>,
-    // Probably AuditedDependencies???
+    audits: StableMap<String, AuditsFile>,
 }
 
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
@@ -259,7 +259,7 @@ struct UnauditedDependency {
 struct AuditEntry {
     version: Option<Version>,
     delta: Option<Delta>,
-    forbidden: Option<Version>,
+    forbidden: Option<VersionReq>,
     who: Option<String>,
     notes: Option<String>,
     extra: Option<String>,
@@ -646,7 +646,7 @@ fn cmd_init(
     {
         trace!("initializing {:#?}", imports_path);
         let imports_struct = ImportsFile {
-            imported: StableMap::new(),
+            audits: StableMap::new(),
         };
         let imports_toml = toml::to_string_pretty(&imports_struct)?;
         let mut imports = File::create(&imports_path)?;
@@ -775,52 +775,103 @@ fn cmd_vet(
     let store_path = config.store_path();
     let audit_inputs = config.audits();
 
-    let _audits = load_audits(store_path)?;
+    let audits = load_audits(store_path)?;
     let config = load_config(store_path)?;
-    let _imports = load_imports(store_path)?;
+    let imports = load_imports(store_path)?;
 
     // Update audits (trusted.toml)
     if !cli.locked && !audit_inputs.is_empty() {
         unimplemented!("fetching audits not yet implemented!");
     }
 
-    // TODO: do proper resolution on the 3 inputs.
-    //
-    // Relevant entries:
-    // * unaudited.version: this entire version is unaudited, but implicitly trusted
-    // * audited.forbid: this version is bad, do not use
-    // * audited.version: this entire version has been reviewed
-    // * audited.delta(x -> y): the changes from x to y
-    // * trusted.*: I think the same as audited.* but separate for logistics
-    //   probably audited "overrides" trusted if they disagree? (via forbid?)
-    //
-    // If not for deltas, resolving packages would be fairly trivial.
-    // *With* deltas I think we want to have some DAG-like analysis where you start
-    // at the current version and look for a 'delta.to' that matches that version,
-    // and then recursively check `delta.from'
-    //
-    // One thing that's unclear is what should happen if 'delta' hops *over* a version
-    // i.e. if we have `audited.version = 5` and `audited.delta = 3 -> 7', does that
-    // allow us to accept version 7? This is kind of an incoherent state but it seems
-    // plausible with 'trusted' inputs imported from elsewhere!
+    let root_version = Version::new(0, 0, 0);
+    let no_audits = Vec::new();
 
     let mut all_good = true;
     // Actually vet the dependencies
     'all_packages: for package in foreign_packages(metadata) {
-        if let Some(entry) = config.unaudited.get(&package.name) {
-            if entry.version.matches(&package.version) {
-                continue 'all_packages;
+        let unaudited = config.unaudited.get(&package.name);
+
+        // Just merge all the entries from the foreign audit files and our audit file.
+        let foreign_audits = imports
+            .audits
+            .values()
+            .flat_map(|audit_file| audit_file.audits.get(&package.name).unwrap_or(&no_audits));
+        let own_audits = audits.audits.get(&package.name).unwrap_or(&no_audits);
+
+        let mut forbids = Vec::new();
+        // Deltas are flipped so that we have a map of 'to: [froms]'. This lets
+        // us start at the current version and look up all the deltas that *end* at that
+        // version. By repeating this over and over, we can slowly walk back in time until
+        // we run out of deltas or reach full audit or an unaudited entry.
+        let mut deltas_to_from = HashMap::<&Version, HashSet<&Version>>::new();
+
+        // Collect up all the deltas
+        for entry in own_audits.iter().chain(foreign_audits) {
+            // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
+            if let Some(ver) = &entry.version {
+                deltas_to_from.entry(ver).or_default().insert(&root_version);
+            }
+            if let Some(delta) = &entry.delta {
+                deltas_to_from
+                    .entry(&delta.to)
+                    .or_default()
+                    .insert(&delta.from);
+            }
+            if let Some(forbid) = &entry.forbidden {
+                forbids.push(forbid);
             }
         }
 
-        all_good = false;
-        error!(
-            "Unregistered Package Version: {} {}",
-            package.name, package.version
-        );
+        // Reject forbidden packages
+        //
+        // TODO: should the "local" audit have a mechanism to override foreign forbids?
+        // TODO: should forbids be applied during delta resolution, invalidating deltas?
+        for forbid in &forbids {
+            if forbid.matches(&package.version) {
+                error!("forbidden package: {} {}", package.name, package.version);
+            }
+        }
+
+        // Now try to resolve the deltas
+        let mut cur_versions: HashSet<&Version> = [&package.version].into_iter().collect();
+        let mut next_versions: HashSet<&Version> = HashSet::new();
+        loop {
+            // If there's no versions left to check, we've failed
+            if cur_versions.is_empty() {
+                error!("could not cerify {} {}", package.name, package.version);
+                all_good = false;
+            }
+
+            // Check if we've succeeded
+            for &version in &cur_versions {
+                if let Some(allowed) = unaudited {
+                    if allowed.version.matches(version) {
+                        // Reached an explicitly unaudited package, that's good enough
+                        continue 'all_packages;
+                    }
+                    if version == &root_version {
+                        // Reached 0.0.0, which means we hit a Full Audit, that's perfect
+                        continue 'all_packages;
+                    }
+                }
+            }
+
+            // Apply deltas to move along the next "layer" of the search
+            for version in &cur_versions {
+                if let Some(versions) = deltas_to_from.get(version) {
+                    next_versions.extend(versions);
+                }
+            }
+
+            // Now swap the next versions to be the current versions
+            core::mem::swap(&mut cur_versions, &mut next_versions);
+            next_versions.clear();
+        }
     }
 
     if !all_good {
+        error!("some crates failed to vet");
         std::process::exit(-1);
     }
 
