@@ -31,35 +31,36 @@ A sample `audits.toml` looks like this:
 
 [[audits.bar]]
 version = "1.2.3"
-who = "Alice"
+who = "Alice Foo <alicefoo@example.com>"
 
 [[audits.bar]]
 delta = "1.2.3 -> 1.2.4"
-who = "Bob"
+who = "Bob Bar <bobbar@example.com>""
 
 [[audits.bar]]
 version = "2.1.3"
-who = "Alice"
+who = "Alice Foo <alicefoo@example.com>"
 
 [[audits.bar]]
 delta = "2.1.3 -> 2.1.1"
-who = "Alice"
+who = "Alice Foo <alicefoo@example.com>"
 
 [[audits.baz]]
 version = "0.2"
-who = "Alice"
+who = "Alice Foo <alicefoo@example.com>"
 criteria = "safe_to_run_locally"
 
 [[audits.foo]]
 version = "0.2.1 -> 0.3.1"
-who = "Bob"
+who = "Bob Bar <bobbar@example.com>""
 
 [[audits.malicious_crate]]
 violation = "*"
+who = "Bob Bar <bobbar@example.com>""
 
 [[audits.partially_vulnerable_crate]]
 violation = "<1.3"
-who = "Bob"
+who = "Bob Bar <bobbar@example.com>""
 ```
 
 Exactly one of `version`, `delta`, or `violation` must be specified.  The `who`

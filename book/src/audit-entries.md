@@ -47,14 +47,62 @@ their project doesn't target).
 
 ## `who`
 
+A string identifying the auditor. When invoking `cargo vet certify`, the
+value is auto-populated from the global git config.
+
+This field is optional but encouraged.
+
 ## `notes`
 
-## `extra`
+An optional free-form string containing any information the auditor may wish to
+record.
 
-## `dependency_rules`
+## `dependency_criteria`
 
-### `require_criteria`
+An optional inline table specifying the criteria the vetting algorithm should
+check for in a dependency subtree.
 
-### `pin_version`
+Ordinarily, when vetting a crate for criteria `foo`, `cargo vet` will
+recursively vet each direct dependency for `foo` as well. This is usually what
+you want, but occasionally you may wish to add or remove criteria for certain
+subtrees.
 
-### `fold_audit`
+For example, a dependency used to encrypt sensitive data might need review from
+cryptography experts:
+
+```
+default-criteria = 'secure'
+
+...
+
+[audit.mynetworkingcrate]
+version = '2.3.4'
+dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
+```
+
+Alternatively, a dependency might be used in a very limited way that allows you
+to reduce the level of scrutiny. For example, a crate might import a sprawling
+platform binding crate just to invoke one or two native functions:
+
+```
+default-criteria = 'secure'
+
+...
+
+[audit.foo]
+version = '1.5.2'
+dependency_criteria = { winapi: 'safe_to_run_locally' }
+notes = '''
+  The winapi dependency is only used in a few places, and I have directly audited
+  the parts of it that are used. As long as we ensure that minor updates don't
+  include blatantly malicious code in the build script we should be fine.
+  '''
+
+```
+
+This field only has an effect when the associated audit entry is actually used
+in the recursive vetting algorithm. In the where multiple entries are used for a
+single crate, their `dependency_criteria` are unioned together.
+
+These criteria propagate through the entire subtree unless inner branches
+specify their own `require_criteria`.
