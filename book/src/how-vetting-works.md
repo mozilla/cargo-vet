@@ -59,11 +59,11 @@ Any unmapped criteria (and audits under those criteria) are discarded.
 `audits.toml`, `imports.lock`, and  `config.toml` are then parsed. If any of the
 three are not well-formed, an error is thrown.
 
-Next, the files are ingested in order into a table, indexed by crate name. Each
-table entry contains a list of absolute versions, a list of version deltas, a
-list of forbidden versions. Each insertion checks for overlap between the set of
-audited versions and forbidden versions; if overlap is created, an error is
-thrown.
+Next, the files are ingested in order into a multi-level table, indexed first by
+crate name and then by criteria. Each concrete entry contains a list of absolute
+versions, a list of version deltas, a list of violation versions. Each insertion
+checks for overlap between the set of audited versions and violation versions;
+if overlap is created, an error is thrown.
 
 Next, the depedency subtrees of each top-level crate are traversed in accordance
 with the policy specified for each crate. TODO: Precisely specify the subtree
