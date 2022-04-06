@@ -65,23 +65,13 @@ list of forbidden versions. Each insertion checks for overlap between the set of
 audited versions and forbidden versions; if overlap is created, an error is
 thrown.
 
-The list of crates to be verified is then enumerated. For each such crates, the following steps are performed:
+Next, the depedency subtrees of each top-level crate are traversed in accordance
+with the policy specified for each crate. TODO: Precisely specify the subtree
+traversal algorithm.
 
-* The crate name is looked up in the table. If there is no entry, verification fails.
-
-* If the crate version matches the list of forbidden versions, verification fails.
-
-* If the crate version matches the list of absolute versions, verification succeeds.
-
-* All delta entries whose right-hand-side matches the crate version are collected. For
-each such entry, the verification algorithm is recursively run with the version specified
-on the left-hand-side (with appropriate loop checking). If any recursive call suceeds,
-verification succeeds.
-
-* Otherwise, verification fails.
-
-If verification fails, an error is generated, along with a list of any versions of the
-same crate that would have passed verification. These can be used as inputs to `cargo vet diff`.
+If verification fails, an error is generated, along with a list of any versions
+of the same crate that would have passed verification. These can be used as
+inputs to `cargo vet diff`.
 
 If any entries in `unaudited` are superfluous — i.e. verification would succeed
 without them — a warning is generated so that the list can be pared down.
