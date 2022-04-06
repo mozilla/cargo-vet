@@ -1,10 +1,10 @@
 # Defining Criteria
 
 Before you can go about importing or performing audits, you need to define what
-you want the audits to involve. This is specified, in prose, via the
-`[criteria]` section of `audited.toml`. These descriptions should be concise,
-but have enough detail so that auditors know what's expected of them, and other
-projects know how to interpret the results.
+you want the audits to entail. This is specified, in prose, via the `[criteria]`
+section of `audited.toml`. These descriptions should be concise, but have enough
+detail so that auditors know what's expected of them, and other projects know
+how to interpret the results.
 
 ## The Basics
 
@@ -39,4 +39,4 @@ criteria:
   for A, B, and C allows the two projects to partially share work.
 
 You can define as many separate sets of criteria as you like, so long as you
-[designate a default](audits-toml.md).
+[designate a default](config.md#default-criteria).

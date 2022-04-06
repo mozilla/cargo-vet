@@ -85,12 +85,12 @@ $ cargo vet certify foo 1.2 1.2.1
   Recorded relative audit between foo versions 1.2 and 1.2.1
 ```
 
-In the future, it may be valuable to stand up a web service to provide
-a richer display of the differences between public crates. However, since
-auditing for security vulnerabilities is usually a much lighter-weight process
-than full code review, this functionality is not essential.
+In the future, it may be valuable to stand up a web service to provide a richer
+display of the differences between public crates. However, since auditing is
+usually a much lighter-weight process than full code review, this functionality
+is not essential.
 
-## Shrinking the `unaudited` List
+## Shrinking the `unaudited` Table
 
 Even when your project is passing `cargo vet`, lingering entries in `unaudited`
 could still leave you vulnerable. As such, shrinking it is a worthwhile endeavor.
