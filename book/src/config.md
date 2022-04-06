@@ -112,10 +112,7 @@ required audits. It has a similar structure to the `audits` table in
 
 #### `version`
 
-Specifies the version which should be exempted. In addition to the syntax
-supported for the `version` field of the `audits` table, this field also
-supports star-matched versions (e.g. "1.*"), which is useful for managing
-[unused dependencies](./platform-specific.md).
+Specifies the exact version which should be exempted.
 
 #### `notes`
 
