@@ -42,6 +42,19 @@ Once you start recording audits, you should generally avoid making changes to
 the default criteria, since such changes will automatically apply to the bulk of
 your previously-recorded audits and likely misrepresent what actually happened.
 
+#### `implies`
+
+An optional string or array of other criteria that are subsumed by this entry.
+Audit entries that are certified with these criteria are also implicitly
+certified with any implied criteria.
+
+For example:
+
+```
+[criteria.secure]
+implies = 'safe_to_run_locally'
+```
+
 ### The `audits` Table
 
 This table contains the audit entries, indexed by crate name. Because there are
