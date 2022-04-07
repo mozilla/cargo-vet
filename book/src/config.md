@@ -23,16 +23,24 @@ This file contains the audits performed by the project members and descriptions
 of the audit criteria. The information in this file can be imported by other
 projects.
 
-### `default-criteria`
-
-This key defines the criteria for recorded audits that do not specify the
-`criteria` field. The value may be either a string or an array of strings. If
-only one set of criteria is defined for the project, this key may be omitted.
-
 ### The `criteria` Table
 
-This table maps criteria identifiers to their descriptions. There must be at
-least one entry.
+This table defines different sets of criteria. There must be at least one entry.
+Entries have several potential fields:
+
+### `description`
+
+A concise description of the criteria. This field is required.
+
+#### `default`
+
+A boolean indicating whether this entry should be part of the default criteria
+for the audit set. Default criteria are associated with every audit entry that
+does not explicitly specify criteria.
+
+Once you start recording audits, you should generally avoid making changes to
+the default criteria, since such changes will automatically apply to the bulk of
+your previously-recorded audits and likely misrepresent what actually happened.
 
 ### The `audits` Table
 
@@ -81,7 +89,7 @@ fields.
 A string or array of strings specifying the criteria that should be enforced for
 this crate and its dependency tree.
 
-Defaults to the `default-criteria` in `audits.toml`.
+Defaults to the default criteria from `audits.toml`.
 
 #### `build-and-dev-criteria`
 

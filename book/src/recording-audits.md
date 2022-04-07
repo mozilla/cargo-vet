@@ -9,8 +9,8 @@ effect on your project unless you explicitly import them in `config.toml`.
 
 Listing a crate in `audits.toml` means that the you've inspected it and
 determined that it meets your criteria. Usually these will be the [default
-criteria](config.md#default-criteria), but you can also specify that a given
-audit was performed against a different set of criteria.
+criteria](config.md#default), but you can also specify that a given audit was
+performed against a different set of criteria.
 
 Each crate can have one or more audit entries, which support various fields.
 Specifying a `version` means that the owner has audited that version in its

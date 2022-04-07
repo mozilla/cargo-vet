@@ -36,8 +36,8 @@ the dependency even if it's listed in the `unaudited` table.
 ## `criteria`
 
 Specifies the relevant criteria for this audit. For `version` and `delta`
-entries, this defaults to value(s) specified in the top-level `default-criteria`
-field. For `violation` entries, this defaults to all defined criteria.
+entries, this defaults to the projects default criteria. For `violation`
+entries, this defaults to all defined criteria.
 
 ## `targets`
 
@@ -79,7 +79,8 @@ For example, a dependency used to encrypt sensitive data might need review from
 cryptography experts:
 
 ```
-default-criteria = 'secure'
+[criteria.secure]
+default = true
 
 ...
 
@@ -93,7 +94,8 @@ to reduce the level of scrutiny. For example, a crate might import a sprawling
 platform binding crate just to invoke one or two native functions:
 
 ```
-default-criteria = 'secure'
+[criteria.secure]
+default = true
 
 ...
 
