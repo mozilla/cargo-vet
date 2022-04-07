@@ -111,8 +111,8 @@ notes = '''
 ```
 
 This field only has an effect when the associated audit entry is actually used
-in the recursive vetting algorithm. In the where multiple entries are used for a
-single crate, their `dependency_criteria` are unioned together.
+in the recursive vetting algorithm. In the case where multiple entries are used
+for a single crate, their `dependency_criteria` are unioned together.
 
 These criteria propagate through the entire subtree unless inner branches
-specify their own `require_criteria`.
+specify their own `dependency_criteria`.
