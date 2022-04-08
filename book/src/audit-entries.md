@@ -49,6 +49,9 @@ However, they can optionally be restricted to certain platforms (so that, for
 example, an auditor can skim over complicated assembly code for a platform that
 their project doesn't target).
 
+The syntax for this field mirrors Cargo's syntax for [platform-specific
+dependencies](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#platform-specific-dependencies).
+
 ## `who`
 
 A string identifying the auditor. When invoking `cargo vet certify`, the
