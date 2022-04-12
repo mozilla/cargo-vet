@@ -1,14 +1,16 @@
 use std::collections::{HashMap, HashSet};
-use std::error::Error;
-use std::fmt;
+use std::ffi::OsString;
+use std::fs::OpenOptions;
 use std::io::{BufReader, Read};
 use std::ops::Deref;
 use std::path::Path;
+use std::process::Command;
+use std::{fmt, fs};
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package, Version, VersionReq};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
-use log::{error, info, trace};
+use log::{error, info, trace, warn};
 use serde::de::Visitor;
 use serde::{de, de::Deserialize, ser::Serialize};
 use serde::{Deserializer, Serializer};
@@ -17,7 +19,7 @@ use simplelog::{
 };
 
 type StableMap<K, V> = linked_hash_map::LinkedHashMap<K, V>;
-type VetError = Box<dyn Error>;
+type VetError = eyre::Report;
 
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
@@ -60,7 +62,7 @@ enum Commands {
     #[clap(disable_version_flag = true)]
     Init(InitArgs),
 
-    /// Fetch the source of `$crate $version`
+    /// Fetch the source of `$package $version`
     #[clap(disable_version_flag = true)]
     Fetch(FetchArgs),
 
@@ -68,21 +70,17 @@ enum Commands {
     #[clap(disable_version_flag = true)]
     Diff(DiffArgs),
 
-    /// Mark `$crate $version` as reviewed with `$message`
+    /// Mark `$package $version` as reviewed with `$message`
     #[clap(disable_version_flag = true)]
     Certify(CertifyArgs),
 
-    /// Mark `$crate $version` as unacceptable with `$message`
+    /// Mark `$package $version` as unacceptable with `$message`
     #[clap(disable_version_flag = true)]
     Forbid(ForbidArgs),
 
     /// Suggest some low-hanging fruit to review
     #[clap(disable_version_flag = true)]
     Suggest(SuggestArgs),
-
-    /// ??? List audits mechanisms ???
-    #[clap(disable_version_flag = true)]
-    Audits(AuditsArgs),
 
     /// Print --help as markdown (for generating docs)
     #[clap(disable_version_flag = true)]
@@ -93,34 +91,39 @@ enum Commands {
 #[derive(clap::Args)]
 struct InitArgs {}
 
+/// Fetches the crate to a temp location
 #[derive(clap::Args)]
 struct FetchArgs {
-    krate: String,
+    package: String,
     version: String,
 }
 
+/// Emits a diff of the two versions
 #[derive(clap::Args)]
-struct DiffArgs {}
+struct DiffArgs {
+    package: String,
+    version1: String,
+    version2: String,
+}
 
+/// Cerifies the given version
 #[derive(clap::Args)]
 struct CertifyArgs {
-    krate: String,
-    version: String,
-    message: String,
+    package: String,
+    version1: String,
+    version2: Option<String>,
 }
 
+/// Forbids the given version
 #[derive(clap::Args)]
 struct ForbidArgs {
-    krate: String,
+    package: String,
     version: String,
     message: String,
 }
 
 #[derive(clap::Args)]
 struct SuggestArgs {}
-
-#[derive(clap::Args)]
-struct AuditsArgs {}
 
 #[derive(clap::Args)]
 struct HelpMarkdownArgs {}
@@ -136,8 +139,19 @@ enum Verbose {
     Trace,
 }
 
+/// Absolutely All The Global Configurations
+struct Config {
+    // file: ConfigFile,
+    metacfg: MetaConfig,
+    metadata: Metadata,
+    cli: Cli,
+    cargo: OsString,
+    tmp: PathBuf,
+}
+
+/// A `[*.metadata.vet]` table in a Cargo.toml, configuring our behaviour
 #[derive(serde::Deserialize)]
-struct MetadataVet {
+struct MetaConfigInstance {
     // Reserved for future use, if not present version=1 assumed.
     // (not sure whether this versions the format, or semantics, or...
     // for now assuming this species global semantics of some kind.
@@ -149,16 +163,17 @@ struct Store {
     path: Option<PathBuf>,
 }
 
-// FIXME: Probably want this to be a tree, and for queries to
-// be keyed off the "current package" but unclear what that would *mean*
-// so for now assume there is a linear chain of overrides. Possible
-// that any "tree-like" situation wants to be an error...
+// FIXME: It's *possible* for someone to have a workspace but not have a
+// global `vet` instance for the whole workspace. In this case they *could*
+// have individual `vet` instances for each subcrate they care about.
+// This is... Weird, and it's unclear what that *means*... but maybe it's valid?
+// Either way, we definitely don't support it right now!
 
 /// All available configuration files, overlaying eachother.
 /// Generally contains: `[Default, Workspace, Package]`
-struct MetadataVets(Vec<MetadataVet>);
+struct MetaConfig(Vec<MetaConfigInstance>);
 
-impl MetadataVets {
+impl MetaConfig {
     fn store_path(&self) -> &Path {
         // Last config gets priority to set this
         for config in self.0.iter().rev() {
@@ -334,6 +349,8 @@ impl AuditsFile {
     }
 }
 
+static EMPTY_PACKAGE: &str = "empty";
+static TEMP_DIR_SUFFIX: &str = "cargo-vet-checkout";
 static CARGO_ENV: &str = "CARGO";
 static DEFAULT_STORE: &str = "supply-chain";
 // package.metadata.vet
@@ -440,11 +457,9 @@ fn main() -> Result<(), VetError> {
     // Fetch cargo metadata
     ///////////////////////////////////////////////////
 
-    let cargo = std::env::var_os(CARGO_ENV);
+    let cargo = std::env::var_os(CARGO_ENV).expect("Cargo failed to set $CARGO, how?");
     let mut cmd = cargo_metadata::MetadataCommand::new();
-    if let Some(cargo) = cargo {
-        cmd.cargo_path(cargo);
-    }
+    cmd.cargo_path(&cargo);
     if let Some(manifest_path) = &cli.manifest.manifest_path {
         cmd.manifest_path(manifest_path);
     }
@@ -489,7 +504,7 @@ fn main() -> Result<(), VetError> {
     // Parse out our own configuration
     //////////////////////////////////////////////////////
 
-    let default_config = MetadataVet {
+    let default_config = MetaConfigInstance {
         version: Some(1),
         store: Some(Store {
             path: Some(
@@ -501,9 +516,9 @@ fn main() -> Result<(), VetError> {
         }),
     };
 
-    let workspace_config = || -> Option<MetadataVet> {
+    let workspace_metacfg = || -> Option<MetaConfigInstance> {
         // FIXME: what is `store.path` relative to here?
-        MetadataVet::deserialize(metadata.workspace_metadata.get(WORKSPACE_VET_CONFIG)?)
+        MetaConfigInstance::deserialize(metadata.workspace_metadata.get(WORKSPACE_VET_CONFIG)?)
             .map_err(|e| {
                 error!(
                     "Workspace had [{WORKSPACE_VET_CONFIG}] but it was malformed: {}",
@@ -514,9 +529,9 @@ fn main() -> Result<(), VetError> {
             .ok()
     }();
 
-    let package_config = || -> Option<MetadataVet> {
+    let package_metacfg = || -> Option<MetaConfigInstance> {
         // FIXME: what is `store.path` relative to here?
-        MetadataVet::deserialize(metadata.root_package()?.metadata.get(PACKAGE_VET_CONFIG)?)
+        MetaConfigInstance::deserialize(metadata.root_package()?.metadata.get(PACKAGE_VET_CONFIG)?)
             .map_err(|e| {
                 error!(
                     "Root package had [{PACKAGE_VET_CONFIG}] but it was malformed: {}",
@@ -527,71 +542,74 @@ fn main() -> Result<(), VetError> {
             .ok()
     }();
 
-    if workspace_config.is_some() && package_config.is_some() {
+    if workspace_metacfg.is_some() && package_metacfg.is_some() {
         error!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!");
         std::process::exit(-1);
     }
 
-    let mut configs = vec![default_config];
-    if let Some(cfg) = workspace_config {
-        configs.push(cfg);
+    let mut metacfgs = vec![default_config];
+    if let Some(metacfg) = workspace_metacfg {
+        metacfgs.push(metacfg);
     }
-    if let Some(cfg) = package_config {
-        configs.push(cfg);
+    if let Some(metacfg) = package_metacfg {
+        metacfgs.push(metacfg);
     }
-    let config = MetadataVets(configs);
+    let metacfg = MetaConfig(metacfgs);
 
     info!("Final Metadata Config: ");
-    info!("  - version: {}", config.version());
-    info!("  - store.path: {:#?}", config.store_path());
+    info!("  - version: {}", metacfg.version());
+    info!("  - store.path: {:#?}", metacfg.store_path());
 
     //////////////////////////////////////////////////////
     // Run the actual command
     //////////////////////////////////////////////////////
 
-    let init = is_init(&config);
+    let init = is_init(&metacfg);
     if matches!(cli.command, Some(Commands::Init { .. })) {
         if init {
             error!(
                 "'cargo vet' already initialized (store found at {:#?})",
-                config.store_path()
+                metacfg.store_path()
             );
             std::process::exit(-1);
         }
     } else if !init {
         error!(
             "You must run 'cargo vet init' (store not found at {:#?})",
-            config.store_path()
+            metacfg.store_path()
         );
         std::process::exit(-1);
     }
 
-    match &cli.command {
-        Some(Commands::Init(sub_args)) => cmd_init(out, &cli, &config, &metadata, sub_args),
-        Some(Commands::Fetch(sub_args)) => cmd_fetch(out, &cli, &config, &metadata, sub_args),
-        Some(Commands::Certify(sub_args)) => cmd_certify(out, &cli, &config, &metadata, sub_args),
-        Some(Commands::Forbid(sub_args)) => cmd_forbid(out, &cli, &config, &metadata, sub_args),
-        Some(Commands::Suggest(sub_args)) => cmd_suggest(out, &cli, &config, &metadata, sub_args),
-        Some(Commands::Diff(sub_args)) => cmd_diff(out, &cli, &config, &metadata, sub_args),
-        Some(Commands::Audits(sub_args)) => cmd_audits(out, &cli, &config, &metadata, sub_args),
-        Some(Commands::HelpMarkdown(sub_args)) => {
-            cmd_help_markdown(out, &cli, &config, &metadata, sub_args)
-        }
-        None => cmd_vet(out, &cli, &config, &metadata),
+    // TODO: make this configurable
+    // TODO: maybe this wants to be actually totally random to allow multi-vets?
+    let tmp = std::env::temp_dir().join(TEMP_DIR_SUFFIX);
+    let cfg = Config {
+        metacfg,
+        metadata,
+        cli,
+        cargo,
+        tmp,
+    };
+
+    use Commands::*;
+    match &cfg.cli.command {
+        Some(Init(sub_args)) => cmd_init(out, &cfg, sub_args),
+        Some(Fetch(sub_args)) => cmd_fetch(out, &cfg, sub_args),
+        Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
+        Some(Forbid(sub_args)) => cmd_forbid(out, &cfg, sub_args),
+        Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
+        Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
+        Some(HelpMarkdown(sub_args)) => cmd_help_md(out, &cfg, sub_args),
+        None => cmd_vet(out, &cfg),
     }
 }
 
-fn cmd_init(
-    _out: &mut dyn Write,
-    _cli: &Cli,
-    config: &MetadataVets,
-    metadata: &Metadata,
-    _sub_args: &InitArgs,
-) -> Result<(), Box<dyn Error>> {
+fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<(), VetError> {
     // Initialize vet
     trace!("initializing...");
 
-    let store_path = config.store_path();
+    let store_path = cfg.metacfg.store_path();
 
     let audits_path = store_path.join(AUDITS_TOML);
     let config_path = store_path.join(CONFIG_TOML);
@@ -656,7 +674,7 @@ fn cmd_init(
         trace!("initializing {:#?}", config_path);
 
         let mut dependencies = StableMap::new();
-        for package in foreign_packages(metadata) {
+        for package in foreign_packages(&cfg.metadata) {
             dependencies.insert(
                 package.name.clone(),
                 UnauditedDependency {
@@ -689,87 +707,276 @@ fn cmd_init(
     Ok(())
 }
 
-fn cmd_fetch(
-    _out: &mut dyn Write,
-    _cli: &Cli,
-    _config: &MetadataVets,
-    _metadata: &Metadata,
-    __sub_args: &FetchArgs,
-) -> Result<(), Box<dyn Error>> {
+fn cmd_fetch(out: &mut dyn Write, cfg: &Config, sub_args: &FetchArgs) -> Result<(), VetError> {
     // Download a crate's source to a temp location for review
-    unimplemented!()
+    let tmp = &cfg.tmp;
+    clean_tmp(tmp)?;
+
+    let to_fetch = &[(&*sub_args.package, &*sub_args.version)];
+    let fetched = fetch_crates(cfg, tmp, "fetch", to_fetch)?.join(&sub_args.package);
+
+    writeln!(out, "  fetched to {:#?}", fetched)?;
+    Ok(())
 }
 
-fn cmd_certify(
-    _out: &mut dyn Write,
-    _cli: &Cli,
-    _config: &MetadataVets,
-    _metadata: &Metadata,
-    _sub_args: &CertifyArgs,
-) -> Result<(), Box<dyn Error>> {
+fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
     // Certify that you have reviewed a crate's source for some version / delta
-    unimplemented!()
+    let store_path = cfg.metacfg.store_path();
+    let mut audits = load_audits(store_path)?;
+
+    // FIXME: better error when this goes bad
+    let version1 = Version::parse(&sub_args.version1).expect("version1 wasn't a valid Version");
+    let version2 = sub_args
+        .version2
+        .as_ref()
+        .map(|v| Version::parse(v).expect("version2 wasn't a valid Version"));
+
+    let mut version = None;
+    let mut delta = None;
+    if let Some(version2) = version2 {
+        // This is a delta audit
+        delta = Some(Delta {
+            from: version1,
+            to: version2,
+        });
+    } else {
+        // This is an absolute audit
+        version = Some(version1);
+    }
+
+    // TODO: source this from git or something?
+    let who = Some("?TODO?".to_string());
+    // TODO: start an interactive prompt? launch $EDITOR?
+    let notes = Some("?TODO?".to_string());
+    // I think this should always be blank when done via certify?
+    let extra = None;
+    // TODO: No criteria is the default criteria? Does that make sense?
+    // Shouldn't we actually snapshot the current default so the default can change
+    // without changing the claims on old audits? Or do we in fact *want* that so
+    // that audit criteria can be subdivided, and the defaults will pick that up..?
+    //
+    // Alternate impl?
+    // audits.default_criteria.clone()
+    //      .unwrap_or_else(|| audits.criteria.keys().cloned().collect());
+    let criteria = None;
+    // TODO: figure this out
+    let dependency_rules = None;
+
+    let new_entry = AuditEntry {
+        version,
+        delta,
+        forbidden: None,
+        who,
+        notes,
+        extra,
+        criteria,
+        dependency_rules,
+    };
+
+    // TODO: check if the version makes sense..?
+    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+        error!("'{}' isn't one of your foreign packages", sub_args.package);
+        std::process::exit(-1);
+    }
+
+    audits
+        .audits
+        .entry(sub_args.package.clone())
+        .or_insert(vec![])
+        .push(new_entry);
+    store_audits(store_path, audits)?;
+
+    Ok(())
 }
 
-fn cmd_forbid(
-    _out: &mut dyn Write,
-    _cli: &Cli,
-    _config: &MetadataVets,
-    _metadata: &Metadata,
-    _sub_args: &ForbidArgs,
-) -> Result<(), Box<dyn Error>> {
+fn cmd_forbid(_out: &mut dyn Write, cfg: &Config, sub_args: &ForbidArgs) -> Result<(), VetError> {
     // Forbid a crate's source for some version
-    unimplemented!()
+    let store_path = cfg.metacfg.store_path();
+    let mut audits = load_audits(store_path)?;
+
+    // FIXME: better error when this goes bad
+    // TODO: properly make this an `=` VersionReq
+    let forbidden =
+        Some(VersionReq::parse(&sub_args.version).expect("version wasn't a valid VersionReq"));
+
+    // TODO: source this from git or something?
+    let who = Some("?TODO?".to_string());
+    // TODO: start an interactive prompt? launch $EDITOR?
+    let notes = Some("?TODO?".to_string());
+    // I think this should always be blank when done via certify?
+    let extra = None;
+    // TODO: figure this out
+    let dependency_rules = None;
+
+    let new_entry = AuditEntry {
+        version: None,
+        delta: None,
+        forbidden,
+        who,
+        notes,
+        extra,
+        criteria: None,
+        dependency_rules,
+    };
+
+    // TODO: check if the version makes sense..?
+    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+        error!("'{}' isn't one of your foreign packages", sub_args.package);
+        std::process::exit(-1);
+    }
+    audits
+        .audits
+        .entry(sub_args.package.clone())
+        .or_insert(vec![])
+        .push(new_entry);
+    store_audits(store_path, audits)?;
+
+    Ok(())
 }
 
-fn cmd_audits(
-    _out: &mut dyn Write,
-    _cli: &Cli,
-    _config: &MetadataVets,
-    _metadata: &Metadata,
-    _sub_args: &AuditsArgs,
-) -> Result<(), Box<dyn Error>> {
-    // ??? list audits? update audits?
-    unimplemented!()
+fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Result<(), VetError> {
+    // * download the current (saved?) lockfile's packages
+    // * download the current audited packages
+    // * diff each package (if there is any audit)
+    // * sort by the line count of the diff
+    // * emit the sorted list
+    let tmp = &cfg.tmp;
+    clean_tmp(tmp)?;
+
+    let store_path = cfg.metacfg.store_path();
+    let audits = load_audits(store_path)?;
+
+    // FIXME: in theory we can avoid fetching any file with an up to date audit
+    writeln!(out, "  fetching current packages...")?;
+    let fetched_saved = {
+        let to_fetch: Vec<_> = foreign_packages(&cfg.metadata)
+            .map(|pkg| (&*pkg.name, pkg.version.to_string()))
+            .collect();
+        let to_fetch: Vec<_> = to_fetch
+            .iter()
+            .map(|(krate, version)| (*krate, &**version))
+            .collect();
+        fetch_crates(cfg, tmp, "current", &to_fetch)?
+    };
+    writeln!(out, "  fetched to {:#?}", fetched_saved)?;
+
+    writeln!(out, "  fetching audited packages...")?;
+    let fetched_audited = {
+        // TODO: do this
+        warn!("fetching audited packages not yet implemented!");
+        let to_fetch: Vec<_> = foreign_packages(&cfg.metadata)
+            .map(|pkg| (&*pkg.name, pkg.version.to_string()))
+            .collect();
+        let to_fetch: Vec<_> = to_fetch
+            .iter()
+            .map(|(krate, version)| (*krate, &**version))
+            .collect();
+        fetch_crates(cfg, tmp, "audited", &to_fetch)?
+    };
+    writeln!(out, "  fetched to {:#?}", fetched_audited)?;
+
+    writeln!(out, "  gathering diffstats...")?;
+
+    let mut diffstats = vec![];
+    for package in foreign_packages(&cfg.metadata) {
+        // If there are no audits, then diff from an empty dir
+        let (base, base_ver) = if audits.audits.contains_key(&package.name) {
+            // TODO: find the latest version
+            (fetched_audited.join(&package.name), "TODO?".to_string())
+        } else {
+            (tmp.join(EMPTY_PACKAGE), "0.0.0".to_string())
+        };
+        let current = fetched_saved.join(&package.name);
+        let stat = diffstat_crate(out, cfg, &base, &current)?;
+
+        // Ignore things that didn't change
+        if stat.count > 0 {
+            diffstats.push((stat, &package.name, base_ver, package.version.to_string()));
+        }
+    }
+
+    // If we got no diffstats then we're fully audited!
+    if diffstats.is_empty() {
+        writeln!(
+            out,
+            "  Wow, everything is completely audited! You did it!!!"
+        )?;
+        return Ok(());
+    }
+
+    // Ok, now sort the diffstats by change count and print them:
+    diffstats.sort_by_key(|(stat, ..)| stat.count);
+    writeln!(out, "  {} audits to perform:", diffstats.len())?;
+    let max_len = diffstats
+        .iter()
+        .map(|(_, package_name, ..)| package_name.len())
+        .max()
+        .unwrap();
+    for (stat, package, v1, v2) in diffstats.iter() {
+        // Try to align things better...
+        let heading = format!("{package}:{v1}->{v2}");
+        writeln!(
+            out,
+            "     {heading:width$}{}",
+            stat.raw.trim(),
+            width = max_len + 15
+        )?;
+    }
+    Ok(())
 }
-fn cmd_suggest(
-    _out: &mut dyn Write,
-    _cli: &Cli,
-    _config: &MetadataVets,
-    _metadata: &Metadata,
-    _sub_args: &SuggestArgs,
-) -> Result<(), Box<dyn Error>> {
-    // Suggest low-hanging-fruit reviews
-    unimplemented!()
-}
-fn cmd_diff(
-    _out: &mut dyn Write,
-    _cli: &Cli,
-    _config: &MetadataVets,
-    _metadata: &Metadata,
-    _sub_args: &DiffArgs,
-) -> Result<(), Box<dyn Error>> {
-    // ??? diff something
-    unimplemented!()
+fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<(), VetError> {
+    // * download version1 of the package
+    // * download version2 of the package
+    // * diff the two
+    // * emit the diff
+    let tmp = &cfg.tmp;
+    clean_tmp(tmp)?;
+
+    writeln!(
+        out,
+        "  fetching {} {}...",
+        sub_args.package, sub_args.version1
+    )?;
+    let to_fetch1 = &[(&*sub_args.package, &*sub_args.version1)];
+    let fetched1 = fetch_crates(cfg, tmp, "first", to_fetch1)?.join(&sub_args.package);
+    writeln!(
+        out,
+        "  fetched {} {} to {:#?}",
+        sub_args.package, sub_args.version1, fetched1
+    )?;
+
+    writeln!(
+        out,
+        "  fetching {} {}...",
+        sub_args.package, sub_args.version2
+    )?;
+    let to_fetch2 = &[(&*sub_args.package, &*sub_args.version2)];
+    let fetched2 = fetch_crates(cfg, tmp, "second", to_fetch2)?.join(&sub_args.package);
+    writeln!(
+        out,
+        "  fetched {} {} to {:#?}",
+        sub_args.package, sub_args.version2, fetched2
+    )?;
+
+    writeln!(out)?;
+
+    diff_crate(out, cfg, &fetched1, &fetched2)?;
+
+    Ok(())
 }
 
-fn cmd_vet(
-    out: &mut dyn Write,
-    cli: &Cli,
-    config: &MetadataVets,
-    metadata: &Metadata,
-) -> Result<(), Box<dyn Error>> {
+fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
-    let store_path = config.store_path();
+    let store_path = cfg.metacfg.store_path();
 
     let audits = load_audits(store_path)?;
     let config = load_config(store_path)?;
     let imports = load_imports(store_path)?;
 
     // Update audits (trusted.toml)
-    if !cli.locked && !config.imports.is_empty() {
+    if !cfg.cli.locked && !config.imports.is_empty() {
         unimplemented!("fetching audits not yet implemented!");
     }
 
@@ -778,7 +985,7 @@ fn cmd_vet(
 
     let mut all_good = true;
     // Actually vet the dependencies
-    'all_packages: for package in foreign_packages(metadata) {
+    'all_packages: for package in foreign_packages(&cfg.metadata) {
         let unaudited = config.unaudited.get(&package.name);
 
         // Just merge all the entries from the foreign audit files and our audit file.
@@ -871,13 +1078,11 @@ fn cmd_vet(
 }
 
 /// Perform crimes on clap long_help to generate markdown docs
-fn cmd_help_markdown(
+fn cmd_help_md(
     out: &mut dyn Write,
-    _cli: &Cli,
-    _config: &MetadataVets,
-    _metadata: &Metadata,
+    _cfg: &Config,
     _sub_args: &HelpMarkdownArgs,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), VetError> {
     let app_name = "cargo-vet";
     let pretty_app_name = "cargo vet";
     // Make a new App to get the help message this time.
@@ -986,9 +1191,9 @@ fn cmd_help_markdown(
 
 // Utils
 
-fn is_init(config: &MetadataVets) -> bool {
+fn is_init(metacfg: &MetaConfig) -> bool {
     // Probably want to do more here later...
-    config.store_path().exists()
+    metacfg.store_path().exists()
 }
 
 fn foreign_packages(metadata: &Metadata) -> impl Iterator<Item = &Package> {
@@ -1012,6 +1217,16 @@ where
     let toml = toml::from_str(&string)?;
     Ok(toml)
 }
+fn store_toml<T>(path: &Path, val: T) -> Result<(), VetError>
+where
+    T: Serialize,
+{
+    // FIXME: do this in a temp file and swap it into place to avoid corruption?
+    let toml_string = toml::to_string(&val)?;
+    let mut output = File::create(path)?;
+    writeln!(&mut output, "{}", toml_string)?;
+    Ok(())
+}
 
 fn load_audits(store_path: &Path) -> Result<AuditsFile, VetError> {
     let path = store_path.join(AUDITS_TOML);
@@ -1032,4 +1247,180 @@ fn load_imports(store_path: &Path) -> Result<ImportsFile, VetError> {
     let file: ImportsFile = load_toml(&path)?;
     file.validate()?;
     Ok(file)
+}
+
+fn store_audits(store_path: &Path, audits: AuditsFile) -> Result<(), VetError> {
+    let path = store_path.join(AUDITS_TOML);
+    store_toml(&path, audits)?;
+    Ok(())
+}
+/*
+fn store_config(store_path: &Path, config: AuditsFile) -> Result<(), VetError> {
+    let path = store_path.join(CONFIG_TOML);
+    store_toml(&path, config)?;
+    Ok(())
+}
+fn store_imports(store_path: &Path, imports: AuditsFile) -> Result<(), VetError> {
+    let path = store_path.join(IMPORTS_LOCK);
+    store_toml(&path, imports)?;
+    Ok(())
+}
+*/
+
+fn clean_tmp(tmp: &Path) -> Result<(), VetError> {
+    // Wipe out and remake tmp my making sure it exists, destroying it, and then remaking it.
+    fs::create_dir_all(tmp)?;
+    fs::remove_dir_all(tmp)?;
+    fs::create_dir_all(tmp)?;
+    fs::create_dir_all(tmp.join(EMPTY_PACKAGE))?;
+    Ok(())
+}
+
+fn fetch_crates(
+    cfg: &Config,
+    tmp: &Path,
+    fetch_dir: &str,
+    crates: &[(&str, &str)],
+) -> Result<PathBuf, VetError> {
+    {
+        let out = Command::new(&cfg.cargo)
+            .current_dir(tmp)
+            .arg("new")
+            .arg("--bin")
+            .arg(fetch_dir)
+            .output()?;
+
+        if !out.status.success() {
+            panic!(
+                "command failed!\nout:\n{}\nstderr:\n{}",
+                String::from_utf8(out.stdout).unwrap(),
+                String::from_utf8(out.stderr).unwrap()
+            )
+        }
+    }
+
+    trace!("init to: {:#?}", tmp);
+    let fetch_dir = tmp.join(fetch_dir);
+    let fetch_toml = fetch_dir.join("Cargo.toml");
+
+    {
+        // FIXME: properly parse the toml instead of assuming structure
+        let mut toml = OpenOptions::new().append(true).open(&fetch_toml)?;
+
+        for (krate, version) in crates {
+            writeln!(toml, r#"{} = "={}""#, krate, version)?;
+        }
+    }
+
+    trace!("updated: {:#?}", fetch_toml);
+
+    {
+        let out = Command::new(&cfg.cargo)
+            .current_dir(&fetch_dir)
+            .arg("vendor")
+            .output()?;
+
+        if !out.status.success() {
+            panic!(
+                "command failed!\nout:\n{}\nstderr:\n{}",
+                String::from_utf8(out.stdout).unwrap(),
+                String::from_utf8(out.stderr).unwrap()
+            )
+        }
+    }
+    // FIXME: delete the .cargo-checksum.json files (don't want to diff them, not real)
+
+    let fetched = fetch_dir.join("vendor");
+
+    Ok(fetched)
+}
+
+fn diff_crate(
+    _out: &mut dyn Write,
+    _cfg: &Config,
+    version1: &Path,
+    version2: &Path,
+) -> Result<(), VetError> {
+    // FIXME: probably don't just directly use git diff?
+    // ...but also cargo is based on git, so, can you really not have it? (look into libgit2 stuff)
+
+    let status = Command::new("git")
+        .arg("diff")
+        .arg("--no-index")
+        .arg(version1)
+        .arg(version2)
+        .status()?;
+
+    if !status.success() {
+        todo!()
+    }
+
+    Ok(())
+}
+
+struct DiffStat {
+    raw: String,
+    count: u64,
+}
+
+fn diffstat_crate(
+    _out: &mut dyn Write,
+    _cfg: &Config,
+    version1: &Path,
+    version2: &Path,
+) -> Result<DiffStat, VetError> {
+    trace!("diffstating {version1:#?} {version2:#?}");
+    // FIXME: probably don't just directly use git diff?
+    // ...but also cargo is based on git, so, can you really not have it? (look into libgit2 stuff)
+
+    let out = Command::new("git")
+        .arg("diff")
+        .arg("--no-index")
+        .arg("--shortstat")
+        .arg(version1)
+        .arg(version2)
+        .output()?;
+
+    // TODO: don't unwrap this
+    let status = out.status.code().unwrap();
+    // 0 = empty
+    // 1 = some diff
+    if status != 0 && status != 1 {
+        panic!(
+            "command failed!\nout:\n{}\nstderr:\n{}",
+            String::from_utf8(out.stdout).unwrap(),
+            String::from_utf8(out.stderr).unwrap()
+        )
+    }
+
+    let diffstat = String::from_utf8(out.stdout)?;
+
+    let count = if diffstat.is_empty() {
+        0
+    } else {
+        // 3 files changed, 9 insertions(+), 3 deletions(-)
+        let mut parts = diffstat.split(',');
+        parts.next().unwrap(); // Discard files
+
+        fn parse_diffnum(part: Option<&str>) -> Option<u64> {
+            part?.trim().split_once(' ')?.0.parse().ok()
+        }
+
+        let added: u64 = parse_diffnum(parts.next()).unwrap_or(0);
+        let removed: u64 = parse_diffnum(parts.next()).unwrap_or(0);
+
+        assert_eq!(
+            parts.next(),
+            None,
+            "diffstat had more parts than expected? {}",
+            diffstat
+        );
+
+        added + removed
+    };
+
+    Ok(DiffStat {
+        raw: diffstat,
+        count,
+    })
 }

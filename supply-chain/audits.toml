@@ -1,11 +1,12 @@
-
-# cargo-vet audited code
-#
-# Helpful Comment Explaining Format
-
 [criteria]
-reviewed = 'the code was reviewed'
+reviewed = "the code was reviewed"
+[[audits.linked-hash-map]]
+version = "0.1.2"
+who = "?TODO?"
+notes = "?TODO?"
 
-[audits]
-
+[[audits.linked-hash-map]]
+forbidden = "^0.1.5"
+who = "?TODO?"
+notes = "?TODO?"
 
