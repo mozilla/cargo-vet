@@ -82,6 +82,10 @@ enum Commands {
     #[clap(disable_version_flag = true)]
     Suggest(SuggestArgs),
 
+    /// Reformat all of vet's files (in case you hand-edited them)
+    #[clap(disable_version_flag = true)]
+    Fmt(FmtArgs),
+
     /// Print --help as markdown (for generating docs)
     #[clap(disable_version_flag = true)]
     #[clap(hide = true)]
@@ -124,6 +128,9 @@ struct ForbidArgs {
 
 #[derive(clap::Args)]
 struct SuggestArgs {}
+
+#[derive(clap::Args)]
+struct FmtArgs {}
 
 #[derive(clap::Args)]
 struct HelpMarkdownArgs {}
@@ -600,6 +607,7 @@ fn main() -> Result<(), VetError> {
         Some(Forbid(sub_args)) => cmd_forbid(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
         Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
+        Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
         Some(HelpMarkdown(sub_args)) => cmd_help_md(out, &cfg, sub_args),
         None => cmd_vet(out, &cfg),
     }
@@ -610,10 +618,6 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
     trace!("initializing...");
 
     let store_path = cfg.metacfg.store_path();
-
-    let audits_path = store_path.join(AUDITS_TOML);
-    let config_path = store_path.join(CONFIG_TOML);
-    let imports_path = store_path.join(IMPORTS_LOCK);
 
     // Create store_path
     // - audited.toml (empty)
@@ -626,52 +630,28 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
     std::fs::create_dir_all(store_path)?;
 
     {
-        trace!("initializing {:#?}", audits_path);
+        trace!("initializing {:#?}", AUDITS_TOML);
 
-        let audits_struct = AuditsFile {
+        let audits = AuditsFile {
             default_criteria: None,
             criteria: [("reviewed".to_string(), "the code was reviewed".to_string())]
                 .into_iter()
                 .collect(),
             audits: StableMap::new(),
         };
-        let audits_toml = toml::to_string_pretty(&audits_struct)?;
-
-        let mut audits = File::create(&audits_path)?;
-
-        writeln!(
-            audits,
-            r####"
-# cargo-vet audited code
-#
-# Helpful Comment Explaining Format
-
-{audits_toml}
-"####
-        )?;
+        store_audits(store_path, audits)?;
     }
 
     {
-        trace!("initializing {:#?}", imports_path);
-        let imports_struct = ImportsFile {
+        trace!("initializing {:#?}", IMPORTS_LOCK);
+        let imports = ImportsFile {
             audits: StableMap::new(),
         };
-        let imports_toml = toml::to_string_pretty(&imports_struct)?;
-        let mut imports = File::create(&imports_path)?;
-        writeln!(
-            imports,
-            r####"
-# cargo-vet imports lockfile
-#
-# Helpful Comment Explaining Format
-
-{imports_toml}
-"####
-        )?;
+        store_imports(store_path, imports)?;
     }
 
     {
-        trace!("initializing {:#?}", config_path);
+        trace!("initializing {:#?}", CONFIG_TOML);
 
         let mut dependencies = StableMap::new();
         for package in foreign_packages(&cfg.metadata) {
@@ -685,23 +665,11 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
             );
         }
         // FIXME: probably shouldn't recycle this type, but just getting things working.
-        let config_struct = ConfigFile {
+        let config = ConfigFile {
             imports: StableMap::new(),
             unaudited: dependencies,
         };
-        let config_toml = toml::to_string_pretty(&config_struct).unwrap();
-
-        let mut config = File::create(&config_path)?;
-        writeln!(
-            config,
-            r####"
-# cargo-vet config.toml
-#
-# Helpful Comment Explaining Format
-
-{config_toml}
-"####
-        )?;
+        store_config(store_path, config)?;
     }
 
     Ok(())
@@ -1077,6 +1045,19 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     Ok(())
 }
 
+fn cmd_fmt(_out: &mut dyn Write, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), VetError> {
+    // Reformat all the files (just load and store them, formatting is implict).
+    trace!("formatting...");
+
+    let store_path = cfg.metacfg.store_path();
+
+    store_audits(store_path, load_audits(store_path)?)?;
+    store_config(store_path, load_config(store_path)?)?;
+    store_imports(store_path, load_imports(store_path)?)?;
+
+    Ok(())
+}
+
 /// Perform crimes on clap long_help to generate markdown docs
 fn cmd_help_md(
     out: &mut dyn Write,
@@ -1217,14 +1198,14 @@ where
     let toml = toml::from_str(&string)?;
     Ok(toml)
 }
-fn store_toml<T>(path: &Path, val: T) -> Result<(), VetError>
+fn store_toml<T>(path: &Path, heading: &str, val: T) -> Result<(), VetError>
 where
     T: Serialize,
 {
     // FIXME: do this in a temp file and swap it into place to avoid corruption?
     let toml_string = toml::to_string(&val)?;
     let mut output = File::create(path)?;
-    writeln!(&mut output, "{}", toml_string)?;
+    writeln!(&mut output, "{}\n{}", heading, toml_string)?;
     Ok(())
 }
 
@@ -1250,22 +1231,32 @@ fn load_imports(store_path: &Path) -> Result<ImportsFile, VetError> {
 }
 
 fn store_audits(store_path: &Path, audits: AuditsFile) -> Result<(), VetError> {
+    let heading = r###"
+# cargo-vet audits file
+"###;
+
     let path = store_path.join(AUDITS_TOML);
-    store_toml(&path, audits)?;
+    store_toml(&path, heading, audits)?;
     Ok(())
 }
-/*
-fn store_config(store_path: &Path, config: AuditsFile) -> Result<(), VetError> {
+fn store_config(store_path: &Path, config: ConfigFile) -> Result<(), VetError> {
+    let heading = r###"
+# cargo-vet config file
+"###;
+
     let path = store_path.join(CONFIG_TOML);
-    store_toml(&path, config)?;
+    store_toml(&path, heading, config)?;
     Ok(())
 }
-fn store_imports(store_path: &Path, imports: AuditsFile) -> Result<(), VetError> {
+fn store_imports(store_path: &Path, imports: ImportsFile) -> Result<(), VetError> {
+    let heading = r###"
+# cargo-vet imports lock
+"###;
+
     let path = store_path.join(IMPORTS_LOCK);
-    store_toml(&path, imports)?;
+    store_toml(&path, heading, imports)?;
     Ok(())
 }
-*/
 
 fn clean_tmp(tmp: &Path) -> Result<(), VetError> {
     // Wipe out and remake tmp my making sure it exists, destroying it, and then remaking it.
