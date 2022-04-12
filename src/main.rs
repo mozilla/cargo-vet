@@ -227,7 +227,7 @@ struct ConfigFile {
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
-    unaudited: StableMap<String, UnauditedDependency>,
+    unaudited: StableMap<String, Vec<UnauditedDependency>>,
 }
 
 /// imports.lock, not sure what I want to put in here yet.
@@ -263,7 +263,7 @@ struct UnauditedDependency {
     /// One significant implication of this is that x.y.z is *not* one version. It is
     /// ^x.y.z, per Cargo convention. You must use =x.y.z to be that specific. We will
     /// do this for you when we do `cargo vet init`, so this shouldn't be a big deal?
-    version: VersionReq,
+    version: Version,
     /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
     notes: Option<String>,
 }
@@ -657,16 +657,16 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
 
         let mut dependencies = StableMap::new();
         for package in foreign_packages(&cfg.metadata) {
-            dependencies.insert(
-                package.name.clone(),
-                UnauditedDependency {
-                    version: VersionReq::parse(&format!("={}", package.version))
-                        .expect("Version wasn't a valid VersionReq??"),
-                    notes: Some("automatically imported by 'cargo vet init'".to_string()),
-                },
-            );
+            // NOTE: May have multiple copies of a package!
+            let item = UnauditedDependency {
+                version: package.version.clone(),
+                notes: Some("automatically imported by 'cargo vet init'".to_string()),
+            };
+            dependencies
+                .entry(package.name.clone())
+                .or_insert(vec![])
+                .push(item);
         }
-        // FIXME: probably shouldn't recycle this type, but just getting things working.
         let config = ConfigFile {
             imports: StableMap::new(),
             unaudited: dependencies,
@@ -1019,7 +1019,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             // Check if we've succeeded
             for &version in &cur_versions {
                 if let Some(allowed) = unaudited {
-                    if allowed.version.matches(version) {
+                    if allowed.iter().any(|a| a.version == *version) {
                         // Reached an explicitly unaudited package, that's good enough
                         continue 'all_packages;
                     }
