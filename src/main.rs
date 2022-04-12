@@ -950,7 +950,9 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     // FIXME: Do we actually want to hold on to historical foreign audits? Like
     // if someone we trust adds or removes an entry, do we forget about that entry
     // or do we want to still remember it existed?
-    let imports = if !cfg.cli.locked && !config.imports.is_empty() {
+    // FIXME: We should probably check if the config has changed its imports and
+    // mask out things in imports.lock that aren't there anymore?
+    let imports = if !cfg.cli.locked {
         fetch_foreign_audits(out, cfg, &config)?
     } else {
         load_imports(store_path)?
