@@ -1,8 +1,5 @@
 
-# cargo-vet imports lockfile
-#
-# Helpful Comment Explaining Format
+# cargo-vet imports lock
 
 [audits]
-
 

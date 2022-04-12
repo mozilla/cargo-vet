@@ -1,235 +1,260 @@
 
-# cargo-vet config.toml
-#
-# Helpful Comment Explaining Format
+# cargo-vet config file
 
 [imports]
 [unaudited.atty]
-version = '=0.2.14'
+version = "=0.2.14"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.autocfg]
-version = '=1.1.0'
+version = "=1.1.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.bitflags]
-version = '=1.3.2'
+version = "=1.3.2"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.camino]
-version = '=1.0.7'
+version = "=1.0.7"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.cargo-platform]
-version = '=0.1.2'
+version = "=0.1.2"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.cargo_metadata]
-version = '=0.14.2'
+version = "=0.14.2"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.cfg-if]
-version = '=1.0.0'
+version = "=1.0.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.chrono]
-version = '=0.4.19'
+version = "=0.4.19"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.clap]
-version = '=3.1.8'
+version = "=3.1.8"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.clap-cargo]
-version = '=0.8.0'
+version = "=0.8.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.clap_derive]
-version = '=3.1.7'
+version = "=3.1.7"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.console]
-version = '=0.15.0'
+version = "=0.15.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.doc-comment]
-version = '=0.3.3'
+version = "=0.3.3"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.encode_unicode]
-version = '=0.3.6'
+version = "=0.3.6"
+notes = "automatically imported by 'cargo vet init'"
+
+[unaudited.eyre]
+version = "=0.6.8"
+notes = "automatically imported by 'cargo vet init'"
+
+[unaudited.fastrand]
+version = "=1.7.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.hashbrown]
-version = '=0.11.2'
+version = "=0.11.2"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.heck]
-version = '=0.4.0'
+version = "=0.4.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.hermit-abi]
-version = '=0.1.19'
+version = "=0.1.19"
+notes = "automatically imported by 'cargo vet init'"
+
+[unaudited.indenter]
+version = "=0.3.3"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.indexmap]
-version = '=1.8.1'
+version = "=1.8.1"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.insta]
-version = '=1.14.0'
+version = "=1.14.0"
+notes = "automatically imported by 'cargo vet init'"
+
+[unaudited.instant]
+version = "=0.1.12"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.itoa]
-version = '=1.0.1'
+version = "=1.0.1"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.lazy_static]
-version = '=1.4.0'
+version = "=1.4.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.libc]
-version = '=0.2.121'
+version = "=0.2.121"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.linked-hash-map]
-version = '=0.5.4'
+version = "=0.5.4"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.log]
-version = '=0.4.16'
+version = "=0.4.16"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.memchr]
-version = '=2.4.1'
+version = "=2.4.1"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.num-integer]
-version = '=0.1.44'
+version = "=0.1.44"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.num-traits]
-version = '=0.2.14'
+version = "=0.2.14"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.once_cell]
-version = '=1.10.0'
+version = "=1.10.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.os_str_bytes]
-version = '=6.0.0'
+version = "=6.0.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.proc-macro-error]
-version = '=1.0.4'
+version = "=1.0.4"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.proc-macro-error-attr]
-version = '=1.0.4'
+version = "=1.0.4"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.proc-macro2]
-version = '=1.0.36'
+version = "=1.0.36"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.quote]
-version = '=1.0.17'
+version = "=1.0.17"
+notes = "automatically imported by 'cargo vet init'"
+
+[unaudited.redox_syscall]
+version = "=0.2.13"
+notes = "automatically imported by 'cargo vet init'"
+
+[unaudited.remove_dir_all]
+version = "=0.5.3"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.ryu]
-version = '=1.0.9'
+version = "=1.0.9"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.semver]
-version = '=1.0.7'
+version = "=1.0.7"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.serde]
-version = '=1.0.136'
+version = "=1.0.136"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.serde_derive]
-version = '=1.0.136'
+version = "=1.0.136"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.serde_json]
-version = '=1.0.79'
+version = "=1.0.79"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.serde_test]
-version = '=1.0.136'
+version = "=1.0.136"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.serde_yaml]
-version = '=0.8.23'
+version = "=0.8.23"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.similar]
-version = '=2.1.0'
+version = "=2.1.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.simplelog]
-version = '=0.11.2'
+version = "=0.11.2"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.strsim]
-version = '=0.10.0'
+version = "=0.10.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.syn]
-version = '=1.0.90'
+version = "=1.0.90"
+notes = "automatically imported by 'cargo vet init'"
+
+[unaudited.tempfile]
+version = "=3.3.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.termcolor]
-version = '=1.1.3'
+version = "=1.1.3"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.terminal_size]
-version = '=0.1.17'
+version = "=0.1.17"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.textwrap]
-version = '=0.15.0'
+version = "=0.15.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.time]
-version = '=0.1.44'
+version = "=0.1.44"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.toml]
-version = '=0.5.8'
+version = "=0.5.8"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.unicode-xid]
-version = '=0.2.2'
+version = "=0.2.2"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.version_check]
-version = '=0.9.4'
+version = "=0.9.4"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.wasi]
-version = '=0.10.0'
+version = "=0.10.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.winapi]
-version = '=0.3.9'
+version = "=0.3.9"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.winapi-i686-pc-windows-gnu]
-version = '=0.4.0'
+version = "=0.4.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.winapi-util]
-version = '=0.1.5'
+version = "=0.1.5"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.winapi-x86_64-pc-windows-gnu]
-version = '=0.4.0'
+version = "=0.4.0"
 notes = "automatically imported by 'cargo vet init'"
 
 [unaudited.yaml-rust]
-version = '=0.4.5'
+version = "=0.4.5"
 notes = "automatically imported by 'cargo vet init'"
-
 
