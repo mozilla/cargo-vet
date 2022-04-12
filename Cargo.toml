@@ -20,6 +20,7 @@ clap-cargo = "0.8.0"
 eyre = "0.6.8"
 linked-hash-map = { version = "0.5.4", features = ["serde_impl"] }
 log = "0.4.16"
+reqwest = { version = "0.11.10", features = ["blocking"] }
 serde = "1.0.136"
 serde_json = "1.0.79"
 simplelog = "0.11.2"

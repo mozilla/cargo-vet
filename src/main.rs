@@ -11,6 +11,7 @@ use std::{fs::File, io::Write, panic, path::PathBuf};
 use cargo_metadata::{Metadata, Package, Version, VersionReq};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
 use log::{error, info, trace, warn};
+use reqwest::blocking as req;
 use serde::de::Visitor;
 use serde::{de, de::Deserialize, ser::Serialize};
 use serde::{Deserializer, Serializer};
@@ -942,12 +943,18 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     let audits = load_audits(store_path)?;
     let config = load_config(store_path)?;
-    let imports = load_imports(store_path)?;
 
-    // Update audits (trusted.toml)
-    if !cfg.cli.locked && !config.imports.is_empty() {
-        unimplemented!("fetching audits not yet implemented!");
-    }
+    // FIXME: fetch_foreign_audits may fail to download things, so we should really
+    // be merging these two files somehow? Especially if we want to writeback the
+    // results to our lockfile!
+    // FIXME: Do we actually want to hold on to historical foreign audits? Like
+    // if someone we trust adds or removes an entry, do we forget about that entry
+    // or do we want to still remember it existed?
+    let imports = if !cfg.cli.locked && !config.imports.is_empty() {
+        fetch_foreign_audits(out, cfg, &config)?
+    } else {
+        load_imports(store_path)?
+    };
 
     let root_version = Version::new(0, 0, 0);
     let no_audits = Vec::new();
@@ -1043,13 +1050,16 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     // TODO: I remember convincing myself that we "need" to save the lockfile
     // but I can't remember the reason anymore... let's just do it for now.
-    trace!("Saving vetted lockfile...");
+    trace!("Saving vetting results...");
     let lockfile_path = cfg.metadata.workspace_root.join("Cargo.lock");
     if lockfile_path.exists() {
         fs::copy(lockfile_path, store_path.join(VETTED_LOCK))?;
     } else {
         warn!("Couldn't find Cargo.lock?");
     }
+    // Save the imports file back, in case we downloaded anything new
+    // FIXME: should this be done earlier to avoid repeated network traffic on failed audits?
+    store_imports(store_path, imports)?;
 
     writeln!(out, "All crates vetted!")?;
 
@@ -1425,4 +1435,31 @@ fn diffstat_crate(
         raw: diffstat,
         count,
     })
+}
+
+fn fetch_foreign_audits(
+    _out: &mut dyn Write,
+    _cfg: &Config,
+    config: &ConfigFile,
+) -> Result<ImportsFile, VetError> {
+    // Download all the foreign audits.toml files that we trust
+    let mut audits = StableMap::new();
+    for (name, import) in &config.imports {
+        let url = &import.url;
+        // FIXME: this should probably be async but that's a Whole Thing and these files are small.
+        let audit_txt = req::get(url).and_then(|r| r.text());
+        if let Err(e) = audit_txt {
+            warn!("Could not load {name} @ {url} - {e}");
+            continue;
+        }
+        let audit_file: Result<AuditsFile, _> = toml::from_str(&audit_txt.unwrap());
+        if let Err(e) = audit_file {
+            warn!("Could not parse {name} @ {url} - {e}");
+            continue;
+        }
+
+        audits.insert(name.clone(), audit_file.unwrap());
+    }
+
+    Ok(ImportsFile { audits })
 }

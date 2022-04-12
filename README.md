@@ -13,9 +13,10 @@ cargo-vet helps you vet your dependencies and rely on the vetting done by other 
 (As implemented by the CLI, currently divergent from the book.)
 
 * supply-chain/
-  * audited.toml
-  * trusted.toml
-  * untrusted.toml
+  * config.toml - settings 
+  * audits.toml - audits you have performed
+  * imports.lock - saved foreign audits.toml files you trust
+  * Vetted.lock - a copy of the last Cargo.lock that passed vetting
 
 
 
@@ -78,11 +79,11 @@ How verbose logging should be (log level)
 Process all packages in the workspace
 
 ### SUBCOMMANDS
-* [audits](#cargo-vet-audits): ??? List audits mechanisms ???
-* [certify](#cargo-vet-certify): Mark `$crate $version` as reviewed with `$message`
+* [certify](#cargo-vet-certify): Mark `$package $version` as reviewed with `$message`
 * [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
-* [fetch](#cargo-vet-fetch): Fetch the source of `$crate $version`
-* [forbid](#cargo-vet-forbid): Mark `$crate $version` as unacceptable with `$message`
+* [fetch](#cargo-vet-fetch): Fetch the source of `$package $version`
+* [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
+* [forbid](#cargo-vet-forbid): Mark `$package $version` as unacceptable with `$message`
 * [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 * [init](#cargo-vet-init): initialize cargo-vet for your project
 * [suggest](#cargo-vet-suggest): Suggest some low-hanging fruit to review
@@ -114,15 +115,15 @@ cargo vet help-markdown
 Print help information
 
 <br><br><br>
-## cargo vet audits 
-??? List audits mechanisms ???
+## cargo vet fmt 
+Reformat all of vet's files (in case you hand-edited them)
 
-### cargo vet audits USAGE
+### cargo vet fmt USAGE
 ```
-cargo vet audits
+cargo vet fmt
 ```
 
-### cargo vet audits OPTIONS
+### cargo vet fmt OPTIONS
 #### `-h, --help`
 Print help information
 
@@ -141,15 +142,15 @@ Print help information
 
 <br><br><br>
 ## cargo vet forbid 
-Mark `$crate $version` as unacceptable with `$message`
+Mark `$package $version` as unacceptable with `$message`
 
 ### cargo vet forbid USAGE
 ```
-cargo vet forbid <KRATE> <VERSION> <MESSAGE>
+cargo vet forbid <PACKAGE> <VERSION> <MESSAGE>
 ```
 
 ### cargo vet forbid ARGS
-#### `<KRATE>`
+#### `<PACKAGE>`
 
 
 #### `<VERSION>`
@@ -164,21 +165,21 @@ Print help information
 
 <br><br><br>
 ## cargo vet certify 
-Mark `$crate $version` as reviewed with `$message`
+Mark `$package $version` as reviewed with `$message`
 
 ### cargo vet certify USAGE
 ```
-cargo vet certify <KRATE> <VERSION> <MESSAGE>
+cargo vet certify <PACKAGE> <VERSION1> [VERSION2]
 ```
 
 ### cargo vet certify ARGS
-#### `<KRATE>`
+#### `<PACKAGE>`
 
 
-#### `<VERSION>`
+#### `<VERSION1>`
 
 
-#### `<MESSAGE>`
+#### `<VERSION2>`
 
 
 ### cargo vet certify OPTIONS
@@ -191,8 +192,18 @@ Yield a diff against the last reviewed version
 
 ### cargo vet diff USAGE
 ```
-cargo vet diff
+cargo vet diff <PACKAGE> <VERSION1> <VERSION2>
 ```
+
+### cargo vet diff ARGS
+#### `<PACKAGE>`
+
+
+#### `<VERSION1>`
+
+
+#### `<VERSION2>`
+
 
 ### cargo vet diff OPTIONS
 #### `-h, --help`
@@ -200,15 +211,15 @@ Print help information
 
 <br><br><br>
 ## cargo vet fetch 
-Fetch the source of `$crate $version`
+Fetch the source of `$package $version`
 
 ### cargo vet fetch USAGE
 ```
-cargo vet fetch <KRATE> <VERSION>
+cargo vet fetch <PACKAGE> <VERSION>
 ```
 
 ### cargo vet fetch ARGS
-#### `<KRATE>`
+#### `<PACKAGE>`
 
 
 #### `<VERSION>`
