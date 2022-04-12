@@ -368,6 +368,7 @@ static WORKSPACE_VET_CONFIG: &str = "vet";
 static AUDITS_TOML: &str = "audits.toml";
 static CONFIG_TOML: &str = "config.toml";
 static IMPORTS_LOCK: &str = "imports.lock";
+static VETTED_LOCK: &str = "Vetted.lock";
 
 // store = { path = './supply-chain' }
 // audits = [
@@ -1005,6 +1006,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             if cur_versions.is_empty() {
                 error!("could not cerify {} {}", package.name, package.version);
                 all_good = false;
+                continue 'all_packages;
             }
 
             // Check if we've succeeded
@@ -1039,7 +1041,16 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         std::process::exit(-1);
     }
 
-    // Fetch audits
+    // TODO: I remember convincing myself that we "need" to save the lockfile
+    // but I can't remember the reason anymore... let's just do it for now.
+    trace!("Saving vetted lockfile...");
+    let lockfile_path = cfg.metadata.workspace_root.join("Cargo.lock");
+    if lockfile_path.exists() {
+        fs::copy(lockfile_path, store_path.join(VETTED_LOCK))?;
+    } else {
+        warn!("Couldn't find Cargo.lock?");
+    }
+
     writeln!(out, "All crates vetted!")?;
 
     Ok(())
