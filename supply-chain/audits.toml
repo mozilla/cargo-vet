@@ -1,8 +1,10 @@
 
 # cargo-vet audits file
 
-[criteria]
-reviewed = "the code was reviewed"
+[criteria.reviewed]
+description = "you looked at it and it seems fine"
+default = true
+implies = []
 
 [audits]
 
