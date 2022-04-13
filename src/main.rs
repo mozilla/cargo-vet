@@ -63,6 +63,10 @@ enum Commands {
     #[clap(disable_version_flag = true)]
     Init(InitArgs),
 
+    /// Accept changes that a foreign audits.toml made to their criteria
+    #[clap(disable_version_flag = true)]
+    AcceptCriteriaChange(AcceptCriteriaChangeArgs),
+
     /// Fetch the source of `$package $version`
     #[clap(disable_version_flag = true)]
     Fetch(FetchArgs),
@@ -132,6 +136,9 @@ struct SuggestArgs {}
 
 #[derive(clap::Args)]
 struct FmtArgs {}
+
+#[derive(clap::Args)]
+struct AcceptCriteriaChangeArgs {}
 
 #[derive(clap::Args)]
 struct HelpMarkdownArgs {}
@@ -209,14 +216,16 @@ type AuditedDependencies = StableMap<String, Vec<AuditEntry>>;
 /// audits.toml
 #[derive(serde::Serialize, serde::Deserialize)]
 struct AuditsFile {
-    /// The assumed criteria for any audit that doesn't specify it.
-    /// This key may be absent if there is only one criteria.
-    #[serde(rename = "default-criteria")]
-    default_criteria: Option<Vec<String>>,
-    /// A map of criteria_name to criteria_description.
-    criteria: StableMap<String, String>,
+    /// A map of criteria_name to details on that criteria.
+    criteria: StableMap<String, CriteriaEntry>,
     /// Actual audits.
     audits: AuditedDependencies,
+}
+
+/// imports.lock, not sure what I want to put in here yet.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ImportsFile {
+    audits: StableMap<String, AuditsFile>,
 }
 
 /// config.toml
@@ -228,12 +237,29 @@ struct ConfigFile {
     /// Foreign dependencies are just "things on crates.io", everything else
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
     unaudited: StableMap<String, Vec<UnauditedDependency>>,
+    policy: PolicyTable,
 }
 
-/// imports.lock, not sure what I want to put in here yet.
+/// Information on a Criteria
 #[derive(serde::Serialize, serde::Deserialize)]
-struct ImportsFile {
-    audits: StableMap<String, AuditsFile>,
+struct CriteriaEntry {
+    /// Summary of how you evaluate something by this criteria.
+    description: String,
+    /// Whether this criteria is part of the "defaults"
+    default: bool,
+    /// Criteria that this one implies
+    implies: Vec<String>,
+}
+
+/// Policies the tree must pass (TODO: understand this properly)
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PolicyTable {
+    criteria: Option<Vec<String>>,
+    #[serde(rename = "build-and-dev-criteria")]
+    build_and_dev_criteria: Option<Vec<String>>,
+    targets: Option<Vec<String>>,
+    #[serde(rename = "build-and-dev-targets")]
+    build_and_dev_targets: Option<Vec<String>>,
 }
 
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
@@ -266,6 +292,8 @@ struct UnauditedDependency {
     version: Version,
     /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
     notes: Option<String>,
+    /// Whether suggest should bother mentioning this (defaults true)
+    suggest: bool,
 }
 
 /// This is just a big vague ball initially. It's up to the Audits/Unuadited/Trusted wrappers
@@ -274,22 +302,19 @@ struct UnauditedDependency {
 struct AuditEntry {
     version: Option<Version>,
     delta: Option<Delta>,
-    forbidden: Option<VersionReq>,
+    violation: Option<VersionReq>,
     who: Option<String>,
     notes: Option<String>,
-    extra: Option<String>,
     criteria: Option<Vec<String>>,
-    dependency_rules: Option<Vec<DependencyRule>>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct DependencyRule {
-    /// ???
-    require_criteria: Option<()>,
-    /// ???
-    pin_version: Option<()>,
-    /// ???
-    fold_audit: Option<()>,
+    /// A list of criteria that transitive dependencies must satisfy for this
+    /// audit to continue to be considered valid.
+    ///
+    /// Example:
+    ///
+    /// ```toml
+    /// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
+    /// ```
+    dependency_criteria: Option<Vec<StableMap<String, Vec<String>>>>,
 }
 
 /// A "VERSION -> VERSION"
@@ -603,7 +628,9 @@ fn main() -> Result<(), VetError> {
 
     use Commands::*;
     match &cfg.cli.command {
+        None => cmd_vet(out, &cfg),
         Some(Init(sub_args)) => cmd_init(out, &cfg, sub_args),
+        Some(AcceptCriteriaChange(sub_args)) => cmd_accept_criteria_change(out, &cfg, sub_args),
         Some(Fetch(sub_args)) => cmd_fetch(out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
         Some(Forbid(sub_args)) => cmd_forbid(out, &cfg, sub_args),
@@ -611,7 +638,6 @@ fn main() -> Result<(), VetError> {
         Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
         Some(HelpMarkdown(sub_args)) => cmd_help_md(out, &cfg, sub_args),
-        None => cmd_vet(out, &cfg),
     }
 }
 
@@ -622,9 +648,9 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
     let store_path = cfg.metacfg.store_path();
 
     // Create store_path
-    // - audited.toml (empty)
-    // - trusted.toml (skeleton?)
-    // - unaudited.toml (populated with the full list of third-party crates)
+    // - audits.toml (empty, sample criteria)
+    // - imports.lock (empty)
+    // - config.toml (populated with defaults and full list of third-party crates)
 
     // In theory we don't need `all` here, but this allows them to specify
     // the store as some arbitrarily nested subdir for whatever reason
@@ -634,9 +660,14 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
     {
         trace!("initializing {:#?}", AUDITS_TOML);
 
+        let sample_criteria = CriteriaEntry {
+            description: "you looked at it and it seems fine".to_string(),
+            default: true,
+            implies: vec![],
+        };
+
         let audits = AuditsFile {
-            default_criteria: None,
-            criteria: [("reviewed".to_string(), "the code was reviewed".to_string())]
+            criteria: [("reviewed".to_string(), sample_criteria)]
                 .into_iter()
                 .collect(),
             audits: StableMap::new(),
@@ -661,6 +692,7 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
             let item = UnauditedDependency {
                 version: package.version.clone(),
                 notes: Some("automatically imported by 'cargo vet init'".to_string()),
+                suggest: true,
             };
             dependencies
                 .entry(package.name.clone())
@@ -670,6 +702,12 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
         let config = ConfigFile {
             imports: StableMap::new(),
             unaudited: dependencies,
+            policy: PolicyTable {
+                criteria: None,
+                build_and_dev_criteria: None,
+                targets: None,
+                build_and_dev_targets: None,
+            },
         };
         store_config(store_path, config)?;
     }
@@ -718,8 +756,6 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
     let who = Some("?TODO?".to_string());
     // TODO: start an interactive prompt? launch $EDITOR?
     let notes = Some("?TODO?".to_string());
-    // I think this should always be blank when done via certify?
-    let extra = None;
     // TODO: No criteria is the default criteria? Does that make sense?
     // Shouldn't we actually snapshot the current default so the default can change
     // without changing the claims on old audits? Or do we in fact *want* that so
@@ -730,17 +766,16 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
     //      .unwrap_or_else(|| audits.criteria.keys().cloned().collect());
     let criteria = None;
     // TODO: figure this out
-    let dependency_rules = None;
+    let dependency_criteria = None;
 
     let new_entry = AuditEntry {
         version,
         delta,
-        forbidden: None,
+        violation: None,
         who,
         notes,
-        extra,
         criteria,
-        dependency_rules,
+        dependency_criteria,
     };
 
     // TODO: check if the version makes sense..?
@@ -766,27 +801,24 @@ fn cmd_forbid(_out: &mut dyn Write, cfg: &Config, sub_args: &ForbidArgs) -> Resu
 
     // FIXME: better error when this goes bad
     // TODO: properly make this an `=` VersionReq
-    let forbidden =
+    let violation =
         Some(VersionReq::parse(&sub_args.version).expect("version wasn't a valid VersionReq"));
 
     // TODO: source this from git or something?
     let who = Some("?TODO?".to_string());
     // TODO: start an interactive prompt? launch $EDITOR?
     let notes = Some("?TODO?".to_string());
-    // I think this should always be blank when done via certify?
-    let extra = None;
     // TODO: figure this out
-    let dependency_rules = None;
+    let dependency_criteria = None;
 
     let new_entry = AuditEntry {
         version: None,
         delta: None,
-        forbidden,
+        violation,
         who,
         notes,
-        extra,
         criteria: None,
-        dependency_rules,
+        dependency_criteria,
     };
 
     // TODO: check if the version makes sense..?
@@ -817,7 +849,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
     let audits = load_audits(store_path)?;
 
     // FIXME: in theory we can avoid fetching any file with an up to date audit
-    writeln!(out, "  fetching current packages...")?;
+    writeln!(out, "fetching current packages...")?;
     let fetched_saved = {
         let to_fetch: Vec<_> = foreign_packages(&cfg.metadata)
             .map(|pkg| (&*pkg.name, pkg.version.to_string()))
@@ -828,9 +860,9 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
             .collect();
         fetch_crates(cfg, tmp, "current", &to_fetch)?
     };
-    writeln!(out, "  fetched to {:#?}", fetched_saved)?;
+    writeln!(out, "fetched to {:#?}", fetched_saved)?;
 
-    writeln!(out, "  fetching audited packages...")?;
+    writeln!(out, "fetching audited packages...")?;
     let fetched_audited = {
         // TODO: do this
         warn!("fetching audited packages not yet implemented!");
@@ -843,9 +875,9 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
             .collect();
         fetch_crates(cfg, tmp, "audited", &to_fetch)?
     };
-    writeln!(out, "  fetched to {:#?}", fetched_audited)?;
+    writeln!(out, "fetched to {:#?}", fetched_audited)?;
 
-    writeln!(out, "  gathering diffstats...")?;
+    writeln!(out, "gathering diffstats...")?;
 
     let mut diffstats = vec![];
     for package in foreign_packages(&cfg.metadata) {
@@ -867,16 +899,13 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
 
     // If we got no diffstats then we're fully audited!
     if diffstats.is_empty() {
-        writeln!(
-            out,
-            "  Wow, everything is completely audited! You did it!!!"
-        )?;
+        writeln!(out, "Wow, everything is completely audited! You did it!!!")?;
         return Ok(());
     }
 
     // Ok, now sort the diffstats by change count and print them:
     diffstats.sort_by_key(|(stat, ..)| stat.count);
-    writeln!(out, "  {} audits to perform:", diffstats.len())?;
+    writeln!(out, "{} audits to perform:", diffstats.len())?;
     let max_len = diffstats
         .iter()
         .map(|(_, package_name, ..)| package_name.len())
@@ -887,7 +916,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
         let heading = format!("{package}:{v1}->{v2}");
         writeln!(
             out,
-            "     {heading:width$}{}",
+            "  {heading:width$}{}",
             stat.raw.trim(),
             width = max_len + 15
         )?;
@@ -904,27 +933,27 @@ fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<()
 
     writeln!(
         out,
-        "  fetching {} {}...",
+        "fetching {} {}...",
         sub_args.package, sub_args.version1
     )?;
     let to_fetch1 = &[(&*sub_args.package, &*sub_args.version1)];
     let fetched1 = fetch_crates(cfg, tmp, "first", to_fetch1)?.join(&sub_args.package);
     writeln!(
         out,
-        "  fetched {} {} to {:#?}",
+        "fetched {} {} to {:#?}",
         sub_args.package, sub_args.version1, fetched1
     )?;
 
     writeln!(
         out,
-        "  fetching {} {}...",
+        "fetching {} {}...",
         sub_args.package, sub_args.version2
     )?;
     let to_fetch2 = &[(&*sub_args.package, &*sub_args.version2)];
     let fetched2 = fetch_crates(cfg, tmp, "second", to_fetch2)?.join(&sub_args.package);
     writeln!(
         out,
-        "  fetched {} {} to {:#?}",
+        "fetched {} {} to {:#?}",
         sub_args.package, sub_args.version2, fetched2
     )?;
 
@@ -947,21 +976,30 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     // FIXME: fetch_foreign_audits may fail to download things, so we should really
     // be merging these two files somehow? Especially if we want to writeback the
     // results to our lockfile!
+    //
     // FIXME: Do we actually want to hold on to historical foreign audits? Like
     // if someone we trust adds or removes an entry, do we forget about that entry
     // or do we want to still remember it existed?
+    //
     // FIXME: We should probably check if the config has changed its imports and
     // mask out things in imports.lock that aren't there anymore?
+    //
+    // TODO: error out if the foreign audits changed their criteria (compare to imports.lock)
     let imports = if !cfg.cli.locked {
         fetch_foreign_audits(out, cfg, &config)?
     } else {
         load_imports(store_path)?
     };
 
+    // Dummy values for corner cases
     let root_version = Version::new(0, 0, 0);
     let no_audits = Vec::new();
 
-    let mut all_good = true;
+    let mut audited_count: u64 = 0;
+    let mut unaudited_count: u64 = 0;
+    let mut failed = vec![];
+    let mut violation_failed = vec![];
+
     // Actually vet the dependencies
     'all_packages: for package in foreign_packages(&cfg.metadata) {
         let unaudited = config.unaudited.get(&package.name);
@@ -973,7 +1011,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             .flat_map(|audit_file| audit_file.audits.get(&package.name).unwrap_or(&no_audits));
         let own_audits = audits.audits.get(&package.name).unwrap_or(&no_audits);
 
-        let mut forbids = Vec::new();
+        let mut violations = Vec::new();
         // Deltas are flipped so that we have a map of 'to: [froms]'. This lets
         // us start at the current version and look up all the deltas that *end* at that
         // version. By repeating this over and over, we can slowly walk back in time until
@@ -992,18 +1030,19 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                     .or_default()
                     .insert(&delta.from);
             }
-            if let Some(forbid) = &entry.forbidden {
-                forbids.push(forbid);
+            if let Some(violation) = &entry.violation {
+                violations.push(violation);
             }
         }
 
         // Reject forbidden packages
         //
         // TODO: should the "local" audit have a mechanism to override foreign forbids?
-        // TODO: should forbids be applied during delta resolution, invalidating deltas?
-        for forbid in &forbids {
-            if forbid.matches(&package.version) {
-                error!("forbidden package: {} {}", package.name, package.version);
+        // TODO: this should be stricter, and fail out completely if ANY audit entries match!
+        for violation in &violations {
+            if violation.matches(&package.version) {
+                violation_failed.push(package);
+                continue 'all_packages;
             }
         }
 
@@ -1013,8 +1052,8 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         loop {
             // If there's no versions left to check, we've failed
             if cur_versions.is_empty() {
-                error!("could not cerify {} {}", package.name, package.version);
-                all_good = false;
+                failed.push(package);
+                // error!("could not cerify {} {}", package.name, package.version);
                 continue 'all_packages;
             }
 
@@ -1022,10 +1061,12 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             for &version in &cur_versions {
                 if let Some(allowed) = unaudited {
                     if allowed.iter().any(|a| a.version == *version) {
+                        unaudited_count += 1;
                         // Reached an explicitly unaudited package, that's good enough
                         continue 'all_packages;
                     }
                     if version == &root_version {
+                        audited_count += 1;
                         // Reached 0.0.0, which means we hit a Full Audit, that's perfect
                         continue 'all_packages;
                     }
@@ -1045,8 +1086,29 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         }
     }
 
-    if !all_good {
-        error!("some crates failed to vet");
+    if !failed.is_empty() || !violation_failed.is_empty() {
+        writeln!(out, "Vetting Failed!")?;
+        writeln!(out)?;
+        if !failed.is_empty() {
+            writeln!(out, "{} unvetted dependencies:", failed.len())?;
+            for package in failed {
+                writeln!(out, "  {}:{}", package.name, package.version)?;
+            }
+            writeln!(out)?;
+        }
+        if !violation_failed.is_empty() {
+            writeln!(out, "{} forbidden dependencies:", violation_failed.len())?;
+            for package in violation_failed {
+                writeln!(out, "  {}:{}", package.name, package.version)?;
+            }
+            writeln!(out)?;
+        }
+        {
+            writeln!(out, "recommended audits:")?;
+            writeln!(out, "  [TODO]")?;
+            writeln!(out)?;
+        }
+        writeln!(out, "Use |cargo vet certify| to record the audits.")?;
         std::process::exit(-1);
     }
 
@@ -1057,13 +1119,16 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     if lockfile_path.exists() {
         fs::copy(lockfile_path, store_path.join(VETTED_LOCK))?;
     } else {
-        warn!("Couldn't find Cargo.lock?");
+        warn!("Couldn't find Cargo.lock to save!");
     }
     // Save the imports file back, in case we downloaded anything new
     // FIXME: should this be done earlier to avoid repeated network traffic on failed audits?
     store_imports(store_path, imports)?;
 
-    writeln!(out, "All crates vetted!")?;
+    writeln!(
+        out,
+        "Vetting Succeeded ({audited_count} audited, {unaudited_count} unaudited)"
+    )?;
 
     Ok(())
 }
@@ -1077,6 +1142,19 @@ fn cmd_fmt(_out: &mut dyn Write, cfg: &Config, _sub_args: &FmtArgs) -> Result<()
     store_audits(store_path, load_audits(store_path)?)?;
     store_config(store_path, load_config(store_path)?)?;
     store_imports(store_path, load_imports(store_path)?)?;
+
+    Ok(())
+}
+
+fn cmd_accept_criteria_change(
+    _out: &mut dyn Write,
+    _cfg: &Config,
+    _sub_args: &AcceptCriteriaChangeArgs,
+) -> Result<(), VetError> {
+    // Accept changes that a foreign audits.toml made to their criteria.
+    trace!("accepting...");
+
+    error!("TODO: unimplemented feature!");
 
     Ok(())
 }

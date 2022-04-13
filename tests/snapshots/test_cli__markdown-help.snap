@@ -60,6 +60,7 @@ How verbose logging should be (log level)
 Process all packages in the workspace
 
 ### SUBCOMMANDS
+* [accept-criteria-change](#cargo-vet-accept-criteria-change): Accept changes that a foreign audits.toml made to their criteria
 * [certify](#cargo-vet-certify): Mark `$package $version` as reviewed with `$message`
 * [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
 * [fetch](#cargo-vet-fetch): Fetch the source of `$package $version`
@@ -207,6 +208,19 @@ cargo vet fetch <PACKAGE> <VERSION>
 
 
 ### cargo vet fetch OPTIONS
+#### `-h, --help`
+Print help information
+
+<br><br><br>
+## cargo vet accept-criteria-change 
+Accept changes that a foreign audits.toml made to their criteria
+
+### cargo vet accept-criteria-change USAGE
+```
+cargo vet accept-criteria-change
+```
+
+### cargo vet accept-criteria-change OPTIONS
 #### `-h, --help`
 Print help information
 

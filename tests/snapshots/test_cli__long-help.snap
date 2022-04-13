@@ -53,6 +53,8 @@ OPTIONS:
             Process all packages in the workspace
 
 SUBCOMMANDS:
+    accept-criteria-change
+            Accept changes that a foreign audits.toml made to their criteria
     certify
             Mark `$package $version` as reviewed with `$message`
     diff
