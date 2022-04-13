@@ -78,10 +78,6 @@ enum Commands {
     #[clap(disable_version_flag = true)]
     Certify(CertifyArgs),
 
-    /// Mark `$package $version` as unacceptable with `$message`
-    #[clap(disable_version_flag = true)]
-    Forbid(ForbidArgs),
-
     /// Suggest some low-hanging fruit to review
     #[clap(disable_version_flag = true)]
     Suggest(SuggestArgs),
@@ -120,14 +116,6 @@ struct CertifyArgs {
     package: String,
     version1: String,
     version2: Option<String>,
-}
-
-/// Forbids the given version
-#[derive(clap::Args)]
-struct ForbidArgs {
-    package: String,
-    version: String,
-    message: String,
 }
 
 #[derive(clap::Args)]
@@ -638,7 +626,6 @@ fn main() -> Result<(), VetError> {
         Some(AcceptCriteriaChange(sub_args)) => cmd_accept_criteria_change(out, &cfg, sub_args),
         Some(Fetch(sub_args)) => cmd_fetch(out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
-        Some(Forbid(sub_args)) => cmd_forbid(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
         Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
@@ -790,48 +777,6 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
         std::process::exit(-1);
     }
 
-    audits
-        .audits
-        .entry(sub_args.package.clone())
-        .or_insert(vec![])
-        .push(new_entry);
-    store_audits(store_path, audits)?;
-
-    Ok(())
-}
-
-fn cmd_forbid(_out: &mut dyn Write, cfg: &Config, sub_args: &ForbidArgs) -> Result<(), VetError> {
-    // Forbid a crate's source for some version
-    let store_path = cfg.metacfg.store_path();
-    let mut audits = load_audits(store_path)?;
-
-    // FIXME: better error when this goes bad
-    // TODO: properly make this an `=` VersionReq
-    let violation =
-        Some(VersionReq::parse(&sub_args.version).expect("version wasn't a valid VersionReq"));
-
-    // TODO: source this from git or something?
-    let who = Some("?TODO?".to_string());
-    // TODO: start an interactive prompt? launch $EDITOR?
-    let notes = Some("?TODO?".to_string());
-    // TODO: figure this out
-    let dependency_criteria = None;
-
-    let new_entry = AuditEntry {
-        version: None,
-        delta: None,
-        violation,
-        who,
-        notes,
-        criteria: None,
-        dependency_criteria,
-    };
-
-    // TODO: check if the version makes sense..?
-    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
-        error!("'{}' isn't one of your foreign packages", sub_args.package);
-        std::process::exit(-1);
-    }
     audits
         .audits
         .entry(sub_args.package.clone())
