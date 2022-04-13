@@ -16,7 +16,6 @@ cargo-vet helps you vet your dependencies and rely on the vetting done by other 
   * config.toml - settings 
   * audits.toml - audits you have performed
   * imports.lock - saved foreign audits.toml files you trust
-  * Vetted.lock - a copy of the last Cargo.lock that passed vetting
 
 
 

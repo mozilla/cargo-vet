@@ -383,7 +383,6 @@ static WORKSPACE_VET_CONFIG: &str = "vet";
 static AUDITS_TOML: &str = "audits.toml";
 static CONFIG_TOML: &str = "config.toml";
 static IMPORTS_LOCK: &str = "imports.lock";
-static VETTED_LOCK: &str = "Vetted.lock";
 
 // store = { path = './supply-chain' }
 // audits = [
@@ -932,16 +931,8 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     let audits = load_audits(store_path)?;
     let config = load_config(store_path)?;
 
-    // FIXME: fetch_foreign_audits may fail to download things, so we should really
-    // be merging these two files somehow? Especially if we want to writeback the
-    // results to our lockfile!
-    //
-    // FIXME: Do we actually want to hold on to historical foreign audits? Like
-    // if someone we trust adds or removes an entry, do we forget about that entry
-    // or do we want to still remember it existed?
-    //
-    // FIXME: We should probably check if the config has changed its imports and
-    // mask out things in imports.lock that aren't there anymore?
+    // FIXME: We should probably check in --locked vets if the config has changed its
+    // imports and warn if the imports.lock is inconsistent with that..?
     //
     // TODO: error out if the foreign audits changed their criteria (compare to imports.lock)
     let imports = if !cfg.cli.locked {
@@ -1077,17 +1068,9 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         std::process::exit(-1);
     }
 
-    // TODO: I remember convincing myself that we "need" to save the lockfile
-    // but I can't remember the reason anymore... let's just do it for now.
-    trace!("Saving vetting results...");
-    let lockfile_path = cfg.metadata.workspace_root.join("Cargo.lock");
-    if lockfile_path.exists() {
-        fs::copy(lockfile_path, store_path.join(VETTED_LOCK))?;
-    } else {
-        warn!("Couldn't find Cargo.lock to save!");
-    }
     // Save the imports file back, in case we downloaded anything new
     // FIXME: should this be done earlier to avoid repeated network traffic on failed audits?
+    trace!("Saving imports.lock...");
     store_imports(store_path, imports)?;
 
     writeln!(
@@ -1276,6 +1259,7 @@ where
 }
 
 fn load_audits(store_path: &Path) -> Result<AuditsFile, VetError> {
+    // TODO: do integrity checks? (for things like criteria keys being valid)
     let path = store_path.join(AUDITS_TOML);
     let file: AuditsFile = load_toml(&path)?;
     file.validate()?;
@@ -1283,6 +1267,7 @@ fn load_audits(store_path: &Path) -> Result<AuditsFile, VetError> {
 }
 
 fn load_config(store_path: &Path) -> Result<ConfigFile, VetError> {
+    // TODO: do integrity checks?
     let path = store_path.join(CONFIG_TOML);
     let file: ConfigFile = load_toml(&path)?;
     file.validate()?;
@@ -1290,6 +1275,7 @@ fn load_config(store_path: &Path) -> Result<ConfigFile, VetError> {
 }
 
 fn load_imports(store_path: &Path) -> Result<ImportsFile, VetError> {
+    // TODO: do integrity checks?
     let path = store_path.join(IMPORTS_LOCK);
     let file: ImportsFile = load_toml(&path)?;
     file.validate()?;
@@ -1562,14 +1548,16 @@ fn fetch_foreign_audits(
         // FIXME: this should probably be async but that's a Whole Thing and these files are small.
         let audit_txt = req::get(url).and_then(|r| r.text());
         if let Err(e) = audit_txt {
-            warn!("Could not load {name} @ {url} - {e}");
-            continue;
+            error!("Could not load {name} @ {url} - {e}");
+            std::process::exit(-1);
         }
         let audit_file: Result<AuditsFile, _> = toml::from_str(&audit_txt.unwrap());
         if let Err(e) = audit_file {
-            warn!("Could not parse {name} @ {url} - {e}");
-            continue;
+            error!("Could not parse {name} @ {url} - {e}");
+            std::process::exit(-1);
         }
+
+        // TODO: do integrity checks? (share code with load_audits/load_imports here...)
 
         audits.insert(name.clone(), audit_file.unwrap());
     }
