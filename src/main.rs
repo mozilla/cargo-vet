@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
-use std::fs::OpenOptions;
 use std::io::{BufReader, Read};
 use std::ops::Deref;
 use std::path::Path;
@@ -162,6 +161,7 @@ struct Config {
     cli: Cli,
     cargo: OsString,
     tmp: PathBuf,
+    registry_src: Option<PathBuf>,
 }
 
 /// A `[*.metadata.vet]` table in a Cargo.toml, configuring our behaviour
@@ -385,6 +385,7 @@ impl AuditsFile {
 static EMPTY_PACKAGE: &str = "empty";
 static TEMP_DIR_SUFFIX: &str = "cargo-vet-checkout";
 static CARGO_ENV: &str = "CARGO";
+static CARGO_REGISTRY_SRC: &str = "registry/src/";
 static DEFAULT_STORE: &str = "supply-chain";
 // package.metadata.vet
 static PACKAGE_VET_CONFIG: &str = "vet";
@@ -618,12 +619,16 @@ fn main() -> Result<(), VetError> {
     // TODO: make this configurable
     // TODO: maybe this wants to be actually totally random to allow multi-vets?
     let tmp = std::env::temp_dir().join(TEMP_DIR_SUFFIX);
+    let registry_src = home::cargo_home()
+        .ok()
+        .map(|path| path.join(CARGO_REGISTRY_SRC));
     let cfg = Config {
         metacfg,
         metadata,
         cli,
         cargo,
         tmp,
+        registry_src,
     };
 
     use Commands::*;
@@ -721,7 +726,8 @@ fn cmd_fetch(out: &mut dyn Write, cfg: &Config, sub_args: &FetchArgs) -> Result<
     clean_tmp(tmp)?;
 
     let to_fetch = &[(&*sub_args.package, &*sub_args.version)];
-    let fetched = fetch_crates(cfg, tmp, "fetch", to_fetch)?.join(&sub_args.package);
+    let fetch_dir = fetch_crates(cfg, tmp, "fetch", to_fetch)?;
+    let fetched = fetched_pkg(&fetch_dir, &sub_args.package, &sub_args.version);
 
     writeln!(out, "  fetched to {:#?}", fetched)?;
     Ok(())
@@ -885,12 +891,16 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
     for package in foreign_packages(&cfg.metadata) {
         // If there are no audits, then diff from an empty dir
         let (base, base_ver) = if audits.audits.contains_key(&package.name) {
-            // TODO: find the latest version
-            (fetched_audited.join(&package.name), "TODO?".to_string())
+            // TODO: find the closest audited version <= sub_args.version!
+            let version = &package.version.to_string();
+            (
+                fetched_pkg(&fetched_audited, &package.name, version),
+                "TODO?".to_string(),
+            )
         } else {
             (tmp.join(EMPTY_PACKAGE), "0.0.0".to_string())
         };
-        let current = fetched_saved.join(&package.name);
+        let current = fetched_pkg(&fetched_saved, &package.name, &package.version.to_string());
         let stat = diffstat_crate(out, cfg, &base, &current)?;
 
         // Ignore things that didn't change
@@ -939,7 +949,8 @@ fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<()
         sub_args.package, sub_args.version1
     )?;
     let to_fetch1 = &[(&*sub_args.package, &*sub_args.version1)];
-    let fetched1 = fetch_crates(cfg, tmp, "first", to_fetch1)?.join(&sub_args.package);
+    let fetch_dir1 = fetch_crates(cfg, tmp, "first", to_fetch1)?;
+    let fetched1 = fetched_pkg(&fetch_dir1, &sub_args.package, &sub_args.version1);
     writeln!(
         out,
         "fetched {} {} to {:#?}",
@@ -952,7 +963,8 @@ fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<()
         sub_args.package, sub_args.version2
     )?;
     let to_fetch2 = &[(&*sub_args.package, &*sub_args.version2)];
-    let fetched2 = fetch_crates(cfg, tmp, "second", to_fetch2)?.join(&sub_args.package);
+    let fetch_dir2 = fetch_crates(cfg, tmp, "second", to_fetch2)?;
+    let fetched2 = fetched_pkg(&fetch_dir2, &sub_args.package, &sub_args.version2);
     writeln!(
         out,
         "fetched {} {} to {:#?}",
@@ -1378,17 +1390,79 @@ fn clean_tmp(tmp: &Path) -> Result<(), VetError> {
 
 fn fetch_crates(
     cfg: &Config,
-    tmp: &Path,
-    fetch_dir: &str,
+    _tmp: &Path,
+    _fetch_dir: &str,
     crates: &[(&str, &str)],
 ) -> Result<PathBuf, VetError> {
+    /* OLD Approach, might need some version of this for fallback...?
+       {
+           let out = Command::new(&cfg.cargo)
+               .current_dir(tmp)
+               .arg("new")
+               .arg("--bin")
+               .arg(fetch_dir)
+               .output()?;
+
+           if !out.status.success() {
+               panic!(
+                   "command failed!\nout:\n{}\nstderr:\n{}",
+                   String::from_utf8(out.stdout).unwrap(),
+                   String::from_utf8(out.stderr).unwrap()
+               )
+           }
+       }
+
+       trace!("init to: {:#?}", tmp);
+       let fetch_dir = tmp.join(fetch_dir);
+       let fetch_toml = fetch_dir.join("Cargo.toml");
+
+       {
+           // FIXME: properly parse the toml instead of assuming structure
+           let mut toml = OpenOptions::new().append(true).open(&fetch_toml)?;
+
+           for (krate, version) in crates {
+               writeln!(toml, r#"{} = "={}""#, krate, version)?;
+           }
+       }
+
+       trace!("updated: {:#?}", fetch_toml);
+
+       {
+           let out = Command::new(&cfg.cargo)
+               .current_dir(&fetch_dir)
+               .arg("vendor")
+               .output()?;
+
+           if !out.status.success() {
+               panic!(
+                   "command failed!\nout:\n{}\nstderr:\n{}",
+                   String::from_utf8(out.stdout).unwrap(),
+                   String::from_utf8(out.stderr).unwrap()
+               )
+           }
+       }
+       // FIXME: delete the .cargo-checksum.json files (don't want to diff them, not real)
+
+       let fetched = fetch_dir.join("vendor");
+    */
+
+    if cfg.registry_src.is_none() {
+        error!("Could not resolve CARGO_HOME!?");
+        std::process::exit(-1);
+    }
+
+    let registry_src = cfg.registry_src.as_ref().unwrap();
+    if !registry_src.exists() {
+        error!("Cargo registry src cache doesn't exist!?");
+        std::process::exit(-1);
+    }
+
     {
-        let out = Command::new(&cfg.cargo)
-            .current_dir(tmp)
-            .arg("new")
-            .arg("--bin")
-            .arg(fetch_dir)
-            .output()?;
+        // TODO: we need to be smarter about this and tell fetch what we actually need.
+        // This is currently both overbroad and insufficent, but might work well enough
+        // for the MVP. What exactly we should do here depends on what packages we actually
+        // want to compare in practice (how much we can just copy an existing lockfile).
+        let out = Command::new(&cfg.cargo).arg("fetch").output()?;
 
         if !out.status.success() {
             panic!(
@@ -1399,40 +1473,44 @@ fn fetch_crates(
         }
     }
 
-    trace!("init to: {:#?}", tmp);
-    let fetch_dir = tmp.join(fetch_dir);
-    let fetch_toml = fetch_dir.join("Cargo.toml");
+    // This is all unstable nonsense so being a bit paranoid here so that we can notice
+    // when things get weird and understand corner cases better...
+    let mut real_src_dir = None;
+    for entry in std::fs::read_dir(registry_src)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if real_src_dir.is_some() {
+                warn!("Found multiple subdirectories in CARGO_HOME/registry/src");
+                warn!("  Preferring any named github.com-*");
+                if path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("github.com-")
+                {
+                    real_src_dir = Some(path);
+                }
+            } else {
+                real_src_dir = Some(path);
+            }
+        }
+    }
+    if real_src_dir.is_none() {
+        error!("failed to find cargo package sources");
+        std::process::exit(-1);
+    }
+    let real_src_dir = real_src_dir.unwrap();
 
-    {
-        // FIXME: properly parse the toml instead of assuming structure
-        let mut toml = OpenOptions::new().append(true).open(&fetch_toml)?;
-
-        for (krate, version) in crates {
-            writeln!(toml, r#"{} = "={}""#, krate, version)?;
+    // FIXME: we probably shouldn't do this, but better to fail-fast when hacky.
+    for (krate, version) in crates {
+        if !fetched_pkg(&real_src_dir, krate, version).exists() {
+            error!("failed to fetch {}:{}", krate, version);
+            std::process::exit(-1);
         }
     }
 
-    trace!("updated: {:#?}", fetch_toml);
-
-    {
-        let out = Command::new(&cfg.cargo)
-            .current_dir(&fetch_dir)
-            .arg("vendor")
-            .output()?;
-
-        if !out.status.success() {
-            panic!(
-                "command failed!\nout:\n{}\nstderr:\n{}",
-                String::from_utf8(out.stdout).unwrap(),
-                String::from_utf8(out.stderr).unwrap()
-            )
-        }
-    }
-    // FIXME: delete the .cargo-checksum.json files (don't want to diff them, not real)
-
-    let fetched = fetch_dir.join("vendor");
-
-    Ok(fetched)
+    Ok(real_src_dir)
 }
 
 fn diff_crate(
@@ -1441,8 +1519,8 @@ fn diff_crate(
     version1: &Path,
     version2: &Path,
 ) -> Result<(), VetError> {
-    // FIXME: probably don't just directly use git diff?
-    // ...but also cargo is based on git, so, can you really not have it? (look into libgit2 stuff)
+    // FIXME: mask out .cargo_vcs_info.json
+    // FIXME: look into libgit2 vs just calling git
 
     let status = Command::new("git")
         .arg("diff")
@@ -1472,8 +1550,8 @@ fn diffstat_crate(
     version2: &Path,
 ) -> Result<DiffStat, VetError> {
     trace!("diffstating {version1:#?} {version2:#?}");
-    // FIXME: probably don't just directly use git diff?
-    // ...but also cargo is based on git, so, can you really not have it? (look into libgit2 stuff)
+    // FIXME: mask out .cargo_vcs_info.json
+    // FIXME: look into libgit2 vs just calling git
 
     let out = Command::new("git")
         .arg("diff")
@@ -1552,4 +1630,9 @@ fn fetch_foreign_audits(
     }
 
     Ok(ImportsFile { audits })
+}
+
+fn fetched_pkg(fetch_dir: &Path, name: &str, version: &str) -> PathBuf {
+    let dir_name = format!("{}-{}", name, version);
+    fetch_dir.join(dir_name)
 }
