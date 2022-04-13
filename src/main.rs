@@ -848,6 +848,8 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
     let store_path = cfg.metacfg.store_path();
     let audits = load_audits(store_path)?;
 
+    // TODO: skip packages with suggest=false
+
     // FIXME: in theory we can avoid fetching any file with an up to date audit
     writeln!(out, "fetching current packages...")?;
     let fetched_saved = {
@@ -1063,11 +1065,17 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                     if allowed.iter().any(|a| a.version == *version) {
                         unaudited_count += 1;
                         // Reached an explicitly unaudited package, that's good enough
+
+                        // TODO: register this unaudited entry as "used" so we can warn
+                        // about any entries that weren't used (security hazard).
                         continue 'all_packages;
                     }
                     if version == &root_version {
                         audited_count += 1;
                         // Reached 0.0.0, which means we hit a Full Audit, that's perfect
+
+                        // TODO: now verify policy
+                        // TODO: now verify dependency_criteria
                         continue 'all_packages;
                     }
                 }
@@ -1443,6 +1451,8 @@ fn diff_crate(
         .arg(version2)
         .status()?;
 
+    // TODO: pretty sure this is wrong, should use --exit-code and copy diffstat_crate's logic
+    // (not actually sure what the default exit status logic is!)
     if !status.success() {
         todo!()
     }
