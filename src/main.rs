@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{BufReader, Read};
 use std::ops::Deref;
@@ -286,7 +286,7 @@ struct UnauditedDependency {
 
 /// This is just a big vague ball initially. It's up to the Audits/Unuadited/Trusted wrappers
 /// to validate if it "makes sense" for their particular function.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct AuditEntry {
     version: Option<Version>,
     delta: Option<Delta>,
@@ -294,18 +294,21 @@ struct AuditEntry {
     who: Option<String>,
     notes: Option<String>,
     criteria: Option<Vec<String>>,
-    /// A list of criteria that transitive dependencies must satisfy for this
-    /// audit to continue to be considered valid.
-    ///
-    /// Example:
-    ///
-    /// ```toml
-    /// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
-    /// ```
-    dependency_criteria: Option<Vec<StableMap<String, Vec<String>>>>,
+    dependency_criteria: Option<DependencyCriteria>,
 }
 
+/// A list of criteria that transitive dependencies must satisfy for this
+/// audit to continue to be considered valid.
+///
+/// Example:
+///
+/// ```toml
+/// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
+/// ```
+type DependencyCriteria = Vec<StableMap<String, Vec<String>>>;
+
 /// A "VERSION -> VERSION"
+#[derive(Debug)]
 struct Delta {
     from: Version,
     to: Version,
@@ -922,7 +925,136 @@ fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<()
     Ok(())
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+/// Resolver Algorithm And Types (Probably Gonna Be Its Own File Later)
+/////////////////////////////////////////////////////////////////////////////////////////
+
+/// Set of booleans, 64 should be Enough For Anyone (but abstracting in case not).
+#[derive(Clone)]
+struct CriteriaSet(u64);
+const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
+
+struct CriteriaMapper<'a> {
+    list: Vec<(&'a str, &'a CriteriaEntry)>,
+    index: HashMap<&'a str, usize>,
+    default_criteria: CriteriaSet,
+}
+
+impl<'a> CriteriaMapper<'a> {
+    fn new(criteria: &'a StableMap<String, CriteriaEntry>) -> CriteriaMapper<'a> {
+        let list = criteria.iter().map(|(k, v)| (&**k, v)).collect::<Vec<_>>();
+        let index = criteria
+            .keys()
+            .enumerate()
+            .map(|(idx, v)| (&**v, idx))
+            .collect();
+
+        let mut default_criteria = CriteriaSet::none(list.len());
+        for (idx, (_name, entry)) in list.iter().enumerate() {
+            if entry.default {
+                default_criteria.set_criteria(idx);
+            }
+        }
+
+        Self {
+            list,
+            index,
+            default_criteria,
+        }
+    }
+    fn criteria_from_entry(&self, entry: &AuditEntry) -> CriteriaSet {
+        if let Some(criteria_list) = entry.criteria.as_ref() {
+            self.criteria_from_list(criteria_list.iter().map(|s| &**s))
+        } else {
+            self.default_criteria().clone()
+        }
+    }
+    fn criteria_from_list<'b>(&self, list: impl IntoIterator<Item = &'b str>) -> CriteriaSet {
+        let mut result = self.no_criteria();
+        for criteria in list {
+            result.set_criteria(self.index[criteria])
+        }
+        result
+    }
+    fn set_criteria(&self, set: &mut CriteriaSet, criteria: &str) {
+        set.set_criteria(self.index[criteria])
+    }
+
+    fn _criteria<'b>(
+        &'b self,
+        set: &'b CriteriaSet,
+    ) -> impl Iterator<Item = (&'a str, &'a CriteriaEntry)> + 'b {
+        self.list
+            .iter()
+            .copied()
+            .enumerate()
+            .filter_map(|(idx, payload)| {
+                if set._has_criteria(idx) {
+                    Some(payload)
+                } else {
+                    None
+                }
+            })
+    }
+    fn len(&self) -> usize {
+        self.list.len()
+    }
+    fn default_criteria(&self) -> &CriteriaSet {
+        &self.default_criteria
+    }
+    fn no_criteria(&self) -> CriteriaSet {
+        CriteriaSet::none(self.len())
+    }
+    fn all_criteria(&self) -> CriteriaSet {
+        CriteriaSet::all(self.len())
+    }
+}
+
+impl CriteriaSet {
+    fn none(count: usize) -> Self {
+        assert!(
+            count <= MAX_CRITERIA,
+            "{MAX_CRITERIA} was not Enough For Everyone ({count} criteria)"
+        );
+        CriteriaSet(0)
+    }
+    fn all(count: usize) -> Self {
+        assert!(
+            count <= MAX_CRITERIA,
+            "{MAX_CRITERIA} was not Enough For Everyone ({count} criteria)"
+        );
+        if count == MAX_CRITERIA {
+            CriteriaSet(!0)
+        } else {
+            // Bit Magic to get 'count' 1's
+            CriteriaSet((1 << count) - 1)
+        }
+    }
+    fn set_criteria(&mut self, idx: usize) {
+        self.0 |= 1 << idx;
+    }
+    fn _has_criteria(&self, idx: usize) -> bool {
+        (self.0 & (1 << idx)) != 0
+    }
+    fn intersected_with(&mut self, other: &CriteriaSet) {
+        self.0 &= other.0;
+    }
+    fn unioned_with(&mut self, other: &CriteriaSet) {
+        self.0 |= other.0;
+    }
+    fn contains(&self, other: &CriteriaSet) -> bool {
+        (self.0 & other.0) == other.0
+    }
+    fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
+}
+
 fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
+    // Not sure which we want, so make it configurable to test.
+    // Determines whether a delta must be == unaudited or just <=
+    let unaudited_matching_is_strict = true;
+
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
@@ -950,6 +1082,15 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     let mut failed = vec![];
     let mut violation_failed = vec![];
 
+    // A large part of our algorithm is unioning and intersecting criteria, so we map all
+    // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
+
+    let criteria_mapper = CriteriaMapper::new(&audits.criteria);
+    let all_criteria = criteria_mapper.all_criteria();
+    let no_criteria = criteria_mapper.no_criteria();
+    let mut via_audited = false;
+    let mut via_unaudited = false;
+
     // Actually vet the dependencies
     'all_packages: for package in foreign_packages(&cfg.metadata) {
         let unaudited = config.unaudited.get(&package.name);
@@ -961,84 +1102,195 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             .flat_map(|audit_file| audit_file.audits.get(&package.name).unwrap_or(&no_audits));
         let own_audits = audits.audits.get(&package.name).unwrap_or(&no_audits);
 
-        let mut violations = Vec::new();
         // Deltas are flipped so that we have a map of 'to: [froms]'. This lets
         // us start at the current version and look up all the deltas that *end* at that
-        // version. By repeating this over and over, we can slowly walk back in time until
+        // version. By repeating this over and over, we can loslowly walk back in time until
         // we run out of deltas or reach full audit or an unaudited entry.
-        let mut deltas_to_from = HashMap::<&Version, HashSet<&Version>>::new();
+        let mut deltas_to =
+            HashMap::<&Version, Vec<(&Version, CriteriaSet, Option<&DependencyCriteria>)>>::new();
+        let mut violations = Vec::new();
 
-        // Collect up all the deltas
-        for entry in own_audits.iter().chain(foreign_audits) {
+        // Collect up all the deltas, their criteria, and dependency_criteria
+        for entry in own_audits.iter() {
+            let criteria = criteria_mapper.criteria_from_entry(entry);
+            let dep_criteria = entry.dependency_criteria.as_ref();
             // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
             if let Some(ver) = &entry.version {
-                deltas_to_from.entry(ver).or_default().insert(&root_version);
-            }
-            if let Some(delta) = &entry.delta {
-                deltas_to_from
+                deltas_to
+                    .entry(ver)
+                    .or_default()
+                    .push((&root_version, criteria, dep_criteria));
+            } else if let Some(delta) = &entry.delta {
+                deltas_to
                     .entry(&delta.to)
                     .or_default()
-                    .insert(&delta.from);
-            }
-            if let Some(violation) = &entry.violation {
-                violations.push(violation);
+                    .push((&delta.from, criteria, dep_criteria));
+            } else if entry.violation.is_some() {
+                violations.push(entry);
             }
         }
 
-        // Reject forbidden packages
+        // Try to map foreign audits into our worldview
+        for (foreign_name, foreign_audits) in &imports.audits {
+            // Prep CriteriaSet machinery for comparing requirements
+            let foreign_criteria_mapper = CriteriaMapper::new(&foreign_audits.criteria);
+            let criteria_map = &config
+                .imports
+                .get(foreign_name)
+                .expect("Foreign Import isn't in config file (imports.lock outdated?)")
+                .criteria_map;
+            let criteria_map: Vec<(&str, CriteriaSet)> = criteria_map
+                .iter()
+                .map(|mapping| {
+                    let set = foreign_criteria_mapper
+                        .criteria_from_list(mapping.theirs.iter().map(|s| &**s));
+                    (&*mapping.ours, set)
+                })
+                .collect();
+
+            for entry in foreign_audits
+                .audits
+                .get(&package.name)
+                .unwrap_or(&no_audits)
+            {
+                // TODO: figure out a reasonable way to map foreign dependency_criteria
+                if entry.dependency_criteria.is_some() {
+                    // Just discard this entry for now
+                    warn!("discarding foreign audit with dependency_criteria (TODO)");
+                    continue;
+                }
+
+                // Map this entry's criteria into our worldview
+                let mut local_criteria = no_criteria.clone();
+                let foreign_criteria = foreign_criteria_mapper.criteria_from_entry(entry);
+                for (local_implied, foreign_required) in &criteria_map {
+                    if foreign_criteria.contains(foreign_required) {
+                        criteria_mapper.set_criteria(&mut local_criteria, local_implied);
+                    }
+                }
+
+                // Now process it as normal
+                if let Some(ver) = &entry.version {
+                    deltas_to
+                        .entry(ver)
+                        .or_default()
+                        .push((&root_version, local_criteria, None));
+                } else if let Some(delta) = &entry.delta {
+                    deltas_to.entry(&delta.to).or_default().push((
+                        &delta.from,
+                        local_criteria,
+                        None,
+                    ));
+                } else if entry.violation.is_some() {
+                    violations.push(entry);
+                }
+            }
+        }
+
+        // Reject forbidden packages (violations)
         //
-        // TODO: should the "local" audit have a mechanism to override foreign forbids?
-        // TODO: this should be stricter, and fail out completely if ANY audit entries match!
-        for violation in &violations {
-            if violation.matches(&package.version) {
+        // FIXME: should the "local" audit have a mechanism to override foreign forbids?
+        for violation_entry in &violations {
+            let violation_range = violation_entry.violation.as_ref().unwrap();
+            // Hard error out if anything in our audits overlaps with a forbid entry!
+            // (This clone isn't a big deal, it's just iterator adaptors for by-ref iteration)
+            for entry in own_audits.iter().chain(foreign_audits.clone()) {
+                if let Some(ver) = &entry.version {
+                    if violation_range.matches(ver) {
+                        error!(
+                            "Integrity Failure! Audit and Violation Overlap for {}:",
+                            package.name
+                        );
+                        error!("  audit: {:#?}", entry);
+                        error!("  violation: {:#?}", violation_entry);
+                        std::process::exit(-1);
+                    }
+                }
+                if let Some(delta) = &entry.delta {
+                    if violation_range.matches(&delta.from) || violation_range.matches(&delta.to) {
+                        error!(
+                            "Integrity Failure! Delta Audit and Violation Overlap for {}:",
+                            package.name
+                        );
+                        error!("  audit: {:#?}", entry);
+                        error!("  violation: {:#?}", violation_entry);
+                        std::process::exit(-1);
+                    }
+                }
+            }
+            // Having current versions overlap with a violations is less horrifyingly bad,
+            // so just gather them up as part of the normal report.
+            if violation_range.matches(&package.version) {
                 violation_failed.push(package);
                 continue 'all_packages;
             }
         }
 
         // Now try to resolve the deltas
-        let mut cur_versions: HashSet<&Version> = [&package.version].into_iter().collect();
-        let mut next_versions: HashSet<&Version> = HashSet::new();
-        loop {
-            // If there's no versions left to check, we've failed
-            if cur_versions.is_empty() {
-                failed.push(package);
-                // error!("could not cerify {} {}", package.name, package.version);
-                continue 'all_packages;
-            }
+        let mut working_queue = vec![(&package.version, all_criteria.clone())];
+        let mut validated_criteria = no_criteria.clone();
 
+        while let Some((cur_version, cur_criteria)) = working_queue.pop() {
             // Check if we've succeeded
-            for &version in &cur_versions {
-                if let Some(allowed) = unaudited {
-                    if allowed.iter().any(|a| a.version == *version) {
-                        unaudited_count += 1;
-                        // Reached an explicitly unaudited package, that's good enough
-
-                        // TODO: register this unaudited entry as "used" so we can warn
-                        // about any entries that weren't used (security hazard).
-                        continue 'all_packages;
+            if let Some(allowed) = unaudited {
+                // Check if we've reached an 'unaudited' entry
+                let reached_unaudited = allowed.iter().any(|allowed| {
+                    if unaudited_matching_is_strict {
+                        allowed.version == *cur_version
+                    } else {
+                        allowed.version >= *cur_version
                     }
-                    if version == &root_version {
-                        audited_count += 1;
-                        // Reached 0.0.0, which means we hit a Full Audit, that's perfect
+                });
+                if reached_unaudited {
+                    // Reached an explicitly unaudited package, that's good enough
+                    validated_criteria.unioned_with(&cur_criteria);
+                    // FIXME: should this only be set if we followed no deltas?
+                    via_unaudited = true;
 
-                        // TODO: now verify policy
-                        // TODO: now verify dependency_criteria
-                        continue 'all_packages;
+                    // TODO: register this unaudited entry as "used" so we can warn
+                    // about any entries that weren't used (security hazard).
+
+                    // Just keep running the workqueue in case we find more criteria by other paths
+                    continue;
+                }
+            }
+            if cur_version == &root_version {
+                // Reached 0.0.0, which means we hit a Full Audit, that's perfect
+                validated_criteria.unioned_with(&cur_criteria);
+                via_audited = true;
+
+                // Just keep running the workqueue in case we find more criteria by other paths
+                continue;
+            }
+            // Apply deltas to move along to the next "layer" of the search
+            if let Some(deltas) = deltas_to.get(cur_version) {
+                for (from_version, criteria, dep_criteria) in deltas {
+                    let mut next_critera = cur_criteria.clone();
+                    next_critera.intersected_with(criteria);
+
+                    // TODO: check dep_criteria (need to ensure 'all_packages has right order)
+                    if dep_criteria.is_some() {
+                        warn!("dependency_criteria resolution not yet implemented (TODO)");
+                    }
+                    let deps_satisfied = true;
+
+                    if !next_critera.is_empty() && deps_satisfied {
+                        working_queue.push((from_version, next_critera));
                     }
                 }
             }
+        }
+        // TODO: now verify validated_criteria matches our policy
 
-            // Apply deltas to move along the next "layer" of the search
-            for version in &cur_versions {
-                if let Some(versions) = deltas_to_from.get(version) {
-                    next_versions.extend(versions);
-                }
-            }
-
-            // Now swap the next versions to be the current versions
-            core::mem::swap(&mut cur_versions, &mut next_versions);
-            next_versions.clear();
+        // If we failed to validate any criteria, then we've failed
+        if validated_criteria.is_empty() {
+            failed.push(package);
+        } else if via_audited {
+            audited_count += 1;
+        } else if via_unaudited {
+            unaudited_count += 1;
+        } else {
+            unreachable!("I have messed up the vet algorithm very badly...");
         }
     }
 
@@ -1080,6 +1332,10 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     Ok(())
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////
+/// End of Resolver
+////////////////////////////////////////////////////////////////////////////////////////////
 
 fn cmd_fmt(_out: &mut dyn Write, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), VetError> {
     // Reformat all the files (just load and store them, formatting is implict).

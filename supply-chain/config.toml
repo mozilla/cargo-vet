@@ -482,6 +482,12 @@ version = "0.4.4"
 notes = "automatically imported by 'cargo vet init'"
 suggest = true
 
+[[unaudited.home]]
+version = "0.5.3"
+notes = "automatically imported by 'cargo vet init'"
+suggest = true
+
+
 [[unaudited.strsim]]
 version = "0.10.0"
 notes = "automatically imported by 'cargo vet init'"
