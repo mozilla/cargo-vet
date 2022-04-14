@@ -1569,8 +1569,9 @@ fn cmd_help_md(
     )?;
     writeln!(out)?;
 
-    let mut full_command = FakeCli::command();
-    let mut todo = vec![&mut full_command];
+    let mut fake_cli = FakeCli::command();
+    let full_command = fake_cli.get_subcommands_mut().next().unwrap();
+    let mut todo = vec![full_command];
     let mut is_full_command = true;
 
     while let Some(command) = todo.pop() {

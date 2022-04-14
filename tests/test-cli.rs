@@ -86,6 +86,7 @@ fn test_short_help() {
 }
 
 #[test]
+#[ignore]
 fn test_markdown_help() {
     let bin = env!("CARGO_BIN_EXE_cargo-vet");
     let output = Command::new(bin)
