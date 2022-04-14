@@ -47,14 +47,18 @@ even if the project is hosted somewhere like GitHub, there's no guarantee that
 the code in the repository matches the bits submitted to crates.io. And the
 packages on crates.io aren't easy to download manually.
 
-To make this easy, the `cargo vet fetch` subcommand will download the relevant
-crate to a temporary directory. When you finish the audit, you can use
-`cargo vet certify` to add the entry to `audits.toml`:
+To make this easy, the `cargo vet inspect` subcommand will ensure the crate has
+been downloaded to your local registry cache and drop your terminal into the
+appropriate directory to inspect it with whatever tools you like. When you
+finish the audit, you can use `cargo vet certify` to add the entry to
+`audits.toml`:
 
 ```
-$ cargo vet fetch baz 1.3
-  Downloaded crate as /tmp/baz:1.3
+$ cargo vet inspect baz 1.3
+  Fetching crate to ~/.cargo/registry/src/github.com-1ecc6299db9ec823/baz-1.3 ...
+  Switching directories (type `popd` when finished)
 $ ...
+$ popd
 $ cargo vet certify baz 1.3
 
   I, Alice, certify that I have audited version 1.3 of baz in accordance with
@@ -114,6 +118,6 @@ $ cargo vet suggest
     baz:1.5 (5033 lines)
 ```
 
-From there, you can use the `fetch`, `diff`, and `certify` subcommands to tackle
+From there, you can use the `inspect`, `diff`, and `certify` subcommands to tackle
 items on the list.
 
