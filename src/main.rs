@@ -30,6 +30,8 @@ enum FakeCli {
 }
 
 #[derive(clap::Args)]
+#[clap(version)]
+#[clap(bin_name = "cargo vet")]
 /// Supply-chain security for Rust
 struct Cli {
     /// Subcommands ("no subcommand" is its own subcommand)
@@ -1234,7 +1236,6 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
         let resolve = &graph.resolve_list[resolve_idx];
         let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
-        
 
         // Implicitly trust non-third-parties
         let is_third_party = package
