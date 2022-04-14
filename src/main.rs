@@ -24,6 +24,13 @@ type VetError = eyre::Report;
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
 #[clap(propagate_version = true)]
+#[clap(bin_name = "cargo")]
+enum FakeCli {
+    Vet(Cli),
+}
+
+#[derive(clap::Args)]
+/// Supply-chain security for Rust
 struct Cli {
     /// Subcommands ("no subcommand" is its own subcommand)
     #[clap(subcommand)]
@@ -399,7 +406,8 @@ static IMPORTS_LOCK: &str = "imports.lock";
 // - unaudited.toml
 
 fn main() -> Result<(), VetError> {
-    let cli = Cli::parse();
+    let fake_cli = FakeCli::parse();
+    let FakeCli::Vet(cli) = fake_cli;
 
     //////////////////////////////////////////////////////
     // Setup logging / output
@@ -1222,7 +1230,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     'all_packages: for pkgid in &graph.topo_index {
         let mut via_audited = false;
         let mut via_unaudited = false;
-        
+
         let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
         let resolve = &graph.resolve_list[resolve_idx];
         let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
@@ -1561,7 +1569,7 @@ fn cmd_help_md(
     )?;
     writeln!(out)?;
 
-    let mut full_command = Cli::command();
+    let mut full_command = FakeCli::command();
     let mut todo = vec![&mut full_command];
     let mut is_full_command = true;
 

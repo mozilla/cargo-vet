@@ -25,6 +25,7 @@ use std::process::{Command, Stdio};
 fn test_version() {
     let bin = env!("CARGO_BIN_EXE_cargo-vet");
     let output = Command::new(bin)
+        .arg("vet")
         .arg("-V")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -50,6 +51,7 @@ fn test_version() {
 fn test_long_help() {
     let bin = env!("CARGO_BIN_EXE_cargo-vet");
     let output = Command::new(bin)
+        .arg("vet")
         .arg("--help")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -68,6 +70,7 @@ fn test_long_help() {
 fn test_short_help() {
     let bin = env!("CARGO_BIN_EXE_cargo-vet");
     let output = Command::new(bin)
+        .arg("vet")
         .arg("-h")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -1,13 +1,13 @@
 ---
 source: tests/test-cli.rs
-assertion_line: 81
+assertion_line: 84
 expression: stdout
 ---
 cargo-vet 0.1.0
 Supply-chain security for Rust
 
 USAGE:
-    cargo-vet.exe [OPTIONS] [SUBCOMMAND]
+    cargo vet [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
         --all-features                 Activate all available features
