@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::io::{BufReader, Read};
 use std::ops::Deref;
@@ -7,7 +7,7 @@ use std::process::Command;
 use std::{fmt, fs};
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
-use cargo_metadata::{Metadata, Package, Version, VersionReq};
+use cargo_metadata::{Metadata, Package, PackageId, Version, VersionReq};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
@@ -305,7 +305,7 @@ struct AuditEntry {
 /// ```toml
 /// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
 /// ```
-type DependencyCriteria = Vec<StableMap<String, Vec<String>>>;
+type DependencyCriteria = StableMap<String, Vec<String>>;
 
 /// A "VERSION -> VERSION"
 #[derive(Debug)]
@@ -938,6 +938,18 @@ struct CriteriaMapper<'a> {
     list: Vec<(&'a str, &'a CriteriaEntry)>,
     index: HashMap<&'a str, usize>,
     default_criteria: CriteriaSet,
+    implied_criteria: Vec<CriteriaSet>,
+}
+
+/// The dependency graph in a form we can use more easily.
+pub struct DepGraph<'a> {
+    pub package_list: &'a [Package],
+    pub resolve_list: &'a [cargo_metadata::Node],
+    pub package_index_by_pkgid: BTreeMap<&'a PackageId, usize>,
+    pub resolve_index_by_pkgid: BTreeMap<&'a PackageId, usize>,
+    pub pkgid_by_name_and_ver: HashMap<&'a str, HashMap<&'a Version, &'a PackageId>>,
+    /// Toplogical sorting of the dependencies (linear iteration will do things in dependency order)
+    pub topo_index: Vec<&'a PackageId>,
 }
 
 impl<'a> CriteriaMapper<'a> {
@@ -950,9 +962,31 @@ impl<'a> CriteriaMapper<'a> {
             .collect();
 
         let mut default_criteria = CriteriaSet::none(list.len());
+        let mut implied_criteria = Vec::with_capacity(list.len());
         for (idx, (_name, entry)) in list.iter().enumerate() {
             if entry.default {
                 default_criteria.set_criteria(idx);
+            }
+
+            // Precompute implied criteria (doing it later is genuinely a typesystem headache)
+            let mut implied = CriteriaSet::none(list.len());
+            recursive_implies(&mut implied, &entry.implies, &index, &list);
+            implied_criteria.push(implied);
+
+            fn recursive_implies(
+                result: &mut CriteriaSet,
+                implies: &[String],
+                index: &HashMap<&str, usize>,
+                list: &[(&str, &CriteriaEntry)],
+            ) {
+                for implied in implies {
+                    let idx = index[&**implied];
+                    result.set_criteria(idx);
+
+                    // FIXME: we should detect infinite implies loops?
+                    let further_implies = &list[idx].1.implies[..];
+                    recursive_implies(result, further_implies, index, list);
+                }
             }
         }
 
@@ -960,6 +994,7 @@ impl<'a> CriteriaMapper<'a> {
             list,
             index,
             default_criteria,
+            implied_criteria,
         }
     }
     fn criteria_from_entry(&self, entry: &AuditEntry) -> CriteriaSet {
@@ -972,7 +1007,9 @@ impl<'a> CriteriaMapper<'a> {
     fn criteria_from_list<'b>(&self, list: impl IntoIterator<Item = &'b str>) -> CriteriaSet {
         let mut result = self.no_criteria();
         for criteria in list {
-            result.set_criteria(self.index[criteria])
+            let idx = self.index[criteria];
+            result.set_criteria(idx);
+            result.unioned_with(&self.implied_criteria[idx]);
         }
         result
     }
@@ -1050,6 +1087,94 @@ impl CriteriaSet {
     }
 }
 
+impl<'a> DepGraph<'a> {
+    pub fn new(metadata: &'a Metadata) -> Self {
+        // FIXME: study the nature of the 'resolve' field more carefully.
+        // In particular how resolver version 2 describes normal vs build/dev-deps.
+        // Worst case we might need to invoke 'cargo metadata' multiple times to get
+        // the proper description of both situations.
+
+        let package_list = &*metadata.packages;
+        let resolve_list = &*metadata
+            .resolve
+            .as_ref()
+            .expect("cargo metadata did not yield resolve!")
+            .nodes;
+        let package_index_by_pkgid = package_list
+            .iter()
+            .enumerate()
+            .map(|(idx, pkg)| (&pkg.id, idx))
+            .collect();
+        let resolve_index_by_pkgid = resolve_list
+            .iter()
+            .enumerate()
+            .map(|(idx, pkg)| (&pkg.id, idx))
+            .collect();
+        let mut pkgid_by_name_and_ver = HashMap::<&str, HashMap<&Version, &PackageId>>::new();
+        for pkg in package_list {
+            pkgid_by_name_and_ver
+                .entry(&*pkg.name)
+                .or_default()
+                .insert(&pkg.version, &pkg.id);
+        }
+
+        // Do topological sort: just recursively visit all of a node's children, and only add it
+        // to the node *after* visiting the children. In this way we have trivially already added
+        // all of the dependencies of a node by the time we have
+        let mut topo_index = Vec::with_capacity(package_list.len());
+        {
+            // FIXME: cargo uses BTreeSet, PackageIds are long strings, so maybe this makes sense?
+            let mut visited = BTreeMap::new();
+            // All of the roots can be found in the workspace_members.
+            // It's fine if some aren't roots, toplogical sort works even if do all nodes.
+            // FIXME: is it better to actually use resolve.root? Seems like it won't
+            // work right for workspaces with multiple roots!
+            for pkgid in &metadata.workspace_members {
+                visit_node(
+                    &mut topo_index,
+                    &mut visited,
+                    &resolve_index_by_pkgid,
+                    resolve_list,
+                    pkgid,
+                );
+            }
+            fn visit_node<'a>(
+                topo_index: &mut Vec<&'a PackageId>,
+                visited: &mut BTreeMap<&'a PackageId, ()>,
+                resolve_index_by_pkgid: &BTreeMap<&'a PackageId, usize>,
+                resolve_list: &'a [cargo_metadata::Node],
+                pkgid: &'a PackageId,
+            ) {
+                // Don't revisit a node (fine for correctness, wasteful for perf)
+                let query = visited.entry(pkgid);
+                if matches!(query, std::collections::btree_map::Entry::Vacant(..)) {
+                    query.or_insert(());
+                    let node = &resolve_list[resolve_index_by_pkgid[pkgid]];
+                    for child in &node.dependencies {
+                        visit_node(
+                            topo_index,
+                            visited,
+                            resolve_index_by_pkgid,
+                            resolve_list,
+                            child,
+                        );
+                    }
+                    topo_index.push(pkgid);
+                }
+            }
+        }
+
+        Self {
+            package_list,
+            resolve_list,
+            package_index_by_pkgid,
+            resolve_index_by_pkgid,
+            pkgid_by_name_and_ver,
+            topo_index,
+        }
+    }
+}
+
 fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     // Not sure which we want, so make it configurable to test.
     // Determines whether a delta must be == unaudited or just <=
@@ -1076,6 +1201,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     // Dummy values for corner cases
     let root_version = Version::new(0, 0, 0);
     let no_audits = Vec::new();
+    let no_custom_dep_criteria = DependencyCriteria::new();
 
     let mut audited_count: u64 = 0;
     let mut unaudited_count: u64 = 0;
@@ -1084,15 +1210,32 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
-
+    let graph = DepGraph::new(&cfg.metadata);
     let criteria_mapper = CriteriaMapper::new(&audits.criteria);
     let all_criteria = criteria_mapper.all_criteria();
     let no_criteria = criteria_mapper.no_criteria();
     let mut via_audited = false;
     let mut via_unaudited = false;
 
+    // This uses the same indexing pattern as graph.resolve_index_by_pkgid
+    let mut vet_resolve_results = vec![no_criteria.clone(); graph.resolve_list.len()];
+
     // Actually vet the dependencies
-    'all_packages: for package in foreign_packages(&cfg.metadata) {
+    'all_packages: for pkgid in &graph.topo_index {
+        let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
+        let resolve = &graph.resolve_list[resolve_idx];
+        let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
+
+        // Implicitly trust non-third-parties
+        let is_third_party = package
+            .source
+            .as_ref()
+            .map(|s| s.is_crates_io())
+            .unwrap_or(false);
+        if !is_third_party {
+            vet_resolve_results[resolve_idx].unioned_with(&all_criteria);
+            continue;
+        }
         let unaudited = config.unaudited.get(&package.name);
 
         // Just merge all the entries from the foreign audit files and our audit file.
@@ -1107,13 +1250,25 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         // version. By repeating this over and over, we can loslowly walk back in time until
         // we run out of deltas or reach full audit or an unaudited entry.
         let mut deltas_to =
-            HashMap::<&Version, Vec<(&Version, CriteriaSet, Option<&DependencyCriteria>)>>::new();
+            HashMap::<&Version, Vec<(&Version, CriteriaSet, HashMap<&str, CriteriaSet>)>>::new();
         let mut violations = Vec::new();
 
         // Collect up all the deltas, their criteria, and dependency_criteria
         for entry in own_audits.iter() {
             let criteria = criteria_mapper.criteria_from_entry(entry);
-            let dep_criteria = entry.dependency_criteria.as_ref();
+            // Convert all the custom criteria to CriteriaSets
+            let dep_criteria: HashMap<_, _> = entry
+                .dependency_criteria
+                .as_ref()
+                .unwrap_or(&no_custom_dep_criteria)
+                .iter()
+                .map(|(pkg_name, criteria)| {
+                    (
+                        &**pkg_name,
+                        criteria_mapper.criteria_from_list(criteria.iter().map(|s| &**s)),
+                    )
+                })
+                .collect();
             // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
             if let Some(ver) = &entry.version {
                 deltas_to
@@ -1171,15 +1326,16 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
                 // Now process it as normal
                 if let Some(ver) = &entry.version {
-                    deltas_to
-                        .entry(ver)
-                        .or_default()
-                        .push((&root_version, local_criteria, None));
+                    deltas_to.entry(ver).or_default().push((
+                        &root_version,
+                        local_criteria,
+                        Default::default(),
+                    ));
                 } else if let Some(delta) = &entry.delta {
                     deltas_to.entry(&delta.to).or_default().push((
                         &delta.from,
                         local_criteria,
-                        None,
+                        Default::default(),
                     ));
                 } else if entry.violation.is_some() {
                     violations.push(entry);
@@ -1268,11 +1424,23 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                     let mut next_critera = cur_criteria.clone();
                     next_critera.intersected_with(criteria);
 
-                    // TODO: check dep_criteria (need to ensure 'all_packages has right order)
-                    if dep_criteria.is_some() {
-                        warn!("dependency_criteria resolution not yet implemented (TODO)");
+                    // Deltas should only apply if dependencies satisfy dep_criteria
+                    let mut deps_satisfied = true;
+                    for dependency in &resolve.dependencies {
+                        let dep_resolve_idx = graph.resolve_index_by_pkgid[dependency];
+                        let dep_package =
+                            &graph.package_list[graph.package_index_by_pkgid[dependency]];
+                        let dep_vet_result = &vet_resolve_results[dep_resolve_idx];
+
+                        // If no custom criteria is specified, then require our dependency to match
+                        // the same criteria that this delta claims to provide.
+                        // e.g. a 'secure' audit requires all dependencies to be 'secure' by default.
+                        let dep_req = dep_criteria.get(&*dep_package.name).unwrap_or(criteria);
+                        if !dep_vet_result.contains(dep_req) {
+                            deps_satisfied = false;
+                            break;
+                        }
                     }
-                    let deps_satisfied = true;
 
                     if !next_critera.is_empty() && deps_satisfied {
                         working_queue.push((from_version, next_critera));
@@ -1281,16 +1449,26 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             }
         }
         // TODO: now verify validated_criteria matches our policy
+        let passed_policy = !validated_criteria.is_empty();
 
-        // If we failed to validate any criteria, then we've failed
-        if validated_criteria.is_empty() {
-            failed.push(package);
-        } else if via_audited {
-            audited_count += 1;
-        } else if via_unaudited {
-            unaudited_count += 1;
+        if passed_policy {
+            // hooray, we win! record the result in vet_resolve_results
+            // so that our dependents can check what criteria we achieved.
+            //
+            // FIXME: this logic is going to cause cascading errors up the entire
+            // dependency tree... do we really want that?
+            vet_resolve_results[resolve_idx] = validated_criteria;
+
+            // Log statistics
+            if via_audited {
+                audited_count += 1;
+            } else if via_unaudited {
+                unaudited_count += 1;
+            } else {
+                unreachable!("I have messed up the vet algorithm very badly...");
+            }
         } else {
-            unreachable!("I have messed up the vet algorithm very badly...");
+            failed.push(package);
         }
     }
 
