@@ -281,7 +281,7 @@ struct CriteriaMapping {
 struct UnauditedDependency {
     /// The version(s) of the crate that we are currently "fine" with leaving unaudited.
     /// For the sake of consistency, I'm making this a proper Cargo VersionReq:
-    /// https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html
+    /// <https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html>
     ///
     /// One significant implication of this is that x.y.z is *not* one version. It is
     /// ^x.y.z, per Cargo convention. You must use =x.y.z to be that specific. We will
