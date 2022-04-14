@@ -267,11 +267,6 @@ version = "0.2.121"
 notes = "automatically imported by 'cargo vet init'"
 suggest = true
 
-[[unaudited.linked-hash-map]]
-version = "0.5.4"
-notes = "automatically imported by 'cargo vet init'"
-suggest = true
-
 [[unaudited.log]]
 version = "0.4.16"
 notes = "automatically imported by 'cargo vet init'"

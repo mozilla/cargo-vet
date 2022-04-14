@@ -1214,17 +1214,19 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     let criteria_mapper = CriteriaMapper::new(&audits.criteria);
     let all_criteria = criteria_mapper.all_criteria();
     let no_criteria = criteria_mapper.no_criteria();
-    let mut via_audited = false;
-    let mut via_unaudited = false;
 
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
     let mut vet_resolve_results = vec![no_criteria.clone(); graph.resolve_list.len()];
 
     // Actually vet the dependencies
     'all_packages: for pkgid in &graph.topo_index {
+        let mut via_audited = false;
+        let mut via_unaudited = false;
+        
         let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
         let resolve = &graph.resolve_list[resolve_idx];
         let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
+        
 
         // Implicitly trust non-third-parties
         let is_third_party = package
