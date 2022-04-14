@@ -14,7 +14,10 @@
 // Also note that `cargo test` for an application adds our binary to
 // the env as `CARGO_BIN_EXE_<name>`.
 
-use std::process::{Command, Stdio};
+use std::{
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 // Some tests need to write files (and read them back).
 // To keep this tidy and hidden, we make a new directory
@@ -86,10 +89,10 @@ fn test_short_help() {
 }
 
 #[test]
-#[ignore]
 fn test_markdown_help() {
     let bin = env!("CARGO_BIN_EXE_cargo-vet");
     let output = Command::new(bin)
+        .arg("vet")
         .arg("help-markdown")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -101,5 +104,27 @@ fn test_markdown_help() {
 
     assert!(output.status.success());
     insta::assert_snapshot!("markdown-help", stdout);
+    assert_eq!(stderr, "");
+}
+
+#[test]
+fn test_project() {
+    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-project");
+    let bin = env!("CARGO_BIN_EXE_cargo-vet");
+    let output = Command::new(bin)
+        .current_dir(&project)
+        .arg("vet")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+
+    assert!(output.status.success());
+    insta::assert_snapshot!("test-project", stdout);
     assert_eq!(stderr, "");
 }

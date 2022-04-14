@@ -30,9 +30,7 @@ Version: `cargo-vet 0.1.0`
 Supply-chain security for Rust
 
 ### USAGE
-```
-cargo-vet [OPTIONS] [SUBCOMMAND]
-```
+cargo vet [OPTIONS] [SUBCOMMAND]
 
 ### OPTIONS
 #### `--all-features`

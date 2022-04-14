@@ -30,6 +30,8 @@ enum FakeCli {
 }
 
 #[derive(clap::Args)]
+#[clap(version)]
+#[clap(bin_name = "cargo vet")]
 /// Supply-chain security for Rust
 struct Cli {
     /// Subcommands ("no subcommand" is its own subcommand)
@@ -279,7 +281,7 @@ struct CriteriaMapping {
 struct UnauditedDependency {
     /// The version(s) of the crate that we are currently "fine" with leaving unaudited.
     /// For the sake of consistency, I'm making this a proper Cargo VersionReq:
-    /// https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html
+    /// <https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html>
     ///
     /// One significant implication of this is that x.y.z is *not* one version. It is
     /// ^x.y.z, per Cargo convention. You must use =x.y.z to be that specific. We will
@@ -1234,7 +1236,6 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
         let resolve = &graph.resolve_list[resolve_idx];
         let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
-        
 
         // Implicitly trust non-third-parties
         let is_third_party = package

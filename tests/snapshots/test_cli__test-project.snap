@@ -1,0 +1,7 @@
+---
+source: tests/test-cli.rs
+assertion_line: 124
+expression: stdout
+---
+Vetting Succeeded (5 audited, 99 unaudited)
+
