@@ -1,7 +1,16 @@
 ---
 source: tests/test-cli.rs
-assertion_line: 124
+assertion_line: 127
 expression: stdout
 ---
-Vetting Succeeded (5 audited, 99 unaudited)
+Vetting Failed!
+
+2 unvetted dependencies:
+  atty:0.2.14
+  clap:3.1.8
+
+recommended audits:
+  [TODO]
+
+Use |cargo vet certify| to record the audits.
 

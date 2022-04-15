@@ -1241,6 +1241,18 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     let criteria_mapper = CriteriaMapper::new(&audits.criteria);
     let all_criteria = criteria_mapper.all_criteria();
     let no_criteria = criteria_mapper.no_criteria();
+    let policy = config
+        .policy
+        .criteria
+        .as_ref()
+        .map(|c| criteria_mapper.criteria_from_list(c.iter().map(|s| &**s)))
+        .unwrap_or_else(|| criteria_mapper.default_criteria().clone());
+    let _build_and_dev_policy = config
+        .policy
+        .build_and_dev_criteria
+        .as_ref()
+        .map(|c| criteria_mapper.criteria_from_list(c.iter().map(|s| &**s)))
+        .unwrap_or_else(|| policy.clone());
 
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
     let mut vet_resolve_results = vec![no_criteria.clone(); graph.resolve_list.len()];
@@ -1476,8 +1488,8 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                 }
             }
         }
-        // TODO: now verify validated_criteria matches our policy
-        let passed_policy = !validated_criteria.is_empty();
+        // TODO: distinguish between build_and_dev somehow?
+        let passed_policy = validated_criteria.contains(&policy);
 
         if passed_policy {
             // hooray, we win! record the result in vet_resolve_results
