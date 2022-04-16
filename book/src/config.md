@@ -91,11 +91,14 @@ are discarded.
 
 ### the `policy` Table
 
-By default, invoking `cargo vet` will recursively check every top-level crate in
-the workspace against the default criteria for all possible platforms. These
-defaults can be overridden as needed with entries in the `policy` table. The
-table is indexed by top-level crate name, and each entry has the following
-fields.
+By default, invoking `cargo vet` will recursively check every top-level subtree
+in the workspace against the default criteria for all possible platforms. These
+defaults can be overridden as needed with entries in the `policy` table. Whereas
+the `audits` table configures the traversal for crates.io crates, the `policy`
+table configures the traversal for first-party and other non-auditable crates in
+the graph.
+
+The table is indexed by crate name, and each entry has the following fields.
 
 #### `criteria`
 
@@ -124,6 +127,12 @@ Defaults to all platforms.
 Same as the above, but applied to build-dependencies and dev-dependencies.
 
 Defaults to the same value as `targets`.
+
+#### `dependency_criteria`
+
+Similar to the [equivalent field](audit-entries.md#dependency_criteria) in audit
+entries, specifies criteria that should be enforced for specific dependencies of
+this crate.
 
 ### The `unaudited` Table
 

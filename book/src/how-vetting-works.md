@@ -4,43 +4,26 @@ This section provides additional detail on the mechanics of `cargo vet`.
 
 ## Scope
 
-When vetting dependencies, `cargo vet` will execute the `cargo
-metadata` subcommand to learn about the crate graph. All dependencies can be
-categorized as:
+When vetting dependencies, `cargo vet` will execute the `cargo metadata`
+subcommand to learn about the crate graph. When traversing the graph, `cargo
+vet` will enforce audits for all crates.io dependencies.
 
-* Path dependencies - these dependencies are ignored. The source code is
-  typically in the repository and already subject to normal review policies.
+All other nodes in the graph are considered trusted and therefore non-auditable:
 
-* Git dependencies - these dependencies are ignored. It is expected that git
-  dependencies have a manual verification process if necessary, or it's
-  otherwise expected that these are typically private git repositories anyway.
+* **Root crates and path dependencies:** The source code is typically in the
+  repository and already subject to normal review policies.
 
-* Non-crates.io registry dependencies - these dependencies are ignored. It's
-  expected that a non-default registry is likely private or has its own review
-  and/or publication policies. The tool may eventually support
-  this if there are large public non-crates.io mirrors, but at this time they
-  aren't verified.
+* **Git dependencies:** It is expected that git dependencies have a manual
+  verification process if necessary, or it's otherwise expected that these are
+  typically private git repositories anyway.
 
-* Crates.io dependencies - these are verified, as specified below.
+* **Non-crates.io registry dependencies:** It's expected that a non-default
+  registry is likely private or has its own review and/or publication policies.
+  The tool may eventually support this if large public non-crates.io mirrors
+  emerge.
 
-Or, in other words, while Cargo allows pulling crates in from many locations
-only those from crates.io are currently verified by `cargo trust`. Note though
-that every single dependency in `cargo metadata` (and transitively `Cargo.lock`)
-from crates.io will be verified to be trusted. It's important to note that not
-all builds will use all these crates. For example:
-
-* `dev-dependencies` are only used during testing
-* Optional dependencies may be disabled
-* Platform-specific dependencies may not be built if you're not building on
-  that platform.
-
-Despite this all dependencies must be allowed by the trust store. The
-rationale for this is that it's a conservative choice because all of these
-dependencies may be used at one point, and it's not certain when they might
-be used in typical build processes.
-
-For more information about this, and known deficiencies, see the documentation
-on [platform specific dependencies](./platform-specific.md).
+Traversal behavior for non-auditable crates can be specified in the [policy
+table](./config.md#the-policy-table).
 
 ## Algorithm
 
