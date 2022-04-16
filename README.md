@@ -1,25 +1,11 @@
 # cargo-vet
 
 [![crates.io](https://img.shields.io/crates/v/cargo-vet.svg)](https://crates.io/crates/cargo-vet)
-[![docs.rs](https://docs.rs/cargo-vet/badge.svg)](https://docs.rs/cargo-vet)
 ![Rust CI](https://github.com/bholley/cargo-vet/workflows/Rust%20CI/badge.svg?branch=main)
 
-cargo-vet helps you vet your dependencies and rely on the vetting done by other projects.
+The `cargo vet` subcommand is a tool to help projects ensure that third-party Rust dependencies have been audited by a trusted source. It strives to be lightweight and easy to integrate.
 
-
-
-# Current Default Directory Structure
-
-(As implemented by the CLI, currently divergent from the book.)
-
-* supply-chain/
-  * config.toml - settings 
-  * audits.toml - audits you have performed
-  * imports.lock - saved foreign audits.toml files you trust
-
-
-
-
+More details available in the [book](https://bholley.net/cargo-vet/).
 
 # cargo vet CLI manual
 
