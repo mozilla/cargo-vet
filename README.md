@@ -79,10 +79,10 @@ Process all packages in the workspace
 * [accept-criteria-change](#cargo-vet-accept-criteria-change): Accept changes that a foreign audits.toml made to their criteria
 * [certify](#cargo-vet-certify): Mark `$package $version` as reviewed with `$message`
 * [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
-* [fetch](#cargo-vet-fetch): Fetch the source of `$package $version`
 * [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
 * [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 * [init](#cargo-vet-init): initialize cargo-vet for your project
+* [inspect](#cargo-vet-inspect): Fetch the source of `$package $version`
 * [suggest](#cargo-vet-suggest): Suggest some low-hanging fruit to review
 
 <br><br><br>
@@ -184,22 +184,22 @@ cargo vet diff <PACKAGE> <VERSION1> <VERSION2>
 Print help information
 
 <br><br><br>
-## cargo vet fetch 
+## cargo vet inspect 
 Fetch the source of `$package $version`
 
-### cargo vet fetch USAGE
+### cargo vet inspect USAGE
 ```
-cargo vet fetch <PACKAGE> <VERSION>
+cargo vet inspect <PACKAGE> <VERSION>
 ```
 
-### cargo vet fetch ARGS
+### cargo vet inspect ARGS
 #### `<PACKAGE>`
 
 
 #### `<VERSION>`
 
 
-### cargo vet fetch OPTIONS
+### cargo vet inspect OPTIONS
 #### `-h, --help`
 Print help information
 

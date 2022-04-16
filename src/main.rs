@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
+use std::fs::OpenOptions;
 use std::io::{BufReader, Read};
 use std::ops::Deref;
 use std::path::Path;
@@ -77,7 +78,7 @@ enum Commands {
 
     /// Fetch the source of `$package $version`
     #[clap(disable_version_flag = true)]
-    Fetch(FetchArgs),
+    Inspect(InspectArgs),
 
     /// Yield a diff against the last reviewed version.
     #[clap(disable_version_flag = true)]
@@ -104,9 +105,9 @@ enum Commands {
 #[derive(clap::Args)]
 struct InitArgs {}
 
-/// Fetches the crate to a temp location
+/// Fetches the crate to a temp location and pushd's to it
 #[derive(clap::Args)]
-struct FetchArgs {
+struct InspectArgs {
     package: String,
     version: String,
 }
@@ -636,7 +637,7 @@ fn main() -> Result<(), VetError> {
         None => cmd_vet(out, &cfg),
         Some(Init(sub_args)) => cmd_init(out, &cfg, sub_args),
         Some(AcceptCriteriaChange(sub_args)) => cmd_accept_criteria_change(out, &cfg, sub_args),
-        Some(Fetch(sub_args)) => cmd_fetch(out, &cfg, sub_args),
+        Some(Inspect(sub_args)) => cmd_inspect(out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
         Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
@@ -719,7 +720,7 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
     Ok(())
 }
 
-fn cmd_fetch(out: &mut dyn Write, cfg: &Config, sub_args: &FetchArgs) -> Result<(), VetError> {
+fn cmd_inspect(out: &mut dyn Write, cfg: &Config, sub_args: &InspectArgs) -> Result<(), VetError> {
     // Download a crate's source to a temp location for review
     let tmp = &cfg.tmp;
     clean_tmp(tmp)?;
@@ -1767,61 +1768,71 @@ fn clean_tmp(tmp: &Path) -> Result<(), VetError> {
 
 fn fetch_crates(
     cfg: &Config,
-    _tmp: &Path,
-    _fetch_dir: &str,
+    tmp: &Path,
+    fetch_dir: &str,
     crates: &[(&str, &str)],
 ) -> Result<PathBuf, VetError> {
-    /* OLD Approach, might need some version of this for fallback...?
-       {
-           let out = Command::new(&cfg.cargo)
-               .current_dir(tmp)
-               .arg("new")
-               .arg("--bin")
-               .arg(fetch_dir)
-               .output()?;
+    // Create a tempdir with a Cargo.toml referring to each package,
+    // then run 'cargo fetch' on it to ensure the cargo cache is populated.
+    // FIXME: maybe we should actually just check if we have all the packages
+    // first, to avoid doing a bunch of faffing around we don't need..?
+    {
+        let out = Command::new(&cfg.cargo)
+            .current_dir(tmp)
+            .arg("new")
+            .arg("--bin")
+            .arg(fetch_dir)
+            .output()?;
 
-           if !out.status.success() {
-               panic!(
-                   "command failed!\nout:\n{}\nstderr:\n{}",
-                   String::from_utf8(out.stdout).unwrap(),
-                   String::from_utf8(out.stderr).unwrap()
-               )
-           }
-       }
+        if !out.status.success() {
+            panic!(
+                "command failed!\nout:\n{}\nstderr:\n{}",
+                String::from_utf8(out.stdout).unwrap(),
+                String::from_utf8(out.stderr).unwrap()
+            )
+        }
+    }
 
-       trace!("init to: {:#?}", tmp);
-       let fetch_dir = tmp.join(fetch_dir);
-       let fetch_toml = fetch_dir.join("Cargo.toml");
+    trace!("init to: {:#?}", tmp);
+    let fetch_dir = tmp.join(fetch_dir);
+    let fetch_toml = fetch_dir.join("Cargo.toml");
 
-       {
-           // FIXME: properly parse the toml instead of assuming structure
-           let mut toml = OpenOptions::new().append(true).open(&fetch_toml)?;
+    {
+        // FIXME: properly parse the toml instead of assuming structure
+        let mut toml = OpenOptions::new().append(true).open(&fetch_toml)?;
 
-           for (krate, version) in crates {
-               writeln!(toml, r#"{} = "={}""#, krate, version)?;
-           }
-       }
+        for (krate, version) in crates {
+            // Mangle names so that cargo doesn't complain about multiple versions.
+            // FIXME: probably want more reliable escaping...
+            let rename = format!("{}_{}", krate, version);
+            let rename = rename.replace('.', "_");
+            let rename = rename.replace('+', "_");
+            writeln!(
+                toml,
+                r#""{}" = {{ version = "={}", package = "{}" }}"#,
+                rename, version, krate
+            )?;
+        }
+    }
 
-       trace!("updated: {:#?}", fetch_toml);
+    trace!("updated: {:#?}", fetch_toml);
 
-       {
-           let out = Command::new(&cfg.cargo)
-               .current_dir(&fetch_dir)
-               .arg("vendor")
-               .output()?;
+    {
+        let out = Command::new(&cfg.cargo)
+            .current_dir(&fetch_dir)
+            .arg("fetch")
+            .output()?;
 
-           if !out.status.success() {
-               panic!(
-                   "command failed!\nout:\n{}\nstderr:\n{}",
-                   String::from_utf8(out.stdout).unwrap(),
-                   String::from_utf8(out.stderr).unwrap()
-               )
-           }
-       }
-       // FIXME: delete the .cargo-checksum.json files (don't want to diff them, not real)
+        if !out.status.success() {
+            panic!(
+                "command failed!\nout:\n{}\nstderr:\n{}",
+                String::from_utf8(out.stdout).unwrap(),
+                String::from_utf8(out.stderr).unwrap()
+            )
+        }
+    }
 
-       let fetched = fetch_dir.join("vendor");
-    */
+    trace!("fetched");
 
     if cfg.registry_src.is_none() {
         error!("Could not resolve CARGO_HOME!?");
