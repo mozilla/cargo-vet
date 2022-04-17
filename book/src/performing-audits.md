@@ -55,10 +55,10 @@ finish the audit, you can use `cargo vet certify` to add the entry to
 
 ```
 $ cargo vet inspect baz 1.3
-  Fetching crate to ~/.cargo/registry/src/github.com-1ecc6299db9ec823/baz-1.3 ...
-  Switching directories (type `popd` when finished)
+  Opening nested shell in ~/.cargo/registry/src/github.com-1ecc6299db9ec823/baz-1.3
+  Use `exit` or Ctrl-D to finish.
 $ ...
-$ popd
+$ exit
 $ cargo vet certify baz 1.3
 
   I, Alice, certify that I have audited version 1.3 of baz in accordance with
