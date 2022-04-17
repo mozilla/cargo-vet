@@ -729,7 +729,23 @@ fn cmd_inspect(out: &mut dyn Write, cfg: &Config, sub_args: &InspectArgs) -> Res
     let fetch_dir = fetch_crates(cfg, tmp, "fetch", to_fetch)?;
     let fetched = fetched_pkg(&fetch_dir, &sub_args.package, &sub_args.version);
 
-    writeln!(out, "  fetched to {:#?}", fetched)?;
+    #[cfg(target_family = "unix")]
+    {
+        // Loosely borrowed from cargo crev.
+        use std::os::unix::process::CommandExt;
+        let shell = std::env::var_os("SHELL").unwrap();
+        writeln!(out, "Opening nested shell in: {:#?}", fetched)?;
+        writeln!(out, "Use `exit` or Ctrl-D to finish.",)?;
+        let mut command = std::process::Command::new(shell);
+        command.current_dir(fetched.clone()).env("PWD", fetched);
+        command.exec();
+    }
+
+    #[cfg(not(target_family = "unix"))]
+    {
+        writeln!(out, "  fetched to {:#?}", fetched)?;
+    }
+
     Ok(())
 }
 
