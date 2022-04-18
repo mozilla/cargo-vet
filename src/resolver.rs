@@ -1,32 +1,34 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::ffi::OsString;
-use std::fs::OpenOptions;
-use std::io::{BufReader, Read};
-use std::ops::Deref;
-use std::path::Path;
-use std::process::Command;
-use std::{fmt, fs};
-use std::{fs::File, io::Write, panic, path::PathBuf};
+use std::io::Write;
 
-use cargo_metadata::{Metadata, Package, PackageId, Version, VersionReq};
-use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
-use log::{error, info, trace, warn};
-use reqwest::blocking as req;
-use serde::de::Visitor;
-use serde::{de, de::Deserialize, ser::Serialize};
-use serde::{Deserializer, Serializer};
-use simplelog::{
-    ColorChoice, ConfigBuilder, Level, LevelFilter, TermLogger, TerminalMode, WriteLogger,
+use cargo_metadata::{Metadata, Package, PackageId, Version};
+use log::{error, warn};
+
+use crate::{
+    AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, StableMap,
+    VetError,
 };
+
+pub struct Report<'a> {
+    unaudited_count: u64,
+    partially_audited_count: u64,
+    fully_audited_count: u64,
+    failed_count: u64,
+    useless_unaudited: Vec<&'a Package>,
+    root_failures: Vec<&'a PackageId>,
+    results: Vec<ResolveResult<'a>>,
+    graph: DepGraph<'a>,
+    violation_failed: Vec<&'a Package>,
+}
 
 /// Set of booleans, 64 should be Enough For Anyone (but abstracting in case not).
 #[derive(Clone)]
-struct CriteriaSet(u64);
+pub struct CriteriaSet(u64);
 const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
 
 /// A processed version of config.toml's criteria definitions, for mapping
 /// lists of criteria names to CriteriaSets.
-struct CriteriaMapper<'a> {
+pub struct CriteriaMapper<'a> {
     list: Vec<(&'a str, &'a CriteriaEntry)>,
     index: HashMap<&'a str, usize>,
     default_criteria: CriteriaSet,
@@ -331,6 +333,15 @@ impl<'a> DepGraph<'a> {
     }
 }
 
+pub fn resolve<'a>(
+    metadata: &'a Metadata,
+    config: &'a ConfigFile,
+    audits: &'a AuditsFile,
+    imports: &'a ImportsFile,
+) -> Report<'a> {
+    // Not sure which we want, so make it configurable to test.
+    // Determines whether a delta must be == unaudited or just <=
+    let unaudited_matching_is_strict = true;
 
     // Dummy values for corner cases
     let root_version = Version::new(0, 0, 0);
@@ -341,7 +352,7 @@ impl<'a> DepGraph<'a> {
 
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
-    let graph = DepGraph::new(&cfg.metadata);
+    let graph = DepGraph::new(metadata);
     let criteria_mapper = CriteriaMapper::new(&audits.criteria);
     let all_criteria = criteria_mapper.all_criteria();
     let no_criteria = criteria_mapper.no_criteria();
@@ -374,7 +385,7 @@ impl<'a> DepGraph<'a> {
         .collect();
 
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
-    let mut vet_resolve_results =
+    let mut results =
         vec![ResolveResult::with_no_criteria(no_criteria.clone()); graph.resolve_list.len()];
 
     // Actually vet the dependencies
@@ -612,7 +623,7 @@ impl<'a> DepGraph<'a> {
                         let dep_resolve_idx = graph.resolve_index_by_pkgid[dependency];
                         let dep_package =
                             &graph.package_list[graph.package_index_by_pkgid[dependency]];
-                        let dep_vet_result = &mut vet_resolve_results[dep_resolve_idx];
+                        let dep_vet_result = &mut results[dep_resolve_idx];
 
                         // If no custom criteria is specified, then require our dependency to match
                         // the same criteria that this delta claims to provide.
@@ -624,7 +635,7 @@ impl<'a> DepGraph<'a> {
                             // this dependency for own future failings. If we end up resolving some
                             // other way, then we won't mention this horrendous treachery.
                             if !cur_criteria.is_empty() {
-                                let own_result = &mut vet_resolve_results[resolve_idx];
+                                let own_result = &mut results[resolve_idx];
                                 own_result.failed_deps.insert(dependency);
                             }
                         }
@@ -649,11 +660,11 @@ impl<'a> DepGraph<'a> {
                 let mut deps_satisfied = true;
                 for dependency in &resolve.dependencies {
                     let dep_resolve_idx = graph.resolve_index_by_pkgid[dependency];
-                    let dep_vet_result = &mut vet_resolve_results[dep_resolve_idx];
+                    let dep_vet_result = &mut results[dep_resolve_idx];
 
                     let dep_req = criteria_mapper.default_criteria();
                     if !dep_vet_result.contains(dep_req) {
-                        let own_result = &mut vet_resolve_results[resolve_idx];
+                        let own_result = &mut results[resolve_idx];
                         deps_satisfied = false;
                         own_result.failed_deps.insert(dependency);
                     }
@@ -670,7 +681,7 @@ impl<'a> DepGraph<'a> {
         }
 
         // We've completed our graph analysis for this package, now record the results
-        let result = &mut vet_resolve_results[resolve_idx];
+        let result = &mut results[resolve_idx];
         result.validated_criteria = validated_criteria;
         result.found_any_path = found_any_path;
         result.fully_audited = fully_audited;
@@ -701,7 +712,7 @@ impl<'a> DepGraph<'a> {
         for dependency in &resolve.dependencies {
             let dep_resolve_idx = graph.resolve_index_by_pkgid[dependency];
             let dep_package = &graph.package_list[graph.package_index_by_pkgid[dependency]];
-            let dep_vet_result = &mut vet_resolve_results[dep_resolve_idx];
+            let dep_vet_result = &mut results[dep_resolve_idx];
 
             // If no custom policy is specified, then require our dependencies to
             // satisfy the default policy.
@@ -712,29 +723,29 @@ impl<'a> DepGraph<'a> {
             }
         }
 
-        let result = &mut vet_resolve_results[resolve_idx];
+        let result = &mut results[resolve_idx];
         if failed_deps.is_empty() {
             result.validated_criteria.unioned_with(&all_criteria);
         } else {
             result.failed_deps = failed_deps;
             result.failed = true;
 
-            if cfg.metadata.workspace_members.contains(pkgid) {
-                root_failures.push(pkgid);
+            if metadata.workspace_members.contains(pkgid) {
+                root_failures.push(*pkgid);
             }
         }
     }
 
     // Gather statistics
-    let mut unaudited_count: u64 = 0;
-    let mut audited_count: u64 = 0;
-    let mut failed_count: u64 = 0;
-    let mut fully_audited_count: u64 = 0;
+    let mut failed_count = 0;
+    let mut unaudited_count = 0;
+    let mut fully_audited_count = 0;
+    let mut partially_audited_count = 0;
     let mut useless_unaudited = vec![];
     for pkgid in &graph.topo_index {
         let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
         let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
-        let result = &vet_resolve_results[resolve_idx];
+        let result = &results[resolve_idx];
 
         if result.failed {
             failed_count += 1;
@@ -743,7 +754,7 @@ impl<'a> DepGraph<'a> {
         } else if result.fully_audited {
             fully_audited_count += 1;
         } else {
-            audited_count += 1;
+            partially_audited_count += 1;
         }
 
         if result.directly_unaudited && !result.used_directly_unaudited {
@@ -751,13 +762,64 @@ impl<'a> DepGraph<'a> {
         }
     }
 
-    if !root_failures.is_empty() || !violation_failed.is_empty() {
+    Report {
+        unaudited_count,
+        partially_audited_count,
+        fully_audited_count,
+        failed_count,
+        useless_unaudited,
+        root_failures,
+        violation_failed,
+        results,
+        graph,
+    }
+}
+
+impl<'a> Report<'a> {
+    pub fn has_errors(&self) -> bool {
+        !self.root_failures.is_empty() || !self.violation_failed.is_empty()
+    }
+
+    pub fn _has_warnings(&self) -> bool {
+        !self.useless_unaudited.is_empty()
+    }
+
+    pub fn print_report(&self, out: &mut dyn Write) -> Result<(), VetError> {
+        if self.has_errors() {
+            self.print_failure(out)
+        } else {
+            self.print_success(out)
+        }
+    }
+
+    fn print_success(&self, out: &mut dyn Write) -> Result<(), VetError> {
+        writeln!(
+            out,
+            "Vetting Succeeded ({} fully audited {} partially audited, {} unaudited)",
+            self.fully_audited_count, self.partially_audited_count, self.unaudited_count,
+        )?;
+
+        // Warn about useless unaudited entries
+        if !self.useless_unaudited.is_empty() {
+            writeln!(
+                out,
+                "  warning: some dependencies are listed in unaudited, but didn't need it:"
+            )?;
+            for package in &self.useless_unaudited {
+                writeln!(out, "    {}:{}", package.name, package.version)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn print_failure(&self, out: &mut dyn Write) -> Result<(), VetError> {
         writeln!(out, "Vetting Failed!")?;
         writeln!(out)?;
-        if !root_failures.is_empty() {
-            writeln!(out, "{} unvetted dependencies:", failed_count)?;
-            for package in root_failures {
-                print_failures(out, 0, package, &graph, &vet_resolve_results)?;
+        if !self.root_failures.is_empty() {
+            writeln!(out, "{} unvetted dependencies:", self.failed_count)?;
+            for package in &self.root_failures {
+                print_failures(out, 0, package, &self.graph, &self.results)?;
             }
             writeln!(out)?;
 
@@ -766,11 +828,11 @@ impl<'a> DepGraph<'a> {
                 depth: usize,
                 pkgid: &PackageId,
                 graph: &DepGraph,
-                vet_resolve_results: &[ResolveResult],
+                results: &[ResolveResult],
             ) -> Result<(), VetError> {
                 let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
                 let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
-                let result = &vet_resolve_results[resolve_idx];
+                let result = &results[resolve_idx];
                 let indent = (depth + 1) * 2;
                 writeln!(
                     out,
@@ -781,14 +843,18 @@ impl<'a> DepGraph<'a> {
                     width = indent
                 )?;
                 for dep_package in &result.failed_deps {
-                    print_failures(out, depth + 1, dep_package, graph, vet_resolve_results)?;
+                    print_failures(out, depth + 1, dep_package, graph, results)?;
                 }
                 Ok(())
             }
         }
-        if !violation_failed.is_empty() {
-            writeln!(out, "{} forbidden dependencies:", violation_failed.len())?;
-            for package in violation_failed {
+        if !self.violation_failed.is_empty() {
+            writeln!(
+                out,
+                "{} forbidden dependencies:",
+                self.violation_failed.len()
+            )?;
+            for package in &self.violation_failed {
                 writeln!(out, "  {}:{}", package.name, package.version)?;
             }
             writeln!(out)?;
@@ -799,33 +865,7 @@ impl<'a> DepGraph<'a> {
             writeln!(out)?;
         }
         writeln!(out, "Use |cargo vet certify| to record the audits.")?;
-        std::process::exit(-1);
+
+        Ok(())
     }
-
-    // Save the imports file back, in case we downloaded anything new
-    // FIXME: should this be done earlier to avoid repeated network traffic on failed audits?
-    trace!("Saving imports.lock...");
-    store_imports(store_path, imports)?;
-
-    writeln!(
-        out,
-        "Vetting Succeeded ({fully_audited_count} fully audited {audited_count} partially audited, {unaudited_count} unaudited)"
-    )?;
-
-    // Warn about useless unaudited entries
-    if !useless_unaudited.is_empty() {
-        writeln!(
-            out,
-            "  warning: some dependencies are listed in unaudited, but didn't need it:"
-        )?;
-        for package in useless_unaudited {
-            writeln!(out, "    {}:{}", package.name, package.version)?;
-        }
-    }
-
-    Ok(())
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////
-/// End of Resolver
-////////////////////////////////////////////////////////////////////////////////////////////

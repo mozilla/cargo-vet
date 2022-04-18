@@ -1,4 +1,3 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::fs::OpenOptions;
 use std::io::{BufReader, Read};
@@ -8,7 +7,7 @@ use std::process::Command;
 use std::{fmt, fs};
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
-use cargo_metadata::{Metadata, Package, PackageId, Version, VersionReq};
+use cargo_metadata::{Metadata, Package, Version, VersionReq};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
@@ -20,6 +19,8 @@ use simplelog::{
 };
 
 mod resolver;
+#[cfg(test)]
+mod tests;
 
 type StableMap<K, V> = linked_hash_map::LinkedHashMap<K, V>;
 type VetError = eyre::Report;
@@ -154,7 +155,7 @@ enum Verbose {
 }
 
 /// Absolutely All The Global Configurations
-struct Config {
+pub struct Config {
     // file: ConfigFile,
     metacfg: MetaConfig,
     metadata: Metadata,
@@ -166,7 +167,7 @@ struct Config {
 
 /// A `[*.metadata.vet]` table in a Cargo.toml, configuring our behaviour
 #[derive(serde::Deserialize)]
-struct MetaConfigInstance {
+pub struct MetaConfigInstance {
     // Reserved for future use, if not present version=1 assumed.
     // (not sure whether this versions the format, or semantics, or...
     // for now assuming this species global semantics of some kind.
@@ -174,7 +175,7 @@ struct MetaConfigInstance {
     store: Option<Store>,
 }
 #[derive(serde::Deserialize)]
-struct Store {
+pub struct Store {
     path: Option<PathBuf>,
 }
 
@@ -186,7 +187,7 @@ struct Store {
 
 /// All available configuration files, overlaying eachother.
 /// Generally contains: `[Default, Workspace, Package]`
-struct MetaConfig(Vec<MetaConfigInstance>);
+pub struct MetaConfig(Vec<MetaConfigInstance>);
 
 impl MetaConfig {
     fn store_path(&self) -> &Path {
@@ -211,11 +212,11 @@ impl MetaConfig {
     }
 }
 
-type AuditedDependencies = StableMap<String, Vec<AuditEntry>>;
+pub type AuditedDependencies = StableMap<String, Vec<AuditEntry>>;
 
 /// audits.toml
 #[derive(serde::Serialize, serde::Deserialize)]
-struct AuditsFile {
+pub struct AuditsFile {
     /// A map of criteria_name to details on that criteria.
     criteria: StableMap<String, CriteriaEntry>,
     /// Actual audits.
@@ -224,13 +225,13 @@ struct AuditsFile {
 
 /// imports.lock, not sure what I want to put in here yet.
 #[derive(serde::Serialize, serde::Deserialize)]
-struct ImportsFile {
+pub struct ImportsFile {
     audits: StableMap<String, AuditsFile>,
 }
 
 /// config.toml
 #[derive(serde::Serialize, serde::Deserialize)]
-struct ConfigFile {
+pub struct ConfigFile {
     /// Remote audits.toml's that we trust and want to import.
     imports: StableMap<String, RemoteImport>,
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
@@ -242,7 +243,7 @@ struct ConfigFile {
 
 /// Information on a Criteria
 #[derive(serde::Serialize, serde::Deserialize)]
-struct CriteriaEntry {
+pub struct CriteriaEntry {
     /// Summary of how you evaluate something by this criteria.
     description: String,
     /// Whether this criteria is part of the "defaults"
@@ -266,7 +267,7 @@ struct CriteriaEntry {
 /// and an empty PolicyTable basically just means "everything should satisfy the
 /// default criteria in audits.toml".
 #[derive(serde::Serialize, serde::Deserialize)]
-struct PolicyTable {
+pub struct PolicyTable {
     /// Default criteria that must be satisfied by all *direct* third-party (foreign)
     /// dependencies of first-party crates. If satisfied, the first-party crate is
     /// set to satisfying all criteria.
@@ -296,7 +297,7 @@ struct PolicyTable {
 
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
 #[derive(serde::Serialize, serde::Deserialize)]
-struct RemoteImport {
+pub struct RemoteImport {
     /// URL of the foreign audits.toml
     url: String,
     /// A list of criteria that are implied by foreign criteria
@@ -305,7 +306,7 @@ struct RemoteImport {
 
 /// Translations of foreign criteria to local criteria.
 #[derive(serde::Serialize, serde::Deserialize)]
-struct CriteriaMapping {
+pub struct CriteriaMapping {
     /// This local criteria is implied...
     ours: String,
     /// If all of these foreign criteria apply
@@ -313,7 +314,7 @@ struct CriteriaMapping {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct UnauditedDependency {
+pub struct UnauditedDependency {
     /// The version(s) of the crate that we are currently "fine" with leaving unaudited.
     /// For the sake of consistency, I'm making this a proper Cargo VersionReq:
     /// <https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html>
@@ -331,7 +332,7 @@ struct UnauditedDependency {
 /// This is just a big vague ball initially. It's up to the Audits/Unuadited/Trusted wrappers
 /// to validate if it "makes sense" for their particular function.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
-struct AuditEntry {
+pub struct AuditEntry {
     version: Option<Version>,
     delta: Option<Delta>,
     violation: Option<VersionReq>,
@@ -349,11 +350,11 @@ struct AuditEntry {
 /// ```toml
 /// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
 /// ```
-type DependencyCriteria = StableMap<String, Vec<String>>;
+pub type DependencyCriteria = StableMap<String, Vec<String>>;
 
 /// A "VERSION -> VERSION"
 #[derive(Debug)]
-struct Delta {
+pub struct Delta {
     from: Version,
     to: Version,
 }
@@ -988,10 +989,6 @@ fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<()
 }
 
 fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
-    // Not sure which we want, so make it configurable to test.
-    // Determines whether a delta must be == unaudited or just <=
-    let unaudited_matching_is_strict = true;
-
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
@@ -1010,9 +1007,18 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         load_imports(store_path)?
     };
 
-    resolver::resolve(auidts, config)
-}
+    // DO THE THING!!!!
+    let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports);
+    report.print_report(out)?;
 
+    // Only save imports if we succeeded, to avoid any modifications on error.
+    if !report.has_errors() {
+        trace!("Saving imports.lock...");
+        store_imports(store_path, imports)?;
+    }
+
+    Ok(())
+}
 
 fn cmd_fmt(_out: &mut dyn Write, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), VetError> {
     // Reformat all the files (just load and store them, formatting is implict).
