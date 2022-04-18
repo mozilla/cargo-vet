@@ -276,7 +276,7 @@ struct PolicyTable {
     /// to define criteria between two first-party crates, so you can only name third-party
     /// dependencies here.
     ///
-    /// Any dependency edge that isn't
+    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
     dependency_criteria: Option<DependencyCriteria>,
 
     /// Same as `criteria`, but for first-party(?) crates that are only
