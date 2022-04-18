@@ -279,11 +279,8 @@ struct PolicyTable {
     /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
     dependency_criteria: Option<DependencyCriteria>,
 
-    /// Same as `criteria`, but for first-party(?) crates that are only
+    /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
     /// used as build-dependencies or dev-dependencies.
-    ///
-    /// FIXME: Or is it for edges between first-party crates and third-party-build-dependencies?
-    /// Probably that one? HMM...goo
     #[serde(rename = "build-and-dev-criteria")]
     build_and_dev_criteria: Option<Vec<String>>,
 
