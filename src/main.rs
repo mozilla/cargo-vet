@@ -1571,9 +1571,13 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                     }
                 });
                 if reached_unaudited {
-                    // Reached an explicitly unaudited package, that's good enough
-                    validated_criteria.unioned_with(&cur_criteria);
-                    found_any_path = true;
+                    // If this is the original package version, don't treat this is as a real
+                    // validation path so that we can tell if the we were directly relying on it.
+                    if cur_version != &package.version {
+                        found_any_path = true;
+                        validated_criteria.unioned_with(&cur_criteria);
+                    }
+
                     // Just keep running the workqueue in case we find more criteria by other paths
                     continue;
                 }
@@ -1635,6 +1639,12 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         result.validated_criteria = validated_criteria;
         result.found_any_path = found_any_path;
         result.fully_audited = fully_audited;
+
+        // If we didn't actually find any paths and we're directly unaudited, note that
+        if !found_any_path && result.directly_unaudited {
+            // I need to test this path more, but I think this is the main thing to note?
+            result.used_directly_unaudited = true;
+        }
     }
 
     // All third-party crates have been processed, now process policies and first-party crates.
@@ -1696,17 +1706,16 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
         if result.failed {
             failed_count += 1;
-        } else if result.directly_unaudited {
-            if !result.used_directly_unaudited {
-                useless_unaudited.push(package);
-                audited_count += 1;
-            } else {
-                unaudited_count += 1;
-            }
+        } else if result.used_directly_unaudited {
+            unaudited_count += 1;
         } else if result.fully_audited {
             fully_audited_count += 1;
         } else {
             audited_count += 1;
+        }
+
+        if result.directly_unaudited && !result.used_directly_unaudited {
+            useless_unaudited.push(package);
         }
     }
 
@@ -1770,6 +1779,17 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         out,
         "Vetting Succeeded ({fully_audited_count} fully audited {audited_count} partially audited, {unaudited_count} unaudited)"
     )?;
+
+    // Warn about useless unaudited entries
+    if !useless_unaudited.is_empty() {
+        writeln!(
+            out,
+            "  warning: some dependencies are listed in unaudited, but didn't need it:"
+        )?;
+        for package in useless_unaudited {
+            writeln!(out, "    {}:{}", package.name, package.version)?;
+        }
+    }
 
     Ok(())
 }
