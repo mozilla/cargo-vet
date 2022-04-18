@@ -40,3 +40,11 @@ delta = "0.5.8 -> 0.5.9"
 who = "bholley"
 notes = "audited for secure"
 
+[[audits.clap_lex]]
+version = "0.1.1"
+who = "bholley"
+
+[[audits.clap]]
+delta = "3.1.8 -> 3.1.9"
+who = "bholley"
+
