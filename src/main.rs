@@ -1185,7 +1185,7 @@ impl CriteriaSet {
     fn contains(&self, other: &CriteriaSet) -> bool {
         (self.0 & other.0) == other.0
     }
-    fn _is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.0 == 0
     }
 }
@@ -1610,7 +1610,13 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                         let dep_req = dep_criteria.get(&*dep_package.name).unwrap_or(criteria);
                         if !dep_vet_result.contains(dep_req) {
                             deps_satisfied = false;
-                            break;
+                            // If this is resulting in an actual loss of criteria, tentatively blame
+                            // this dependency for own future failings. If we end up resolving some
+                            // other way, then we won't mention this horrendous treachery.
+                            if !cur_criteria.is_empty() {
+                                let own_result = &mut vet_resolve_results[resolve_idx];
+                                own_result.failed_deps.insert(dependency);
+                            }
                         }
                     }
 
