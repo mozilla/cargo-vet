@@ -1206,7 +1206,7 @@ impl ResolveResult<'_> {
     fn contains(&mut self, other: &CriteriaSet) -> bool {
         if self.validated_criteria.contains(other) {
             true
-        } else if self.directly_unaudited {
+        } else if self.directly_unaudited && !self.failed {
             // Note that the unaudited entry was (seemingly) needed.
             self.used_directly_unaudited = true;
             true
@@ -1537,6 +1537,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             }
         }
 
+        let mut directly_unaudited = false;
         // Identify if this version is directly marked as allowed in 'unaudited'.
         // This implies that all dependency_criteria checks against it will succeed
         // as if its validated_criteria was all_criteria.
@@ -1549,7 +1550,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                 }
             });
             if reached_unaudited {
-                vet_resolve_results[resolve_idx].directly_unaudited = true;
+                directly_unaudited = true;
             }
         }
 
@@ -1557,7 +1558,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         let mut working_queue = vec![(&package.version, all_criteria.clone())];
         let mut validated_criteria = no_criteria.clone();
         let mut found_any_path = false;
-        let mut fully_audited = true;
+        let mut fully_audited = false;
 
         while let Some((cur_version, cur_criteria)) = working_queue.pop() {
             // Check if we've succeeded
@@ -1576,10 +1577,10 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                     if cur_version != &package.version {
                         found_any_path = true;
                         validated_criteria.unioned_with(&cur_criteria);
-                    }
 
-                    // Just keep running the workqueue in case we find more criteria by other paths
-                    continue;
+                        // Just keep running the workqueue in case we find more criteria by other paths
+                        continue;
+                    }
                 }
             }
             if cur_version == &root_version {
@@ -1634,17 +1635,43 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             }
         }
 
+        let mut failed = false;
+        let mut used_directly_unaudited = false;
+        if !found_any_path {
+            // If we didn't actually find any paths and we're directly unaudited,
+            // make sure our deps make sense (has default criteria)
+            if directly_unaudited {
+                let mut deps_satisfied = true;
+                for dependency in &resolve.dependencies {
+                    let dep_resolve_idx = graph.resolve_index_by_pkgid[dependency];
+                    let dep_vet_result = &mut vet_resolve_results[dep_resolve_idx];
+
+                    let dep_req = criteria_mapper.default_criteria();
+                    if !dep_vet_result.contains(dep_req) {
+                        let own_result = &mut vet_resolve_results[resolve_idx];
+                        deps_satisfied = false;
+                        own_result.failed_deps.insert(dependency);
+                    }
+                }
+
+                if deps_satisfied {
+                    used_directly_unaudited = true;
+                } else {
+                    failed = true;
+                }
+            } else {
+                failed = true;
+            }
+        }
+
         // We've completed our graph analysis for this package, now record the results
         let result = &mut vet_resolve_results[resolve_idx];
         result.validated_criteria = validated_criteria;
         result.found_any_path = found_any_path;
         result.fully_audited = fully_audited;
-
-        // If we didn't actually find any paths and we're directly unaudited, note that
-        if !found_any_path && result.directly_unaudited {
-            // I need to test this path more, but I think this is the main thing to note?
-            result.used_directly_unaudited = true;
-        }
+        result.failed = failed;
+        result.used_directly_unaudited = used_directly_unaudited;
+        result.directly_unaudited = directly_unaudited;
     }
 
     // All third-party crates have been processed, now process policies and first-party crates.

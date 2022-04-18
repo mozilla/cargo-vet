@@ -88,3 +88,4 @@ criteria = ["fuzzed"]
 [[audits.unicode-bidi]]
 delta = "0.2.0 -> 0.3.7"
 message = "test for delta to unaudited"
+

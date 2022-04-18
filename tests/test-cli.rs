@@ -116,6 +116,8 @@ fn test_project() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
+        .arg("--manifest-path")
+        .arg("Cargo.toml")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
