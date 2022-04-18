@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::fs::OpenOptions;
 use std::io::{BufReader, Read};
@@ -249,13 +249,45 @@ struct CriteriaEntry {
     implies: Vec<String>,
 }
 
-/// Policies the tree must pass (TODO: understand this properly)
+/// Policies that first-party (non-foreign) crates must pass.
+///
+/// This is basically the first-party equivalent of audits.toml, which is separated out
+/// because it's not supposed to be shared (or, doesn't really make sense to share,
+/// since first-party crates are defined by "not on crates.io").
+///
+/// Because first-party crates are implicitly trusted, really the only purpose of this
+/// table is to define the boundary between a first-party crates and third-party ones.
+/// More specifically, the criteria of the dependency edges between a first-party crate
+/// and its direct third-party dependencies.
+///
+/// If this sounds overwhelming, don't worry, everything defaults to "nothing special"
+/// and an empty PolicyTable basically just means "everything should satisfy the
+/// default criteria in audits.toml".
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PolicyTable {
+    /// Default criteria that must be satisfied by all *direct* third-party (foreign)
+    /// dependencies of first-party crates. If satisfied, the first-party crate is
+    /// set to satisfying all criteria.
+    ///
+    /// If not present, this defaults to the default criteria in the audits table.
     criteria: Option<Vec<String>>,
+
+    /// Custom criteria for a specific first-party crate's dependencies. It's nonsensical
+    /// to define criteria between two first-party crates, so you can only name third-party
+    /// dependencies here.
+    ///
+    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
+    dependency_criteria: Option<DependencyCriteria>,
+
+    /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
+    /// used as build-dependencies or dev-dependencies.
     #[serde(rename = "build-and-dev-criteria")]
     build_and_dev_criteria: Option<Vec<String>>,
+
+    /// TODO: figure this out
     targets: Option<Vec<String>>,
+
+    /// `targets` but build/dev
     #[serde(rename = "build-and-dev-targets")]
     build_and_dev_targets: Option<Vec<String>>,
 }
@@ -708,6 +740,7 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
             imports: StableMap::new(),
             unaudited: dependencies,
             policy: PolicyTable {
+                dependency_criteria: None,
                 criteria: None,
                 build_and_dev_criteria: None,
                 targets: None,
@@ -961,6 +994,8 @@ fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<()
 struct CriteriaSet(u64);
 const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
 
+/// A processed version of config.toml's criteria definitions, for mapping
+/// lists of criteria names to CriteriaSets.
 struct CriteriaMapper<'a> {
     list: Vec<(&'a str, &'a CriteriaEntry)>,
     index: HashMap<&'a str, usize>,
@@ -977,6 +1012,44 @@ pub struct DepGraph<'a> {
     pub pkgid_by_name_and_ver: HashMap<&'a str, HashMap<&'a Version, &'a PackageId>>,
     /// Toplogical sorting of the dependencies (linear iteration will do things in dependency order)
     pub topo_index: Vec<&'a PackageId>,
+}
+
+/// Results and notes from running vet on a particular package.
+#[derive(Clone)]
+pub struct ResolveResult<'a> {
+    /// The set of criteria we validated for this package.
+    validated_criteria: CriteriaSet,
+
+    /// Whether we ever found a complete path in the vet graph (even if empty).
+    /// This is used to hint that maybe some restrictions were too tight.
+    found_any_path: bool,
+    /// Whether the current version is actually directly listed in 'unaudited'.
+    /// When checking the dependency requirements on an audit, this implies
+    /// all_criteria, and therefore that the edge is always satisfied.
+    directly_unaudited: bool,
+    /// Whether any dependency_criteria check actually depended on this crate
+    /// being directly unaudited. If directly_unaudited is true but this is false,
+    /// we should emit a diagnostic and tell you to remove the unaudited entry!
+    used_directly_unaudited: bool,
+    /// Whether the validation terminated in a full audit.
+    fully_audited: bool,
+    /// Whether we determined this package failed to audit during policy checking.
+    failed: bool,
+
+    /// dependency_criteria that failed to resolve. This is populated for two reasons:
+    ///
+    /// * during third-party vetting, while walking through the delta graph with
+    ///   non-empty cur_criteria, a dependency failed to satisfy our requirements.
+    ///   This isn't inherently a problem, because it's possible we'll get a validation
+    ///   via another path, but we eagerly "log" the result in case this fails to
+    ///   meet expected criteria, and then try to blame the problem on these deps.
+    ///   Note the "non-empty cur_criteria" qualifier: we keep searching with empty
+    ///   criteria just to give better diagnostics, but failures at that point should
+    ///   be ignored because we're just gathering extra info, and not actually vetting.
+    ///
+    /// * during first-party vetting, if any of these packages fail the policy.
+    ///   This is a hard error, and these packages are 100% to blame.
+    failed_deps: BTreeSet<&'a PackageId>,
 }
 
 impl<'a> CriteriaMapper<'a> {
@@ -1114,6 +1187,32 @@ impl CriteriaSet {
     }
 }
 
+impl ResolveResult<'_> {
+    fn with_no_criteria(empty: CriteriaSet) -> Self {
+        Self {
+            validated_criteria: empty,
+            found_any_path: false,
+            directly_unaudited: false,
+            used_directly_unaudited: false,
+            fully_audited: false,
+            failed: false,
+            failed_deps: Default::default(),
+        }
+    }
+
+    fn contains(&mut self, other: &CriteriaSet) -> bool {
+        if self.validated_criteria.contains(other) {
+            true
+        } else if self.directly_unaudited && !self.failed {
+            // Note that the unaudited entry was (seemingly) needed.
+            self.used_directly_unaudited = true;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 impl<'a> DepGraph<'a> {
     pub fn new(metadata: &'a Metadata) -> Self {
         // FIXME: study the nature of the 'resolve' field more carefully.
@@ -1230,9 +1329,6 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     let no_audits = Vec::new();
     let no_custom_dep_criteria = DependencyCriteria::new();
 
-    let mut audited_count: u64 = 0;
-    let mut unaudited_count: u64 = 0;
-    let mut failed = vec![];
     let mut violation_failed = vec![];
 
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
@@ -1242,14 +1338,39 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     let all_criteria = criteria_mapper.all_criteria();
     let no_criteria = criteria_mapper.no_criteria();
 
+    // Compute the "policy" criteria
+    let policy = config
+        .policy
+        .criteria
+        .as_ref()
+        .map(|c| criteria_mapper.criteria_from_list(c.iter().map(|s| &**s)))
+        .unwrap_or_else(|| criteria_mapper.default_criteria().clone());
+    let _build_and_dev_policy = config
+        .policy
+        .build_and_dev_criteria
+        .as_ref()
+        .map(|c| criteria_mapper.criteria_from_list(c.iter().map(|s| &**s)))
+        .unwrap_or_else(|| policy.clone());
+    let dep_policies: HashMap<_, _> = config
+        .policy
+        .dependency_criteria
+        .as_ref()
+        .unwrap_or(&no_custom_dep_criteria)
+        .iter()
+        .map(|(pkg_name, criteria)| {
+            (
+                &**pkg_name,
+                criteria_mapper.criteria_from_list(criteria.iter().map(|s| &**s)),
+            )
+        })
+        .collect();
+
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
-    let mut vet_resolve_results = vec![no_criteria.clone(); graph.resolve_list.len()];
+    let mut vet_resolve_results =
+        vec![ResolveResult::with_no_criteria(no_criteria.clone()); graph.resolve_list.len()];
 
     // Actually vet the dependencies
     'all_packages: for pkgid in &graph.topo_index {
-        let mut via_audited = false;
-        let mut via_unaudited = false;
-
         let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
         let resolve = &graph.resolve_list[resolve_idx];
         let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
@@ -1260,8 +1381,11 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             .as_ref()
             .map(|s| s.is_crates_io())
             .unwrap_or(false);
+
         if !is_third_party {
-            vet_resolve_results[resolve_idx].unioned_with(&all_criteria);
+            // These get processed in the policy section
+            // FIXME: I like breaking this into two loops but it might be problematic
+            // if someone has their own fork of a crate that crates.io deps use...?
             continue;
         }
         let unaudited = config.unaudited.get(&package.name);
@@ -1410,9 +1534,28 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             }
         }
 
+        let mut directly_unaudited = false;
+        // Identify if this version is directly marked as allowed in 'unaudited'.
+        // This implies that all dependency_criteria checks against it will succeed
+        // as if its validated_criteria was all_criteria.
+        if let Some(allowed) = unaudited {
+            let reached_unaudited = allowed.iter().any(|allowed| {
+                if unaudited_matching_is_strict {
+                    allowed.version == package.version
+                } else {
+                    allowed.version >= package.version
+                }
+            });
+            if reached_unaudited {
+                directly_unaudited = true;
+            }
+        }
+
         // Now try to resolve the deltas
         let mut working_queue = vec![(&package.version, all_criteria.clone())];
         let mut validated_criteria = no_criteria.clone();
+        let mut found_any_path = false;
+        let mut fully_audited = false;
 
         while let Some((cur_version, cur_criteria)) = working_queue.pop() {
             // Check if we've succeeded
@@ -1426,22 +1569,25 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                     }
                 });
                 if reached_unaudited {
-                    // Reached an explicitly unaudited package, that's good enough
-                    validated_criteria.unioned_with(&cur_criteria);
-                    // FIXME: should this only be set if we followed no deltas?
-                    via_unaudited = true;
+                    // If this is the original package version, don't treat this is as a real
+                    // validation path so that we can tell if the we were directly relying on it.
+                    if cur_version != &package.version {
+                        found_any_path = true;
+                        validated_criteria.unioned_with(&cur_criteria);
 
-                    // TODO: register this unaudited entry as "used" so we can warn
-                    // about any entries that weren't used (security hazard).
-
-                    // Just keep running the workqueue in case we find more criteria by other paths
-                    continue;
+                        // Just keep running the workqueue in case we find more criteria by other paths
+                        continue;
+                    }
                 }
             }
             if cur_version == &root_version {
                 // Reached 0.0.0, which means we hit a Full Audit, that's perfect
                 validated_criteria.unioned_with(&cur_criteria);
-                via_audited = true;
+                found_any_path = true;
+
+                // FIXME: this is mildly fuzzy with unioning
+                // FIXME: should this only be true if cur_criteria is non-empty?
+                fully_audited = true;
 
                 // Just keep running the workqueue in case we find more criteria by other paths
                 continue;
@@ -1458,7 +1604,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                         let dep_resolve_idx = graph.resolve_index_by_pkgid[dependency];
                         let dep_package =
                             &graph.package_list[graph.package_index_by_pkgid[dependency]];
-                        let dep_vet_result = &vet_resolve_results[dep_resolve_idx];
+                        let dep_vet_result = &mut vet_resolve_results[dep_resolve_idx];
 
                         // If no custom criteria is specified, then require our dependency to match
                         // the same criteria that this delta claims to provide.
@@ -1466,49 +1612,171 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
                         let dep_req = dep_criteria.get(&*dep_package.name).unwrap_or(criteria);
                         if !dep_vet_result.contains(dep_req) {
                             deps_satisfied = false;
-                            break;
+                            // If this is resulting in an actual loss of criteria, tentatively blame
+                            // this dependency for own future failings. If we end up resolving some
+                            // other way, then we won't mention this horrendous treachery.
+                            if !cur_criteria.is_empty() {
+                                let own_result = &mut vet_resolve_results[resolve_idx];
+                                own_result.failed_deps.insert(dependency);
+                            }
                         }
                     }
 
-                    if !next_critera.is_empty() && deps_satisfied {
+                    // NOTE: we explicitly don't stop if next_criteria is empty, because we want to
+                    // understand the whole graph, and in particular figure out if it's even vaguely
+                    // connected.
+                    if deps_satisfied {
                         working_queue.push((from_version, next_critera));
                     }
                 }
             }
         }
-        // TODO: now verify validated_criteria matches our policy
-        let passed_policy = !validated_criteria.is_empty();
 
-        if passed_policy {
-            // hooray, we win! record the result in vet_resolve_results
-            // so that our dependents can check what criteria we achieved.
-            //
-            // FIXME: this logic is going to cause cascading errors up the entire
-            // dependency tree... do we really want that?
-            vet_resolve_results[resolve_idx] = validated_criteria;
+        let mut failed = false;
+        let mut used_directly_unaudited = false;
+        if !found_any_path {
+            // If we didn't actually find any paths and we're directly unaudited,
+            // make sure our deps make sense (has default criteria)
+            if directly_unaudited {
+                let mut deps_satisfied = true;
+                for dependency in &resolve.dependencies {
+                    let dep_resolve_idx = graph.resolve_index_by_pkgid[dependency];
+                    let dep_vet_result = &mut vet_resolve_results[dep_resolve_idx];
 
-            // Log statistics
-            if via_audited {
-                audited_count += 1;
-            } else if via_unaudited {
-                unaudited_count += 1;
+                    let dep_req = criteria_mapper.default_criteria();
+                    if !dep_vet_result.contains(dep_req) {
+                        let own_result = &mut vet_resolve_results[resolve_idx];
+                        deps_satisfied = false;
+                        own_result.failed_deps.insert(dependency);
+                    }
+                }
+
+                if deps_satisfied {
+                    used_directly_unaudited = true;
+                } else {
+                    failed = true;
+                }
             } else {
-                unreachable!("I have messed up the vet algorithm very badly...");
+                failed = true;
             }
+        }
+
+        // We've completed our graph analysis for this package, now record the results
+        let result = &mut vet_resolve_results[resolve_idx];
+        result.validated_criteria = validated_criteria;
+        result.found_any_path = found_any_path;
+        result.fully_audited = fully_audited;
+        result.failed = failed;
+        result.used_directly_unaudited = used_directly_unaudited;
+        result.directly_unaudited = directly_unaudited;
+    }
+
+    // All third-party crates have been processed, now process policies and first-party crates.
+    let mut root_failures = vec![];
+    for pkgid in &graph.topo_index {
+        let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
+        let resolve = &graph.resolve_list[resolve_idx];
+        let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
+
+        let is_third_party = package
+            .source
+            .as_ref()
+            .map(|s| s.is_crates_io())
+            .unwrap_or(false);
+
+        if is_third_party {
+            // These have already been processed
+            continue;
+        }
+
+        let mut failed_deps = BTreeSet::new();
+        for dependency in &resolve.dependencies {
+            let dep_resolve_idx = graph.resolve_index_by_pkgid[dependency];
+            let dep_package = &graph.package_list[graph.package_index_by_pkgid[dependency]];
+            let dep_vet_result = &mut vet_resolve_results[dep_resolve_idx];
+
+            // If no custom policy is specified, then require our dependencies to
+            // satisfy the default policy.
+            let dep_req = dep_policies.get(&*dep_package.name).unwrap_or(&policy);
+            if !dep_vet_result.contains(dep_req) {
+                failed_deps.insert(dependency);
+                dep_vet_result.failed = true;
+            }
+        }
+
+        let result = &mut vet_resolve_results[resolve_idx];
+        if failed_deps.is_empty() {
+            result.validated_criteria.unioned_with(&all_criteria);
         } else {
-            failed.push(package);
+            result.failed_deps = failed_deps;
+            result.failed = true;
+
+            if cfg.metadata.workspace_members.contains(pkgid) {
+                root_failures.push(pkgid);
+            }
         }
     }
 
-    if !failed.is_empty() || !violation_failed.is_empty() {
+    // Gather statistics
+    let mut unaudited_count: u64 = 0;
+    let mut audited_count: u64 = 0;
+    let mut failed_count: u64 = 0;
+    let mut fully_audited_count: u64 = 0;
+    let mut useless_unaudited = vec![];
+    for pkgid in &graph.topo_index {
+        let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
+        let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
+        let result = &vet_resolve_results[resolve_idx];
+
+        if result.failed {
+            failed_count += 1;
+        } else if result.used_directly_unaudited {
+            unaudited_count += 1;
+        } else if result.fully_audited {
+            fully_audited_count += 1;
+        } else {
+            audited_count += 1;
+        }
+
+        if result.directly_unaudited && !result.used_directly_unaudited {
+            useless_unaudited.push(package);
+        }
+    }
+
+    if !root_failures.is_empty() || !violation_failed.is_empty() {
         writeln!(out, "Vetting Failed!")?;
         writeln!(out)?;
-        if !failed.is_empty() {
-            writeln!(out, "{} unvetted dependencies:", failed.len())?;
-            for package in failed {
-                writeln!(out, "  {}:{}", package.name, package.version)?;
+        if !root_failures.is_empty() {
+            writeln!(out, "{} unvetted dependencies:", failed_count)?;
+            for package in root_failures {
+                print_failures(out, 0, package, &graph, &vet_resolve_results)?;
             }
             writeln!(out)?;
+
+            fn print_failures(
+                out: &mut dyn Write,
+                depth: usize,
+                pkgid: &PackageId,
+                graph: &DepGraph,
+                vet_resolve_results: &[ResolveResult],
+            ) -> Result<(), VetError> {
+                let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
+                let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
+                let result = &vet_resolve_results[resolve_idx];
+                let indent = (depth + 1) * 2;
+                writeln!(
+                    out,
+                    "{:width$}{}:{}",
+                    "",
+                    package.name,
+                    package.version,
+                    width = indent
+                )?;
+                for dep_package in &result.failed_deps {
+                    print_failures(out, depth + 1, dep_package, graph, vet_resolve_results)?;
+                }
+                Ok(())
+            }
         }
         if !violation_failed.is_empty() {
             writeln!(out, "{} forbidden dependencies:", violation_failed.len())?;
@@ -1533,8 +1801,19 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     writeln!(
         out,
-        "Vetting Succeeded ({audited_count} audited, {unaudited_count} unaudited)"
+        "Vetting Succeeded ({fully_audited_count} fully audited {audited_count} partially audited, {unaudited_count} unaudited)"
     )?;
+
+    // Warn about useless unaudited entries
+    if !useless_unaudited.is_empty() {
+        writeln!(
+            out,
+            "  warning: some dependencies are listed in unaudited, but didn't need it:"
+        )?;
+        for package in useless_unaudited {
+            writeln!(out, "    {}:{}", package.name, package.version)?;
+        }
+    }
 
     Ok(())
 }
