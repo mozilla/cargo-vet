@@ -44,3 +44,23 @@ record-violation`. This isn't supported for three reasons:
 * When the situation does arise, the effort required to manually update
   `audits.toml` is dwarfed by the effort of actually extricating the dependency
   from your project.
+
+## How does this relate to `cargo crev`?
+
+This work was partially inspired by `cargo crev`, and borrows some aspects
+from its design. We are grateful for its existence and the hard work behind it.
+`cargo vet` makes a few design choices that differ from `cargo crev`:
+* **Project-Oriented:** `cargo vet` is geared towards usage by organizations,
+  and therefore does not separate audits by individual developer. Consequently,
+  it does not have a separate identity and authentication layer.
+* **No Web-of-Trust:** there is no notion of transitive trust. The decision to
+  trust audits performed by another party is independent of that party's trust
+  choices, which might be rooted in a different threat model.
+* **Automated Enforcement:** `cargo vet` is designed to be run as an enforcement
+  tool for projects to manage (rather than just inspect) their supply chains,
+  and consequently has a number of affordances in this direction.
+* **Audit Criteria:** `cargo vet` supports recording
+  [multiple kinds of audits](defining-criteria.md).
+
+Eventually, it could make sense to implement some form of bridging between the
+two systems.
