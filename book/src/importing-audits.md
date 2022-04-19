@@ -26,10 +26,10 @@ the `config.toml` of other projects for inspiration, and explicitly adopt any
 `imports` entries that meet your requirements.
 
 The [built-in criteria](built-in-criteria.md) have the same meaning across all
-projects, so importing an audit for `safe_to_run` has the same effect as
+projects, so importing an audit for `safe-to-run` has the same effect as
 appending that same audit to your own `audits.toml`. By default, custom criteria
 defined in a foreign audit file exist in a private namespace and have no meaning
-in the local project. However, they can be [mapped](config.md#criteria_map) as
+in the local project. However, they can be [mapped](config.md#criteria-map) as
 desired to locally-defined criteria.
 
 

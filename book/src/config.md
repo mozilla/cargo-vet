@@ -42,17 +42,17 @@ For example, specifying the [built-in criteria](built-in-criteria.md) as custom
 criteria would look like this:
 
 ```
-[criteria.safe_to_build]
+[criteria.safe-to-build]
 description = '...'
-implies = 'safe_to_run'
+implies = 'safe-to-run'
 
-[criteria.safe_to_run]
+[criteria.safe-to-run]
 description = '...'
-implies = 'safe_to_build'
+implies = 'safe-to-build'
 
-[criteria.safe_to_deploy]
+[criteria.safe-to-deploy]
 description = '...'
-implies = 'safe_to_run'
+implies = 'safe-to-run'
 ```
 
 ### The `audits` Table
@@ -72,7 +72,7 @@ file cannot be imported by other projects.
 ### `default-criteria`
 
 This top-level key specifies the default criteria that `cargo vet certify` will
-use when recording audits. If unspecified, this defaults to `safe_to_deploy`.
+use when recording audits. If unspecified, this defaults to `safe-to-deploy`.
 
 ### The `imports` Table
 
@@ -85,7 +85,7 @@ project. The key is a user-defined nickname, so entries are specified as
 Specifies an HTTPS url from which the remote `audits.toml` can be fetched. This
 field is required.
 
-#### `criteria_map`
+#### `criteria-map`
 
 An inline table or array of inline tables specifying one or more mappings
 between the audit criteria of the imported and local sets. Each imported audit
@@ -96,13 +96,13 @@ specified in the `ours` key.
 This will generally be a 1:1 mapping:
 
 ```
-criteria_map = { theirs: "a", ours: "x" }
+criteria-map = { theirs: "a", ours: "x" }
 ```
 
 But can also be more complex:
 
 ```
-criteria_map = [ { theirs: "b", ours: ["y", "z"] },
+criteria-map = [ { theirs: "b", ours: ["y", "z"] },
                  { theirs: ["c", "d"], ours: "z" } ]
 ```
 
@@ -118,24 +118,24 @@ top-level first-party crates get the defaults described below.
 A string or array of strings specifying the criteria that should be enforced for
 this crate and its dependency tree.
 
-For top-level crates, defaults to `safe_to_deploy`.
+For top-level crates, defaults to `safe-to-deploy`.
 
 #### `dev-criteria`
 
 Same as the above, but applied to dev-dependencies.
 
-For top-level crates, defaults to `safe_to_run`.
+For top-level crates, defaults to `safe-to-run`.
 
 #### `build-criteria`
 
 Same as the above, but applied to build-dependencies.
 
-For top-level crates, defaults to `safe_to_build`.
+For top-level crates, defaults to `safe-to-build`.
 
 #### `dependency-criteria`
 
 Allows overriding the above values on a per-dependency basis. Similar in format
-to the [equivalent field](audit-entries.md#dependency_criteria) in audit
+to the [equivalent field](audit-entries.md#dependency-criteria) in audit
 entries.
 
 Defaults to the empty set and is not inherited.

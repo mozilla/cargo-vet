@@ -66,7 +66,7 @@ This field is optional, but encouraged for two reasons:
 An optional free-form string containing any information the auditor may wish to
 record.
 
-## `dependency_criteria`
+## `dependency-criteria`
 
 An optional inline table specifying the criteria the vetting algorithm should
 check for in a dependency subtree.
@@ -82,7 +82,7 @@ cryptography experts:
 ```
 [audit.mynetworkingcrate]
 version = '2.3.4'
-dependency_criteria = { hmac: ['safe_to_deploy', 'crypto_reviewed'] }
+dependency_criteria = { hmac: ['safe-to-deploy', 'crypto-reviewed'] }
 ```
 
 Alternatively, a dependency might be used in a very limited way that allows you
@@ -92,7 +92,7 @@ platform binding crate just to invoke one or two native functions:
 ```
 [audit.foo]
 version = '1.5.2'
-dependency_criteria = { winapi: 'safe_to_run' }
+dependency-criteria = { winapi: 'safe-to-run' }
 notes = '''
   The winapi dependency is only used in a few places, and I have directly audited
   the parts of it that are used. As long as we ensure that minor updates don't
@@ -103,7 +103,7 @@ notes = '''
 
 This field only has an effect when the associated audit entry is actually used
 in the recursive vetting algorithm. In the case where multiple entries are used
-for a single crate, their `dependency_criteria` are unioned together.
+for a single crate, their `dependency-criteria` are unioned together.
 
 These criteria propagate through the entire subtree unless inner branches
-specify their own `dependency_criteria`.
+specify their own `dependency-criteria`.

@@ -28,42 +28,42 @@ A sample `audits.toml` looks like this:
 [[audits.bar]]
 version = "1.2.3"
 who = "Alice Foo <alicefoo@example.com>"
-criteria = "safe_to_deploy"
+criteria = "safe-to-deploy"
 
 [[audits.bar]]
 delta = "1.2.3 -> 1.2.4"
 who = "Bob Bar <bobbar@example.com>""
-criteria = "safe_to_deploy"
+criteria = "safe-to-deploy"
 
 [[audits.bar]]
 version = "2.1.3"
 who = "Alice Foo <alicefoo@example.com>"
-criteria = "safe_to_deploy"
+criteria = "safe-to-deploy"
 
 [[audits.bar]]
 delta = "2.1.3 -> 2.1.1"
 who = "Alice Foo <alicefoo@example.com>"
-criteria = "safe_to_deploy"
+criteria = "safe-to-deploy"
 
 [[audits.baz]]
 version = "0.2"
 who = "Alice Foo <alicefoo@example.com>"
-criteria = "safe_to_run"
+criteria = "safe-to-run"
 
 [[audits.foo]]
 version = "0.2.1 -> 0.3.1"
 who = "Bob Bar <bobbar@example.com>""
-criteria = "safe_to_deploy"
+criteria = "safe-to-deploy"
 
 [[audits.malicious_crate]]
 violation = "*"
 who = "Bob Bar <bobbar@example.com>""
-criteria = "safe_to_build"
+criteria = "safe-to-build"
 
 [[audits.partially_vulnerable_crate]]
 violation = ">=2.0, <2.3"
 who = "Bob Bar <bobbar@example.com>""
-criteria = "safe_to_deploy"
+criteria = "safe-to-deploy"
 ```
 
 Exactly one of `version`, `delta`, or `violation` must be specified for each
