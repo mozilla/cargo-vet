@@ -342,6 +342,39 @@ pub struct AuditEntry {
     dependency_criteria: Option<DependencyCriteria>,
 }
 
+impl AuditEntry {
+    /// Not actually valid, but a starting point for other things
+    pub fn null() -> Self {
+        Self {
+            version: None,
+            delta: None,
+            violation: None,
+            who: None,
+            notes: None,
+            criteria: None,
+            dependency_criteria: None,
+        }
+    }
+    pub fn violation(req: VersionReq) -> Self {
+        Self {
+            violation: Some(req),
+            ..Self::null()
+        }
+    }
+    pub fn full_audit(version: Version) -> Self {
+        Self {
+            version: Some(version),
+            ..Self::null()
+        }
+    }
+    pub fn delta_audit(from: Version, to: Version) -> Self {
+        Self {
+            delta: Some(Delta { from, to }),
+            ..Self::null()
+        }
+    }
+}
+
 /// A list of criteria that transitive dependencies must satisfy for this
 /// audit to continue to be considered valid.
 ///
