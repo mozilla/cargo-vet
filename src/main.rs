@@ -677,7 +677,7 @@ fn main() -> Result<(), VetError> {
             );
             std::process::exit(-1);
         }
-    } else if !init {
+    } else if !init && !matches!(cli.command, Some(Commands::HelpMarkdown { .. })) {
         error!(
             "You must run 'cargo vet init' (store not found at {:#?})",
             metacfg.store_path()
