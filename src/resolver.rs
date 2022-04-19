@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Write;
 
 use cargo_metadata::{Metadata, Package, PackageId, Version};
-use log::{error, warn};
+use log::{error, trace, warn};
 
 use crate::{
     AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, StableMap,
@@ -36,6 +36,7 @@ pub struct CriteriaMapper<'a> {
 }
 
 /// The dependency graph in a form we can use more easily.
+#[derive(Debug)]
 pub struct DepGraph<'a> {
     pub package_list: &'a [Package],
     pub resolve_list: &'a [cargo_metadata::Node],
@@ -353,6 +354,8 @@ pub fn resolve<'a>(
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
     let graph = DepGraph::new(metadata);
+    trace!("graph: {:#?}", graph);
+
     let criteria_mapper = CriteriaMapper::new(&audits.criteria);
     let all_criteria = criteria_mapper.all_criteria();
     let no_criteria = criteria_mapper.no_criteria();

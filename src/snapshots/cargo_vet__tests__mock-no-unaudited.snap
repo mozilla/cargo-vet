@@ -1,0 +1,18 @@
+---
+source: src/tests.rs
+assertion_line: 306
+expression: stdout
+---
+Vetting Failed!
+
+5 unvetted dependencies:
+  root-package:1.0.0
+    first-party:1.0.0
+      third-party1:1.0.0
+      third-party2:1.0.0
+
+recommended audits:
+  [TODO]
+
+Use |cargo vet certify| to record the audits.
+
