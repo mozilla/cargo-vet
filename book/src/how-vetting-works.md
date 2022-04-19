@@ -22,9 +22,6 @@ All other nodes in the graph are considered trusted and therefore non-auditable:
   The tool may eventually support this if large public non-crates.io mirrors
   emerge.
 
-Traversal behavior for non-auditable crates can be specified in the [policy
-table](./config.md#the-policy-table).
-
 ## Algorithm
 
 The following is a simplified sketch of what happens when `cargo vet`

@@ -39,7 +39,7 @@ You can, of course, choose to add one or more unvetted dependencies to the
 situations, though doing so frequently undermines the value provided by the
 tool.
 
-## Reviewing Crates
+## Inspecting Crates
 
 Once you've identified the audit you wish to perform, the next step is to
 produce the artifacts for inspection. This is less trivial than it might sound:

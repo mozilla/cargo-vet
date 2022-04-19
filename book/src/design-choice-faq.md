@@ -60,7 +60,7 @@ from its design. We are grateful for its existence and the hard work behind it.
   tool for projects to manage (rather than just inspect) their supply chains,
   and consequently has a number of affordances in this direction.
 * **Audit Criteria:** `cargo vet` supports recording
-  [multiple kinds of audits](defining-criteria.md).
+  [multiple kinds of audits](audit-criteria.md).
 
 Eventually, it could make sense to implement some form of bridging between the
 two systems.

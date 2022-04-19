@@ -25,22 +25,12 @@ projects.
 
 ### The `criteria` Table
 
-This table defines different sets of criteria. There must be at least one entry.
-Entries have several potential fields:
+This table defines different sets of custom criteria. Entries have several
+potential fields:
 
 ### `description`
 
 A concise description of the criteria. This field is required.
-
-#### `default`
-
-A boolean indicating whether this entry should be part of the default criteria
-for the audit set. Default criteria are associated with every audit entry that
-does not explicitly specify criteria.
-
-Once you start recording audits, you should generally avoid making changes to
-the default criteria, since such changes will automatically apply to the bulk of
-your previously-recorded audits and likely misrepresent what actually happened.
 
 #### `implies`
 
@@ -48,11 +38,21 @@ An optional string or array of other criteria that are subsumed by this entry.
 Audit entries that are certified with these criteria are also implicitly
 certified with any implied criteria.
 
-For example:
+For example, specifying the [built-in criteria](built-in-criteria.md) as custom
+criteria would look like this:
 
 ```
-[criteria.secure]
-implies = 'safe_to_run_locally'
+[criteria.safe_to_build]
+description = '...'
+implies = 'safe_to_run'
+
+[criteria.safe_to_run]
+description = '...'
+implies = 'safe_to_build'
+
+[criteria.safe_to_deploy]
+description = '...'
+implies = 'safe_to_run'
 ```
 
 ### The `audits` Table
@@ -68,6 +68,11 @@ The semantics of the various audit entries keys are described
 
 This file contains configuration information for this specific project. This
 file cannot be imported by other projects.
+
+### `default-criteria`
+
+This top-level key specifies the default criteria that `cargo vet certify` will
+use when recording audits. If unspecified, this defaults to `safe_to_deploy`.
 
 ### The `imports` Table
 
@@ -86,32 +91,54 @@ An inline table or array of inline tables specifying one or more mappings
 between the audit criteria of the imported and local sets. Each imported audit
 is matched against each mapping. If the imported audit certifies all of the
 criteria listed in the `theirs` key, it is associated with the local criteria
-specified in the `ours` key. Any imported audits that do not match any mappings
-are discarded.
+specified in the `ours` key.
+
+This will generally be a 1:1 mapping:
+
+```
+criteria_map = { theirs: "a", ours: "x" }
+```
+
+But can also be more complex:
+
+```
+criteria_map = [ { theirs: "b", ours: ["y", "z"] },
+                 { theirs: ["c", "d"], ours: "z" } ]
+```
 
 ### the `policy` Table
 
-By default, invoking `cargo vet` will recursively check every top-level subtree
-in the workspace against the default criteria for all possible platforms. These
-defaults can be overridden as needed with entries in the `policy` table. Whereas
-the `audits` table configures the traversal for crates.io crates, the `policy`
-table configures the traversal for first-party and other non-auditable crates in
-the graph.
-
-The table is indexed by crate name, and each entry has the following fields.
+This table maps first-party crates to the audit requirements that `cargo vet`
+should enforce on their dependencies. When unspecified, non-top-level
+first-party crates inherit policy attributes from their parents, whereas
+top-level first-party crates get the defaults described below.
 
 #### `criteria`
 
 A string or array of strings specifying the criteria that should be enforced for
 this crate and its dependency tree.
 
-Defaults to the default criteria from `audits.toml`.
+For top-level crates, defaults to `safe_to_deploy`.
 
-#### `build-and-dev-criteria`
+#### `dev-criteria`
 
-Same as the above, but applied to build-dependencies and dev-dependencies.
+Same as the above, but applied to dev-dependencies.
 
-Defaults to the same value as `criteria`.
+For top-level crates, defaults to `safe_to_run`.
+
+#### `build-criteria`
+
+Same as the above, but applied to build-dependencies.
+
+For top-level crates, defaults to `safe_to_build`.
+
+#### `dependency-criteria`
+
+Allows overriding the above values on a per-dependency basis. Similar in format
+to the [equivalent field](audit-entries.md#dependency_criteria) in audit
+entries.
+
+Defaults to the empty set and is not inherited.
 
 #### `targets`
 
@@ -120,19 +147,19 @@ top-level crate. These are the platforms that `cargo vet` will require audits
 for when traversing the subtree (audits can optionally [restrict their
 validity](audit-entries.md#targets) to a set of targets).
 
-Defaults to all platforms.
+For top-level crates, defaults to all platforms.
 
-#### `build-and-dev-targets`
+#### `dev-targets`
 
-Same as the above, but applied to build-dependencies and dev-dependencies.
+Same as the above, but applied to dev-dependencies.
 
-Defaults to the same value as `targets`.
+For top-level crates, defaults to all platforms.
 
-#### `dependency_criteria`
+#### `build-targets`
 
-Similar to the [equivalent field](audit-entries.md#dependency_criteria) in audit
-entries, specifies criteria that should be enforced for specific dependencies of
-this crate.
+Same as the above, but applied to build-dependencies.
+
+For top-level crates, defaults to all platforms.
 
 ### The `unaudited` Table
 

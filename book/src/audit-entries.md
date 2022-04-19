@@ -35,9 +35,7 @@ the dependency even if it's listed in the `unaudited` table.
 
 ## `criteria`
 
-Specifies the relevant criteria for this audit. For `version` and `delta`
-entries, this defaults to the projects default criteria. For `violation`
-entries, this defaults to all defined criteria.
+Specifies the relevant criteria for this audit. This field is required.
 
 ## `targets`
 
@@ -82,14 +80,9 @@ For example, a dependency used to encrypt sensitive data might need review from
 cryptography experts:
 
 ```
-[criteria.secure]
-default = true
-
-...
-
 [audit.mynetworkingcrate]
 version = '2.3.4'
-dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
+dependency_criteria = { hmac: ['safe_to_deploy', 'crypto_reviewed'] }
 ```
 
 Alternatively, a dependency might be used in a very limited way that allows you
@@ -97,14 +90,9 @@ to reduce the level of scrutiny. For example, a crate might import a sprawling
 platform binding crate just to invoke one or two native functions:
 
 ```
-[criteria.secure]
-default = true
-
-...
-
 [audit.foo]
 version = '1.5.2'
-dependency_criteria = { winapi: 'safe_to_run_locally' }
+dependency_criteria = { winapi: 'safe_to_run' }
 notes = '''
   The winapi dependency is only used in a few places, and I have directly audited
   the parts of it that are used. As long as we ensure that minor updates don't

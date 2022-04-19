@@ -26,6 +26,6 @@ down over time. This makes it trivial to introduce `cargo vet` to a new project
 and guard against future vulnerabilities while vetting the pre-existing code
 gradually as time permits.
 
-> **Note**: `cargo vet` doesn't yet exist. This is a sketch of the final
-> documentation to solicit feedback before implementing.
+> **Note**: `cargo vet` is under active development. If you're interested in
+> deploying it, [get in touch](mailto:bholley@mozilla.com).
 
