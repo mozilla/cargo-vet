@@ -144,11 +144,11 @@ impl MockMetadata {
             "packages": self.packages.iter().map(|package| json!({
                 "name": package.name,
                 "version": package.version.to_string(),
-                "id": self.pkgid(&package),
+                "id": self.pkgid(package),
                 "license": "MIT",
                 "license_file": null,
                 "description": "whatever",
-                "source": self.source(&package),
+                "source": self.source(package),
                 "dependencies": package.deps.iter().map(|dep| json!({
                     "name": dep.0,
                     "source": self.source(self.package_by(dep.0, &dep.1)),
@@ -195,14 +195,14 @@ impl MockMetadata {
             })).collect::<Vec<_>>(),
             "workspace_members": self.packages.iter().filter_map(|package| {
                 if package.is_root {
-                    Some(self.pkgid(&package))
+                    Some(self.pkgid(package))
                 } else {
                     None
                 }
             }).collect::<Vec<_>>(),
             "resolve": {
                 "nodes": self.packages.iter().map(|package| json!({
-                    "id": self.pkgid(&package),
+                    "id": self.pkgid(package),
                     "dependencies": package.deps.iter().map(|dep| {
                         self.pkgid_by(dep.0, &dep.1)
                     }).collect::<Vec<_>>(),
