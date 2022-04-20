@@ -24,8 +24,11 @@ All other nodes in the graph are considered trusted and therefore non-auditable:
 
 ## Algorithm
 
-The following is a simplified sketch of what happens when `cargo vet`
+The following is a very simplified sketch of what happens when `cargo vet`
 is invoked.
+
+> **Note**: The details here are still being refined as we iterate on the
+> implementation, so this section has gaps and may drift out of date.
 
 First, the project's [configuration](./config.md) is be parsed and loaded.
 
@@ -34,7 +37,6 @@ If not running in locked mode, each of the URLs listed in the `imports` key of
 data is stored in `imports.lock`. The descriptions for any mapped criteria are
 stored as well, and any changes to previously-recorded descriptions will cause
 `cargo vet` to fail and require `cargo vet accept-criteria-change` to be run.
-Any unmapped criteria (and audits under those criteria) are discarded.
 
 `audits.toml`, `imports.lock`, and  `config.toml` are then parsed. If any of the
 three are not well-formed, an error is thrown.

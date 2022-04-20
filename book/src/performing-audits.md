@@ -7,7 +7,7 @@ to spend that attention as efficiently as possibly.
 
 When you run `cargo update`, you generally pull in new crates or new versions of
 existing crates, which may cause `cargo vet` to fail. In this situation,
-`cargo vet` identifies the relevant crates and recommends how to audit them:
+`cargo vet` identifies the relevant crates and recommends how to audit them[^1]:
 
 ```
 $ cargo update
@@ -109,7 +109,7 @@ consequently, your attack surface.
 More precisely, `cargo vet suggest` computes the number of lines that would
 need to be reviewed for each not-yet-audited dependency, and displays them
 in order. This is the same information you'd get if you emptied out `unaudited`
-and re-ran `cargo vet`:
+and re-ran `cargo vet`[^1]:
 ```
 $ cargo vet suggest
   3 audits to perform:
@@ -121,3 +121,8 @@ $ cargo vet suggest
 From there, you can use the `inspect`, `diff`, and `certify` subcommands to tackle
 items on the list.
 
+[^1]: The textual representation of audit recommendations is still being refined. At
+minimum, we'd like to surface the necessary criteria for the missing audits,
+and display the dependencies in tree form (to give a clearer sense of how a
+dependency is used). We are experimenting with different display formats in the
+prototype.
