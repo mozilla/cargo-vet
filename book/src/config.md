@@ -28,9 +28,16 @@ projects.
 This table defines different sets of custom criteria. Entries have several
 potential fields:
 
-### `description`
+#### `description`
 
-A concise description of the criteria. This field is required.
+A concise description of the criteria. This field (or `description-url`) is
+required.
+
+#### `description-url`
+
+An alternative to `description` which locates the criteria text at a
+publicly-accessible URL. This can be useful for sharing criteria descriptions
+across multiple repositories.
 
 #### `implies`
 
