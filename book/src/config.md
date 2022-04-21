@@ -167,6 +167,10 @@ required audits. It has a similar structure to the `audits` table in
 
 Specifies the exact version which should be exempted.
 
+#### `criteria`
+
+Specifies the criteria covered by the exemption.
+
 #### `notes`
 
 Free-form string for recording rationale or other relevant information.
