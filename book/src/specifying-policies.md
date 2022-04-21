@@ -3,8 +3,7 @@
 By default, `cargo vet` checks all transitive dependencies of all top-level
 crates against the following criteria on all-platforms:
 * For regular dependencies: `safe-to-deploy`
-* For dev-dependencies: `safe-to-run`
-* For build-dependencies: `safe-to-build`
+* For dev-dependencies and build-dependencies: `safe-to-run`
 
 In some situations, you may be able to reduce your workload by encoding your
 requirements more precisely, such as:

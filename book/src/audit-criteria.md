@@ -4,9 +4,8 @@ Before you can go about auditing code, you need to decide what you want the
 audits to entail. This is expressed with "audit criteria", which are just labels
 corresponding to human-readable descriptions of what to check for.
 
-`cargo vet` comes pre-equipped with a handful of built-in criteria:
-[safe-to-build](built-in-criteria.md#safe-to-build),
-[safe-to-run](built-in-criteria.md#safe-to-run), and
+`cargo vet` comes pre-equipped with two built-in criteria:
+[safe-to-run](built-in-criteria.md#safe-to-run) and
 [safe-to-deploy](built-in-criteria.md#safe-to-deploy). You can use these without
 any additional configuration.
 

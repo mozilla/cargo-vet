@@ -49,13 +49,8 @@ For example, specifying the [built-in criteria](built-in-criteria.md) as custom
 criteria would look like this:
 
 ```
-[criteria.safe-to-build]
-description = '...'
-implies = 'safe-to-run'
-
 [criteria.safe-to-run]
 description = '...'
-implies = 'safe-to-build'
 
 [criteria.safe-to-deploy]
 description = '...'
@@ -137,7 +132,7 @@ For top-level crates, defaults to `safe-to-run`.
 
 Same as the above, but applied to build-dependencies.
 
-For top-level crates, defaults to `safe-to-build`.
+For top-level crates, defaults to `safe-to-run`.
 
 #### `dependency-criteria`
 

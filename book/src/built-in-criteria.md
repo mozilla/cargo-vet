@@ -1,29 +1,19 @@
 # Built-In Criteria
 
-While you can define whatever criteria you like, `cargo vet` includes a handful
-of commonly-used audit criteria out of the box. These criteria are automatically
+While you can define whatever criteria you like, `cargo vet` includes two
+commonly-used audit criteria out of the box. These criteria are automatically
 mapped across projects.
-
-## safe-to-build
-
-```
-This crate either has no build script, or running its build script will not
-result in surprising consequences, such as:
-{{#include fragment_surprising_consequences.md}}
-```
-
-As a convenience, `cargo vet` will automatically apply this label to any crate
-without a custom build script.
 
 ## safe-to-run
 
 ```
 This crate can be compiled, run, and tested on a local workstation or in
 controlled automation without surprising consequences, such as:
-{{#include fragment_surprising_consequences.md}}
+* Reading or writing data from sensitive or unrelated parts of the filesystem.
+* Installing software or reconfiguring the device.
+* Connecting to untrusted network endpoints.
+* Misuse of system resources (e.g. crytocurrency mining).
 ```
-
-This implies `safe-to-build`.
 
 ## safe-to-deploy
 

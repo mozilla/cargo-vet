@@ -58,7 +58,7 @@ criteria = "safe-to-deploy"
 [[audits.malicious_crate]]
 violation = "*"
 who = "Bob Bar <bobbar@example.com>""
-criteria = "safe-to-build"
+criteria = "safe-to-run"
 
 [[audits.partially_vulnerable_crate]]
 violation = ">=2.0, <2.3"
