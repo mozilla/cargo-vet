@@ -671,6 +671,14 @@ fn main() -> Result<(), VetError> {
     // Run the actual command
     //////////////////////////////////////////////////////
 
+    // These commands don't need an instance and can be run anywhere
+    let command_is_freestanding = matches!(
+        cli.command,
+        Some(Commands::HelpMarkdown { .. })
+            | Some(Commands::Inspect { .. })
+            | Some(Commands::Diff { .. })
+    );
+
     let init = is_init(&metacfg);
     if matches!(cli.command, Some(Commands::Init { .. })) {
         if init {
@@ -680,7 +688,7 @@ fn main() -> Result<(), VetError> {
             );
             std::process::exit(-1);
         }
-    } else if !init && !matches!(cli.command, Some(Commands::HelpMarkdown { .. })) {
+    } else if !init && !command_is_freestanding {
         error!(
             "You must run 'cargo vet init' (store not found at {:#?})",
             metacfg.store_path()
