@@ -298,15 +298,52 @@ impl MockMetadata {
                 build_and_dev_targets: None,
             },
         };
+
+        // Criteria hierarchy:
+        //
+        // * strong-reviewed
+        //   * reviewed (default)
+        //      * weak-reviewed
+        // * fuzzed
+        //
+        // This lets use mess around with "strong reqs", "weaker reqs", and "unrelated reqs"
+        // with "reviewed" as the implicit default everything cares about.
+
         let audits = AuditsFile {
-            criteria: StableMap::from_iter(vec![(
-                "reviewed".to_string(),
-                CriteriaEntry {
-                    default: true,
-                    implies: vec![],
-                    description: String::new(),
-                },
-            )]),
+            criteria: StableMap::from_iter(vec![
+                (
+                    "strong-reviewed".to_string(),
+                    CriteriaEntry {
+                        default: false,
+                        implies: vec!["reviewed".to_string()],
+                        description: String::new(),
+                    },
+                ),
+                (
+                    "reviewed".to_string(),
+                    CriteriaEntry {
+                        default: true,
+                        implies: vec!["weak-reviewed".to_string()],
+                        description: String::new(),
+                    },
+                ),
+                (
+                    "weak-reviewed".to_string(),
+                    CriteriaEntry {
+                        default: false,
+                        implies: vec![],
+                        description: String::new(),
+                    },
+                ),
+                (
+                    "fuzzed".to_string(),
+                    CriteriaEntry {
+                        default: false,
+                        implies: vec![],
+                        description: String::new(),
+                    },
+                ),
+            ]),
             audits: StableMap::new(),
         };
         let imports = ImportsFile {
@@ -318,6 +355,8 @@ impl MockMetadata {
 
 #[test]
 fn mock_simple_init() {
+    // (Pass) Should look the same as a fresh 'vet init'.
+
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -333,6 +372,8 @@ fn mock_simple_init() {
 
 #[test]
 fn mock_simple_no_unaudited() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -348,6 +389,8 @@ fn mock_simple_no_unaudited() {
 
 #[test]
 fn mock_simple_full_audited() {
+    // (Pass) All entries have direct full audits.
+
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -363,6 +406,8 @@ fn mock_simple_full_audited() {
 
 #[test]
 fn mock_simple_forbidden_unaudited() {
+    // (Fail) All marked 'unaudited' but a 'violation' entry matches a current version.
+
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -381,4 +426,664 @@ fn mock_simple_forbidden_unaudited() {
     report.print_report(&mut stdout).unwrap();
     let stdout = String::from_utf8(stdout).unwrap();
     insta::assert_snapshot!("mock-simple-forbidden-unaudited", stdout);
+}
+
+#[test]
+fn mock_simple_missing_transitive() {
+    // (Fail) Missing an audit for a transitive dep
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    audits.audits["transitive-third-party1"].clear();
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-missing-transitive", stdout);
+}
+
+#[test]
+fn mock_simple_missing_direct_internal() {
+    // (Fail) Missing an audit for a direct dep that has children
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    audits.audits["third-party1"].clear();
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-missing-direct-internal", stdout);
+}
+
+#[test]
+fn mock_simple_missing_direct_leaf() {
+    // (Fail) Missing an entry for direct dep that has no children
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    audits.audits["third-party2"].clear();
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-missing-direct-leaf", stdout);
+}
+
+#[test]
+fn mock_simple_missing_leaves() {
+    // (Fail) Missing all leaf audits (but not the internal)
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    audits.audits["third-party2"].clear();
+    audits.audits["transitive-third-party1"].clear();
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-missing-leaves", stdout);
+}
+
+#[test]
+fn mock_simple_weaker_transitive_req() {
+    // (Pass) A third-party dep with weaker requirements on a child dep
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let trans_audits = &mut audits.audits["transitive-third-party1"];
+    trans_audits.clear();
+    trans_audits.push(AuditEntry {
+        criteria: Some(vec!["weak-reviewed".to_string()]),
+        ..AuditEntry::full_audit(ver(DEFAULT_VER))
+    });
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry {
+        dependency_criteria: Some(
+            [(
+                "transitive-third-party1".to_string(),
+                vec!["weak-reviewed".to_string()],
+            )]
+            .into_iter()
+            .collect(),
+        ),
+        ..AuditEntry::full_audit(ver(DEFAULT_VER))
+    });
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-weaker-transitive-req", stdout);
+}
+
+#[test]
+fn mock_simple_weaker_transitive_req_using_implies() {
+    // (Pass) A third-party dep with weaker requirements on a child dep
+    // but the child dep actually has *super* reqs, to check that implies works
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let trans_audits = &mut audits.audits["transitive-third-party1"];
+    trans_audits.clear();
+    trans_audits.push(AuditEntry {
+        criteria: Some(vec!["strong-reviewed".to_string()]),
+        ..AuditEntry::full_audit(ver(DEFAULT_VER))
+    });
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry {
+        dependency_criteria: Some(
+            [(
+                "transitive-third-party1".to_string(),
+                vec!["weak-reviewed".to_string()],
+            )]
+            .into_iter()
+            .collect(),
+        ),
+        ..AuditEntry::full_audit(ver(DEFAULT_VER))
+    });
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-weaker-transitive-req-using-implies", stdout);
+}
+
+#[test]
+fn mock_simple_lower_version_review() {
+    // (Fail) A dep that has a review but for a lower version.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 1)));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-lower-version-review", stdout);
+}
+
+#[test]
+fn mock_simple_higher_version_review() {
+    // (Fail) A dep that has a review but for a higher version.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER + 1)));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-higher-version-review", stdout);
+}
+
+#[test]
+fn mock_simple_higher_and_lower_version_review() {
+    // (Fail) A dep that has a review but for both a higher and lower version.
+    // Once I mock out fake diffs it should prefer the lower one because the
+    // system will make application size grow quadratically.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 1)));
+    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER + 1)));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-higher-and-lower-version-review", stdout);
+}
+
+#[test]
+fn mock_simple_reviewed_too_weakly() {
+    // (Fail) A dep has a review but the criteria is too weak
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let trans_audits = &mut audits.audits["transitive-third-party1"];
+    trans_audits.clear();
+    trans_audits.push(AuditEntry {
+        criteria: Some(vec!["weak-reviewed".to_string()]),
+        ..AuditEntry::full_audit(ver(DEFAULT_VER))
+    });
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-reviewed-too-weakly", stdout);
+}
+
+#[test]
+fn mock_simple_delta_to_unaudited() {
+    // (Pass) A dep has a delta to an unaudited entry
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER - 5),
+        ver(DEFAULT_VER),
+    ));
+
+    let direct_unaudited = &mut config.unaudited;
+    direct_unaudited.insert(
+        "third-party1".to_string(),
+        vec![UnauditedDependency {
+            version: ver(DEFAULT_VER - 5),
+            notes: None,
+            suggest: false,
+        }],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-delta-to-unaudited", stdout);
+}
+
+#[test]
+fn mock_simple_delta_to_unaudited_overshoot() {
+    // (Fail) A dep has a delta but it overshoots the unaudited entry.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER - 7),
+        ver(DEFAULT_VER),
+    ));
+
+    let direct_unaudited = &mut config.unaudited;
+    direct_unaudited.insert(
+        "third-party1".to_string(),
+        vec![UnauditedDependency {
+            version: ver(DEFAULT_VER - 5),
+            notes: None,
+            suggest: false,
+        }],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-delta-to-unaudited-overshoot", stdout);
+}
+
+#[test]
+fn mock_simple_delta_to_unaudited_undershoot() {
+    // (Fail) A dep has a delta but it undershoots the unaudited entry.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER - 3),
+        ver(DEFAULT_VER),
+    ));
+
+    let direct_unaudited = &mut config.unaudited;
+    direct_unaudited.insert(
+        "third-party1".to_string(),
+        vec![UnauditedDependency {
+            version: ver(DEFAULT_VER - 5),
+            notes: None,
+            suggest: false,
+        }],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-delta-to-unaudited-undershoot", stdout);
+}
+
+#[test]
+fn mock_simple_delta_to_full_audit() {
+    // (Pass) A dep has a delta to a fully audited entry
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER - 5),
+        ver(DEFAULT_VER),
+    ));
+    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 5)));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-delta-to-full-audit", stdout);
+}
+
+#[test]
+fn mock_simple_delta_to_full_audit_overshoot() {
+    // (Fail) A dep has a delta to a fully audited entry but overshoots
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER - 7),
+        ver(DEFAULT_VER),
+    ));
+    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 5)));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-delta-to-full-audit-overshoot", stdout);
+}
+
+#[test]
+fn mock_simple_delta_to_full_audit_undershoot() {
+    // (Fail) A dep has a delta to a fully audited entry but undershoots
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER - 3),
+        ver(DEFAULT_VER),
+    ));
+    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 5)));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-delta-to-full-audit-undershoot", stdout);
+}
+
+#[test]
+fn mock_simple_reverse_delta_to_full_audit() {
+    // (Pass) A dep has a *reverse* delta to a fully audited entry
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER + 5),
+        ver(DEFAULT_VER),
+    ));
+    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER + 5)));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-reverse-delta-to-full-audit", stdout);
+}
+
+#[test]
+fn mock_simple_reverse_delta_to_unaudited() {
+    // (Pass) A dep has a *reverse* delta to an unaudited entry
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER + 5),
+        ver(DEFAULT_VER),
+    ));
+
+    let direct_unaudited = &mut config.unaudited;
+    direct_unaudited.insert(
+        "third-party1".to_string(),
+        vec![UnauditedDependency {
+            version: ver(DEFAULT_VER + 5),
+            notes: None,
+            suggest: false,
+        }],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-reverse-delta-to-unaudited", stdout);
+}
+
+#[test]
+fn mock_simple_wrongly_reversed_delta_to_unaudited() {
+    // (Fail) A dep has a *reverse* delta to an unaudited entry but they needed a normal one
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER),
+        ver(DEFAULT_VER - 5),
+    ));
+
+    let direct_unaudited = &mut config.unaudited;
+    direct_unaudited.insert(
+        "third-party1".to_string(),
+        vec![UnauditedDependency {
+            version: ver(DEFAULT_VER - 5),
+            notes: None,
+            suggest: false,
+        }],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-wrongly-reversed-delta-to-unaudited", stdout);
+}
+
+#[test]
+fn mock_simple_wrongly_reversed_delta_to_full_audit() {
+    // (Fail) A dep has a *reverse* delta to a fully audited entry but they needed a normal one
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER),
+        ver(DEFAULT_VER - 5),
+    ));
+    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 5)));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-wrongly-reversed-delta-to-full-audit", stdout);
+}
+
+#[test]
+fn mock_simple_needed_reversed_delta_to_unaudited() {
+    // (Fail) A dep has a delta to an unaudited entry but they needed a reversed one
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER),
+        ver(DEFAULT_VER + 5),
+    ));
+
+    let direct_unaudited = &mut config.unaudited;
+    direct_unaudited.insert(
+        "third-party1".to_string(),
+        vec![UnauditedDependency {
+            version: ver(DEFAULT_VER + 5),
+            notes: None,
+            suggest: false,
+        }],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-needed-reversed-delta-to-unaudited", stdout);
+}
+
+#[test]
+fn mock_simple_delta_to_unaudited_too_weak() {
+    // (Fail) A dep has a delta to an unaudited entry but it's too weak
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry {
+        criteria: Some(vec!["weak-reviewed".to_string()]),
+        ..AuditEntry::delta_audit(ver(DEFAULT_VER - 5), ver(DEFAULT_VER))
+    });
+
+    let direct_unaudited = &mut config.unaudited;
+    direct_unaudited.insert(
+        "third-party1".to_string(),
+        vec![UnauditedDependency {
+            version: ver(DEFAULT_VER - 5),
+            notes: None,
+            suggest: false,
+        }],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-delta-to-unaudited-too-weak", stdout);
+}
+
+#[test]
+fn mock_simple_delta_to_full_audit_too_weak() {
+    // (Fail) A dep has a delta to a fully audited entry but it's too weak
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry {
+        criteria: Some(vec!["weak-reviewed".to_string()]),
+        ..AuditEntry::delta_audit(ver(DEFAULT_VER - 5), ver(DEFAULT_VER))
+    });
+    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 5)));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-delta-to-full-audit-too-weak", stdout);
+}
+
+#[test]
+fn mock_simple_delta_to_too_weak_full_audit() {
+    // (Fail) A dep has a delta to a fully audited entry but it's too weak
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = mock.files_full_audited();
+
+    let direct_audits = &mut audits.audits["third-party1"];
+    direct_audits.clear();
+    direct_audits.push(AuditEntry::delta_audit(
+        ver(DEFAULT_VER - 5),
+        ver(DEFAULT_VER),
+    ));
+    direct_audits.push(AuditEntry {
+        criteria: Some(vec!["weak-reviewed".to_string()]),
+        ..AuditEntry::full_audit(ver(DEFAULT_VER - 5))
+    });
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout).unwrap();
+    let stdout = String::from_utf8(stdout).unwrap();
+    insta::assert_snapshot!("mock-simple-delta-to-too-weak-full-audit", stdout);
 }

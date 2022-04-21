@@ -58,7 +58,7 @@ message = "test for simple absolute version with non-defaults"
 [[audits.clap]]
 version = "3.1.8"
 message = "test for custom criteria (low-grade and high-grade)"
-dependency_criteria = { "atty" = ["skimmed"], "bitflags" = ["audited", "fuzzed"] }
+dependency-criteria = { "atty" = ["skimmed"], "bitflags" = ["audited", "fuzzed"] }
 
 [[audits.atty]]
 version = "0.2.14"

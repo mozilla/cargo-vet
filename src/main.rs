@@ -280,6 +280,7 @@ pub struct PolicyTable {
     /// dependencies here.
     ///
     /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
+    #[serde(rename = "dependency-criteria")]
     dependency_criteria: Option<DependencyCriteria>,
 
     /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
@@ -301,6 +302,7 @@ pub struct RemoteImport {
     /// URL of the foreign audits.toml
     url: String,
     /// A list of criteria that are implied by foreign criteria
+    #[serde(rename = "criteria-map")]
     criteria_map: Vec<CriteriaMapping>,
 }
 
@@ -339,6 +341,7 @@ pub struct AuditEntry {
     who: Option<String>,
     notes: Option<String>,
     criteria: Option<Vec<String>>,
+    #[serde(rename = "dependency-criteria")]
     dependency_criteria: Option<DependencyCriteria>,
 }
 
@@ -668,6 +671,14 @@ fn main() -> Result<(), VetError> {
     // Run the actual command
     //////////////////////////////////////////////////////
 
+    // These commands don't need an instance and can be run anywhere
+    let command_is_freestanding = matches!(
+        cli.command,
+        Some(Commands::HelpMarkdown { .. })
+            | Some(Commands::Inspect { .. })
+            | Some(Commands::Diff { .. })
+    );
+
     let init = is_init(&metacfg);
     if matches!(cli.command, Some(Commands::Init { .. })) {
         if init {
@@ -677,7 +688,7 @@ fn main() -> Result<(), VetError> {
             );
             std::process::exit(-1);
         }
-    } else if !init && !matches!(cli.command, Some(Commands::HelpMarkdown { .. })) {
+    } else if !init && !command_is_freestanding {
         error!(
             "You must run 'cargo vet init' (store not found at {:#?})",
             metacfg.store_path()

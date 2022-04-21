@@ -533,7 +533,7 @@ pub fn resolve<'a>(
                         );
                         error!("  audit: {:#?}", entry);
                         error!("  violation: {:#?}", violation_entry);
-                        std::process::exit(-1);
+                        panic!("Integrity Failure! TODO: factor this out better");
                     }
                 }
                 if let Some(delta) = &entry.delta {
@@ -544,7 +544,7 @@ pub fn resolve<'a>(
                         );
                         error!("  audit: {:#?}", entry);
                         error!("  violation: {:#?}", violation_entry);
-                        std::process::exit(-1);
+                        panic!("Integrity Failure! TODO: factor this out better");
                     }
                 }
             }
@@ -659,6 +659,33 @@ pub fn resolve<'a>(
         if !found_any_path {
             // If we didn't actually find any paths and we're directly unaudited,
             // make sure our deps make sense (has default criteria)
+            //
+            // A bit of a curious semantic corner case: if there was no way to even
+            // plausibly audit you, does it make sense to care about if your dependencies
+            // are messed up too?
+            //
+            // Consider the case where both "X" and "dep_of_X" are completely new and
+            // unaudited (or just both updated so we have a broken chain on both). They are
+            // both clearly wrong and need to be fixed, but since the *requirements* on
+            // dep_of_X are *unclear* without a proper audit chain on X to define its
+            // criteria, it's unclear what criteria dep_of_X should be tested against.
+            //
+            // In the case of "no audits for both" then we can defer to "failed", but in
+            // a more subtle case where just X is broken, it's genuinely ambiguous what
+            // the requirements on dep_of_X should be.
+            //
+            // In these ambiguous cases, you are doomed to either under-report problems
+            // (so that fixing X may surface dep_of_X as a new problem) or over-report
+            // problems (so dep_of_X might be fine, but we freak out about it because X
+            // is broken and don't know what to check it against).
+            //
+            // The following implementation errs on the side of under-reporting -- if
+            // X has no path *and* isn't directly_unaudited, then it's children will
+            // implicitly be assumed to be fine until we get more information. Fixing
+            // X may suddenly introduce "more work to do", making it potentially difficult
+            // estimate just how broken your current audit tree is.
+            //
+            // See "mock-simple-no-unaudited" for how we currently react to this situation.
             if directly_unaudited {
                 let mut deps_satisfied = true;
                 for dependency in &resolve.dependencies {
