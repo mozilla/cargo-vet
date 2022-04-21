@@ -280,6 +280,7 @@ pub struct PolicyTable {
     /// dependencies here.
     ///
     /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
+    #[serde(rename = "dependency-criteria")]
     dependency_criteria: Option<DependencyCriteria>,
 
     /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
@@ -301,6 +302,7 @@ pub struct RemoteImport {
     /// URL of the foreign audits.toml
     url: String,
     /// A list of criteria that are implied by foreign criteria
+    #[serde(rename = "criteria-map")]
     criteria_map: Vec<CriteriaMapping>,
 }
 
@@ -339,6 +341,7 @@ pub struct AuditEntry {
     who: Option<String>,
     notes: Option<String>,
     criteria: Option<Vec<String>>,
+    #[serde(rename = "dependency-criteria")]
     dependency_criteria: Option<DependencyCriteria>,
 }
 
