@@ -533,7 +533,7 @@ pub fn resolve<'a>(
                         );
                         error!("  audit: {:#?}", entry);
                         error!("  violation: {:#?}", violation_entry);
-                        std::process::exit(-1);
+                        panic!("Integrity Failure! TODO: factor this out better");
                     }
                 }
                 if let Some(delta) = &entry.delta {
@@ -544,7 +544,7 @@ pub fn resolve<'a>(
                         );
                         error!("  audit: {:#?}", entry);
                         error!("  violation: {:#?}", violation_entry);
-                        std::process::exit(-1);
+                        panic!("Integrity Failure! TODO: factor this out better");
                     }
                 }
             }
