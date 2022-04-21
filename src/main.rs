@@ -468,16 +468,18 @@ static AUDITS_TOML: &str = "audits.toml";
 static CONFIG_TOML: &str = "config.toml";
 static IMPORTS_LOCK: &str = "imports.lock";
 
-// store = { path = './supply-chain' }
-// audits = [
-//  "https://raw.githubusercontent.com/rust-lang/cargo-trust-store/audited.toml",
-//  "https://hg.example.org/example/raw-file/tip/audited.toml"
-// ]
+pub trait PackageExt {
+    fn is_third_party(&self) -> bool;
+}
 
-// supply-chain
-// - audited.toml
-// - trusted.toml
-// - unaudited.toml
+impl PackageExt for Package {
+    fn is_third_party(&self) -> bool {
+        self.source
+            .as_ref()
+            .map(|s| s.is_crates_io())
+            .unwrap_or(false)
+    }
+}
 
 fn main() -> Result<(), VetError> {
     let fake_cli = FakeCli::parse();
@@ -1212,13 +1214,10 @@ fn is_init(metacfg: &MetaConfig) -> bool {
 
 fn foreign_packages(metadata: &Metadata) -> impl Iterator<Item = &Package> {
     // Only analyze things from crates.io (no source = path-dep / workspace-member)
-    metadata.packages.iter().filter(|package| {
-        package
-            .source
-            .as_ref()
-            .map(|s| s.is_crates_io())
-            .unwrap_or(false)
-    })
+    metadata
+        .packages
+        .iter()
+        .filter(|package| package.is_third_party())
 }
 
 fn load_toml<T>(path: &Path) -> Result<T, VetError>

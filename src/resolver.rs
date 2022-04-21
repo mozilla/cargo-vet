@@ -5,8 +5,8 @@ use cargo_metadata::{Metadata, Package, PackageId, Version};
 use log::{error, trace, warn};
 
 use crate::{
-    AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, StableMap,
-    VetError,
+    AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, PackageExt,
+    StableMap, VetError,
 };
 
 pub struct Report<'a> {
@@ -55,7 +55,7 @@ pub struct ResolveResult<'a> {
 
     /// Whether we ever found a complete path in the vet graph (even if empty).
     /// This is used to hint that maybe some restrictions were too tight.
-    found_any_path: bool,
+    _found_any_path: bool,
     /// Whether the current version is actually directly listed in 'unaudited'.
     /// When checking the dependency requirements on an audit, this implies
     /// all_criteria, and therefore that the edge is always satisfied.
@@ -224,7 +224,7 @@ impl ResolveResult<'_> {
     fn with_no_criteria(empty: CriteriaSet) -> Self {
         Self {
             validated_criteria: empty,
-            found_any_path: false,
+            _found_any_path: false,
             directly_unaudited: false,
             used_directly_unaudited: false,
             fully_audited: false,
@@ -398,13 +398,7 @@ pub fn resolve<'a>(
         let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
 
         // Implicitly trust non-third-parties
-        let is_third_party = package
-            .source
-            .as_ref()
-            .map(|s| s.is_crates_io())
-            .unwrap_or(false);
-
-        if !is_third_party {
+        if !package.is_third_party() {
             // These get processed in the policy section
             // FIXME: I like breaking this into two loops but it might be problematic
             // if someone has their own fork of a crate that crates.io deps use...?
@@ -578,6 +572,7 @@ pub fn resolve<'a>(
         let mut validated_criteria = no_criteria.clone();
         let mut found_any_path = false;
         let mut fully_audited = false;
+        let mut failed_deps = BTreeSet::new();
 
         while let Some((cur_version, cur_criteria)) = working_queue.pop() {
             // Check if we've succeeded
@@ -638,8 +633,7 @@ pub fn resolve<'a>(
                             // this dependency for own future failings. If we end up resolving some
                             // other way, then we won't mention this horrendous treachery.
                             if !cur_criteria.is_empty() {
-                                let own_result = &mut results[resolve_idx];
-                                own_result.failed_deps.insert(dependency);
+                                failed_deps.insert(dependency);
                             }
                         }
                     }
@@ -694,9 +688,8 @@ pub fn resolve<'a>(
 
                     let dep_req = criteria_mapper.default_criteria();
                     if !dep_vet_result.contains(dep_req) {
-                        let own_result = &mut results[resolve_idx];
                         deps_satisfied = false;
-                        own_result.failed_deps.insert(dependency);
+                        failed_deps.insert(dependency);
                     }
                 }
 
@@ -711,13 +704,15 @@ pub fn resolve<'a>(
         }
 
         // We've completed our graph analysis for this package, now record the results
-        let result = &mut results[resolve_idx];
-        result.validated_criteria = validated_criteria;
-        result.found_any_path = found_any_path;
-        result.fully_audited = fully_audited;
-        result.failed = failed;
-        result.used_directly_unaudited = used_directly_unaudited;
-        result.directly_unaudited = directly_unaudited;
+        results[resolve_idx] = ResolveResult {
+            validated_criteria,
+            _found_any_path: found_any_path,
+            directly_unaudited,
+            used_directly_unaudited,
+            fully_audited,
+            failed,
+            failed_deps,
+        };
     }
 
     // All third-party crates have been processed, now process policies and first-party crates.
@@ -727,13 +722,7 @@ pub fn resolve<'a>(
         let resolve = &graph.resolve_list[resolve_idx];
         let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
 
-        let is_third_party = package
-            .source
-            .as_ref()
-            .map(|s| s.is_crates_io())
-            .unwrap_or(false);
-
-        if is_third_party {
+        if package.is_third_party() {
             // These have already been processed
             continue;
         }
