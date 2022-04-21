@@ -122,15 +122,9 @@ this crate and its dependency tree.
 
 For top-level crates, defaults to `safe-to-deploy`.
 
-#### `dev-criteria`
+#### `dev-and-build-criteria`
 
-Same as the above, but applied to dev-dependencies.
-
-For top-level crates, defaults to `safe-to-run`.
-
-#### `build-criteria`
-
-Same as the above, but applied to build-dependencies.
+Same as the above, but applied to dev-dependencies and build-dependencies.
 
 For top-level crates, defaults to `safe-to-run`.
 
