@@ -4,11 +4,14 @@ use cargo_metadata::{Metadata, Version, VersionReq};
 use serde_json::{json, Value};
 
 use crate::{
-    AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, ImportsFile, StableMap, UnauditedDependency,
+    format::{AuditKind, Delta, DependencyCriteria},
+    init_files, AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
+    StableMap, UnauditedDependency,
 };
 
 // Some room above and below
 const DEFAULT_VER: u64 = 10;
+const DEFAULT_CRIT: &str = "reviewed";
 
 struct MockMetadata {
     packages: Vec<MockPackage>,
@@ -247,131 +250,187 @@ impl MockMetadata {
         });
         serde_json::from_value(meta_json).unwrap()
     }
+}
 
-    fn files_full_audited(&self) -> (ConfigFile, AuditsFile, ImportsFile) {
-        let (config, mut audits, imports) = self.files_no_unaudited();
+fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
+    let (mut config, mut audits, imports) = init_files(metadata).unwrap();
 
-        let mut audited = StableMap::<String, Vec<AuditEntry>>::new();
-        for package in &self.packages {
-            if !package.is_first_party {
-                audited
-                    .entry(package.name.to_string())
-                    .or_insert(vec![])
-                    .push(AuditEntry::full_audit(package.version.clone()));
-            }
-        }
-        audits.audits = audited;
+    // Criteria hierarchy:
+    //
+    // * strong-reviewed
+    //   * reviewed (default)
+    //      * weak-reviewed
+    // * fuzzed
+    //
+    // This lets use mess around with "strong reqs", "weaker reqs", and "unrelated reqs"
+    // with "reviewed" as the implicit default everything cares about.
 
-        (config, audits, imports)
-    }
-
-    fn files_inited(&self) -> (ConfigFile, AuditsFile, ImportsFile) {
-        let (mut config, audits, imports) = self.files_no_unaudited();
-
-        let mut unaudited = StableMap::<String, Vec<UnauditedDependency>>::new();
-        for package in &self.packages {
-            if !package.is_first_party {
-                unaudited
-                    .entry(package.name.to_string())
-                    .or_insert(vec![])
-                    .push(UnauditedDependency {
-                        version: package.version.clone(),
-                        notes: None,
-                        suggest: true,
-                        criteria: None,
-                    });
-            }
-        }
-        config.unaudited = unaudited;
-
-        (config, audits, imports)
-    }
-
-    fn files_no_unaudited(&self) -> (ConfigFile, AuditsFile, ImportsFile) {
-        let config = ConfigFile {
-            imports: StableMap::new(),
-            unaudited: StableMap::new(),
-            policy: crate::PolicyTable {
-                criteria: None,
-                dependency_criteria: None,
-                build_and_dev_criteria: None,
-                targets: None,
-                build_and_dev_targets: None,
+    audits.criteria = StableMap::from_iter(vec![
+        (
+            "strong-reviewed".to_string(),
+            CriteriaEntry {
+                implies: vec!["reviewed".to_string()],
+                description: Some("strongly reviewed".to_string()),
+                description_url: None,
             },
-        };
+        ),
+        (
+            "reviewed".to_string(),
+            CriteriaEntry {
+                implies: vec!["weak-reviewed".to_string()],
+                description: Some("reviewed".to_string()),
+                description_url: None,
+            },
+        ),
+        (
+            "weak-reviewed".to_string(),
+            CriteriaEntry {
+                implies: vec![],
+                description: Some("weakly reviewed".to_string()),
+                description_url: None,
+            },
+        ),
+        (
+            "fuzzed".to_string(),
+            CriteriaEntry {
+                implies: vec![],
+                description: Some("fuzzed".to_string()),
+                description_url: None,
+            },
+        ),
+    ]);
 
-        // Criteria hierarchy:
-        //
-        // * strong-reviewed
-        //   * reviewed (default)
-        //      * weak-reviewed
-        // * fuzzed
-        //
-        // This lets use mess around with "strong reqs", "weaker reqs", and "unrelated reqs"
-        // with "reviewed" as the implicit default everything cares about.
+    config.default_criteria = DEFAULT_CRIT.to_string();
+    config.policy.criteria = vec![DEFAULT_CRIT.to_string()];
+    config.policy.build_and_dev_criteria = vec![DEFAULT_CRIT.to_string()];
 
-        let audits = AuditsFile {
-            criteria: StableMap::from_iter(vec![
-                (
-                    "strong-reviewed".to_string(),
-                    CriteriaEntry {
-                        default: false,
-                        implies: vec!["reviewed".to_string()],
-                        description: String::new(),
-                    },
-                ),
-                (
-                    "reviewed".to_string(),
-                    CriteriaEntry {
-                        default: true,
-                        implies: vec!["weak-reviewed".to_string()],
-                        description: String::new(),
-                    },
-                ),
-                (
-                    "weak-reviewed".to_string(),
-                    CriteriaEntry {
-                        default: false,
-                        implies: vec![],
-                        description: String::new(),
-                    },
-                ),
-                (
-                    "fuzzed".to_string(),
-                    CriteriaEntry {
-                        default: false,
-                        implies: vec![],
-                        description: String::new(),
-                    },
-                ),
-            ]),
-            audits: StableMap::new(),
-        };
-        let imports = ImportsFile {
-            audits: StableMap::new(),
-        };
-        (config, audits, imports)
+    // Rewrite the default used by init
+    for unaudited in &mut config.unaudited {
+        assert_eq!(unaudited.1.len(), 1);
+        let entry = unaudited.1.last_mut().unwrap();
+        assert_eq!(&*entry.criteria, "safe-to-deploy");
+        entry.criteria = DEFAULT_CRIT.to_string();
+    }
+
+    (config, audits, imports)
+}
+
+fn files_no_unaudited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
+    let (mut config, audits, imports) = files_inited(metadata);
+
+    // Just clear all the unaudited entries out
+    config.unaudited.clear();
+
+    (config, audits, imports)
+}
+
+fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
+    let (config, mut audits, imports) = files_no_unaudited(metadata);
+
+    let mut audited = StableMap::<String, Vec<AuditEntry>>::new();
+    for package in &metadata.packages {
+        if package.is_third_party() {
+            audited
+                .entry(package.name.clone())
+                .or_insert(vec![])
+                .push(full_audit(package.version.clone(), DEFAULT_CRIT));
+        }
+    }
+    audits.audits = audited;
+
+    (config, audits, imports)
+}
+
+#[allow(dead_code)]
+fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependency {
+    UnauditedDependency {
+        version,
+        criteria: config.default_criteria.clone(),
+        notes: None,
+        suggest: true,
+    }
+}
+fn unaudited(version: Version, criteria: &str) -> UnauditedDependency {
+    UnauditedDependency {
+        version,
+        criteria: criteria.to_string(),
+        notes: None,
+        suggest: true,
     }
 }
 
-fn unaudited(audits: &AuditsFile, version: Version) -> UnauditedDependency {
-    let defaults = audits
-        .criteria
-        .iter()
-        .filter_map(|(criteria, entry)| {
-            if entry.default {
-                Some(criteria.clone())
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    UnauditedDependency {
-        version,
-        criteria: Some(defaults),
+fn delta_audit(from: Version, to: Version, criteria: &str) -> AuditEntry {
+    let delta = Delta { from, to };
+    AuditEntry {
+        who: None,
         notes: None,
-        suggest: true,
+        criteria: criteria.to_string(),
+        kind: AuditKind::Delta {
+            delta,
+            dependency_criteria: DependencyCriteria::default(),
+        },
+    }
+}
+
+#[allow(dead_code)]
+fn delta_audit_dep(
+    from: Version,
+    to: Version,
+    criteria: &str,
+    dependency_criteria: DependencyCriteria,
+) -> AuditEntry {
+    let delta = Delta { from, to };
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.to_string(),
+        kind: AuditKind::Delta {
+            delta,
+            dependency_criteria,
+        },
+    }
+}
+fn full_audit(version: Version, criteria: &str) -> AuditEntry {
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.to_string(),
+        kind: AuditKind::Full {
+            version,
+            dependency_criteria: DependencyCriteria::default(),
+        },
+    }
+}
+fn full_audit_dep(
+    version: Version,
+    criteria: &str,
+    dependency_criteria: DependencyCriteria,
+) -> AuditEntry {
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.to_string(),
+        kind: AuditKind::Full {
+            version,
+            dependency_criteria,
+        },
+    }
+}
+fn violation_hard(version: VersionReq) -> AuditEntry {
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: "weak-reviewed".to_string(),
+        kind: AuditKind::Violation { violation: version },
+    }
+}
+#[allow(dead_code)]
+fn violation(version: VersionReq, criteria: &str) -> AuditEntry {
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.to_string(),
+        kind: AuditKind::Violation { violation: version },
     }
 }
 
@@ -382,7 +441,7 @@ fn mock_simple_init() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = mock.files_inited();
+    let (config, audits, imports) = files_inited(&metadata);
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -399,7 +458,7 @@ fn mock_simple_no_unaudited() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = mock.files_no_unaudited();
+    let (config, audits, imports) = files_no_unaudited(&metadata);
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -416,7 +475,7 @@ fn mock_simple_full_audited() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = mock.files_full_audited();
+    let (config, audits, imports) = files_full_audited(&metadata);
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -433,14 +492,14 @@ fn mock_simple_forbidden_unaudited() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_inited();
+    let (config, mut audits, imports) = files_inited(&metadata);
 
     let violation = VersionReq::parse(&format!("={DEFAULT_VER}")).unwrap();
     audits
         .audits
         .entry("third-party1".to_string())
         .or_insert(vec![])
-        .push(AuditEntry::violation(violation));
+        .push(violation_hard(violation));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -457,7 +516,7 @@ fn mock_simple_missing_transitive() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     audits.audits["transitive-third-party1"].clear();
 
@@ -476,7 +535,7 @@ fn mock_simple_missing_direct_internal() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     audits.audits["third-party1"].clear();
 
@@ -495,7 +554,7 @@ fn mock_simple_missing_direct_leaf() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     audits.audits["third-party2"].clear();
 
@@ -514,7 +573,7 @@ fn mock_simple_missing_leaves() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     audits.audits["third-party2"].clear();
     audits.audits["transitive-third-party1"].clear();
@@ -534,28 +593,24 @@ fn mock_simple_weaker_transitive_req() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let trans_audits = &mut audits.audits["transitive-third-party1"];
     trans_audits.clear();
-    trans_audits.push(AuditEntry {
-        criteria: Some(vec!["weak-reviewed".to_string()]),
-        ..AuditEntry::full_audit(ver(DEFAULT_VER))
-    });
+    trans_audits.push(full_audit(ver(DEFAULT_VER), "weak-reviewed"));
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry {
-        dependency_criteria: Some(
-            [(
-                "transitive-third-party1".to_string(),
-                vec!["weak-reviewed".to_string()],
-            )]
-            .into_iter()
-            .collect(),
-        ),
-        ..AuditEntry::full_audit(ver(DEFAULT_VER))
-    });
+    direct_audits.push(full_audit_dep(
+        ver(DEFAULT_VER),
+        "reviewed",
+        [(
+            "transitive-third-party1".to_string(),
+            vec!["weak-reviewed".to_string()],
+        )]
+        .into_iter()
+        .collect(),
+    ));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -573,28 +628,24 @@ fn mock_simple_weaker_transitive_req_using_implies() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let trans_audits = &mut audits.audits["transitive-third-party1"];
     trans_audits.clear();
-    trans_audits.push(AuditEntry {
-        criteria: Some(vec!["strong-reviewed".to_string()]),
-        ..AuditEntry::full_audit(ver(DEFAULT_VER))
-    });
+    trans_audits.push(full_audit(ver(DEFAULT_VER), "strong-reviewed"));
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry {
-        dependency_criteria: Some(
-            [(
-                "transitive-third-party1".to_string(),
-                vec!["weak-reviewed".to_string()],
-            )]
-            .into_iter()
-            .collect(),
-        ),
-        ..AuditEntry::full_audit(ver(DEFAULT_VER))
-    });
+    direct_audits.push(full_audit_dep(
+        ver(DEFAULT_VER),
+        "reviewed",
+        [(
+            "transitive-third-party1".to_string(),
+            vec!["weak-reviewed".to_string()],
+        )]
+        .into_iter()
+        .collect(),
+    ));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -611,11 +662,11 @@ fn mock_simple_lower_version_review() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 1)));
+    direct_audits.push(full_audit(ver(DEFAULT_VER - 1), DEFAULT_CRIT));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -632,11 +683,11 @@ fn mock_simple_higher_version_review() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER + 1)));
+    direct_audits.push(full_audit(ver(DEFAULT_VER + 1), DEFAULT_CRIT));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -655,12 +706,12 @@ fn mock_simple_higher_and_lower_version_review() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 1)));
-    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER + 1)));
+    direct_audits.push(full_audit(ver(DEFAULT_VER - 1), DEFAULT_CRIT));
+    direct_audits.push(full_audit(ver(DEFAULT_VER + 1), DEFAULT_CRIT));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -677,14 +728,11 @@ fn mock_simple_reviewed_too_weakly() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let trans_audits = &mut audits.audits["transitive-third-party1"];
     trans_audits.clear();
-    trans_audits.push(AuditEntry {
-        criteria: Some(vec!["weak-reviewed".to_string()]),
-        ..AuditEntry::full_audit(ver(DEFAULT_VER))
-    });
+    trans_audits.push(full_audit(ver(DEFAULT_VER), "weak-reviewed"));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -701,19 +749,20 @@ fn mock_simple_delta_to_unaudited() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = mock.files_full_audited();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 5),
         ver(DEFAULT_VER),
+        DEFAULT_CRIT,
     ));
 
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![unaudited(&audits, ver(DEFAULT_VER - 5))],
+        vec![unaudited(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -731,19 +780,20 @@ fn mock_simple_delta_to_unaudited_overshoot() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = mock.files_full_audited();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 7),
         ver(DEFAULT_VER),
+        DEFAULT_CRIT,
     ));
 
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![unaudited(&audits, ver(DEFAULT_VER - 5))],
+        vec![unaudited(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -761,19 +811,20 @@ fn mock_simple_delta_to_unaudited_undershoot() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = mock.files_full_audited();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 3),
         ver(DEFAULT_VER),
+        DEFAULT_CRIT,
     ));
 
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![unaudited(&audits, ver(DEFAULT_VER - 5))],
+        vec![unaudited(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -791,15 +842,16 @@ fn mock_simple_delta_to_full_audit() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 5),
         ver(DEFAULT_VER),
+        DEFAULT_CRIT,
     ));
-    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 5)));
+    direct_audits.push(full_audit(ver(DEFAULT_VER - 5), DEFAULT_CRIT));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -816,15 +868,16 @@ fn mock_simple_delta_to_full_audit_overshoot() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 7),
         ver(DEFAULT_VER),
+        DEFAULT_CRIT,
     ));
-    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 5)));
+    direct_audits.push(full_audit(ver(DEFAULT_VER - 5), DEFAULT_CRIT));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -841,15 +894,16 @@ fn mock_simple_delta_to_full_audit_undershoot() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 3),
         ver(DEFAULT_VER),
+        DEFAULT_CRIT,
     ));
-    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 5)));
+    direct_audits.push(full_audit(ver(DEFAULT_VER - 5), DEFAULT_CRIT));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -866,15 +920,16 @@ fn mock_simple_reverse_delta_to_full_audit() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER + 5),
         ver(DEFAULT_VER),
+        DEFAULT_CRIT,
     ));
-    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER + 5)));
+    direct_audits.push(full_audit(ver(DEFAULT_VER + 5), DEFAULT_CRIT));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -891,19 +946,20 @@ fn mock_simple_reverse_delta_to_unaudited() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = mock.files_full_audited();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER + 5),
         ver(DEFAULT_VER),
+        DEFAULT_CRIT,
     ));
 
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![unaudited(&audits, ver(DEFAULT_VER + 5))],
+        vec![unaudited(ver(DEFAULT_VER + 5), DEFAULT_CRIT)],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -921,19 +977,20 @@ fn mock_simple_wrongly_reversed_delta_to_unaudited() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = mock.files_full_audited();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER),
         ver(DEFAULT_VER - 5),
+        DEFAULT_CRIT,
     ));
 
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![unaudited(&audits, ver(DEFAULT_VER - 5))],
+        vec![unaudited(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -951,15 +1008,16 @@ fn mock_simple_wrongly_reversed_delta_to_full_audit() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER),
         ver(DEFAULT_VER - 5),
+        DEFAULT_CRIT,
     ));
-    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 5)));
+    direct_audits.push(full_audit(ver(DEFAULT_VER - 5), DEFAULT_CRIT));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -976,19 +1034,20 @@ fn mock_simple_needed_reversed_delta_to_unaudited() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = mock.files_full_audited();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER),
         ver(DEFAULT_VER + 5),
+        DEFAULT_CRIT,
     ));
 
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![unaudited(&audits, ver(DEFAULT_VER + 5))],
+        vec![unaudited(ver(DEFAULT_VER + 5), DEFAULT_CRIT)],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -1006,19 +1065,20 @@ fn mock_simple_delta_to_unaudited_too_weak() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = mock.files_full_audited();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry {
-        criteria: Some(vec!["weak-reviewed".to_string()]),
-        ..AuditEntry::delta_audit(ver(DEFAULT_VER - 5), ver(DEFAULT_VER))
-    });
+    direct_audits.push(delta_audit(
+        ver(DEFAULT_VER - 5),
+        ver(DEFAULT_VER),
+        "weak-reviewed",
+    ));
 
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![unaudited(&audits, ver(DEFAULT_VER - 5))],
+        vec![unaudited(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -1036,15 +1096,16 @@ fn mock_simple_delta_to_full_audit_too_weak() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry {
-        criteria: Some(vec!["weak-reviewed".to_string()]),
-        ..AuditEntry::delta_audit(ver(DEFAULT_VER - 5), ver(DEFAULT_VER))
-    });
-    direct_audits.push(AuditEntry::full_audit(ver(DEFAULT_VER - 5)));
+    direct_audits.push(delta_audit(
+        ver(DEFAULT_VER - 5),
+        ver(DEFAULT_VER),
+        "weak-reviewed",
+    ));
+    direct_audits.push(full_audit(ver(DEFAULT_VER - 5), DEFAULT_CRIT));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
@@ -1061,18 +1122,16 @@ fn mock_simple_delta_to_too_weak_full_audit() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = mock.files_full_audited();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
-    direct_audits.push(AuditEntry::delta_audit(
+    direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 5),
         ver(DEFAULT_VER),
+        DEFAULT_CRIT,
     ));
-    direct_audits.push(AuditEntry {
-        criteria: Some(vec!["weak-reviewed".to_string()]),
-        ..AuditEntry::full_audit(ver(DEFAULT_VER - 5))
-    });
+    direct_audits.push(full_audit(ver(DEFAULT_VER - 5), "weak-reviewed"));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 

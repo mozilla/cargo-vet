@@ -9,7 +9,7 @@ use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package, Version};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
-use format::{AuditEntry, Delta, MetaConfig};
+use format::{AuditEntry, AuditKind, Delta, MetaConfig};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
 use serde::{de::Deserialize, ser::Serialize};
@@ -18,8 +18,8 @@ use simplelog::{
 };
 
 use crate::format::{
-    AuditsFile, ConfigFile, CriteriaEntry, ImportsFile, MetaConfigInstance, PolicyTable, StableMap,
-    Store, UnauditedDependency,
+    AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
+    PolicyTable, StableMap, Store, UnauditedDependency,
 };
 
 pub mod format;
@@ -444,78 +444,72 @@ fn main() -> Result<(), VetError> {
 
 fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<(), VetError> {
     // Initialize vet
-    trace!("initializing...");
-
-    let store_path = cfg.metacfg.store_path();
 
     // Create store_path
     // - audits.toml (empty, sample criteria)
     // - imports.lock (empty)
     // - config.toml (populated with defaults and full list of third-party crates)
+    trace!("initializing...");
+
+    let store_path = cfg.metacfg.store_path();
+
+    let (config, audits, imports) = init_files(&cfg.metadata)?;
 
     // In theory we don't need `all` here, but this allows them to specify
     // the store as some arbitrarily nested subdir for whatever reason
     // (maybe multiple parallel instances?)
     std::fs::create_dir_all(store_path)?;
+    store_audits(store_path, audits)?;
+    store_imports(store_path, imports)?;
+    store_config(store_path, config)?;
 
-    {
-        trace!("initializing {:#?}", AUDITS_TOML);
+    Ok(())
+}
 
-        let sample_criteria = CriteriaEntry {
-            description: "you looked at it and it seems fine".to_string(),
-            default: true,
-            implies: vec![],
-        };
+pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, ImportsFile), VetError> {
+    // Default audits file is empty
+    let audits = AuditsFile {
+        criteria: StableMap::new(),
+        audits: StableMap::new(),
+    };
 
-        let audits = AuditsFile {
-            criteria: [("reviewed".to_string(), sample_criteria)]
-                .into_iter()
-                .collect(),
-            audits: StableMap::new(),
-        };
-        store_audits(store_path, audits)?;
-    }
+    // Default imports file is empty
+    let imports = ImportsFile {
+        audits: StableMap::new(),
+    };
 
-    {
-        trace!("initializing {:#?}", IMPORTS_LOCK);
-        let imports = ImportsFile {
-            audits: StableMap::new(),
-        };
-        store_imports(store_path, imports)?;
-    }
-
-    {
-        trace!("initializing {:#?}", CONFIG_TOML);
-
+    // This is the hard one
+    let config = {
         let mut dependencies = StableMap::new();
-        for package in foreign_packages(&cfg.metadata) {
+        for package in foreign_packages(metadata) {
             // NOTE: May have multiple copies of a package!
             let item = UnauditedDependency {
                 version: package.version.clone(),
                 notes: Some("automatically imported by 'cargo vet init'".to_string()),
                 suggest: true,
-                criteria: None,
+                // TODO: use whether this is a build_and_dev to make this weaker
+                criteria: format::DEFAULT_CRITERIA.to_string(),
             };
             dependencies
                 .entry(package.name.clone())
                 .or_insert(vec![])
                 .push(item);
         }
-        let config = ConfigFile {
+        ConfigFile {
+            default_criteria: format::get_default_criteria(),
             imports: StableMap::new(),
             unaudited: dependencies,
             policy: PolicyTable {
-                dependency_criteria: None,
-                criteria: None,
-                build_and_dev_criteria: None,
+                criteria: format::get_default_policy_criteria(),
+                build_and_dev_criteria: format::get_default_policy_build_and_dev_criteria(),
+                dependency_criteria: StableMap::new(),
                 targets: None,
                 build_and_dev_targets: None,
             },
-        };
-        store_config(store_path, config)?;
-    }
+        }
+    };
 
-    Ok(())
+    Ok((config, audits, imports))
 }
 
 fn cmd_inspect(out: &mut dyn Write, cfg: &Config, sub_args: &InspectArgs) -> Result<(), VetError> {
@@ -551,6 +545,9 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
     // Certify that you have reviewed a crate's source for some version / delta
     let store_path = cfg.metacfg.store_path();
     let mut audits = load_audits(store_path)?;
+    let config = load_config(store_path)?;
+
+    let dependency_criteria = DependencyCriteria::new();
 
     // FIXME: better error when this goes bad
     let version1 = Version::parse(&sub_args.version1).expect("version1 wasn't a valid Version");
@@ -559,43 +556,34 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
         .as_ref()
         .map(|v| Version::parse(v).expect("version2 wasn't a valid Version"));
 
-    let mut version = None;
-    let mut delta = None;
-    if let Some(version2) = version2 {
+    let kind = if let Some(version2) = version2 {
         // This is a delta audit
-        delta = Some(Delta {
-            from: version1,
-            to: version2,
-        });
+        AuditKind::Delta {
+            delta: Delta {
+                from: version1,
+                to: version2,
+            },
+            dependency_criteria,
+        }
     } else {
-        // This is an absolute audit
-        version = Some(version1);
-    }
+        AuditKind::Full {
+            version: version1,
+            dependency_criteria,
+        }
+    };
 
-    // TODO: source this from git or something?
+    let criteria = config.default_criteria;
+
+    // TODO: source this from git
     let who = Some("?TODO?".to_string());
-    // TODO: start an interactive prompt? launch $EDITOR?
+    // TODO: start an interactive prompt
     let notes = Some("?TODO?".to_string());
-    // TODO: No criteria is the default criteria? Does that make sense?
-    // Shouldn't we actually snapshot the current default so the default can change
-    // without changing the claims on old audits? Or do we in fact *want* that so
-    // that audit criteria can be subdivided, and the defaults will pick that up..?
-    //
-    // Alternate impl?
-    // audits.default_criteria.clone()
-    //      .unwrap_or_else(|| audits.criteria.keys().cloned().collect());
-    let criteria = None;
-    // TODO: figure this out
-    let dependency_criteria = None;
 
     let new_entry = AuditEntry {
-        version,
-        delta,
-        violation: None,
+        kind,
+        criteria,
         who,
         notes,
-        criteria,
-        dependency_criteria,
     };
 
     // TODO: check if the version makes sense..?

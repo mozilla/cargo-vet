@@ -1,91 +1,83 @@
-
 # cargo-vet audits file
 
-[criteria.skimmed]
-description = "you skimmed it and it seems fine"
-default = true
-implies = []
-
-[criteria.reviewed]
-description = "you reviewed it properly"
-default = true
-implies = ["skimmed"]
-
 [criteria.audited]
-description = "you fully audited it"
-default = false
-implies = ["reviewed"]
+implies = ["safe-to-deploy"]
+description = "super audited"
 
 [criteria.fuzzed]
-description = "you fuzzed it"
-default = false
-implies = []
-
+description = "fuzzed"
 
 
 
 [[audits.base64]]
 version = "0.1.0"
+criteria = "safe-to-deploy"
 message = "test for basic resolution"
 
 [[audits.base64]]
 delta = "0.2.0 -> 0.14.0"
+criteria = "safe-to-deploy"
 
 [[audits.base64]]
 delta = "0.1.0 -> 0.4.0"
+criteria = "safe-to-deploy"
 
 [[audits.base64]]
 version = "0.5.0"
+criteria = "safe-to-deploy"
 message = "basic resolution"
 
 [[audits.base64]]
 delta = "0.9.0 -> 0.13.0"
+criteria = "safe-to-deploy"
 
 [[audits.base64]]
 delta = "0.8.1 -> 0.9.0"
+criteria = "safe-to-deploy"
 
 [[audits.base64]]
 delta = "0.4.0 -> 0.8.1"
-
+criteria = "safe-to-deploy"
 
 
 
 [[audits.autocfg]]
 version = "1.1.0"
-criteria = ["audited", "fuzzed"]
+criteria = "safe-to-deploy"
 message = "test for simple absolute version with non-defaults"
 
 [[audits.clap]]
 version = "3.1.8"
 message = "test for custom criteria (low-grade and high-grade)"
-dependency-criteria = { "atty" = ["skimmed"], "bitflags" = ["audited", "fuzzed"] }
+criteria = "safe-to-deploy"
+dependency-criteria = { "atty" = ["safe-to-run"], "bitflags" = ["audited", "fuzzed"] }
 
 [[audits.atty]]
 version = "0.2.14"
-criteria = ["skimmed"]
+criteria = "safe-to-run"
 
 
 
 [[audits.bitflags]]
 version = "0.1.0"
 message = "test for unioning criteria from two chains"
-criteria = ["audited"]
+criteria = "audited"
 
 [[audits.bitflags]]
 delta = "0.1.0 -> 1.3.2"
-criteria = ["audited"]
+criteria = "audited"
 
 [[audits.bitflags]]
 version = "0.2.0"
-criteria = ["fuzzed"]
+criteria = "fuzzed"
 
 [[audits.bitflags]]
 delta = "0.2.0 -> 1.3.2"
-criteria = ["fuzzed"]
+criteria = "fuzzed"
 
 
 
 [[audits.unicode-bidi]]
 delta = "0.2.0 -> 0.3.7"
 message = "test for delta to unaudited"
-
+criteria = "safe-to-deploy"

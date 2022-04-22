@@ -94,6 +94,15 @@ pub struct AuditsFile {
 impl AuditsFile {
     pub fn validate(&self) -> Result<(), VetError> {
         // TODO
+        // * check that each CriteriaEntry has 'description' or 'description_url'
+        // * check that all criteria are valid in:
+        //   * CriteriaEntry::implies
+        //   * AuditEntry::criteria
+        //   * DependencyCriteria
+        // * check that all 'audits' entries are well-formed
+        // * check that all package names are valid (with crates.io...?)
+        // * check that all reviews have a 'who' (currently an Option to stub it out)
+        // * catch no-op deltas?
         Ok(())
     }
 }
@@ -102,58 +111,47 @@ impl AuditsFile {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct CriteriaEntry {
     /// Summary of how you evaluate something by this criteria.
-    pub description: String,
-    /// Whether this criteria is part of the "defaults"
-    pub default: bool,
+    pub description: Option<String>,
+    /// An alternative to description which locates the criteria text at a publicly-accessible URL.
+    /// This can be useful for sharing criteria descriptions across multiple repositories.
+    #[serde(rename = "description-url")]
+    pub description_url: Option<String>,
     /// Criteria that this one implies
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub implies: Vec<String>,
 }
 
-/// This is just a big vague ball initially. It's up to the Audits/Unuadited/Trusted wrappers
-/// to validate if it "makes sense" for their particular function.
+/// This is conceptually an enum
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct AuditEntry {
-    pub version: Option<Version>,
-    pub delta: Option<Delta>,
-    pub violation: Option<VersionReq>,
     pub who: Option<String>,
     pub notes: Option<String>,
-    pub criteria: Option<Vec<String>>,
-    #[serde(rename = "dependency-criteria")]
-    pub dependency_criteria: Option<DependencyCriteria>,
+    pub criteria: String,
+    #[serde(flatten)]
+    pub kind: AuditKind,
 }
 
-impl AuditEntry {
-    /// Not actually valid, but a starting point for other things
-    pub fn null() -> Self {
-        Self {
-            version: None,
-            delta: None,
-            violation: None,
-            who: None,
-            notes: None,
-            criteria: None,
-            dependency_criteria: None,
-        }
-    }
-    pub fn violation(req: VersionReq) -> Self {
-        Self {
-            violation: Some(req),
-            ..Self::null()
-        }
-    }
-    pub fn full_audit(version: Version) -> Self {
-        Self {
-            version: Some(version),
-            ..Self::null()
-        }
-    }
-    pub fn delta_audit(from: Version, to: Version) -> Self {
-        Self {
-            delta: Some(Delta { from, to }),
-            ..Self::null()
-        }
-    }
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(untagged)]
+pub enum AuditKind {
+    Full {
+        version: Version,
+        #[serde(rename = "dependency-criteria")]
+        #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
+        #[serde(default)]
+        dependency_criteria: DependencyCriteria,
+    },
+    Delta {
+        delta: Delta,
+        #[serde(rename = "dependency-criteria")]
+        #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
+        #[serde(default)]
+        dependency_criteria: DependencyCriteria,
+    },
+    Violation {
+        violation: VersionReq,
+    },
 }
 
 /// A list of criteria that transitive dependencies must satisfy for this
@@ -226,6 +224,12 @@ impl Serialize for Delta {
 /// config.toml
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ConfigFile {
+    /// This top-level key specifies the default criteria that cargo vet certify will use
+    /// when recording audits. If unspecified, this defaults to "safe-to-deploy".
+    #[serde(rename = "default-criteria")]
+    #[serde(default = "get_default_criteria")]
+    #[serde(skip_serializing_if = "is_default_criteria")]
+    pub default_criteria: String,
     /// Remote audits.toml's that we trust and want to import.
     pub imports: StableMap<String, RemoteImport>,
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
@@ -240,6 +244,17 @@ impl ConfigFile {
         // TODO
         Ok(())
     }
+}
+
+pub static SAFE_TO_DEPLOY: &str = "safe-to-deploy";
+pub static SAFE_TO_RUN: &str = "safe-to-run";
+pub static DEFAULT_CRITERIA: &str = SAFE_TO_DEPLOY;
+
+pub fn get_default_criteria() -> String {
+    String::from(DEFAULT_CRITERIA)
+}
+fn is_default_criteria(val: &String) -> bool {
+    val == DEFAULT_CRITERIA
 }
 
 /// Policies that first-party (non-foreign) crates must pass.
@@ -263,20 +278,24 @@ pub struct PolicyTable {
     /// set to satisfying all criteria.
     ///
     /// If not present, this defaults to the default criteria in the audits table.
-    pub criteria: Option<Vec<String>>,
-
-    /// Custom criteria for a specific first-party crate's dependencies. It's nonsensical
-    /// to define criteria between two first-party crates, so you can only name third-party
-    /// dependencies here.
-    ///
-    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
-    #[serde(rename = "dependency-criteria")]
-    pub dependency_criteria: Option<DependencyCriteria>,
+    #[serde(default = "get_default_policy_criteria")]
+    #[serde(skip_serializing_if = "is_default_policy_criteria")]
+    pub criteria: Vec<String>,
 
     /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
     /// used as build-dependencies or dev-dependencies.
     #[serde(rename = "build-and-dev-criteria")]
-    pub build_and_dev_criteria: Option<Vec<String>>,
+    #[serde(default = "get_default_policy_build_and_dev_criteria")]
+    #[serde(skip_serializing_if = "is_default_policy_build_and_dev_criteria")]
+    pub build_and_dev_criteria: Vec<String>,
+
+    /// Custom criteria for a specific first-party crate's dependencies.
+    ///
+    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
+    #[serde(rename = "dependency-criteria")]
+    #[serde(default = "DependencyCriteria::new")]
+    #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
+    pub dependency_criteria: DependencyCriteria,
 
     /// TODO: figure this out
     pub targets: Option<Vec<String>>,
@@ -284,6 +303,22 @@ pub struct PolicyTable {
     /// `targets` but build/dev
     #[serde(rename = "build-and-dev-targets")]
     pub build_and_dev_targets: Option<Vec<String>>,
+}
+
+static DEFAULT_POLICY_CRITERIA: &str = SAFE_TO_DEPLOY;
+static DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA: &str = SAFE_TO_RUN;
+
+pub fn get_default_policy_criteria() -> Vec<String> {
+    vec![DEFAULT_POLICY_CRITERIA.to_string()]
+}
+fn is_default_policy_criteria(val: &Vec<String>) -> bool {
+    val.len() == 1 && val[0] == DEFAULT_POLICY_CRITERIA
+}
+pub fn get_default_policy_build_and_dev_criteria() -> Vec<String> {
+    vec![DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA.to_string()]
+}
+fn is_default_policy_build_and_dev_criteria(val: &Vec<String>) -> bool {
+    val.len() == 1 && val[0] == DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA
 }
 
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
@@ -305,23 +340,30 @@ pub struct CriteriaMapping {
     pub theirs: Vec<String>,
 }
 
+/// Semantically identical to a 'full audit' entry, but private to our project
+/// and tracked as less-good than a proper audit, so that you try to get rid of it.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct UnauditedDependency {
-    /// The version(s) of the crate that we are currently "fine" with leaving unaudited.
-    /// For the sake of consistency, I'm making this a proper Cargo VersionReq:
-    /// <https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html>
-    ///
-    /// One significant implication of this is that x.y.z is *not* one version. It is
-    /// ^x.y.z, per Cargo convention. You must use =x.y.z to be that specific. We will
-    /// do this for you when we do `cargo vet init`, so this shouldn't be a big deal?
+    /// The version of the crate that we are currently "fine" with leaving unaudited.
     pub version: Version,
-    /// Criteria that we're willing to handwave for this version. If nothing specified,
-    /// this is all_criteria (TODO: rejig init so that this is very an Option!).
-    pub criteria: Option<Vec<String>>,
+    /// Criteria that we're willing to handwave for this version (assuming our dependencies
+    /// satisfy this criteria). This isn't defaulted, 'vet init' and similar commands will
+    /// pick a "good" initial value.
+    pub criteria: String,
     /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
     pub notes: Option<String>,
-    /// Whether suggest should bother mentioning this (defaults true)
+    /// Whether 'suggest' should bother mentioning this (defaults true).
+    #[serde(default = "get_default_unaudited_suggest")]
+    #[serde(skip_serializing_if = "is_default_unaudited_suggest")]
     pub suggest: bool,
+}
+
+static DEFAULT_UNAUDITED_SUGGEST: bool = true;
+pub fn get_default_unaudited_suggest() -> bool {
+    DEFAULT_UNAUDITED_SUGGEST
+}
+fn is_default_unaudited_suggest(val: &bool) -> bool {
+    val == &DEFAULT_UNAUDITED_SUGGEST
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
