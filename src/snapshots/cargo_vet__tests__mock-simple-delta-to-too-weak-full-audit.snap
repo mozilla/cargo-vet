@@ -1,6 +1,6 @@
 ---
 source: src/tests.rs
-assertion_line: 963
+assertion_line: 1070
 expression: stdout
 ---
 Vetting Failed!
@@ -9,7 +9,6 @@ Vetting Failed!
   root-package:10.0.0
     first-party:10.0.0
       third-party1:10.0.0
-        transitive-third-party1:10.0.0
 
 recommended audits:
   [TODO]

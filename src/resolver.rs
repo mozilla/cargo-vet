@@ -1,14 +1,15 @@
+use core::fmt;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Write;
 
-use cargo_metadata::{Metadata, Package, PackageId, Version};
+use cargo_metadata::{Metadata, Node, Package, PackageId, Version};
 use log::{error, trace, warn};
 
 use crate::{
-    AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, PackageExt,
-    StableMap, VetError,
+    AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, ImportsFile, PackageExt, StableMap, VetError,
 };
 
+#[derive(Debug, Clone)]
 pub struct Report<'a> {
     unaudited_count: u64,
     partially_audited_count: u64,
@@ -28,15 +29,20 @@ const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
 
 /// A processed version of config.toml's criteria definitions, for mapping
 /// lists of criteria names to CriteriaSets.
+#[derive(Debug, Clone)]
 pub struct CriteriaMapper<'a> {
+    /// All the criteria in their raw form
     list: Vec<(&'a str, &'a CriteriaEntry)>,
+    /// name -> index in all lists
     index: HashMap<&'a str, usize>,
+    /// The default criteria for anything that says nothing (TODO: remove this?)
     default_criteria: CriteriaSet,
+    /// The transitive closure of all criteria implied by each criteria (including self)
     implied_criteria: Vec<CriteriaSet>,
 }
 
 /// The dependency graph in a form we can use more easily.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DepGraph<'a> {
     pub package_list: &'a [Package],
     pub resolve_list: &'a [cargo_metadata::Node],
@@ -48,41 +54,19 @@ pub struct DepGraph<'a> {
 }
 
 /// Results and notes from running vet on a particular package.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ResolveResult<'a> {
     /// The set of criteria we validated for this package.
     validated_criteria: CriteriaSet,
-
-    /// Whether we ever found a complete path in the vet graph (even if empty).
-    /// This is used to hint that maybe some restrictions were too tight.
-    _found_any_path: bool,
-    /// Whether the current version is actually directly listed in 'unaudited'.
-    /// When checking the dependency requirements on an audit, this implies
-    /// all_criteria, and therefore that the edge is always satisfied.
+    /// The set of criteria we validated for this package without 'unaudited' entries.
+    fully_audited_criteria: CriteriaSet,
+    /// Individual search results for each criteria.
+    search_results: Vec<CriteriaSearchResult<'a>>,
+    /// Whether there was an 'unaudited' entry for this exact version.
     directly_unaudited: bool,
-    /// Whether any dependency_criteria check actually depended on this crate
-    /// being directly unaudited. If directly_unaudited is true but this is false,
-    /// we should emit a diagnostic and tell you to remove the unaudited entry!
-    used_directly_unaudited: bool,
-    /// Whether the validation terminated in a full audit.
-    fully_audited: bool,
-    /// Whether we determined this package failed to audit during policy checking.
+    /// Whether we ever needed the not-fully_audited_criteria for our reverse-deps.
+    needed_unaudited: bool,
     failed: bool,
-
-    /// dependency_criteria that failed to resolve. This is populated for two reasons:
-    ///
-    /// * during third-party vetting, while walking through the delta graph with
-    ///   non-empty cur_criteria, a dependency failed to satisfy our requirements.
-    ///   This isn't inherently a problem, because it's possible we'll get a validation
-    ///   via another path, but we eagerly "log" the result in case this fails to
-    ///   meet expected criteria, and then try to blame the problem on these deps.
-    ///   Note the "non-empty cur_criteria" qualifier: we keep searching with empty
-    ///   criteria just to give better diagnostics, but failures at that point should
-    ///   be ignored because we're just gathering extra info, and not actually vetting.
-    ///
-    /// * during first-party vetting, if any of these packages fail the policy.
-    ///   This is a hard error, and these packages are 100% to blame.
-    failed_deps: BTreeSet<&'a PackageId>,
 }
 
 impl<'a> CriteriaMapper<'a> {
@@ -97,13 +81,15 @@ impl<'a> CriteriaMapper<'a> {
         let mut default_criteria = CriteriaSet::none(list.len());
         let mut implied_criteria = Vec::with_capacity(list.len());
         for (idx, (_name, entry)) in list.iter().enumerate() {
-            if entry.default {
-                default_criteria.set_criteria(idx);
-            }
-
             // Precompute implied criteria (doing it later is genuinely a typesystem headache)
             let mut implied = CriteriaSet::none(list.len());
+            implied.set_criteria(idx);
             recursive_implies(&mut implied, &entry.implies, &index, &list);
+
+            if entry.default {
+                default_criteria.unioned_with(&implied);
+            }
+
             implied_criteria.push(implied);
 
             fn recursive_implies(
@@ -141,7 +127,6 @@ impl<'a> CriteriaMapper<'a> {
         let mut result = self.no_criteria();
         for criteria in list {
             let idx = self.index[criteria];
-            result.set_criteria(idx);
             result.unioned_with(&self.implied_criteria[idx]);
         }
         result
@@ -150,22 +135,11 @@ impl<'a> CriteriaMapper<'a> {
         set.set_criteria(self.index[criteria])
     }
 
-    fn _criteria<'b>(
-        &'b self,
-        set: &'b CriteriaSet,
-    ) -> impl Iterator<Item = (&'a str, &'a CriteriaEntry)> + 'b {
-        self.list
-            .iter()
-            .copied()
-            .enumerate()
-            .filter_map(|(idx, payload)| {
-                if set._has_criteria(idx) {
-                    Some(payload)
-                } else {
-                    None
-                }
-            })
+    /// An iterator over every criteria in order, with 'implies' fully applied.
+    fn criteria_iter(&self) -> impl Iterator<Item = &CriteriaSet> {
+        self.implied_criteria.iter()
     }
+
     fn len(&self) -> usize {
         self.list.len()
     }
@@ -206,7 +180,7 @@ impl CriteriaSet {
     fn _has_criteria(&self, idx: usize) -> bool {
         (self.0 & (1 << idx)) != 0
     }
-    fn intersected_with(&mut self, other: &CriteriaSet) {
+    fn _intersected_with(&mut self, other: &CriteriaSet) {
         self.0 &= other.0;
     }
     fn unioned_with(&mut self, other: &CriteriaSet) {
@@ -220,25 +194,29 @@ impl CriteriaSet {
     }
 }
 
+impl fmt::Debug for CriteriaSet {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{:08b}", self.0)
+    }
+}
+
 impl ResolveResult<'_> {
     fn with_no_criteria(empty: CriteriaSet) -> Self {
         Self {
-            validated_criteria: empty,
-            _found_any_path: false,
+            validated_criteria: empty.clone(),
+            fully_audited_criteria: empty,
+            search_results: vec![],
             directly_unaudited: false,
-            used_directly_unaudited: false,
-            fully_audited: false,
+            needed_unaudited: false,
             failed: false,
-            failed_deps: Default::default(),
         }
     }
 
     fn contains(&mut self, other: &CriteriaSet) -> bool {
-        if self.validated_criteria.contains(other) {
+        if self.fully_audited_criteria.contains(other) {
             true
-        } else if self.directly_unaudited && !self.failed {
-            // Note that the unaudited entry was (seemingly) needed.
-            self.used_directly_unaudited = true;
+        } else if self.validated_criteria.contains(other) {
+            self.needed_unaudited = true;
             true
         } else {
             false
@@ -334,21 +312,52 @@ impl<'a> DepGraph<'a> {
     }
 }
 
+/// The possible results of search for an audit chain for a Criteria
+#[derive(Debug, Clone)]
+enum CriteriaSearchResult<'a> {
+    /// We found a path, criteria validated
+    FoundPath {
+        /// Whether we found a path to a fully_audited entry
+        fully_audited: bool,
+    },
+    /// We failed to find a path, criteria not valid
+    NoPath {
+        /// If any edges failed because of a dependency, here's the ones (blame them)
+        failed_deps: BTreeSet<&'a PackageId>,
+        /// Nodes we could reach from "roots" (unaudited, full audit)
+        reachable_from_root: BTreeSet<&'a Version>,
+        /// Nodes we could reach from the "target" (current version)
+        reachable_from_target: BTreeSet<&'a Version>,
+    },
+}
+
+/// A directed edge in the graph of audits. This may be forward or backwards,
+/// depending on if we're searching from "roots" (forward) or the target (backward).
+/// The source isn't included because that's implicit in the Node.
+#[derive(Debug, Clone)]
+struct DeltaEdge<'a> {
+    /// The version this edge goes to.
+    version: &'a Version,
+    /// The criteria that this edge is valid for.
+    criteria: CriteriaSet,
+    /// Requirements that dependencies must satisfy for the edge to be valid.
+    /// If a dependency isn't mentionned, then it defaults to `criteria`.
+    dependency_criteria: HashMap<&'a str, CriteriaSet>,
+    /// Whether this edge represents an 'unaudited' entry. These will initially
+    /// be ignored, and then used only if we can't find a path.
+    is_unaudited_entry: bool,
+}
+
+// Dummy values for corner cases
+static ROOT_VERSION: Version = Version::new(0, 0, 0);
+static NO_AUDITS: Vec<AuditEntry> = Vec::new();
+
 pub fn resolve<'a>(
     metadata: &'a Metadata,
     config: &'a ConfigFile,
     audits: &'a AuditsFile,
     imports: &'a ImportsFile,
 ) -> Report<'a> {
-    // Not sure which we want, so make it configurable to test.
-    // Determines whether a delta must be == unaudited or just <=
-    let unaudited_matching_is_strict = true;
-
-    // Dummy values for corner cases
-    let root_version = Version::new(0, 0, 0);
-    let no_audits = Vec::new();
-    let no_custom_dep_criteria = DependencyCriteria::new();
-
     let mut violation_failed = vec![];
 
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
@@ -377,8 +386,9 @@ pub fn resolve<'a>(
         .policy
         .dependency_criteria
         .as_ref()
-        .unwrap_or(&no_custom_dep_criteria)
-        .iter()
+        .map(|d| d.iter())
+        .into_iter()
+        .flatten()
         .map(|(pkg_name, criteria)| {
             (
                 &**pkg_name,
@@ -410,26 +420,32 @@ pub fn resolve<'a>(
         let foreign_audits = imports
             .audits
             .values()
-            .flat_map(|audit_file| audit_file.audits.get(&package.name).unwrap_or(&no_audits));
-        let own_audits = audits.audits.get(&package.name).unwrap_or(&no_audits);
+            .flat_map(|audit_file| audit_file.audits.get(&package.name).unwrap_or(&NO_AUDITS));
+        let own_audits = audits.audits.get(&package.name).unwrap_or(&NO_AUDITS);
 
         // Deltas are flipped so that we have a map of 'to: [froms]'. This lets
         // us start at the current version and look up all the deltas that *end* at that
         // version. By repeating this over and over, we can loslowly walk back in time until
         // we run out of deltas or reach full audit or an unaudited entry.
-        let mut deltas_to =
-            HashMap::<&Version, Vec<(&Version, CriteriaSet, HashMap<&str, CriteriaSet>)>>::new();
+        let mut forward_nodes = BTreeMap::<&Version, Vec<DeltaEdge>>::new();
+        let mut backward_nodes = BTreeMap::<&Version, Vec<DeltaEdge>>::new();
         let mut violations = Vec::new();
 
         // Collect up all the deltas, their criteria, and dependency_criteria
         for entry in own_audits.iter() {
+            if entry.violation.is_some() {
+                violations.push(entry);
+                continue;
+            };
+
             let criteria = criteria_mapper.criteria_from_entry(entry);
             // Convert all the custom criteria to CriteriaSets
-            let dep_criteria: HashMap<_, _> = entry
+            let dependency_criteria: HashMap<_, _> = entry
                 .dependency_criteria
                 .as_ref()
-                .unwrap_or(&no_custom_dep_criteria)
-                .iter()
+                .map(|d| d.iter())
+                .into_iter()
+                .flatten()
                 .map(|(pkg_name, criteria)| {
                     (
                         &**pkg_name,
@@ -437,20 +453,28 @@ pub fn resolve<'a>(
                     )
                 })
                 .collect();
+
             // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
-            if let Some(ver) = &entry.version {
-                deltas_to
-                    .entry(ver)
-                    .or_default()
-                    .push((&root_version, criteria, dep_criteria));
+            let (from_ver, to_ver) = if let Some(ver) = &entry.version {
+                (&ROOT_VERSION, ver)
             } else if let Some(delta) = &entry.delta {
-                deltas_to
-                    .entry(&delta.to)
-                    .or_default()
-                    .push((&delta.from, criteria, dep_criteria));
-            } else if entry.violation.is_some() {
-                violations.push(entry);
-            }
+                (&delta.from, &delta.to)
+            } else {
+                unreachable!("audit wasn't a full entry, audit, or delta!?")
+            };
+
+            forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
+                version: to_ver,
+                criteria: criteria.clone(),
+                dependency_criteria: dependency_criteria.clone(),
+                is_unaudited_entry: false,
+            });
+            backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
+                version: from_ver,
+                criteria,
+                dependency_criteria,
+                is_unaudited_entry: false,
+            });
         }
 
         // Try to map foreign audits into our worldview
@@ -474,7 +498,7 @@ pub fn resolve<'a>(
             for entry in foreign_audits
                 .audits
                 .get(&package.name)
-                .unwrap_or(&no_audits)
+                .unwrap_or(&NO_AUDITS)
             {
                 // TODO: figure out a reasonable way to map foreign dependency_criteria
                 if entry.dependency_criteria.is_some() {
@@ -482,6 +506,10 @@ pub fn resolve<'a>(
                     warn!("discarding foreign audit with dependency_criteria (TODO)");
                     continue;
                 }
+                if entry.violation.is_some() {
+                    violations.push(entry);
+                    continue;
+                };
 
                 // Map this entry's criteria into our worldview
                 let mut local_criteria = no_criteria.clone();
@@ -492,22 +520,27 @@ pub fn resolve<'a>(
                     }
                 }
 
-                // Now process it as normal
-                if let Some(ver) = &entry.version {
-                    deltas_to.entry(ver).or_default().push((
-                        &root_version,
-                        local_criteria,
-                        Default::default(),
-                    ));
+                // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
+                let (from_ver, to_ver) = if let Some(ver) = &entry.version {
+                    (&ROOT_VERSION, ver)
                 } else if let Some(delta) = &entry.delta {
-                    deltas_to.entry(&delta.to).or_default().push((
-                        &delta.from,
-                        local_criteria,
-                        Default::default(),
-                    ));
-                } else if entry.violation.is_some() {
-                    violations.push(entry);
-                }
+                    (&delta.from, &delta.to)
+                } else {
+                    unreachable!("audit wasn't a full entry, audit, or delta!?")
+                };
+
+                forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
+                    version: to_ver,
+                    criteria: local_criteria.clone(),
+                    dependency_criteria: Default::default(),
+                    is_unaudited_entry: false,
+                });
+                backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
+                    version: from_ver,
+                    criteria: local_criteria,
+                    dependency_criteria: Default::default(),
+                    is_unaudited_entry: false,
+                });
             }
         }
 
@@ -554,164 +587,105 @@ pub fn resolve<'a>(
         // Identify if this version is directly marked as allowed in 'unaudited'.
         // This implies that all dependency_criteria checks against it will succeed
         // as if its validated_criteria was all_criteria.
-        if let Some(allowed) = unaudited {
-            let reached_unaudited = allowed.iter().any(|allowed| {
-                if unaudited_matching_is_strict {
-                    allowed.version == package.version
-                } else {
-                    allowed.version >= package.version
+        //
+        // Also register all the unaudited entries as "roots" for search.
+        if let Some(alloweds) = unaudited {
+            for allowed in alloweds {
+                if allowed.version == package.version {
+                    directly_unaudited = true;
                 }
-            });
-            if reached_unaudited {
-                directly_unaudited = true;
-            }
-        }
+                let from_ver = &ROOT_VERSION;
+                let to_ver = &allowed.version;
+                let criteria = allowed
+                    .criteria
+                    .as_ref()
+                    .map(|c| criteria_mapper.criteria_from_list(c.iter().map(|s| &**s)))
+                    .unwrap_or_else(|| all_criteria.clone());
 
-        // Now try to resolve the deltas
-        let mut working_queue = vec![(&package.version, all_criteria.clone())];
-        let mut validated_criteria = no_criteria.clone();
-        let mut found_any_path = false;
-        let mut fully_audited = false;
-        let mut failed_deps = BTreeSet::new();
-
-        while let Some((cur_version, cur_criteria)) = working_queue.pop() {
-            // Check if we've succeeded
-            if let Some(allowed) = unaudited {
-                // Check if we've reached an 'unaudited' entry
-                let reached_unaudited = allowed.iter().any(|allowed| {
-                    if unaudited_matching_is_strict {
-                        allowed.version == *cur_version
-                    } else {
-                        allowed.version >= *cur_version
-                    }
+                // For simplicity, turn 'unaudited' entries into deltas from 0.0.0
+                forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
+                    version: to_ver,
+                    criteria: criteria.clone(),
+                    dependency_criteria: Default::default(),
+                    is_unaudited_entry: true,
                 });
-                if reached_unaudited {
-                    // If this is the original package version, don't treat this is as a real
-                    // validation path so that we can tell if the we were directly relying on it.
-                    if cur_version != &package.version {
-                        found_any_path = true;
-                        validated_criteria.unioned_with(&cur_criteria);
+                backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
+                    version: from_ver,
+                    criteria,
+                    dependency_criteria: Default::default(),
+                    is_unaudited_entry: true,
+                });
+            }
+        }
 
-                        // Just keep running the workqueue in case we find more criteria by other paths
-                        continue;
+        let mut validated_criteria = no_criteria.clone();
+        let mut fully_audited_criteria = no_criteria.clone();
+        let mut search_results = vec![];
+        for criteria in criteria_mapper.criteria_iter() {
+            let result = search_for_path(
+                criteria,
+                &ROOT_VERSION,
+                &package.version,
+                &forward_nodes,
+                &graph,
+                resolve,
+                &mut results,
+            );
+            match result {
+                CriteriaSearchResult::FoundPath { fully_audited } => {
+                    // We found a path, hooray, criteria validated!
+                    if fully_audited {
+                        fully_audited_criteria.unioned_with(criteria);
                     }
+                    validated_criteria.unioned_with(criteria);
+                    search_results.push(CriteriaSearchResult::FoundPath { fully_audited });
                 }
-            }
-            if cur_version == &root_version {
-                // Reached 0.0.0, which means we hit a Full Audit, that's perfect
-                validated_criteria.unioned_with(&cur_criteria);
-                found_any_path = true;
-
-                // FIXME: this is mildly fuzzy with unioning
-                // FIXME: should this only be true if cur_criteria is non-empty?
-                fully_audited = true;
-
-                // Just keep running the workqueue in case we find more criteria by other paths
-                continue;
-            }
-            // Apply deltas to move along to the next "layer" of the search
-            if let Some(deltas) = deltas_to.get(cur_version) {
-                for (from_version, criteria, dep_criteria) in deltas {
-                    let mut next_critera = cur_criteria.clone();
-                    next_critera.intersected_with(criteria);
-
-                    // Deltas should only apply if dependencies satisfy dep_criteria
-                    let mut deps_satisfied = true;
-                    for dependency in &resolve.dependencies {
-                        let dep_resolve_idx = graph.resolve_index_by_pkgid[dependency];
-                        let dep_package =
-                            &graph.package_list[graph.package_index_by_pkgid[dependency]];
-                        let dep_vet_result = &mut results[dep_resolve_idx];
-
-                        // If no custom criteria is specified, then require our dependency to match
-                        // the same criteria that this delta claims to provide.
-                        // e.g. a 'secure' audit requires all dependencies to be 'secure' by default.
-                        let dep_req = dep_criteria.get(&*dep_package.name).unwrap_or(criteria);
-                        if !dep_vet_result.contains(dep_req) {
-                            deps_satisfied = false;
-                            // If this is resulting in an actual loss of criteria, tentatively blame
-                            // this dependency for own future failings. If we end up resolving some
-                            // other way, then we won't mention this horrendous treachery.
-                            if !cur_criteria.is_empty() {
-                                failed_deps.insert(dependency);
-                            }
-                        }
-                    }
-
-                    // NOTE: we explicitly don't stop if next_criteria is empty, because we want to
-                    // understand the whole graph, and in particular figure out if it's even vaguely
-                    // connected.
-                    if deps_satisfied {
-                        working_queue.push((from_version, next_critera));
+                CriteriaSearchResult::NoPath {
+                    mut failed_deps,
+                    reachable_from_root,
+                    ..
+                } => {
+                    // We failed to find a path, boo! Run the algorithm backwards to see what we
+                    // can reach from the other side, so we have our candidates for suggestions.
+                    let rev_result = search_for_path(
+                        criteria,
+                        &package.version,
+                        &ROOT_VERSION,
+                        &backward_nodes,
+                        &graph,
+                        resolve,
+                        &mut results,
+                    );
+                    if let CriteriaSearchResult::NoPath {
+                        failed_deps: mut rev_failed_deps,
+                        reachable_from_root: reachable_from_target,
+                        ..
+                    } = rev_result
+                    {
+                        failed_deps.append(&mut rev_failed_deps);
+                        search_results.push(CriteriaSearchResult::NoPath {
+                            failed_deps,
+                            reachable_from_root,
+                            reachable_from_target,
+                        })
+                    } else {
+                        unreachable!("We managed to find a path but only from one direction?!");
                     }
                 }
             }
         }
-
-        let mut failed = false;
-        let mut used_directly_unaudited = false;
-        if !found_any_path {
-            // If we didn't actually find any paths and we're directly unaudited,
-            // make sure our deps make sense (has default criteria)
-            //
-            // A bit of a curious semantic corner case: if there was no way to even
-            // plausibly audit you, does it make sense to care about if your dependencies
-            // are messed up too?
-            //
-            // Consider the case where both "X" and "dep_of_X" are completely new and
-            // unaudited (or just both updated so we have a broken chain on both). They are
-            // both clearly wrong and need to be fixed, but since the *requirements* on
-            // dep_of_X are *unclear* without a proper audit chain on X to define its
-            // criteria, it's unclear what criteria dep_of_X should be tested against.
-            //
-            // In the case of "no audits for both" then we can defer to "failed", but in
-            // a more subtle case where just X is broken, it's genuinely ambiguous what
-            // the requirements on dep_of_X should be.
-            //
-            // In these ambiguous cases, you are doomed to either under-report problems
-            // (so that fixing X may surface dep_of_X as a new problem) or over-report
-            // problems (so dep_of_X might be fine, but we freak out about it because X
-            // is broken and don't know what to check it against).
-            //
-            // The following implementation errs on the side of under-reporting -- if
-            // X has no path *and* isn't directly_unaudited, then it's children will
-            // implicitly be assumed to be fine until we get more information. Fixing
-            // X may suddenly introduce "more work to do", making it potentially difficult
-            // estimate just how broken your current audit tree is.
-            //
-            // See "mock-simple-no-unaudited" for how we currently react to this situation.
-            if directly_unaudited {
-                let mut deps_satisfied = true;
-                for dependency in &resolve.dependencies {
-                    let dep_resolve_idx = graph.resolve_index_by_pkgid[dependency];
-                    let dep_vet_result = &mut results[dep_resolve_idx];
-
-                    let dep_req = criteria_mapper.default_criteria();
-                    if !dep_vet_result.contains(dep_req) {
-                        deps_satisfied = false;
-                        failed_deps.insert(dependency);
-                    }
-                }
-
-                if deps_satisfied {
-                    used_directly_unaudited = true;
-                } else {
-                    failed = true;
-                }
-            } else {
-                failed = true;
-            }
-        }
+        // Just pre-mark ourselves as a failure if we have no validated criteria.
+        let failed = validated_criteria.is_empty();
 
         // We've completed our graph analysis for this package, now record the results
         results[resolve_idx] = ResolveResult {
             validated_criteria,
-            _found_any_path: found_any_path,
+            fully_audited_criteria,
             directly_unaudited,
-            used_directly_unaudited,
-            fully_audited,
+            search_results,
             failed,
-            failed_deps,
+            // Only gets found out later, for now, assume not.
+            needed_unaudited: false,
         };
     }
 
@@ -746,7 +720,11 @@ pub fn resolve<'a>(
         if failed_deps.is_empty() {
             result.validated_criteria.unioned_with(&all_criteria);
         } else {
-            result.failed_deps = failed_deps;
+            result.search_results.push(CriteriaSearchResult::NoPath {
+                failed_deps,
+                reachable_from_root: Default::default(),
+                reachable_from_target: Default::default(),
+            });
             result.failed = true;
 
             if metadata.workspace_members.contains(pkgid) {
@@ -768,15 +746,15 @@ pub fn resolve<'a>(
 
         if result.failed {
             failed_count += 1;
-        } else if result.used_directly_unaudited {
-            unaudited_count += 1;
-        } else if result.fully_audited {
+        } else if !result.needed_unaudited || !package.is_third_party() {
             fully_audited_count += 1;
+        } else if result.directly_unaudited {
+            unaudited_count += 1;
         } else {
             partially_audited_count += 1;
         }
 
-        if result.directly_unaudited && !result.used_directly_unaudited {
+        if result.directly_unaudited && !result.needed_unaudited {
             useless_unaudited.push(package);
         }
     }
@@ -791,6 +769,136 @@ pub fn resolve<'a>(
         violation_failed,
         results,
         graph,
+    }
+}
+
+fn search_for_path<'a>(
+    cur_criteria: &CriteriaSet,
+    from_version: &'a Version,
+    to_version: &'a Version,
+    version_nodes: &BTreeMap<&'a Version, Vec<DeltaEdge<'a>>>,
+    dep_graph: &DepGraph<'a>,
+    resolve: &'a Node,
+    results: &mut [ResolveResult],
+) -> CriteriaSearchResult<'a> {
+    // Search for any path through the graph with edges that satisfy cur_criteria.
+    // Finding any path validates that we satisfy that criteria. All we're doing is
+    // basic depth-first search with a manual stack.
+    //
+    // All full-audits and unaudited entries have been "desugarred" to a delta from 0.0.0,
+    // meaning our graph now has exactly one source and one sink, significantly simplifying
+    // the start and end conditions.
+    //
+    // Because we want to know if the validation can be done without ever using an
+    // 'unaudited' entry, we initially "defer" using those edges. This is accomplished
+    // by wrapping the entire algorithm in a loop, and only taking those edges on the
+    // next iteration of the outer loop. So if we find a path in the first iteration,
+    // then that's an unambiguous proof that we didn't need those edges.
+
+    // Conclusions
+    let mut found_path = false;
+    let mut needed_unaudited_entry = false;
+    let mut failed_deps = BTreeSet::new();
+
+    // Search State
+    let mut search_stack = vec![from_version];
+    let mut visited = BTreeSet::new();
+    let mut deferred_unaudited_entries = vec![];
+
+    // Loop until we find a path or run out of deferred edges.
+    loop {
+        // If there are any deferred edges (only possible on iteration 2+), try to follow them..
+        if let Some(node) = deferred_unaudited_entries.pop() {
+            // Don't bother if we got to that node some other way.
+            if visited.contains(node) {
+                continue;
+            }
+            // Ok at this point we officially "need" the unaudited edge. If the search still
+            // fails, then we won't mention that we used this, since the graph is just broken
+            // and we can't make any conclusions about whether anything is needed or not!
+            needed_unaudited_entry = true;
+            search_stack.push(node);
+        }
+
+        // Do Depth-First-Search
+        while let Some(cur_version) = search_stack.pop() {
+            // Don't revisit nodes, there's never an advantage to doing so, and because deltas
+            // can go both forwards and backwards in time, cycles are a real concern!
+            visited.insert(cur_version);
+            if cur_version == to_version {
+                // Success! Nothing more to do.
+                found_path = true;
+                break;
+            }
+
+            // Apply deltas to move along to the next "layer" of the search
+            if let Some(edges) = version_nodes.get(cur_version) {
+                for edge in edges {
+                    if !edge.criteria.contains(cur_criteria) {
+                        // This edge never would have been useful to us
+                        continue;
+                    }
+                    if visited.contains(edge.version) {
+                        // We've been to this node already
+                        continue;
+                    }
+
+                    // Deltas should only apply if dependencies satisfy dep_criteria
+                    let mut deps_satisfied = true;
+                    for dependency in &resolve.dependencies {
+                        let dep_resolve_idx = dep_graph.resolve_index_by_pkgid[dependency];
+                        let dep_package =
+                            &dep_graph.package_list[dep_graph.package_index_by_pkgid[dependency]];
+                        let dep_vet_result = &mut results[dep_resolve_idx];
+
+                        // If no custom criteria is specified, then require our dependency to match
+                        // the same criteria that this delta claims to provide.
+                        // e.g. a 'secure' audit requires all dependencies to be 'secure' by default.
+                        let dep_req = edge
+                            .dependency_criteria
+                            .get(&*dep_package.name)
+                            .unwrap_or(&edge.criteria);
+                        // TODO: think harder about how unaudited works here
+                        if !dep_vet_result.contains(dep_req) && !edge.is_unaudited_entry {
+                            deps_satisfied = false;
+                            // If this is resulting in an actual loss of criteria, tentatively blame
+                            // this dependency for own future failings. If we end up resolving some
+                            // other way, then we won't mention this horrendous treachery.
+                            if !cur_criteria.is_empty() {
+                                failed_deps.insert(dependency);
+                            }
+                        }
+                    }
+
+                    if deps_satisfied {
+                        // Ok yep, this edge is usable! But defer it if it's an 'unaudited' entry.
+                        if edge.is_unaudited_entry {
+                            deferred_unaudited_entries.push(edge.version);
+                        } else {
+                            search_stack.push(edge.version);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Exit conditions
+        if found_path || deferred_unaudited_entries.is_empty() {
+            break;
+        }
+    }
+
+    if found_path {
+        CriteriaSearchResult::FoundPath {
+            fully_audited: !needed_unaudited_entry,
+        }
+    } else {
+        CriteriaSearchResult::NoPath {
+            failed_deps,
+            reachable_from_root: visited,
+            // This will get filled in by the second pass
+            reachable_from_target: Default::default(),
+        }
     }
 }
 
@@ -814,7 +922,7 @@ impl<'a> Report<'a> {
     fn print_success(&self, out: &mut dyn Write) -> Result<(), VetError> {
         writeln!(
             out,
-            "Vetting Succeeded ({} fully audited {} partially audited, {} unaudited)",
+            "Vetting Succeeded ({} fully audited, {} partially audited, {} unaudited)",
             self.fully_audited_count, self.partially_audited_count, self.unaudited_count,
         )?;
 
@@ -861,7 +969,20 @@ impl<'a> Report<'a> {
                     package.version,
                     width = indent
                 )?;
-                for dep_package in &result.failed_deps {
+
+                let all_failed_deps: BTreeSet<_> = result
+                    .search_results
+                    .iter()
+                    .filter_map(|result| {
+                        if let CriteriaSearchResult::NoPath { failed_deps, .. } = result {
+                            Some(failed_deps.iter())
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten()
+                    .collect();
+                for dep_package in all_failed_deps {
                     print_failures(out, depth + 1, dep_package, graph, results)?;
                 }
                 Ok(())

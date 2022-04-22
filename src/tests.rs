@@ -278,6 +278,7 @@ impl MockMetadata {
                         version: package.version.clone(),
                         notes: None,
                         suggest: true,
+                        criteria: None,
                     });
             }
         }
@@ -350,6 +351,15 @@ impl MockMetadata {
             audits: StableMap::new(),
         };
         (config, audits, imports)
+    }
+}
+
+fn unaudited(audits: &AuditsFile, version: Version) -> UnauditedDependency {
+    UnauditedDependency {
+        version,
+        criteria: Some(audits.criteria.keys().cloned().collect()),
+        notes: None,
+        suggest: true,
     }
 }
 
@@ -691,11 +701,7 @@ fn mock_simple_delta_to_unaudited() {
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![UnauditedDependency {
-            version: ver(DEFAULT_VER - 5),
-            notes: None,
-            suggest: false,
-        }],
+        vec![unaudited(&audits, ver(DEFAULT_VER - 5))],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -725,11 +731,7 @@ fn mock_simple_delta_to_unaudited_overshoot() {
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![UnauditedDependency {
-            version: ver(DEFAULT_VER - 5),
-            notes: None,
-            suggest: false,
-        }],
+        vec![unaudited(&audits, ver(DEFAULT_VER - 5))],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -759,11 +761,7 @@ fn mock_simple_delta_to_unaudited_undershoot() {
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![UnauditedDependency {
-            version: ver(DEFAULT_VER - 5),
-            notes: None,
-            suggest: false,
-        }],
+        vec![unaudited(&audits, ver(DEFAULT_VER - 5))],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -893,11 +891,7 @@ fn mock_simple_reverse_delta_to_unaudited() {
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![UnauditedDependency {
-            version: ver(DEFAULT_VER + 5),
-            notes: None,
-            suggest: false,
-        }],
+        vec![unaudited(&audits, ver(DEFAULT_VER + 5))],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -927,11 +921,7 @@ fn mock_simple_wrongly_reversed_delta_to_unaudited() {
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![UnauditedDependency {
-            version: ver(DEFAULT_VER - 5),
-            notes: None,
-            suggest: false,
-        }],
+        vec![unaudited(&audits, ver(DEFAULT_VER - 5))],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -986,11 +976,7 @@ fn mock_simple_needed_reversed_delta_to_unaudited() {
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![UnauditedDependency {
-            version: ver(DEFAULT_VER + 5),
-            notes: None,
-            suggest: false,
-        }],
+        vec![unaudited(&audits, ver(DEFAULT_VER + 5))],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
@@ -1020,11 +1006,7 @@ fn mock_simple_delta_to_unaudited_too_weak() {
     let direct_unaudited = &mut config.unaudited;
     direct_unaudited.insert(
         "third-party1".to_string(),
-        vec![UnauditedDependency {
-            version: ver(DEFAULT_VER - 5),
-            notes: None,
-            suggest: false,
-        }],
+        vec![unaudited(&audits, ver(DEFAULT_VER - 5))],
     );
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);

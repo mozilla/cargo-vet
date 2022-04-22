@@ -242,7 +242,7 @@ pub struct ConfigFile {
 }
 
 /// Information on a Criteria
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct CriteriaEntry {
     /// Summary of how you evaluate something by this criteria.
     description: String,
@@ -325,6 +325,9 @@ pub struct UnauditedDependency {
     /// ^x.y.z, per Cargo convention. You must use =x.y.z to be that specific. We will
     /// do this for you when we do `cargo vet init`, so this shouldn't be a big deal?
     version: Version,
+    /// Criteria that we're willing to handwave for this version. If nothing specified,
+    /// this is all_criteria (TODO: rejig init so that this is very an Option!).
+    criteria: Option<Vec<String>>,
     /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
     notes: Option<String>,
     /// Whether suggest should bother mentioning this (defaults true)
@@ -779,6 +782,7 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
                 version: package.version.clone(),
                 notes: Some("automatically imported by 'cargo vet init'".to_string()),
                 suggest: true,
+                criteria: None,
             };
             dependencies
                 .entry(package.name.clone())
