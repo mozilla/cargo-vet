@@ -61,7 +61,7 @@ pub struct ResolveResult<'a> {
     /// The set of criteria we validated for this package without 'unaudited' entries.
     fully_audited_criteria: CriteriaSet,
     /// Individual search results for each criteria.
-    search_results: Vec<CriteriaSearchResult<'a>>,
+    search_results: Vec<SearchResult<'a>>,
     /// Whether there was an 'unaudited' entry for this exact version.
     directly_unaudited: bool,
     /// Whether we ever needed the not-fully_audited_criteria for our reverse-deps.
@@ -314,19 +314,30 @@ impl<'a> DepGraph<'a> {
 
 /// The possible results of search for an audit chain for a Criteria
 #[derive(Debug, Clone)]
-enum CriteriaSearchResult<'a> {
-    /// We found a path, criteria validated
-    FoundPath {
+enum SearchResult<'a> {
+    /// We found a path, criteria validated.
+    Connected {
         /// Whether we found a path to a fully_audited entry
         fully_audited: bool,
     },
-    /// We failed to find a path, criteria not valid
-    NoPath {
-        /// If any edges failed because of a dependency, here's the ones (blame them)
+    /// We failed to find a *proper* path, criteria not valid, but adding in failing
+    /// edges caused by our dependencies not meeting criteria created a connection!
+    /// If you fix these dependencies then we should validate this criteria!
+    PossiblyConnected {
+        /// The dependencies that failed on some edges (blame them).
+        /// This is currently overbroad in corner cases where there are two possible
+        /// paths blocked by two different dependencies and so only fixing one would
+        /// actually be sufficient, but, whatever.
         failed_deps: BTreeSet<&'a PackageId>,
-        /// Nodes we could reach from "roots" (unaudited, full audit)
+    },
+    /// We failed to find any path, criteria not valid.
+    Disconnected {
+        /// Nodes we could reach from "root"
         reachable_from_root: BTreeSet<&'a Version>,
-        /// Nodes we could reach from the "target" (current version)
+        /// Nodes we could reach from the "target"
+        ///
+        /// We will only ever fill in the other one, but on failure we run the algorithm
+        /// in reverse and will merge that result into this value.
         _reachable_from_target: BTreeSet<&'a Version>,
     },
 }
@@ -632,16 +643,20 @@ pub fn resolve<'a>(
                 &mut results,
             );
             match result {
-                CriteriaSearchResult::FoundPath { fully_audited } => {
+                SearchResult::Connected { fully_audited } => {
                     // We found a path, hooray, criteria validated!
                     if fully_audited {
                         fully_audited_criteria.unioned_with(criteria);
                     }
                     validated_criteria.unioned_with(criteria);
-                    search_results.push(CriteriaSearchResult::FoundPath { fully_audited });
+                    search_results.push(SearchResult::Connected { fully_audited });
                 }
-                CriteriaSearchResult::NoPath {
-                    mut failed_deps,
+                SearchResult::PossiblyConnected { failed_deps } => {
+                    // We failed but found a possible solution if our dependencies were better.
+                    // Just forward this along so that we can blame them if it comes up!
+                    search_results.push(SearchResult::PossiblyConnected { failed_deps });
+                }
+                SearchResult::Disconnected {
                     reachable_from_root,
                     ..
                 } => {
@@ -656,15 +671,12 @@ pub fn resolve<'a>(
                         resolve,
                         &mut results,
                     );
-                    if let CriteriaSearchResult::NoPath {
-                        failed_deps: mut rev_failed_deps,
+                    if let SearchResult::Disconnected {
                         reachable_from_root: reachable_from_target,
                         ..
                     } = rev_result
                     {
-                        failed_deps.append(&mut rev_failed_deps);
-                        search_results.push(CriteriaSearchResult::NoPath {
-                            failed_deps,
+                        search_results.push(SearchResult::Disconnected {
                             reachable_from_root,
                             _reachable_from_target: reachable_from_target,
                         })
@@ -720,11 +732,10 @@ pub fn resolve<'a>(
         if failed_deps.is_empty() {
             result.validated_criteria.unioned_with(&all_criteria);
         } else {
-            result.search_results.push(CriteriaSearchResult::NoPath {
-                failed_deps,
-                reachable_from_root: Default::default(),
-                _reachable_from_target: Default::default(),
-            });
+            // It's always the fault of our dependencies!
+            result
+                .search_results
+                .push(SearchResult::PossiblyConnected { failed_deps });
             result.failed = true;
 
             if metadata.workspace_members.contains(pkgid) {
@@ -780,7 +791,7 @@ fn search_for_path<'a>(
     dep_graph: &DepGraph<'a>,
     resolve: &'a Node,
     results: &mut [ResolveResult],
-) -> CriteriaSearchResult<'a> {
+) -> SearchResult<'a> {
     // Search for any path through the graph with edges that satisfy cur_criteria.
     // Finding any path validates that we satisfy that criteria. All we're doing is
     // basic depth-first search with a manual stack.
@@ -794,20 +805,30 @@ fn search_for_path<'a>(
     // by wrapping the entire algorithm in a loop, and only taking those edges on the
     // next iteration of the outer loop. So if we find a path in the first iteration,
     // then that's an unambiguous proof that we didn't need those edges.
+    //
+    // We apply this same "deferring" trick to edges which fail because of our dependencies.
+    // Once we run out of both 'unaudited' entries and still don't have a path, we start
+    // speculatively allowing ourselves to follow those edges. If we find a path by doing that
+    // then we can reliably "blame" our deps for our own failings. Otherwise we there is
+    // no possible path, and we are absolutely just missing reviews for ourself.
 
     // Conclusions
     let mut found_path = false;
     let mut needed_unaudited_entry = false;
+    let mut needed_failed_edges = false;
     let mut failed_deps = BTreeSet::new();
 
     // Search State
     let mut search_stack = vec![from_version];
     let mut visited = BTreeSet::new();
     let mut deferred_unaudited_entries = vec![];
+    let mut deferred_failed_edges = vec![];
 
     // Loop until we find a path or run out of deferred edges.
     loop {
-        // If there are any deferred edges (only possible on iteration 2+), try to follow them..
+        // If there are any deferred edges (only possible on iteration 2+), try to follow them.
+        // Always prefer following 'unaudited' edges, so that we only dip into failed edges when
+        // we've completely run out of options.
         if let Some(node) = deferred_unaudited_entries.pop() {
             // Don't bother if we got to that node some other way.
             if visited.contains(node) {
@@ -817,6 +838,16 @@ fn search_for_path<'a>(
             // fails, then we won't mention that we used this, since the graph is just broken
             // and we can't make any conclusions about whether anything is needed or not!
             needed_unaudited_entry = true;
+            search_stack.push(node);
+        } else if let Some(node) = deferred_failed_edges.pop() {
+            // Don't bother if we got to that node some other way.
+            if visited.contains(node) {
+                continue;
+            }
+            // Ok at this point we officially "need" the failed edge. If the search still
+            // fails, then we won't mention that we used this, since the graph is just broken
+            // and we can't make any conclusions about whether anything is needed or not!
+            needed_failed_edges = true;
             search_stack.push(node);
         }
 
@@ -858,15 +889,10 @@ fn search_for_path<'a>(
                             .dependency_criteria
                             .get(&*dep_package.name)
                             .unwrap_or(&edge.criteria);
-                        // TODO: think harder about how unaudited works here
+
                         if !dep_vet_result.contains(dep_req) {
+                            failed_deps.insert(dependency);
                             deps_satisfied = false;
-                            // If this is resulting in an actual loss of criteria, tentatively blame
-                            // this dependency for own future failings. If we end up resolving some
-                            // other way, then we won't mention this horrendous treachery.
-                            if !cur_criteria.is_empty() {
-                                failed_deps.insert(dependency);
-                            }
                         }
                     }
 
@@ -877,24 +903,35 @@ fn search_for_path<'a>(
                         } else {
                             search_stack.push(edge.version);
                         }
+                    } else {
+                        // Remember this edge failed, if we can't find any path we'll speculatively
+                        // re-enable it.
+                        deferred_failed_edges.push(edge.version);
                     }
                 }
             }
         }
 
         // Exit conditions
-        if found_path || deferred_unaudited_entries.is_empty() {
+        if found_path || (deferred_unaudited_entries.is_empty() && deferred_failed_edges.is_empty())
+        {
             break;
         }
     }
 
-    if found_path {
-        CriteriaSearchResult::FoundPath {
+    // It's only a success if we found a path and used no 'failed' edges.
+    if found_path && !needed_failed_edges {
+        // Complete success!
+        SearchResult::Connected {
             fully_audited: !needed_unaudited_entry,
         }
+    } else if found_path {
+        // Failure, but it's clearly the fault of our deps.
+        SearchResult::PossiblyConnected { failed_deps }
     } else {
-        CriteriaSearchResult::NoPath {
-            failed_deps,
+        // Complete failure, we need more audits of ourself,
+        // so all that matters is what nodes were reachable.
+        SearchResult::Disconnected {
             reachable_from_root: visited,
             // This will get filled in by the second pass
             _reachable_from_target: Default::default(),
@@ -970,11 +1007,15 @@ impl<'a> Report<'a> {
                     width = indent
                 )?;
 
+                // Try to blame our deps
+                // TODO: filter this further by only selecting for criteria that was actually
+                // needed by our policy, we don't care if our dependencies were preventing us
+                // from satisfying some strict criteria we didn't even need!
                 let all_failed_deps: BTreeSet<_> = result
                     .search_results
                     .iter()
                     .filter_map(|result| {
-                        if let CriteriaSearchResult::NoPath { failed_deps, .. } = result {
+                        if let SearchResult::PossiblyConnected { failed_deps } = result {
                             Some(failed_deps.iter())
                         } else {
                             None

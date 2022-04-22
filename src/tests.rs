@@ -1081,3 +1081,89 @@ fn mock_simple_delta_to_too_weak_full_audit() {
     let stdout = String::from_utf8(stdout).unwrap();
     insta::assert_snapshot!("mock-simple-delta-to-too-weak-full-audit", stdout);
 }
+
+// TESTING BACKLOG:
+//
+// * custom policies
+//   * basic
+//   * custom criteria to third-party
+//   * custom criteria to first-party
+//   * two first-parties depending on the same thing
+//      * which is itself first-party
+//      * which is a third-party
+//      * with different policies
+//         * where only the weaker one is satisfied (fail but give good diagnostic)
+//
+// * delta cycles (don't enter infinite loops!)
+//   * no-op delta (x -> x), should diagnostic for this..?
+//   * A -> B -> A
+//   * A -> B -> C -> A
+//   * try both success and failure cases, failure more likely to infinite loop
+//
+// * unaudited entry dependencies
+//   * (fail) dep unaudited but claims too-weak criteria
+//   * (pass) dep unaudited and his exactly the right criteria
+//   * (pass) dep unaudited and has superset of criteria
+//   * all of the above but for dep-audited
+//   * dep has no audits
+//
+// * interesting situations for vet-init
+//   * build-deps
+//   * dev-deps
+//   * "cargo resolver 2.0 situations"?
+//
+// * foreign mappings
+//   * only using builtins
+//   * 1:1 explicit mappings
+//   * asymmetric cases
+//   * missing mappings
+//   * foreign has criteria with the same name, unmapped (don't accidentally mix it up)
+//   * foreign has criteria with the same name, mapped to that name
+//   * foreign has criteria with the same name, mapped to a different name
+//
+// * detecting unused unaudited entries
+//   * no crate in the project with that name (removed dep)
+//   * completely unreachable unaudited entry
+//   * unaudited entry is reachable but not needed
+//   * there is a full audit for exactly the unaudited entry
+//   * this is a delta chain that passes through the unaudited entry
+//   * situations that shouldn't warn
+//     * two versions of the same crate, one needs an unaudited, the other doesn't
+//     * two versions and two unauditeds, each used by one of them
+//     * two unauditeds, one is needed, the other isn't (warn about exactly one!)
+//
+// * violations
+//   * matching the current version
+//   * matching an unaudited entry
+//   * matching a delta audit (from)
+//   * matching a delta audit (to)
+//   * matching a full audit
+//   * violations "masking" out higher criteria but preserving lower criteria?
+//
+// * misc
+//   * git deps are first party but not in workspace
+//   * path deps are first party but not in workspace
+//   * multiple root packages
+//   * weird workspaces
+//   * running from weird directories
+//   * a node explicitly setting all its dependency_criteria to "no reqs"
+//     * ...should this just be an error? that feels wrong to do. otherwise:
+//       * with perfectly fine children
+//       * with children that fail to validate at all
+//
+// * malformed inputs:
+//   * no default criteria specified
+//   * referring to non-existent criteria
+//   * referring to non-existent crates (in crates.io? or just in our dep graph?)
+//   * referring to non-existent versions?
+//   * Bad delta syntax
+//   * Bad version syntax
+//   * entries in tomls that don't map to anything (at least warn to catch typos?)
+//     * might be running an old version of cargo-vet on a newer repo?
+//
+// * builtin-criteria..?
+//
+// * dev-deps
+//
+// * build-deps
+//
