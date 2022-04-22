@@ -355,9 +355,21 @@ impl MockMetadata {
 }
 
 fn unaudited(audits: &AuditsFile, version: Version) -> UnauditedDependency {
+    let defaults = audits
+        .criteria
+        .iter()
+        .filter_map(|(criteria, entry)| {
+            if entry.default {
+                Some(criteria.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+
     UnauditedDependency {
         version,
-        criteria: Some(audits.criteria.keys().cloned().collect()),
+        criteria: Some(defaults),
         notes: None,
         suggest: true,
     }

@@ -327,7 +327,7 @@ enum CriteriaSearchResult<'a> {
         /// Nodes we could reach from "roots" (unaudited, full audit)
         reachable_from_root: BTreeSet<&'a Version>,
         /// Nodes we could reach from the "target" (current version)
-        reachable_from_target: BTreeSet<&'a Version>,
+        _reachable_from_target: BTreeSet<&'a Version>,
     },
 }
 
@@ -600,7 +600,7 @@ pub fn resolve<'a>(
                     .criteria
                     .as_ref()
                     .map(|c| criteria_mapper.criteria_from_list(c.iter().map(|s| &**s)))
-                    .unwrap_or_else(|| all_criteria.clone());
+                    .unwrap_or_else(|| criteria_mapper.default_criteria().clone());
 
                 // For simplicity, turn 'unaudited' entries into deltas from 0.0.0
                 forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
@@ -666,7 +666,7 @@ pub fn resolve<'a>(
                         search_results.push(CriteriaSearchResult::NoPath {
                             failed_deps,
                             reachable_from_root,
-                            reachable_from_target,
+                            _reachable_from_target: reachable_from_target,
                         })
                     } else {
                         unreachable!("We managed to find a path but only from one direction?!");
@@ -723,7 +723,7 @@ pub fn resolve<'a>(
             result.search_results.push(CriteriaSearchResult::NoPath {
                 failed_deps,
                 reachable_from_root: Default::default(),
-                reachable_from_target: Default::default(),
+                _reachable_from_target: Default::default(),
             });
             result.failed = true;
 
@@ -859,7 +859,7 @@ fn search_for_path<'a>(
                             .get(&*dep_package.name)
                             .unwrap_or(&edge.criteria);
                         // TODO: think harder about how unaudited works here
-                        if !dep_vet_result.contains(dep_req) && !edge.is_unaudited_entry {
+                        if !dep_vet_result.contains(dep_req) {
                             deps_satisfied = false;
                             // If this is resulting in an actual loss of criteria, tentatively blame
                             // this dependency for own future failings. If we end up resolving some
@@ -897,7 +897,7 @@ fn search_for_path<'a>(
             failed_deps,
             reachable_from_root: visited,
             // This will get filled in by the second pass
-            reachable_from_target: Default::default(),
+            _reachable_from_target: Default::default(),
         }
     }
 }
@@ -1008,4 +1008,10 @@ impl<'a> Report<'a> {
 
         Ok(())
     }
+
+    /* TODO
+    fn print_suggest(&self, out: &mut dyn Write) -> Result<(), VetError> {
+
+    }
+     */
 }
