@@ -15,7 +15,7 @@ exclude = [
 
 [dependencies]
 cargo_metadata = "0.14.2"
-clap = "3.1.10"
+clap = "3.1.11"
 clap-cargo = "0.8.0"
 eyre = "0.6.8"
 home = "0.5.3"
