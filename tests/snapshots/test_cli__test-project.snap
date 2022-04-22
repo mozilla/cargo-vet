@@ -3,5 +3,5 @@ source: tests/test-cli.rs
 assertion_line: 129
 expression: stdout
 ---
-Vetting Succeeded (5 fully audited 2 partially audited, 98 unaudited)
+Vetting Succeeded (6 fully audited, 1 partially audited, 98 unaudited)
 
