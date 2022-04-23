@@ -311,12 +311,14 @@ static DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA: &str = SAFE_TO_RUN;
 pub fn get_default_policy_criteria() -> Vec<String> {
     vec![DEFAULT_POLICY_CRITERIA.to_string()]
 }
+#[allow(clippy::ptr_arg)]
 fn is_default_policy_criteria(val: &Vec<String>) -> bool {
     val.len() == 1 && val[0] == DEFAULT_POLICY_CRITERIA
 }
 pub fn get_default_policy_build_and_dev_criteria() -> Vec<String> {
     vec![DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA.to_string()]
 }
+#[allow(clippy::ptr_arg)]
 fn is_default_policy_build_and_dev_criteria(val: &Vec<String>) -> bool {
     val.len() == 1 && val[0] == DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA
 }
