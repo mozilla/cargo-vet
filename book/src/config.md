@@ -145,17 +145,12 @@ validity](audit-entries.md#targets) to a set of targets).
 
 For top-level crates, defaults to all platforms.
 
-#### `dev-targets`
+#### `dev-and-build-targets`
 
-Same as the above, but applied to dev-dependencies.
-
-For top-level crates, defaults to all platforms.
-
-#### `build-targets`
-
-Same as the above, but applied to build-dependencies.
+Same as the above, but applied to dev-dependencies and build-dependencies.
 
 For top-level crates, defaults to all platforms.
+
 
 ### The `unaudited` Table
 
