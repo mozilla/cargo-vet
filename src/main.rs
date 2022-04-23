@@ -1,28 +1,32 @@
 use std::ffi::OsString;
+use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufReader, Read};
 use std::ops::Deref;
 use std::path::Path;
 use std::process::Command;
-use std::{fmt, fs};
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
-use cargo_metadata::{Metadata, Package, Version, VersionReq};
+use cargo_metadata::{Metadata, Package, Version};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
+use format::{AuditEntry, AuditKind, Delta, MetaConfig};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
-use serde::de::Visitor;
-use serde::{de, de::Deserialize, ser::Serialize};
-use serde::{Deserializer, Serializer};
+use serde::{de::Deserialize, ser::Serialize};
 use simplelog::{
     ColorChoice, ConfigBuilder, Level, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
 
+use crate::format::{
+    AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
+    PolicyTable, StableMap, Store, UnauditedDependency,
+};
+
+pub mod format;
 mod resolver;
 #[cfg(test)]
 mod tests;
 
-type StableMap<K, V> = linked_hash_map::LinkedHashMap<K, V>;
 type VetError = eyre::Report;
 
 #[derive(Parser)]
@@ -163,298 +167,6 @@ pub struct Config {
     cargo: OsString,
     tmp: PathBuf,
     registry_src: Option<PathBuf>,
-}
-
-/// A `[*.metadata.vet]` table in a Cargo.toml, configuring our behaviour
-#[derive(serde::Deserialize)]
-pub struct MetaConfigInstance {
-    // Reserved for future use, if not present version=1 assumed.
-    // (not sure whether this versions the format, or semantics, or...
-    // for now assuming this species global semantics of some kind.
-    version: Option<u64>,
-    store: Option<Store>,
-}
-#[derive(serde::Deserialize)]
-pub struct Store {
-    path: Option<PathBuf>,
-}
-
-// FIXME: It's *possible* for someone to have a workspace but not have a
-// global `vet` instance for the whole workspace. In this case they *could*
-// have individual `vet` instances for each subcrate they care about.
-// This is... Weird, and it's unclear what that *means*... but maybe it's valid?
-// Either way, we definitely don't support it right now!
-
-/// All available configuration files, overlaying eachother.
-/// Generally contains: `[Default, Workspace, Package]`
-pub struct MetaConfig(Vec<MetaConfigInstance>);
-
-impl MetaConfig {
-    fn store_path(&self) -> &Path {
-        // Last config gets priority to set this
-        for config in self.0.iter().rev() {
-            if let Some(store) = &config.store {
-                if let Some(path) = &store.path {
-                    return path;
-                }
-            }
-        }
-        unreachable!("Default config didn't define store.path???");
-    }
-    fn version(&self) -> u64 {
-        // Last config gets priority to set this
-        for config in self.0.iter().rev() {
-            if let Some(ver) = config.version {
-                return ver;
-            }
-        }
-        unreachable!("Default config didn't define version???");
-    }
-}
-
-pub type AuditedDependencies = StableMap<String, Vec<AuditEntry>>;
-
-/// audits.toml
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct AuditsFile {
-    /// A map of criteria_name to details on that criteria.
-    criteria: StableMap<String, CriteriaEntry>,
-    /// Actual audits.
-    audits: AuditedDependencies,
-}
-
-/// imports.lock, not sure what I want to put in here yet.
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct ImportsFile {
-    audits: StableMap<String, AuditsFile>,
-}
-
-/// config.toml
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct ConfigFile {
-    /// Remote audits.toml's that we trust and want to import.
-    imports: StableMap<String, RemoteImport>,
-    /// All of the "foreign" dependencies that we rely on but haven't audited yet.
-    /// Foreign dependencies are just "things on crates.io", everything else
-    /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
-    unaudited: StableMap<String, Vec<UnauditedDependency>>,
-    policy: PolicyTable,
-}
-
-/// Information on a Criteria
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct CriteriaEntry {
-    /// Summary of how you evaluate something by this criteria.
-    description: String,
-    /// Whether this criteria is part of the "defaults"
-    default: bool,
-    /// Criteria that this one implies
-    implies: Vec<String>,
-}
-
-/// Policies that first-party (non-foreign) crates must pass.
-///
-/// This is basically the first-party equivalent of audits.toml, which is separated out
-/// because it's not supposed to be shared (or, doesn't really make sense to share,
-/// since first-party crates are defined by "not on crates.io").
-///
-/// Because first-party crates are implicitly trusted, really the only purpose of this
-/// table is to define the boundary between a first-party crates and third-party ones.
-/// More specifically, the criteria of the dependency edges between a first-party crate
-/// and its direct third-party dependencies.
-///
-/// If this sounds overwhelming, don't worry, everything defaults to "nothing special"
-/// and an empty PolicyTable basically just means "everything should satisfy the
-/// default criteria in audits.toml".
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct PolicyTable {
-    /// Default criteria that must be satisfied by all *direct* third-party (foreign)
-    /// dependencies of first-party crates. If satisfied, the first-party crate is
-    /// set to satisfying all criteria.
-    ///
-    /// If not present, this defaults to the default criteria in the audits table.
-    criteria: Option<Vec<String>>,
-
-    /// Custom criteria for a specific first-party crate's dependencies. It's nonsensical
-    /// to define criteria between two first-party crates, so you can only name third-party
-    /// dependencies here.
-    ///
-    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
-    #[serde(rename = "dependency-criteria")]
-    dependency_criteria: Option<DependencyCriteria>,
-
-    /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
-    /// used as build-dependencies or dev-dependencies.
-    #[serde(rename = "build-and-dev-criteria")]
-    build_and_dev_criteria: Option<Vec<String>>,
-
-    /// TODO: figure this out
-    targets: Option<Vec<String>>,
-
-    /// `targets` but build/dev
-    #[serde(rename = "build-and-dev-targets")]
-    build_and_dev_targets: Option<Vec<String>>,
-}
-
-/// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct RemoteImport {
-    /// URL of the foreign audits.toml
-    url: String,
-    /// A list of criteria that are implied by foreign criteria
-    #[serde(rename = "criteria-map")]
-    criteria_map: Vec<CriteriaMapping>,
-}
-
-/// Translations of foreign criteria to local criteria.
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct CriteriaMapping {
-    /// This local criteria is implied...
-    ours: String,
-    /// If all of these foreign criteria apply
-    theirs: Vec<String>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct UnauditedDependency {
-    /// The version(s) of the crate that we are currently "fine" with leaving unaudited.
-    /// For the sake of consistency, I'm making this a proper Cargo VersionReq:
-    /// <https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html>
-    ///
-    /// One significant implication of this is that x.y.z is *not* one version. It is
-    /// ^x.y.z, per Cargo convention. You must use =x.y.z to be that specific. We will
-    /// do this for you when we do `cargo vet init`, so this shouldn't be a big deal?
-    version: Version,
-    /// Criteria that we're willing to handwave for this version. If nothing specified,
-    /// this is all_criteria (TODO: rejig init so that this is very an Option!).
-    criteria: Option<Vec<String>>,
-    /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
-    notes: Option<String>,
-    /// Whether suggest should bother mentioning this (defaults true)
-    suggest: bool,
-}
-
-/// This is just a big vague ball initially. It's up to the Audits/Unuadited/Trusted wrappers
-/// to validate if it "makes sense" for their particular function.
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-pub struct AuditEntry {
-    version: Option<Version>,
-    delta: Option<Delta>,
-    violation: Option<VersionReq>,
-    who: Option<String>,
-    notes: Option<String>,
-    criteria: Option<Vec<String>>,
-    #[serde(rename = "dependency-criteria")]
-    dependency_criteria: Option<DependencyCriteria>,
-}
-
-impl AuditEntry {
-    /// Not actually valid, but a starting point for other things
-    pub fn null() -> Self {
-        Self {
-            version: None,
-            delta: None,
-            violation: None,
-            who: None,
-            notes: None,
-            criteria: None,
-            dependency_criteria: None,
-        }
-    }
-    pub fn violation(req: VersionReq) -> Self {
-        Self {
-            violation: Some(req),
-            ..Self::null()
-        }
-    }
-    pub fn full_audit(version: Version) -> Self {
-        Self {
-            version: Some(version),
-            ..Self::null()
-        }
-    }
-    pub fn delta_audit(from: Version, to: Version) -> Self {
-        Self {
-            delta: Some(Delta { from, to }),
-            ..Self::null()
-        }
-    }
-}
-
-/// A list of criteria that transitive dependencies must satisfy for this
-/// audit to continue to be considered valid.
-///
-/// Example:
-///
-/// ```toml
-/// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
-/// ```
-pub type DependencyCriteria = StableMap<String, Vec<String>>;
-
-/// A "VERSION -> VERSION"
-#[derive(Debug)]
-pub struct Delta {
-    from: Version,
-    to: Version,
-}
-
-impl<'de> Deserialize<'de> for Delta {
-    fn deserialize<D>(deserializer: D) -> Result<Delta, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct DeltaVisitor;
-        impl<'de> Visitor<'de> for DeltaVisitor {
-            type Value = Delta;
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a delta of the form 'VERSION -> VERSION'")
-            }
-            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                if let Some((from, to)) = s.split_once("->") {
-                    Ok(Delta {
-                        from: Version::parse(from.trim()).map_err(de::Error::custom)?,
-                        to: Version::parse(to.trim()).map_err(de::Error::custom)?,
-                    })
-                } else {
-                    Err(de::Error::invalid_value(de::Unexpected::Str(s), &self))
-                }
-            }
-        }
-
-        deserializer.deserialize_str(DeltaVisitor)
-    }
-}
-
-impl Serialize for Delta {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let output = format!("{} -> {}", self.from, self.to);
-        serializer.serialize_str(&output)
-    }
-}
-
-impl ConfigFile {
-    fn validate(&self) -> Result<(), VetError> {
-        // TODO
-        Ok(())
-    }
-}
-impl ImportsFile {
-    fn validate(&self) -> Result<(), VetError> {
-        // TODO
-        Ok(())
-    }
-}
-impl AuditsFile {
-    fn validate(&self) -> Result<(), VetError> {
-        // TODO
-        Ok(())
-    }
 }
 
 static EMPTY_PACKAGE: &str = "empty";
@@ -732,78 +444,72 @@ fn main() -> Result<(), VetError> {
 
 fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<(), VetError> {
     // Initialize vet
-    trace!("initializing...");
-
-    let store_path = cfg.metacfg.store_path();
 
     // Create store_path
     // - audits.toml (empty, sample criteria)
     // - imports.lock (empty)
     // - config.toml (populated with defaults and full list of third-party crates)
+    trace!("initializing...");
+
+    let store_path = cfg.metacfg.store_path();
+
+    let (config, audits, imports) = init_files(&cfg.metadata)?;
 
     // In theory we don't need `all` here, but this allows them to specify
     // the store as some arbitrarily nested subdir for whatever reason
     // (maybe multiple parallel instances?)
     std::fs::create_dir_all(store_path)?;
+    store_audits(store_path, audits)?;
+    store_imports(store_path, imports)?;
+    store_config(store_path, config)?;
 
-    {
-        trace!("initializing {:#?}", AUDITS_TOML);
+    Ok(())
+}
 
-        let sample_criteria = CriteriaEntry {
-            description: "you looked at it and it seems fine".to_string(),
-            default: true,
-            implies: vec![],
-        };
+pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, ImportsFile), VetError> {
+    // Default audits file is empty
+    let audits = AuditsFile {
+        criteria: StableMap::new(),
+        audits: StableMap::new(),
+    };
 
-        let audits = AuditsFile {
-            criteria: [("reviewed".to_string(), sample_criteria)]
-                .into_iter()
-                .collect(),
-            audits: StableMap::new(),
-        };
-        store_audits(store_path, audits)?;
-    }
+    // Default imports file is empty
+    let imports = ImportsFile {
+        audits: StableMap::new(),
+    };
 
-    {
-        trace!("initializing {:#?}", IMPORTS_LOCK);
-        let imports = ImportsFile {
-            audits: StableMap::new(),
-        };
-        store_imports(store_path, imports)?;
-    }
-
-    {
-        trace!("initializing {:#?}", CONFIG_TOML);
-
+    // This is the hard one
+    let config = {
         let mut dependencies = StableMap::new();
-        for package in foreign_packages(&cfg.metadata) {
+        for package in foreign_packages(metadata) {
             // NOTE: May have multiple copies of a package!
             let item = UnauditedDependency {
                 version: package.version.clone(),
                 notes: Some("automatically imported by 'cargo vet init'".to_string()),
                 suggest: true,
-                criteria: None,
+                // TODO: use whether this is a build_and_dev to make this weaker
+                criteria: format::DEFAULT_CRITERIA.to_string(),
             };
             dependencies
                 .entry(package.name.clone())
                 .or_insert(vec![])
                 .push(item);
         }
-        let config = ConfigFile {
+        ConfigFile {
+            default_criteria: format::get_default_criteria(),
             imports: StableMap::new(),
             unaudited: dependencies,
             policy: PolicyTable {
-                dependency_criteria: None,
-                criteria: None,
-                build_and_dev_criteria: None,
+                criteria: format::get_default_policy_criteria(),
+                build_and_dev_criteria: format::get_default_policy_build_and_dev_criteria(),
+                dependency_criteria: StableMap::new(),
                 targets: None,
                 build_and_dev_targets: None,
             },
-        };
-        store_config(store_path, config)?;
-    }
+        }
+    };
 
-    Ok(())
+    Ok((config, audits, imports))
 }
 
 fn cmd_inspect(out: &mut dyn Write, cfg: &Config, sub_args: &InspectArgs) -> Result<(), VetError> {
@@ -839,6 +545,9 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
     // Certify that you have reviewed a crate's source for some version / delta
     let store_path = cfg.metacfg.store_path();
     let mut audits = load_audits(store_path)?;
+    let config = load_config(store_path)?;
+
+    let dependency_criteria = DependencyCriteria::new();
 
     // FIXME: better error when this goes bad
     let version1 = Version::parse(&sub_args.version1).expect("version1 wasn't a valid Version");
@@ -847,43 +556,34 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
         .as_ref()
         .map(|v| Version::parse(v).expect("version2 wasn't a valid Version"));
 
-    let mut version = None;
-    let mut delta = None;
-    if let Some(version2) = version2 {
+    let kind = if let Some(version2) = version2 {
         // This is a delta audit
-        delta = Some(Delta {
-            from: version1,
-            to: version2,
-        });
+        AuditKind::Delta {
+            delta: Delta {
+                from: version1,
+                to: version2,
+            },
+            dependency_criteria,
+        }
     } else {
-        // This is an absolute audit
-        version = Some(version1);
-    }
+        AuditKind::Full {
+            version: version1,
+            dependency_criteria,
+        }
+    };
 
-    // TODO: source this from git or something?
+    let criteria = config.default_criteria;
+
+    // TODO: source this from git
     let who = Some("?TODO?".to_string());
-    // TODO: start an interactive prompt? launch $EDITOR?
+    // TODO: start an interactive prompt
     let notes = Some("?TODO?".to_string());
-    // TODO: No criteria is the default criteria? Does that make sense?
-    // Shouldn't we actually snapshot the current default so the default can change
-    // without changing the claims on old audits? Or do we in fact *want* that so
-    // that audit criteria can be subdivided, and the defaults will pick that up..?
-    //
-    // Alternate impl?
-    // audits.default_criteria.clone()
-    //      .unwrap_or_else(|| audits.criteria.keys().cloned().collect());
-    let criteria = None;
-    // TODO: figure this out
-    let dependency_criteria = None;
 
     let new_entry = AuditEntry {
-        version,
-        delta,
-        violation: None,
+        kind,
+        criteria,
         who,
         notes,
-        criteria,
-        dependency_criteria,
     };
 
     // TODO: check if the version makes sense..?

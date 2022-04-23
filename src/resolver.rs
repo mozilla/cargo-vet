@@ -5,6 +5,7 @@ use std::io::Write;
 use cargo_metadata::{Metadata, Node, Package, PackageId, Version};
 use log::{error, trace, warn};
 
+use crate::format::AuditKind;
 use crate::{
     AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, ImportsFile, PackageExt, StableMap, VetError,
 };
@@ -30,13 +31,11 @@ const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
 /// A processed version of config.toml's criteria definitions, for mapping
 /// lists of criteria names to CriteriaSets.
 #[derive(Debug, Clone)]
-pub struct CriteriaMapper<'a> {
+pub struct CriteriaMapper {
     /// All the criteria in their raw form
-    list: Vec<(&'a str, &'a CriteriaEntry)>,
+    list: Vec<(String, CriteriaEntry)>,
     /// name -> index in all lists
-    index: HashMap<&'a str, usize>,
-    /// The default criteria for anything that says nothing (TODO: remove this?)
-    default_criteria: CriteriaSet,
+    index: HashMap<String, usize>,
     /// The transitive closure of all criteria implied by each criteria (including self)
     implied_criteria: Vec<CriteriaSet>,
 }
@@ -69,16 +68,43 @@ pub struct ResolveResult<'a> {
     failed: bool,
 }
 
-impl<'a> CriteriaMapper<'a> {
-    fn new(criteria: &'a StableMap<String, CriteriaEntry>) -> CriteriaMapper<'a> {
-        let list = criteria.iter().map(|(k, v)| (&**k, v)).collect::<Vec<_>>();
-        let index = criteria
-            .keys()
+fn builtin_criteria() -> StableMap<String, CriteriaEntry> {
+    [
+        (
+            "safe-to-run".to_string(),
+            CriteriaEntry {
+                description: Some("safe to run locally".to_string()),
+                description_url: None,
+                implies: vec![],
+            },
+        ),
+        (
+            "safe-to-deploy".to_string(),
+            CriteriaEntry {
+                description: Some("safe to deploy to production".to_string()),
+                description_url: None,
+                implies: vec!["safe-to-run".to_string()],
+            },
+        ),
+    ]
+    .into_iter()
+    .collect()
+}
+
+impl CriteriaMapper {
+    fn new(criteria: &StableMap<String, CriteriaEntry>) -> CriteriaMapper {
+        let builtins = builtin_criteria();
+        let list = criteria
+            .iter()
+            .chain(builtins.iter())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<Vec<_>>();
+        let index: HashMap<String, usize> = list
+            .iter()
             .enumerate()
-            .map(|(idx, v)| (&**v, idx))
+            .map(|(idx, v)| (v.0.clone(), idx))
             .collect();
 
-        let mut default_criteria = CriteriaSet::none(list.len());
         let mut implied_criteria = Vec::with_capacity(list.len());
         for (idx, (_name, entry)) in list.iter().enumerate() {
             // Precompute implied criteria (doing it later is genuinely a typesystem headache)
@@ -86,17 +112,13 @@ impl<'a> CriteriaMapper<'a> {
             implied.set_criteria(idx);
             recursive_implies(&mut implied, &entry.implies, &index, &list);
 
-            if entry.default {
-                default_criteria.unioned_with(&implied);
-            }
-
             implied_criteria.push(implied);
 
             fn recursive_implies(
                 result: &mut CriteriaSet,
                 implies: &[String],
-                index: &HashMap<&str, usize>,
-                list: &[(&str, &CriteriaEntry)],
+                index: &HashMap<String, usize>,
+                list: &[(String, CriteriaEntry)],
             ) {
                 for implied in implies {
                     let idx = index[&**implied];
@@ -112,16 +134,11 @@ impl<'a> CriteriaMapper<'a> {
         Self {
             list,
             index,
-            default_criteria,
             implied_criteria,
         }
     }
     fn criteria_from_entry(&self, entry: &AuditEntry) -> CriteriaSet {
-        if let Some(criteria_list) = entry.criteria.as_ref() {
-            self.criteria_from_list(criteria_list.iter().map(|s| &**s))
-        } else {
-            self.default_criteria().clone()
-        }
+        self.implied_criteria[self.index[&*entry.criteria]].clone()
     }
     fn criteria_from_list<'b>(&self, list: impl IntoIterator<Item = &'b str>) -> CriteriaSet {
         let mut result = self.no_criteria();
@@ -142,9 +159,6 @@ impl<'a> CriteriaMapper<'a> {
 
     fn len(&self) -> usize {
         self.list.len()
-    }
-    fn default_criteria(&self) -> &CriteriaSet {
-        &self.default_criteria
     }
     fn no_criteria(&self) -> CriteriaSet {
         CriteriaSet::none(self.len())
@@ -381,25 +395,13 @@ pub fn resolve<'a>(
     let no_criteria = criteria_mapper.no_criteria();
 
     // Compute the "policy" criteria
-    let policy = config
-        .policy
-        .criteria
-        .as_ref()
-        .map(|c| criteria_mapper.criteria_from_list(c.iter().map(|s| &**s)))
-        .unwrap_or_else(|| criteria_mapper.default_criteria().clone());
-    let _build_and_dev_policy = config
-        .policy
-        .build_and_dev_criteria
-        .as_ref()
-        .map(|c| criteria_mapper.criteria_from_list(c.iter().map(|s| &**s)))
-        .unwrap_or_else(|| policy.clone());
+    let policy = criteria_mapper.criteria_from_list(config.policy.criteria.iter().map(|s| &**s));
+    let _build_and_dev_policy = criteria_mapper
+        .criteria_from_list(config.policy.build_and_dev_criteria.iter().map(|s| &**s));
     let dep_policies: HashMap<_, _> = config
         .policy
         .dependency_criteria
-        .as_ref()
-        .map(|d| d.iter())
-        .into_iter()
-        .flatten()
+        .iter()
         .map(|(pkg_name, criteria)| {
             (
                 &**pkg_name,
@@ -444,19 +446,26 @@ pub fn resolve<'a>(
 
         // Collect up all the deltas, their criteria, and dependency_criteria
         for entry in own_audits.iter() {
-            if entry.violation.is_some() {
-                violations.push(entry);
-                continue;
+            // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
+            let (from_ver, to_ver, dependency_criteria) = match &entry.kind {
+                AuditKind::Full {
+                    version,
+                    dependency_criteria,
+                } => (&ROOT_VERSION, version, dependency_criteria),
+                AuditKind::Delta {
+                    delta,
+                    dependency_criteria,
+                } => (&delta.from, &delta.to, dependency_criteria),
+                AuditKind::Violation { .. } => {
+                    violations.push(entry);
+                    continue;
+                }
             };
 
             let criteria = criteria_mapper.criteria_from_entry(entry);
             // Convert all the custom criteria to CriteriaSets
-            let dependency_criteria: HashMap<_, _> = entry
-                .dependency_criteria
-                .as_ref()
-                .map(|d| d.iter())
-                .into_iter()
-                .flatten()
+            let dependency_criteria: HashMap<_, _> = dependency_criteria
+                .iter()
                 .map(|(pkg_name, criteria)| {
                     (
                         &**pkg_name,
@@ -464,15 +473,6 @@ pub fn resolve<'a>(
                     )
                 })
                 .collect();
-
-            // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
-            let (from_ver, to_ver) = if let Some(ver) = &entry.version {
-                (&ROOT_VERSION, ver)
-            } else if let Some(delta) = &entry.delta {
-                (&delta.from, &delta.to)
-            } else {
-                unreachable!("audit wasn't a full entry, audit, or delta!?")
-            };
 
             forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
                 version: to_ver,
@@ -511,16 +511,27 @@ pub fn resolve<'a>(
                 .get(&package.name)
                 .unwrap_or(&NO_AUDITS)
             {
+                // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
+                let (from_ver, to_ver, dependency_criteria) = match &entry.kind {
+                    AuditKind::Full {
+                        version,
+                        dependency_criteria,
+                    } => (&ROOT_VERSION, version, dependency_criteria),
+                    AuditKind::Delta {
+                        delta,
+                        dependency_criteria,
+                    } => (&delta.from, &delta.to, dependency_criteria),
+                    AuditKind::Violation { .. } => {
+                        violations.push(entry);
+                        continue;
+                    }
+                };
                 // TODO: figure out a reasonable way to map foreign dependency_criteria
-                if entry.dependency_criteria.is_some() {
+                if !dependency_criteria.is_empty() {
                     // Just discard this entry for now
                     warn!("discarding foreign audit with dependency_criteria (TODO)");
                     continue;
                 }
-                if entry.violation.is_some() {
-                    violations.push(entry);
-                    continue;
-                };
 
                 // Map this entry's criteria into our worldview
                 let mut local_criteria = no_criteria.clone();
@@ -530,15 +541,6 @@ pub fn resolve<'a>(
                         criteria_mapper.set_criteria(&mut local_criteria, local_implied);
                     }
                 }
-
-                // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
-                let (from_ver, to_ver) = if let Some(ver) = &entry.version {
-                    (&ROOT_VERSION, ver)
-                } else if let Some(delta) = &entry.delta {
-                    (&delta.from, &delta.to)
-                } else {
-                    unreachable!("audit wasn't a full entry, audit, or delta!?")
-                };
 
                 forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
                     version: to_ver,
@@ -559,30 +561,43 @@ pub fn resolve<'a>(
         //
         // FIXME: should the "local" audit have a mechanism to override foreign forbids?
         for violation_entry in &violations {
-            let violation_range = violation_entry.violation.as_ref().unwrap();
+            let violation_range = if let AuditKind::Violation { violation } = &violation_entry.kind
+            {
+                violation
+            } else {
+                unreachable!("violation_entry wasn't a Violation?");
+            };
+
             // Hard error out if anything in our audits overlaps with a forbid entry!
             // (This clone isn't a big deal, it's just iterator adaptors for by-ref iteration)
             for entry in own_audits.iter().chain(foreign_audits.clone()) {
-                if let Some(ver) = &entry.version {
-                    if violation_range.matches(ver) {
-                        error!(
-                            "Integrity Failure! Audit and Violation Overlap for {}:",
-                            package.name
-                        );
-                        error!("  audit: {:#?}", entry);
-                        error!("  violation: {:#?}", violation_entry);
-                        panic!("Integrity Failure! TODO: factor this out better");
+                match &entry.kind {
+                    AuditKind::Full { version, .. } => {
+                        if violation_range.matches(version) {
+                            error!(
+                                "Integrity Failure! Audit and Violation Overlap for {}:",
+                                package.name
+                            );
+                            error!("  audit: {:#?}", entry);
+                            error!("  violation: {:#?}", violation_entry);
+                            panic!("Integrity Failure! TODO: factor this out better");
+                        }
                     }
-                }
-                if let Some(delta) = &entry.delta {
-                    if violation_range.matches(&delta.from) || violation_range.matches(&delta.to) {
-                        error!(
-                            "Integrity Failure! Delta Audit and Violation Overlap for {}:",
-                            package.name
-                        );
-                        error!("  audit: {:#?}", entry);
-                        error!("  violation: {:#?}", violation_entry);
-                        panic!("Integrity Failure! TODO: factor this out better");
+                    AuditKind::Delta { delta, .. } => {
+                        if violation_range.matches(&delta.from)
+                            || violation_range.matches(&delta.to)
+                        {
+                            error!(
+                                "Integrity Failure! Delta Audit and Violation Overlap for {}:",
+                                package.name
+                            );
+                            error!("  audit: {:#?}", entry);
+                            error!("  violation: {:#?}", violation_entry);
+                            panic!("Integrity Failure! TODO: factor this out better");
+                        }
+                    }
+                    AuditKind::Violation { .. } => {
+                        // don't care
                     }
                 }
             }
@@ -607,11 +622,7 @@ pub fn resolve<'a>(
                 }
                 let from_ver = &ROOT_VERSION;
                 let to_ver = &allowed.version;
-                let criteria = allowed
-                    .criteria
-                    .as_ref()
-                    .map(|c| criteria_mapper.criteria_from_list(c.iter().map(|s| &**s)))
-                    .unwrap_or_else(|| criteria_mapper.default_criteria().clone());
+                let criteria = criteria_mapper.criteria_from_list([&*allowed.criteria].into_iter());
 
                 // For simplicity, turn 'unaudited' entries into deltas from 0.0.0
                 forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
