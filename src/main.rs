@@ -24,6 +24,7 @@ use crate::format::{
 
 pub mod format;
 mod resolver;
+mod targets;
 #[cfg(test)]
 mod tests;
 

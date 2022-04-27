@@ -26,6 +26,15 @@ pub struct Report<'a> {
 /// Set of booleans, 64 should be Enough For Anyone (but abstracting in case not).
 #[derive(Clone)]
 pub struct CriteriaSet(u64);
+/*
+pub struct CriteriaSet {
+    /// Each bit represents a criteria entry.
+    criteria_bitfield: u64,
+    /// Sparse array of any non-unity target restrictions for a given index into
+    /// the above bitfield.
+    //target_restrictions: HashMap<usize, TargetRestriction>,
+};
+*/
 const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
 
 /// A processed version of config.toml's criteria definitions, for mapping
