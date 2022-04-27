@@ -236,12 +236,17 @@ pub struct ConfigFile {
     /// Foreign dependencies are just "things on crates.io", everything else
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
     pub unaudited: StableMap<String, Vec<UnauditedDependency>>,
-    pub policy: PolicyTable,
+    /// A table of policies for first-party crates.
+    pub policy: StableMap<String, PolicyEntry>,
 }
 
 impl ConfigFile {
     pub fn validate(&self) -> Result<(), VetError> {
         // TODO
+        //
+        // * check that policy entries are only first-party
+        // * check that unaudited entries are for things that exist?
+        // * check that lockfile and imports aren't desync'd (catch new/removed import urls)
         Ok(())
     }
 }
@@ -272,7 +277,7 @@ fn is_default_criteria(val: &String) -> bool {
 /// and an empty PolicyTable basically just means "everything should satisfy the
 /// default criteria in audits.toml".
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct PolicyTable {
+pub struct PolicyEntry {
     /// Default criteria that must be satisfied by all *direct* third-party (foreign)
     /// dependencies of first-party crates. If satisfied, the first-party crate is
     /// set to satisfying all criteria.
@@ -305,22 +310,22 @@ pub struct PolicyTable {
     pub build_and_dev_targets: Option<Vec<String>>,
 }
 
-static DEFAULT_POLICY_CRITERIA: &str = SAFE_TO_DEPLOY;
-static DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA: &str = SAFE_TO_RUN;
+pub static DEFAULT_POLICY_CRITERIA: &str = SAFE_TO_DEPLOY;
+pub static DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA: &str = SAFE_TO_RUN;
 
 pub fn get_default_policy_criteria() -> Vec<String> {
-    vec![DEFAULT_POLICY_CRITERIA.to_string()]
+    vec![]
 }
 #[allow(clippy::ptr_arg)]
 fn is_default_policy_criteria(val: &Vec<String>) -> bool {
-    val.len() == 1 && val[0] == DEFAULT_POLICY_CRITERIA
+    val.is_empty()
 }
 pub fn get_default_policy_build_and_dev_criteria() -> Vec<String> {
-    vec![DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA.to_string()]
+    vec![]
 }
 #[allow(clippy::ptr_arg)]
 fn is_default_policy_build_and_dev_criteria(val: &Vec<String>) -> bool {
-    val.len() == 1 && val[0] == DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA
+    val.is_empty()
 }
 
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).

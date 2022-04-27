@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::fs;
 use std::fs::OpenOptions;
@@ -19,7 +20,7 @@ use simplelog::{
 
 use crate::format::{
     AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
-    PolicyTable, StableMap, Store, UnauditedDependency,
+    StableMap, Store, UnauditedDependency,
 };
 
 pub mod format;
@@ -156,6 +157,24 @@ enum Verbose {
     Info,
     Debug,
     Trace,
+}
+
+impl Cli {
+    #[cfg(test)]
+    pub fn mock() -> Self {
+        use clap_cargo::{Features, Manifest, Workspace};
+
+        Self {
+            command: None,
+            manifest: Manifest::default(),
+            workspace: Workspace::default(),
+            features: Features::default(),
+            locked: true,
+            verbose: Verbose::Off,
+            output_file: None,
+            log_file: None,
+        }
+    }
 }
 
 /// Absolutely All The Global Configurations
@@ -499,13 +518,7 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
             default_criteria: format::get_default_criteria(),
             imports: StableMap::new(),
             unaudited: dependencies,
-            policy: PolicyTable {
-                criteria: format::get_default_policy_criteria(),
-                build_and_dev_criteria: format::get_default_policy_build_and_dev_criteria(),
-                dependency_criteria: StableMap::new(),
-                targets: None,
-                build_and_dev_targets: None,
-            },
+            policy: StableMap::new(),
         }
     };
 
@@ -759,7 +772,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports);
-    report.print_report(out)?;
+    report.print_report(out, cfg)?;
 
     // Only save imports if we succeeded, to avoid any modifications on error.
     if !report.has_errors() {
@@ -1169,6 +1182,54 @@ fn diff_crate(
 struct DiffStat {
     raw: String,
     count: u64,
+}
+
+pub struct DiffRecommendation<'a> {
+    from: &'a Version,
+    to: &'a Version,
+    diffstat: DiffStat,
+}
+
+pub fn fetch_and_diffstat_all<'a>(
+    cfg: &Config,
+    _package: &str,
+    diffs: BTreeSet<(&'a Version, &'a Version)>,
+) -> Result<DiffRecommendation<'a>, VetError> {
+    let mut all_versions = BTreeSet::new();
+    for (from, to) in &diffs {
+        all_versions.insert(from);
+        all_versions.insert(to);
+    }
+
+    let mut best_rec: Option<DiffRecommendation> = None;
+    if cfg.registry_src.is_some() {
+        unimplemented!()
+    } else {
+        warn!("assuming we're in tests and mocking");
+        for (from, to) in &diffs {
+            let from_len = from.major * from.major;
+            let to_len: u64 = to.major * to.major;
+            let delta = to_len as i64 - from_len as i64;
+            let count = delta.unsigned_abs();
+            let raw = if delta < 0 {
+                format!("-{}", count)
+            } else {
+                format!("+{}", count)
+            };
+            let diffstat = DiffStat { raw, count };
+            let rec = DiffRecommendation { from, to, diffstat };
+
+            if let Some(best) = best_rec.as_ref() {
+                if best.diffstat.count > rec.diffstat.count {
+                    best_rec = Some(rec);
+                }
+            } else {
+                best_rec = Some(rec);
+            }
+        }
+    }
+
+    Ok(best_rec.unwrap())
 }
 
 fn diffstat_crate(

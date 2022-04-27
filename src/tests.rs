@@ -1,11 +1,13 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 
 use cargo_metadata::{Metadata, Version, VersionReq};
 use serde_json::{json, Value};
 
 use crate::{
-    format::{AuditKind, Delta, DependencyCriteria},
-    init_files, AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
+    format::{AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry},
+    init_files,
+    resolver::Report,
+    AuditEntry, AuditsFile, Cli, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
     StableMap, UnauditedDependency,
 };
 
@@ -300,9 +302,24 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
         ),
     ]);
 
+    // Make the root packages use our custom criteria instead of the builtins
+    for pkgid in &metadata.workspace_members {
+        for package in &metadata.packages {
+            if package.id == *pkgid {
+                config.policy.insert(
+                    package.name.clone(),
+                    PolicyEntry {
+                        criteria: vec![DEFAULT_CRIT.to_string()],
+                        build_and_dev_criteria: vec![DEFAULT_CRIT.to_string()],
+                        dependency_criteria: DependencyCriteria::new(),
+                        targets: None,
+                        build_and_dev_targets: None,
+                    },
+                );
+            }
+        }
+    }
     config.default_criteria = DEFAULT_CRIT.to_string();
-    config.policy.criteria = vec![DEFAULT_CRIT.to_string()];
-    config.policy.build_and_dev_criteria = vec![DEFAULT_CRIT.to_string()];
 
     // Rewrite the default used by init
     for unaudited in &mut config.unaudited {
@@ -434,6 +451,20 @@ fn violation(version: VersionReq, criteria: &str) -> AuditEntry {
     }
 }
 
+fn get_report(metadata: &Metadata, report: Report) -> String {
+    let cfg = Config {
+        metacfg: MetaConfig(vec![]),
+        metadata: metadata.clone(),
+        cli: Cli::mock(),
+        cargo: OsString::new(),
+        tmp: PathBuf::new(),
+        registry_src: None,
+    };
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout, &cfg).unwrap();
+    String::from_utf8(stdout).unwrap()
+}
+
 #[test]
 fn mock_simple_init() {
     // (Pass) Should look the same as a fresh 'vet init'.
@@ -444,10 +475,7 @@ fn mock_simple_init() {
     let (config, audits, imports) = files_inited(&metadata);
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
-
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-init", stdout);
 }
 
@@ -462,9 +490,7 @@ fn mock_simple_no_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-no-unaudited", stdout);
 }
 
@@ -479,9 +505,7 @@ fn mock_simple_full_audited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-full-audited", stdout);
 }
 
@@ -503,9 +527,7 @@ fn mock_simple_forbidden_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-forbidden-unaudited", stdout);
 }
 
@@ -522,9 +544,7 @@ fn mock_simple_missing_transitive() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-transitive", stdout);
 }
 
@@ -541,9 +561,7 @@ fn mock_simple_missing_direct_internal() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-direct-internal", stdout);
 }
 
@@ -560,9 +578,7 @@ fn mock_simple_missing_direct_leaf() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-direct-leaf", stdout);
 }
 
@@ -580,9 +596,7 @@ fn mock_simple_missing_leaves() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-leaves", stdout);
 }
 
@@ -614,9 +628,7 @@ fn mock_simple_weaker_transitive_req() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-weaker-transitive-req", stdout);
 }
 
@@ -649,9 +661,7 @@ fn mock_simple_weaker_transitive_req_using_implies() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-weaker-transitive-req-using-implies", stdout);
 }
 
@@ -670,9 +680,7 @@ fn mock_simple_lower_version_review() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-lower-version-review", stdout);
 }
 
@@ -691,9 +699,7 @@ fn mock_simple_higher_version_review() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-higher-version-review", stdout);
 }
 
@@ -715,9 +721,7 @@ fn mock_simple_higher_and_lower_version_review() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-higher-and-lower-version-review", stdout);
 }
 
@@ -736,9 +740,7 @@ fn mock_simple_reviewed_too_weakly() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-reviewed-too-weakly", stdout);
 }
 
@@ -767,9 +769,7 @@ fn mock_simple_delta_to_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited", stdout);
 }
 
@@ -798,9 +798,7 @@ fn mock_simple_delta_to_unaudited_overshoot() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited-overshoot", stdout);
 }
 
@@ -829,9 +827,7 @@ fn mock_simple_delta_to_unaudited_undershoot() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited-undershoot", stdout);
 }
 
@@ -855,9 +851,7 @@ fn mock_simple_delta_to_full_audit() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit", stdout);
 }
 
@@ -881,9 +875,7 @@ fn mock_simple_delta_to_full_audit_overshoot() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit-overshoot", stdout);
 }
 
@@ -907,9 +899,7 @@ fn mock_simple_delta_to_full_audit_undershoot() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit-undershoot", stdout);
 }
 
@@ -933,9 +923,7 @@ fn mock_simple_reverse_delta_to_full_audit() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-reverse-delta-to-full-audit", stdout);
 }
 
@@ -964,9 +952,7 @@ fn mock_simple_reverse_delta_to_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-reverse-delta-to-unaudited", stdout);
 }
 
@@ -995,9 +981,7 @@ fn mock_simple_wrongly_reversed_delta_to_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-wrongly-reversed-delta-to-unaudited", stdout);
 }
 
@@ -1021,9 +1005,7 @@ fn mock_simple_wrongly_reversed_delta_to_full_audit() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-wrongly-reversed-delta-to-full-audit", stdout);
 }
 
@@ -1052,9 +1034,7 @@ fn mock_simple_needed_reversed_delta_to_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-needed-reversed-delta-to-unaudited", stdout);
 }
 
@@ -1083,9 +1063,7 @@ fn mock_simple_delta_to_unaudited_too_weak() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited-too-weak", stdout);
 }
 
@@ -1109,9 +1087,7 @@ fn mock_simple_delta_to_full_audit_too_weak() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit-too-weak", stdout);
 }
 
@@ -1135,9 +1111,7 @@ fn mock_simple_delta_to_too_weak_full_audit() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-too-weak-full-audit", stdout);
 }
 

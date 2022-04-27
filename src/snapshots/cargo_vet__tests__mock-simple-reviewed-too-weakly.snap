@@ -1,18 +1,21 @@
 ---
 source: src/tests.rs
-assertion_line: 640
+assertion_line: 744
 expression: stdout
 ---
 Vetting Failed!
 
-3 unvetted dependencies:
+1 unvetted dependencies:
+  transitive-third-party1:10.0.0
+
+dependency tree:
   root-package:10.0.0
     first-party:10.0.0
       third-party1:10.0.0
         transitive-third-party1:10.0.0
-
-recommended audits:
-  [TODO]
-
 Use |cargo vet certify| to record the audits.
+recommended audits:
+  transitive-third-party1:10.0.0
+    0.0.0 -> 10.0.0 -- +100
+
 
