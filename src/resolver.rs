@@ -7,8 +7,8 @@ use log::{error, trace, warn};
 
 use crate::format::{self, AuditKind};
 use crate::{
-    AuditEntry, AuditsFile, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt, StableMap,
-    VetError,
+    AuditEntry, AuditsFile, Config, ConfigFile, CriteriaEntry, DiffRecommendation, ImportsFile,
+    PackageExt, StableMap, VetError,
 };
 
 #[derive(Debug, Clone)]
@@ -229,11 +229,28 @@ impl CriteriaMapper {
         CriteriaSet::_all(self.len())
     }
 
-    fn criteria_names<'a>(
+    pub fn criteria_names<'a>(
         &'a self,
         criteria: &'a CriteriaSet,
     ) -> impl Iterator<Item = &'a str> + 'a {
         criteria.indices().map(|idx| &*self.list[idx].0)
+    }
+
+    pub fn filter_implied<'a>(&self, input: &[&'a str]) -> Vec<&'a str> {
+        let mut result = vec![];
+        'outer: for a in input {
+            let a_idx = self.index[*a];
+            for b in input {
+                let b_idx = self.index[*b];
+                if a_idx != b_idx && self.implied_criteria[b_idx].has_criteria(a_idx) {
+                    // implied by something else, ignore it
+                    continue 'outer;
+                }
+            }
+            // implied by nothing else, report it
+            result.push(*a);
+        }
+        result
     }
 }
 
@@ -1070,7 +1087,7 @@ impl<'a> Report<'a> {
     pub fn print_report(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         if self.has_errors() {
             self.print_failure(out)?;
-            self.print_suggest(out, cfg)?;
+            self.print_suggest(out, cfg, true)?;
         } else {
             self.print_success(out)?;
         }
@@ -1113,7 +1130,9 @@ impl<'a> Report<'a> {
                 writeln!(
                     out,
                     "  {}:{} missing {:?}",
-                    failed_package.name, failed_package.version, criteria
+                    failed_package.name,
+                    failed_package.version,
+                    self.criteria_mapper.filter_implied(&criteria)
                 )?;
             }
 
@@ -1140,7 +1159,7 @@ impl<'a> Report<'a> {
                             "",
                             package.name,
                             package.version,
-                            criteria,
+                            self.criteria_mapper.filter_implied(&criteria),
                             width = indent
                         )?;
                     } else {
@@ -1175,7 +1194,12 @@ impl<'a> Report<'a> {
         Ok(())
     }
 
-    pub fn print_suggest(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
+    pub fn print_suggest(
+        &self,
+        out: &mut dyn Write,
+        cfg: &Config,
+        sorted: bool,
+    ) -> Result<(), VetError> {
         if self.leaf_failures.is_empty() {
             writeln!(out, "nothing to recommend")?;
             return Ok(());
@@ -1183,6 +1207,13 @@ impl<'a> Report<'a> {
 
         writeln!(out, "recommended audits:")?;
 
+        struct SuggestItem<'a> {
+            package: &'a Package,
+            rec: DiffRecommendation<'a>,
+            criteria: Vec<&'a str>,
+        }
+
+        let mut suggestions = vec![];
         for (failure, audit_failure) in &self.leaf_failures {
             let package = &self.graph.package_list[self.graph.package_index_by_pkgid[failure]];
             let resolve_idx = self.graph.resolve_index_by_pkgid[failure];
@@ -1250,16 +1281,62 @@ impl<'a> Report<'a> {
                 .criteria_names(&audit_failure.criteria_failures)
                 .collect::<Vec<_>>();
             let rec = crate::fetch_and_diffstat_all(cfg, &package.name, candidates)?;
-            writeln!(
-                out,
-                "    {}:{}  {} -> {} ({}) for {:?}",
-                package.name,
-                package.version,
-                rec.from,
-                rec.to,
-                rec.diffstat.raw.trim(),
-                criteria,
-            )?;
+
+            // If we're sorting, defer the result
+            if sorted {
+                suggestions.push(SuggestItem {
+                    package,
+                    rec,
+                    criteria,
+                })
+            } else {
+                writeln!(
+                    out,
+                    "    {}:{}  {} -> {} ({}) for {:?}",
+                    package.name,
+                    package.version,
+                    rec.from,
+                    rec.to,
+                    rec.diffstat.raw.trim(),
+                    self.criteria_mapper.filter_implied(&criteria),
+                )?;
+            }
+        }
+
+        if sorted {
+            suggestions.sort_by_key(|item| item.rec.diffstat.count);
+
+            let strings = suggestions
+                .into_iter()
+                .map(|item| {
+                    (
+                        format!("{}:{}", item.package.name, item.package.version),
+                        if item.rec.from == &ROOT_VERSION {
+                            format!("full {}", item.rec.to)
+                        } else {
+                            format!("{} -> {}", item.rec.from, item.rec.to)
+                        },
+                        format!("({})", item.rec.diffstat.raw.trim()),
+                        format!("{:?}", self.criteria_mapper.filter_implied(&item.criteria)),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            let max0 = strings.iter().max_by_key(|s| s.0.len()).unwrap().0.len();
+            let max1 = strings.iter().max_by_key(|s| s.1.len()).unwrap().1.len();
+            let max2 = strings.iter().max_by_key(|s| s.2.len()).unwrap().2.len();
+            let max3 = strings.iter().max_by_key(|s| s.3.len()).unwrap().3.len();
+
+            for (s0, s1, s2, s3) in strings {
+                writeln!(
+                    out,
+                    "    {s0:width0$} {s1:width1$} {s2:width2$} for {s3:width3$}",
+                    width0 = max0,
+                    width1 = max1,
+                    width2 = max2,
+                    width3 = max3,
+                )?;
+            }
         }
         writeln!(out)?;
 

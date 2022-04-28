@@ -1,6 +1,6 @@
 ---
 source: src/tests.rs
-assertion_line: 1304
+assertion_line: 1342
 expression: stdout
 ---
 Vetting Failed!
@@ -24,6 +24,6 @@ dependency tree:
       third-core:10.0.0 needs ["reviewed"]
 Use |cargo vet certify| to record the audits.
 recommended audits:
-    third-core:10.0.0  5.0.0 -> 10.0.0 (+75) for ["reviewed"]
+    third-core:10.0.0 5.0.0 -> 10.0.0 (+75) for ["reviewed"]
 
 

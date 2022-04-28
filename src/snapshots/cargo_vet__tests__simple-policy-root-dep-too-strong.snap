@@ -1,6 +1,6 @@
 ---
 source: src/tests.rs
-assertion_line: 1534
+assertion_line: 1536
 expression: stdout
 ---
 Vetting Failed!
@@ -16,7 +16,7 @@ dependency tree:
       third-party2:10.0.0 needs ["strong-reviewed"]
 Use |cargo vet certify| to record the audits.
 recommended audits:
-    third-party1:10.0.0  0.0.0 -> 10.0.0 (+100) for ["strong-reviewed"]
-    third-party2:10.0.0  0.0.0 -> 10.0.0 (+100) for ["strong-reviewed"]
+    third-party1:10.0.0 full 10.0.0 (+100) for ["strong-reviewed"]
+    third-party2:10.0.0 full 10.0.0 (+100) for ["strong-reviewed"]
 
 
