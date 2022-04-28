@@ -618,87 +618,31 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
 }
 
 fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Result<(), VetError> {
-    // * download the current (saved?) lockfile's packages
-    // * download the current audited packages
-    // * diff each package (if there is any audit)
-    // * sort by the line count of the diff
-    // * emit the sorted list
-    let tmp = &cfg.tmp;
-    clean_tmp(tmp)?;
+    // Run the checker to validate that the current set of deps is covered by the current cargo vet store
+    trace!("suggesting...");
 
     let store_path = cfg.metacfg.store_path();
+
     let audits = load_audits(store_path)?;
+    let mut config = load_config(store_path)?;
 
-    // TODO: skip packages with suggest=false
-
-    // FIXME: in theory we can avoid fetching any file with an up to date audit
-    writeln!(out, "fetching current packages...")?;
-    let fetched_saved = {
-        let to_fetch: Vec<_> = foreign_packages(&cfg.metadata)
-            .map(|pkg| (&*pkg.name, &pkg.version))
-            .collect();
-        fetch_crates(cfg, tmp, "current", &to_fetch)?
+    // FIXME: We should probably check in --locked vets if the config has changed its
+    // imports and warn if the imports.lock is inconsistent with that..?
+    //
+    // TODO: error out if the foreign audits changed their criteria (compare to imports.lock)
+    let imports = if !cfg.cli.locked {
+        fetch_foreign_audits(out, cfg, &config)?
+    } else {
+        load_imports(store_path)?
     };
-    writeln!(out, "fetched to {:#?}", fetched_saved)?;
 
-    writeln!(out, "fetching audited packages...")?;
-    let fetched_audited = {
-        // TODO: do this
-        warn!("fetching audited packages not yet implemented!");
-        let to_fetch: Vec<_> = foreign_packages(&cfg.metadata)
-            .map(|pkg| (&*pkg.name, &pkg.version))
-            .collect();
-        fetch_crates(cfg, tmp, "audited", &to_fetch)?
-    };
-    writeln!(out, "fetched to {:#?}", fetched_audited)?;
+    // Delete all unaudited entries
+    config.unaudited.clear();
 
-    writeln!(out, "gathering diffstats...")?;
+    // DO THE THING!!!!
+    let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports);
+    report.print_suggest(out, cfg, true)?;
 
-    let mut diffstats = vec![];
-    for package in foreign_packages(&cfg.metadata) {
-        // If there are no audits, then diff from an empty dir
-        let (base, base_ver) = if audits.audits.contains_key(&package.name) {
-            // TODO: find the closest audited version <= sub_args.version!
-            (
-                fetched_pkg(&fetched_audited, tmp, &package.name, &package.version),
-                "TODO?".to_string(),
-            )
-        } else {
-            (tmp.join(EMPTY_PACKAGE), "0.0.0".to_string())
-        };
-        let current = fetched_pkg(&fetched_saved, tmp, &package.name, &package.version);
-        let stat = diffstat_crate(cfg, &base, &current)?;
-
-        // Ignore things that didn't change
-        if stat.count > 0 {
-            diffstats.push((stat, &package.name, base_ver, package.version.to_string()));
-        }
-    }
-
-    // If we got no diffstats then we're fully audited!
-    if diffstats.is_empty() {
-        writeln!(out, "Wow, everything is completely audited! You did it!!!")?;
-        return Ok(());
-    }
-
-    // Ok, now sort the diffstats by change count and print them:
-    diffstats.sort_by_key(|(stat, ..)| stat.count);
-    writeln!(out, "{} audits to perform:", diffstats.len())?;
-    let max_len = diffstats
-        .iter()
-        .map(|(_, package_name, ..)| package_name.len())
-        .max()
-        .unwrap();
-    for (stat, package, v1, v2) in diffstats.iter() {
-        // Try to align things better...
-        let heading = format!("{package}:{v1}->{v2}");
-        writeln!(
-            out,
-            "  {heading:width$}{}",
-            stat.raw.trim(),
-            width = max_len + 15
-        )?;
-    }
     Ok(())
 }
 fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<(), VetError> {
