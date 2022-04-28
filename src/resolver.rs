@@ -410,7 +410,7 @@ impl<'a> DepGraph<'a> {
 }
 
 // Dummy values for corner cases
-static ROOT_VERSION: Version = Version::new(0, 0, 0);
+pub static ROOT_VERSION: Version = Version::new(0, 0, 0);
 static NO_AUDITS: Vec<AuditEntry> = Vec::new();
 
 pub fn resolve<'a>(
@@ -1188,12 +1188,13 @@ impl<'a> Report<'a> {
             let resolve_idx = self.graph.resolve_index_by_pkgid[failure];
             let result = &self.results[resolve_idx];
 
+            writeln!(out, "  {}:{}", package.name, package.version)?;
+
             // Collect up the details of how we failed
             let mut from_root = None::<BTreeSet<&Version>>;
             let mut from_target = None::<BTreeSet<&Version>>;
             for criteria_idx in audit_failure.criteria_failures.indices() {
                 let search_result = &result.search_results[criteria_idx];
-                writeln!(out, "  {}:{}", package.name, package.version)?;
                 if let SearchResult::Disconnected {
                     reachable_from_root,
                     reachable_from_target,
@@ -1254,7 +1255,10 @@ impl<'a> Report<'a> {
             writeln!(
                 out,
                 "    {} -> {} ({}) for {:?}",
-                rec.from, rec.to, rec.diffstat.raw, criteria,
+                rec.from,
+                rec.to,
+                rec.diffstat.raw.trim(),
+                criteria,
             )?;
         }
         writeln!(out)?;
