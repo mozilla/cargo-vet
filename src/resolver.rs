@@ -444,308 +444,50 @@ pub fn resolve<'a>(
     trace!("graph: {:#?}", graph);
 
     let criteria_mapper = CriteriaMapper::new(&audits.criteria);
-    let no_criteria = criteria_mapper.no_criteria();
-
-    // Compute the "policy" criteria
-
-    let default_root_policy = criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
-    let _default_build_and_dev_policy =
-        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA]);
 
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
-    let mut results =
-        vec![ResolveResult::with_no_criteria(no_criteria.clone()); graph.resolve_list.len()];
-
+    let mut results = vec![
+        ResolveResult::with_no_criteria(criteria_mapper.no_criteria());
+        graph.resolve_list.len()
+    ];
+    let mut root_failures = vec![];
     // Actually vet the dependencies
-    'all_packages: for pkgid in &graph.topo_index {
+    for pkgid in &graph.topo_index {
         let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
         let resolve = &graph.resolve_list[resolve_idx];
         let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
 
-        // Implicitly trust non-third-parties
-        if !package.is_third_party() {
-            // These get processed in the policy section
-            // FIXME: I like breaking this into two loops but it might be problematic
-            // if someone has their own fork of a crate that crates.io deps use...?
-            continue;
-        }
-        let unaudited = config.unaudited.get(&package.name);
-
-        // Just merge all the entries from the foreign audit files and our audit file.
-        let foreign_audits = imports
-            .audits
-            .values()
-            .flat_map(|audit_file| audit_file.audits.get(&package.name).unwrap_or(&NO_AUDITS));
-        let own_audits = audits.audits.get(&package.name).unwrap_or(&NO_AUDITS);
-
-        // Deltas are flipped so that we have a map of 'to: [froms]'. This lets
-        // us start at the current version and look up all the deltas that *end* at that
-        // version. By repeating this over and over, we can loslowly walk back in time until
-        // we run out of deltas or reach full audit or an unaudited entry.
-        let mut forward_nodes = BTreeMap::<&Version, Vec<DeltaEdge>>::new();
-        let mut backward_nodes = BTreeMap::<&Version, Vec<DeltaEdge>>::new();
-        let mut violations = Vec::new();
-
-        // Collect up all the deltas, their criteria, and dependency_criteria
-        for entry in own_audits.iter() {
-            // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
-            let (from_ver, to_ver, dependency_criteria) = match &entry.kind {
-                AuditKind::Full {
-                    version,
-                    dependency_criteria,
-                } => (&ROOT_VERSION, version, dependency_criteria),
-                AuditKind::Delta {
-                    delta,
-                    dependency_criteria,
-                } => (&delta.from, &delta.to, dependency_criteria),
-                AuditKind::Violation { .. } => {
-                    violations.push(entry);
-                    continue;
-                }
-            };
-
-            let criteria = criteria_mapper.criteria_from_entry(entry);
-            // Convert all the custom criteria to CriteriaSets
-            let dependency_criteria: HashMap<_, _> = dependency_criteria
-                .iter()
-                .map(|(pkg_name, criteria)| {
-                    (&**pkg_name, criteria_mapper.criteria_from_list(criteria))
-                })
-                .collect();
-
-            forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
-                version: to_ver,
-                criteria: criteria.clone(),
-                dependency_criteria: dependency_criteria.clone(),
-                is_unaudited_entry: false,
-            });
-            backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
-                version: from_ver,
-                criteria,
-                dependency_criteria,
-                is_unaudited_entry: false,
-            });
-        }
-
-        // Try to map foreign audits into our worldview
-        for (foreign_name, foreign_audits) in &imports.audits {
-            // Prep CriteriaSet machinery for comparing requirements
-            let foreign_criteria_mapper = CriteriaMapper::new(&foreign_audits.criteria);
-            let criteria_map = &config
-                .imports
-                .get(foreign_name)
-                .expect("Foreign Import isn't in config file (imports.lock outdated?)")
-                .criteria_map;
-            let criteria_map: Vec<(&str, CriteriaSet)> = criteria_map
-                .iter()
-                .map(|mapping| {
-                    let set = foreign_criteria_mapper.criteria_from_list(&mapping.theirs);
-                    (&*mapping.ours, set)
-                })
-                .collect();
-
-            for entry in foreign_audits
-                .audits
-                .get(&package.name)
-                .unwrap_or(&NO_AUDITS)
-            {
-                // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
-                let (from_ver, to_ver, dependency_criteria) = match &entry.kind {
-                    AuditKind::Full {
-                        version,
-                        dependency_criteria,
-                    } => (&ROOT_VERSION, version, dependency_criteria),
-                    AuditKind::Delta {
-                        delta,
-                        dependency_criteria,
-                    } => (&delta.from, &delta.to, dependency_criteria),
-                    AuditKind::Violation { .. } => {
-                        violations.push(entry);
-                        continue;
-                    }
-                };
-                // TODO: figure out a reasonable way to map foreign dependency_criteria
-                if !dependency_criteria.is_empty() {
-                    // Just discard this entry for now
-                    warn!("discarding foreign audit with dependency_criteria (TODO)");
-                    continue;
-                }
-
-                // Map this entry's criteria into our worldview
-                let mut local_criteria = no_criteria.clone();
-                let foreign_criteria = foreign_criteria_mapper.criteria_from_entry(entry);
-                for (local_implied, foreign_required) in &criteria_map {
-                    if foreign_criteria.contains(foreign_required) {
-                        criteria_mapper.set_criteria(&mut local_criteria, local_implied);
-                    }
-                }
-
-                forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
-                    version: to_ver,
-                    criteria: local_criteria.clone(),
-                    dependency_criteria: Default::default(),
-                    is_unaudited_entry: false,
-                });
-                backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
-                    version: from_ver,
-                    criteria: local_criteria,
-                    dependency_criteria: Default::default(),
-                    is_unaudited_entry: false,
-                });
-            }
-        }
-
-        // Reject forbidden packages (violations)
-        //
-        // FIXME: should the "local" audit have a mechanism to override foreign forbids?
-        for violation_entry in &violations {
-            let violation_range = if let AuditKind::Violation { violation } = &violation_entry.kind
-            {
-                violation
-            } else {
-                unreachable!("violation_entry wasn't a Violation?");
-            };
-
-            // Hard error out if anything in our audits overlaps with a forbid entry!
-            // (This clone isn't a big deal, it's just iterator adaptors for by-ref iteration)
-            for entry in own_audits.iter().chain(foreign_audits.clone()) {
-                match &entry.kind {
-                    AuditKind::Full { version, .. } => {
-                        if violation_range.matches(version) {
-                            error!(
-                                "Integrity Failure! Audit and Violation Overlap for {}:",
-                                package.name
-                            );
-                            error!("  audit: {:#?}", entry);
-                            error!("  violation: {:#?}", violation_entry);
-                            panic!("Integrity Failure! TODO: factor this out better");
-                        }
-                    }
-                    AuditKind::Delta { delta, .. } => {
-                        if violation_range.matches(&delta.from)
-                            || violation_range.matches(&delta.to)
-                        {
-                            error!(
-                                "Integrity Failure! Delta Audit and Violation Overlap for {}:",
-                                package.name
-                            );
-                            error!("  audit: {:#?}", entry);
-                            error!("  violation: {:#?}", violation_entry);
-                            panic!("Integrity Failure! TODO: factor this out better");
-                        }
-                    }
-                    AuditKind::Violation { .. } => {
-                        // don't care
-                    }
-                }
-            }
-            // Having current versions overlap with a violations is less horrifyingly bad,
-            // so just gather them up as part of the normal report.
-            if violation_range.matches(&package.version) {
-                violation_failed.push(package);
-                continue 'all_packages;
-            }
-        }
-
-        let mut directly_unaudited = false;
-        // Identify if this version is directly marked as allowed in 'unaudited'.
-        // This implies that all dependency_criteria checks against it will succeed
-        // as if its validated_criteria was all_criteria.
-        //
-        // Also register all the unaudited entries as "roots" for search.
-        if let Some(alloweds) = unaudited {
-            for allowed in alloweds {
-                if allowed.version == package.version {
-                    directly_unaudited = true;
-                }
-                let from_ver = &ROOT_VERSION;
-                let to_ver = &allowed.version;
-                let criteria = criteria_mapper.criteria_from_list([&allowed.criteria]);
-
-                // For simplicity, turn 'unaudited' entries into deltas from 0.0.0
-                forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
-                    version: to_ver,
-                    criteria: criteria.clone(),
-                    dependency_criteria: Default::default(),
-                    is_unaudited_entry: true,
-                });
-                backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
-                    version: from_ver,
-                    criteria,
-                    dependency_criteria: Default::default(),
-                    is_unaudited_entry: true,
-                });
-            }
-        }
-
-        let mut validated_criteria = no_criteria.clone();
-        let mut fully_audited_criteria = no_criteria.clone();
-        let mut search_results = vec![];
-        for criteria in criteria_mapper.criteria_iter() {
-            let result = search_for_path(
-                criteria,
-                &ROOT_VERSION,
-                &package.version,
-                &forward_nodes,
+        if package.is_third_party() {
+            resolve_third_party(
+                metadata,
+                config,
+                audits,
+                imports,
                 &graph,
-                resolve,
+                &criteria_mapper,
                 &mut results,
+                &mut violation_failed,
+                &mut root_failures,
+                resolve_idx,
+                resolve,
+                package,
             );
-            match result {
-                SearchResult::Connected { fully_audited } => {
-                    // We found a path, hooray, criteria validated!
-                    if fully_audited {
-                        fully_audited_criteria.unioned_with(criteria);
-                    }
-                    validated_criteria.unioned_with(criteria);
-                    search_results.push(SearchResult::Connected { fully_audited });
-                }
-                SearchResult::PossiblyConnected { failed_deps } => {
-                    // We failed but found a possible solution if our dependencies were better.
-                    // Just forward this along so that we can blame them if it comes up!
-                    search_results.push(SearchResult::PossiblyConnected { failed_deps });
-                }
-                SearchResult::Disconnected {
-                    reachable_from_root,
-                    ..
-                } => {
-                    // We failed to find a path, boo! Run the algorithm backwards to see what we
-                    // can reach from the other side, so we have our candidates for suggestions.
-                    let rev_result = search_for_path(
-                        criteria,
-                        &package.version,
-                        &ROOT_VERSION,
-                        &backward_nodes,
-                        &graph,
-                        resolve,
-                        &mut results,
-                    );
-                    if let SearchResult::Disconnected {
-                        reachable_from_root: reachable_from_target,
-                        ..
-                    } = rev_result
-                    {
-                        search_results.push(SearchResult::Disconnected {
-                            reachable_from_root,
-                            reachable_from_target,
-                        })
-                    } else {
-                        unreachable!("We managed to find a path but only from one direction?!");
-                    }
-                }
-            }
+        } else {
+            resolve_first_party(
+                metadata,
+                config,
+                audits,
+                imports,
+                &graph,
+                &criteria_mapper,
+                &mut results,
+                &mut violation_failed,
+                &mut root_failures,
+                resolve_idx,
+                resolve,
+                package,
+            );
         }
-
-        // We've completed our graph analysis for this package, now record the results
-        results[resolve_idx] = ResolveResult {
-            validated_criteria,
-            fully_audited_criteria,
-            directly_unaudited,
-            search_results,
-            // Only gets found out later, for now, assume not.
-            needed_unaudited: false,
-            policy_failures: PolicyFailures::new(),
-        };
     }
 
     // Don't bother doing anything more if we had violations
@@ -762,106 +504,6 @@ pub fn resolve<'a>(
             graph,
             criteria_mapper,
         };
-    }
-
-    // All third-party crates have been processed, now process policies and first-party crates.
-    let mut root_failures = vec![];
-    for &pkgid in &graph.topo_index {
-        let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
-        let resolve = &graph.resolve_list[resolve_idx];
-        let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
-
-        if package.is_third_party() {
-            // These have already been processed
-            continue;
-        }
-
-        let is_root = metadata.workspace_members.contains(pkgid);
-        let mut policy_failures = PolicyFailures::new();
-
-        // Any dependencies that have explicit policies are checked first
-        let mut passed_dependencies = BTreeSet::new();
-        if let Some(policy) = config.policy.get(&package.name) {
-            for dep in &resolve.dependencies {
-                let dep_resolve_idx = graph.resolve_index_by_pkgid[dep];
-                let dep_package = &graph.package_list[graph.package_index_by_pkgid[dep]];
-                let dep_policy = policy
-                    .dependency_criteria
-                    .get(&dep_package.name)
-                    .map(|p| criteria_mapper.criteria_from_list(p))
-                    .unwrap_or_else(|| criteria_mapper.no_criteria());
-
-                for criteria_idx in dep_policy.indices() {
-                    if results[dep_resolve_idx].has_criteria(criteria_idx) {
-                        passed_dependencies.insert(dep);
-                    } else {
-                        policy_failures
-                            .entry(dep)
-                            .or_insert_with(|| criteria_mapper.no_criteria())
-                            .set_criteria(criteria_idx);
-                    }
-                }
-            }
-        }
-
-        if policy_failures.is_empty() {
-            let mut validated_criteria = criteria_mapper.no_criteria();
-            let mut search_results = vec![];
-            for criteria in criteria_mapper.criteria_iter() {
-                let mut failed_deps = BTreeSet::new();
-                for dep in &resolve.dependencies {
-                    if passed_dependencies.contains(dep) {
-                        // This dep is already fine, ignore it (implicitly all_criteria now)
-                        continue;
-                    }
-                    let dep_resolve_idx = graph.resolve_index_by_pkgid[dep];
-                    if !results[dep_resolve_idx].contains(criteria) {
-                        failed_deps.insert(dep);
-                    }
-                }
-
-                if failed_deps.is_empty() {
-                    search_results.push(SearchResult::Connected {
-                        fully_audited: true,
-                    });
-                    validated_criteria.unioned_with(criteria);
-                } else {
-                    search_results.push(SearchResult::PossiblyConnected { failed_deps })
-                }
-            }
-
-            // Now check that we pass our own policy
-            let own_policy = if let Some(policy) = config.policy.get(&package.name) {
-                criteria_mapper.criteria_from_list(&policy.criteria)
-            } else if is_root {
-                default_root_policy.clone()
-            } else {
-                criteria_mapper.no_criteria()
-            };
-
-            for criteria_idx in own_policy.indices() {
-                if let SearchResult::PossiblyConnected { failed_deps } =
-                    &search_results[criteria_idx]
-                {
-                    for &dep in failed_deps {
-                        policy_failures
-                            .entry(dep)
-                            .or_insert_with(|| criteria_mapper.no_criteria())
-                            .set_criteria(criteria_idx);
-                    }
-                }
-            }
-
-            if policy_failures.is_empty() {
-                results[resolve_idx].search_results = search_results;
-                results[resolve_idx].validated_criteria = validated_criteria;
-            }
-        }
-
-        if !policy_failures.is_empty() && is_root {
-            root_failures.push(pkgid);
-        }
-        results[resolve_idx].policy_failures = policy_failures;
     }
 
     // Gather statistics
@@ -917,6 +559,402 @@ pub fn resolve<'a>(
         graph,
         criteria_mapper,
     }
+}
+
+#[allow(clippy::too_many_arguments, clippy::ptr_arg)]
+fn resolve_third_party<'a>(
+    _metadata: &'a Metadata,
+    config: &'a ConfigFile,
+    audits: &'a AuditsFile,
+    imports: &'a ImportsFile,
+    graph: &DepGraph<'a>,
+    criteria_mapper: &CriteriaMapper,
+    results: &mut [ResolveResult<'a>],
+    violation_failed: &mut Vec<&'a Package>,
+    _root_failures: &mut Vec<&'a PackageId>,
+    resolve_idx: usize,
+    resolve: &'a Node,
+    package: &'a Package,
+) {
+    let unaudited = config.unaudited.get(&package.name);
+
+    // Just merge all the entries from the foreign audit files and our audit file.
+    let foreign_audits = imports
+        .audits
+        .values()
+        .flat_map(|audit_file| audit_file.audits.get(&package.name).unwrap_or(&NO_AUDITS));
+    let own_audits = audits.audits.get(&package.name).unwrap_or(&NO_AUDITS);
+
+    // Deltas are flipped so that we have a map of 'to: [froms]'. This lets
+    // us start at the current version and look up all the deltas that *end* at that
+    // version. By repeating this over and over, we can loslowly walk back in time until
+    // we run out of deltas or reach full audit or an unaudited entry.
+    let mut forward_nodes = BTreeMap::<&Version, Vec<DeltaEdge>>::new();
+    let mut backward_nodes = BTreeMap::<&Version, Vec<DeltaEdge>>::new();
+    let mut violations = Vec::new();
+
+    // Collect up all the deltas, their criteria, and dependency_criteria
+    for entry in own_audits.iter() {
+        // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
+        let (from_ver, to_ver, dependency_criteria) = match &entry.kind {
+            AuditKind::Full {
+                version,
+                dependency_criteria,
+            } => (&ROOT_VERSION, version, dependency_criteria),
+            AuditKind::Delta {
+                delta,
+                dependency_criteria,
+            } => (&delta.from, &delta.to, dependency_criteria),
+            AuditKind::Violation { .. } => {
+                violations.push(entry);
+                continue;
+            }
+        };
+
+        let criteria = criteria_mapper.criteria_from_entry(entry);
+        // Convert all the custom criteria to CriteriaSets
+        let dependency_criteria: HashMap<_, _> = dependency_criteria
+            .iter()
+            .map(|(pkg_name, criteria)| (&**pkg_name, criteria_mapper.criteria_from_list(criteria)))
+            .collect();
+
+        forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
+            version: to_ver,
+            criteria: criteria.clone(),
+            dependency_criteria: dependency_criteria.clone(),
+            is_unaudited_entry: false,
+        });
+        backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
+            version: from_ver,
+            criteria,
+            dependency_criteria,
+            is_unaudited_entry: false,
+        });
+    }
+
+    // Try to map foreign audits into our worldview
+    for (foreign_name, foreign_audits) in &imports.audits {
+        // Prep CriteriaSet machinery for comparing requirements
+        let foreign_criteria_mapper = CriteriaMapper::new(&foreign_audits.criteria);
+        let criteria_map = &config
+            .imports
+            .get(foreign_name)
+            .expect("Foreign Import isn't in config file (imports.lock outdated?)")
+            .criteria_map;
+        let criteria_map: Vec<(&str, CriteriaSet)> = criteria_map
+            .iter()
+            .map(|mapping| {
+                let set = foreign_criteria_mapper.criteria_from_list(&mapping.theirs);
+                (&*mapping.ours, set)
+            })
+            .collect();
+
+        for entry in foreign_audits
+            .audits
+            .get(&package.name)
+            .unwrap_or(&NO_AUDITS)
+        {
+            // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
+            let (from_ver, to_ver, dependency_criteria) = match &entry.kind {
+                AuditKind::Full {
+                    version,
+                    dependency_criteria,
+                } => (&ROOT_VERSION, version, dependency_criteria),
+                AuditKind::Delta {
+                    delta,
+                    dependency_criteria,
+                } => (&delta.from, &delta.to, dependency_criteria),
+                AuditKind::Violation { .. } => {
+                    violations.push(entry);
+                    continue;
+                }
+            };
+            // TODO: figure out a reasonable way to map foreign dependency_criteria
+            if !dependency_criteria.is_empty() {
+                // Just discard this entry for now
+                warn!("discarding foreign audit with dependency_criteria (TODO)");
+                continue;
+            }
+
+            // Map this entry's criteria into our worldview
+            let mut local_criteria = criteria_mapper.no_criteria();
+            let foreign_criteria = foreign_criteria_mapper.criteria_from_entry(entry);
+            for (local_implied, foreign_required) in &criteria_map {
+                if foreign_criteria.contains(foreign_required) {
+                    criteria_mapper.set_criteria(&mut local_criteria, local_implied);
+                }
+            }
+
+            forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
+                version: to_ver,
+                criteria: local_criteria.clone(),
+                dependency_criteria: Default::default(),
+                is_unaudited_entry: false,
+            });
+            backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
+                version: from_ver,
+                criteria: local_criteria,
+                dependency_criteria: Default::default(),
+                is_unaudited_entry: false,
+            });
+        }
+    }
+
+    // Reject forbidden packages (violations)
+    //
+    // FIXME: should the "local" audit have a mechanism to override foreign forbids?
+    for violation_entry in &violations {
+        let violation_range = if let AuditKind::Violation { violation } = &violation_entry.kind {
+            violation
+        } else {
+            unreachable!("violation_entry wasn't a Violation?");
+        };
+
+        // Hard error out if anything in our audits overlaps with a forbid entry!
+        // (This clone isn't a big deal, it's just iterator adaptors for by-ref iteration)
+        for entry in own_audits.iter().chain(foreign_audits.clone()) {
+            match &entry.kind {
+                AuditKind::Full { version, .. } => {
+                    if violation_range.matches(version) {
+                        error!(
+                            "Integrity Failure! Audit and Violation Overlap for {}:",
+                            package.name
+                        );
+                        error!("  audit: {:#?}", entry);
+                        error!("  violation: {:#?}", violation_entry);
+                        panic!("Integrity Failure! TODO: factor this out better");
+                    }
+                }
+                AuditKind::Delta { delta, .. } => {
+                    if violation_range.matches(&delta.from) || violation_range.matches(&delta.to) {
+                        error!(
+                            "Integrity Failure! Delta Audit and Violation Overlap for {}:",
+                            package.name
+                        );
+                        error!("  audit: {:#?}", entry);
+                        error!("  violation: {:#?}", violation_entry);
+                        panic!("Integrity Failure! TODO: factor this out better");
+                    }
+                }
+                AuditKind::Violation { .. } => {
+                    // don't care
+                }
+            }
+        }
+        // Having current versions overlap with a violations is less horrifyingly bad,
+        // so just gather them up as part of the normal report.
+        if violation_range.matches(&package.version) {
+            violation_failed.push(package);
+            return;
+        }
+    }
+
+    let mut directly_unaudited = false;
+    // Identify if this version is directly marked as allowed in 'unaudited'.
+    // This implies that all dependency_criteria checks against it will succeed
+    // as if its validated_criteria was all_criteria.
+    //
+    // Also register all the unaudited entries as "roots" for search.
+    if let Some(alloweds) = unaudited {
+        for allowed in alloweds {
+            if allowed.version == package.version {
+                directly_unaudited = true;
+            }
+            let from_ver = &ROOT_VERSION;
+            let to_ver = &allowed.version;
+            let criteria = criteria_mapper.criteria_from_list([&allowed.criteria]);
+
+            // For simplicity, turn 'unaudited' entries into deltas from 0.0.0
+            forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
+                version: to_ver,
+                criteria: criteria.clone(),
+                dependency_criteria: Default::default(),
+                is_unaudited_entry: true,
+            });
+            backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
+                version: from_ver,
+                criteria,
+                dependency_criteria: Default::default(),
+                is_unaudited_entry: true,
+            });
+        }
+    }
+
+    let mut validated_criteria = criteria_mapper.no_criteria();
+    let mut fully_audited_criteria = criteria_mapper.no_criteria();
+    let mut search_results = vec![];
+    for criteria in criteria_mapper.criteria_iter() {
+        let result = search_for_path(
+            criteria,
+            &ROOT_VERSION,
+            &package.version,
+            &forward_nodes,
+            graph,
+            resolve,
+            results,
+        );
+        match result {
+            SearchResult::Connected { fully_audited } => {
+                // We found a path, hooray, criteria validated!
+                if fully_audited {
+                    fully_audited_criteria.unioned_with(criteria);
+                }
+                validated_criteria.unioned_with(criteria);
+                search_results.push(SearchResult::Connected { fully_audited });
+            }
+            SearchResult::PossiblyConnected { failed_deps } => {
+                // We failed but found a possible solution if our dependencies were better.
+                // Just forward this along so that we can blame them if it comes up!
+                search_results.push(SearchResult::PossiblyConnected { failed_deps });
+            }
+            SearchResult::Disconnected {
+                reachable_from_root,
+                ..
+            } => {
+                // We failed to find a path, boo! Run the algorithm backwards to see what we
+                // can reach from the other side, so we have our candidates for suggestions.
+                let rev_result = search_for_path(
+                    criteria,
+                    &package.version,
+                    &ROOT_VERSION,
+                    &backward_nodes,
+                    graph,
+                    resolve,
+                    results,
+                );
+                if let SearchResult::Disconnected {
+                    reachable_from_root: reachable_from_target,
+                    ..
+                } = rev_result
+                {
+                    search_results.push(SearchResult::Disconnected {
+                        reachable_from_root,
+                        reachable_from_target,
+                    })
+                } else {
+                    unreachable!("We managed to find a path but only from one direction?!");
+                }
+            }
+        }
+    }
+
+    // We've completed our graph analysis for this package, now record the results
+    results[resolve_idx] = ResolveResult {
+        validated_criteria,
+        fully_audited_criteria,
+        directly_unaudited,
+        search_results,
+        // Only gets found out later, for now, assume not.
+        needed_unaudited: false,
+        policy_failures: PolicyFailures::new(),
+    };
+}
+
+#[allow(clippy::too_many_arguments, clippy::ptr_arg)]
+fn resolve_first_party<'a>(
+    metadata: &'a Metadata,
+    config: &'a ConfigFile,
+    _audits: &'a AuditsFile,
+    _imports: &'a ImportsFile,
+    graph: &DepGraph<'a>,
+    criteria_mapper: &CriteriaMapper,
+    results: &mut [ResolveResult<'a>],
+    _violation_failed: &mut Vec<&'a Package>,
+    root_failures: &mut Vec<&'a PackageId>,
+    resolve_idx: usize,
+    resolve: &'a Node,
+    package: &'a Package,
+) {
+    // Compute the "policy" criteria
+
+    let default_root_policy = criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
+    let _default_build_and_dev_policy =
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA]);
+
+    let is_root = metadata.workspace_members.contains(&package.id);
+    let mut policy_failures = PolicyFailures::new();
+
+    // Any dependencies that have explicit policies are checked first
+    let mut passed_dependencies = BTreeSet::new();
+    if let Some(policy) = config.policy.get(&package.name) {
+        for dep in &resolve.dependencies {
+            let dep_resolve_idx = graph.resolve_index_by_pkgid[dep];
+            let dep_package = &graph.package_list[graph.package_index_by_pkgid[dep]];
+            let dep_policy = policy
+                .dependency_criteria
+                .get(&dep_package.name)
+                .map(|p| criteria_mapper.criteria_from_list(p))
+                .unwrap_or_else(|| criteria_mapper.no_criteria());
+
+            for criteria_idx in dep_policy.indices() {
+                if results[dep_resolve_idx].has_criteria(criteria_idx) {
+                    passed_dependencies.insert(dep);
+                } else {
+                    policy_failures
+                        .entry(dep)
+                        .or_insert_with(|| criteria_mapper.no_criteria())
+                        .set_criteria(criteria_idx);
+                }
+            }
+        }
+    }
+
+    if policy_failures.is_empty() {
+        let mut validated_criteria = criteria_mapper.no_criteria();
+        let mut search_results = vec![];
+        for criteria in criteria_mapper.criteria_iter() {
+            let mut failed_deps = BTreeSet::new();
+            for dep in &resolve.dependencies {
+                if passed_dependencies.contains(dep) {
+                    // This dep is already fine, ignore it (implicitly all_criteria now)
+                    continue;
+                }
+                let dep_resolve_idx = graph.resolve_index_by_pkgid[dep];
+                if !results[dep_resolve_idx].contains(criteria) {
+                    failed_deps.insert(dep);
+                }
+            }
+
+            if failed_deps.is_empty() {
+                search_results.push(SearchResult::Connected {
+                    fully_audited: true,
+                });
+                validated_criteria.unioned_with(criteria);
+            } else {
+                search_results.push(SearchResult::PossiblyConnected { failed_deps })
+            }
+        }
+
+        // Now check that we pass our own policy
+        let own_policy = if let Some(policy) = config.policy.get(&package.name) {
+            criteria_mapper.criteria_from_list(&policy.criteria)
+        } else if is_root {
+            default_root_policy
+        } else {
+            criteria_mapper.no_criteria()
+        };
+
+        for criteria_idx in own_policy.indices() {
+            if let SearchResult::PossiblyConnected { failed_deps } = &search_results[criteria_idx] {
+                for &dep in failed_deps {
+                    policy_failures
+                        .entry(dep)
+                        .or_insert_with(|| criteria_mapper.no_criteria())
+                        .set_criteria(criteria_idx);
+                }
+            }
+        }
+
+        if policy_failures.is_empty() {
+            results[resolve_idx].search_results = search_results;
+            results[resolve_idx].validated_criteria = validated_criteria;
+        }
+    }
+
+    if !policy_failures.is_empty() && is_root {
+        root_failures.push(&package.id);
+    }
+    results[resolve_idx].policy_failures = policy_failures;
 }
 
 fn search_for_path<'a>(
