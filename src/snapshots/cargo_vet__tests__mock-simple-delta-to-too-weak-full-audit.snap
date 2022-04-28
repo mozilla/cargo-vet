@@ -14,7 +14,6 @@ dependency tree:
       third-party1:10.0.0 needs ["reviewed"]
 Use |cargo vet certify| to record the audits.
 recommended audits:
-  third-party1:10.0.0
-    0.0.0 -> 5.0.0 (+25) for ["reviewed"]
+    third-party1:10.0.0  0.0.0 -> 5.0.0 (+25) for ["reviewed"]
 
 

@@ -1188,7 +1188,7 @@ impl<'a> Report<'a> {
             let resolve_idx = self.graph.resolve_index_by_pkgid[failure];
             let result = &self.results[resolve_idx];
 
-            writeln!(out, "  {}:{}", package.name, package.version)?;
+            
 
             // Collect up the details of how we failed
             let mut from_root = None::<BTreeSet<&Version>>;
@@ -1254,7 +1254,8 @@ impl<'a> Report<'a> {
             let rec = crate::fetch_and_diffstat_all(cfg, &package.name, candidates)?;
             writeln!(
                 out,
-                "    {} -> {} ({}) for {:?}",
+                "    {}:{}  {} -> {} ({}) for {:?}",
+                package.name, package.version,
                 rec.from,
                 rec.to,
                 rec.diffstat.raw.trim(),

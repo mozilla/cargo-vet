@@ -15,7 +15,6 @@ dependency tree:
         transitive-third-party1:10.0.0 needs ["reviewed", "weak-reviewed"]
 Use |cargo vet certify| to record the audits.
 recommended audits:
-  transitive-third-party1:10.0.0
-    0.0.0 -> 10.0.0 (+100) for ["reviewed", "weak-reviewed"]
+    transitive-third-party1:10.0.0  0.0.0 -> 10.0.0 (+100) for ["reviewed", "weak-reviewed"]
 
 
