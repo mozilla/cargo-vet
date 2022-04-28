@@ -123,7 +123,7 @@ pub struct CriteriaEntry {
 }
 
 /// This is conceptually an enum
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct AuditEntry {
     pub who: Option<String>,
     pub notes: Option<String>,
@@ -132,7 +132,7 @@ pub struct AuditEntry {
     pub kind: AuditKind,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum AuditKind {
     Full {
@@ -165,7 +165,7 @@ pub enum AuditKind {
 pub type DependencyCriteria = StableMap<String, Vec<String>>;
 
 /// A "VERSION -> VERSION"
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Delta {
     pub from: Version,
     pub to: Version,

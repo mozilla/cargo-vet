@@ -73,6 +73,19 @@ fn dep_ver(name: &'static str, version: u64) -> MockDependency {
 
 impl MockMetadata {
     fn simple() -> Self {
+        // A simple dependency tree to test basic functionality on.
+        //
+        //                                    Graph
+        // =======================================================================================
+        //
+        //                                 root-package
+        //                                       |
+        //                                 first-party
+        //                                /           \
+        //                       third-party1       third-party2
+        //                            |
+        //                  transitive-third-party1
+        //
         MockMetadata::new(vec![
             MockPackage {
                 name: "root-package",
@@ -98,6 +111,88 @@ impl MockMetadata {
             },
             MockPackage {
                 name: "transitive-third-party1",
+                ..Default::default()
+            },
+        ])
+    }
+
+    fn complex() -> Self {
+        // A Complex dependency tree to test more weird interactions and corner cases:
+        //
+        // * firstAB: first-party shared between two roots
+        // * firstB-nodeps: first-party with no third-parties
+        // * third-core: third-party used by everything, has two versions in-tree
+        //
+        //                                      Graph
+        // =======================================================================================
+        //
+        //                         rootA                rootB
+        //                        -------       ---------------------
+        //                       /       \     /          |          \
+        //                      /         \   /           |           \
+        //                    firstA     firstAB       firstB     firstB-nodeps
+        //                   /      \         \           |
+        //                  /        \         \          |
+        //                 /        thirdA    thirdAB     +
+        //                /             \        |       /
+        //               /               \       |      /
+        //        third-core:v5           third-core:v10
+        //
+        MockMetadata::new(vec![
+            MockPackage {
+                name: "rootA",
+                is_root: true,
+                is_first_party: true,
+                deps: vec![dep("firstA"), dep("firstAB")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "rootB",
+                is_root: true,
+                is_first_party: true,
+                deps: vec![dep("firstB"), dep("firstAB"), dep("firstB-nodeps")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "firstA",
+                is_first_party: true,
+                deps: vec![dep("thirdA"), dep_ver("third-core", 5)],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "firstAB",
+                is_first_party: true,
+                deps: vec![dep("thirdAB")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "firstB",
+                is_first_party: true,
+                deps: vec![dep("third-core")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "firstB-nodeps",
+                is_first_party: true,
+                ..Default::default()
+            },
+            MockPackage {
+                name: "thirdA",
+                deps: vec![dep("third-core")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "thirdAB",
+                deps: vec![dep("third-core")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "third-core",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "third-core",
+                version: ver(5),
                 ..Default::default()
             },
         ])
@@ -323,10 +418,10 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
 
     // Rewrite the default used by init
     for unaudited in &mut config.unaudited {
-        assert_eq!(unaudited.1.len(), 1);
-        let entry = unaudited.1.last_mut().unwrap();
-        assert_eq!(&*entry.criteria, "safe-to-deploy");
-        entry.criteria = DEFAULT_CRIT.to_string();
+        for entry in unaudited.1 {
+            assert_eq!(&*entry.criteria, "safe-to-deploy");
+            entry.criteria = DEFAULT_CRIT.to_string();
+        }
     }
 
     (config, audits, imports)
@@ -448,6 +543,16 @@ fn violation(version: VersionReq, criteria: &str) -> AuditEntry {
         notes: None,
         criteria: criteria.to_string(),
         kind: AuditKind::Violation { violation: version },
+    }
+}
+
+fn default_policy() -> PolicyEntry {
+    PolicyEntry {
+        criteria: vec![],
+        build_and_dev_criteria: vec![],
+        dependency_criteria: StableMap::new(),
+        targets: None,
+        build_and_dev_targets: None,
     }
 }
 
@@ -1113,6 +1218,210 @@ fn mock_simple_delta_to_too_weak_full_audit() {
 
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-too-weak-full-audit", stdout);
+}
+
+#[test]
+fn mock_complex_no_unaudited() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, audits, imports) = files_no_unaudited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-no-unaudited", stdout);
+}
+
+#[test]
+fn mock_complex_full_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, audits, imports) = files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-full-audited", stdout);
+}
+
+#[test]
+fn mock_complex_missing_core5() {
+    // (Fail) Missing an audit for the v5 version of third-core
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    let core_audits = &mut audits.audits["third-core"];
+    core_audits.retain(|e| {
+        if let AuditKind::Full { version, .. } = &e.kind {
+            if version.major == 5 {
+                return false;
+            }
+        }
+        true
+    });
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-missing-core5", stdout);
+}
+
+#[test]
+fn mock_complex_missing_core10() {
+    // (Fail) Missing an audit for the v10 version of third-core
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    let core_audits = &mut audits.audits["third-core"];
+    core_audits.retain(|e| {
+        if let AuditKind::Full { version, .. } = &e.kind {
+            if version.major == DEFAULT_VER {
+                return false;
+            }
+        }
+        true
+    });
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-missing-core10", stdout);
+}
+
+#[test]
+fn mock_complex_core10_too_weak() {
+    // (Fail) Criteria for core10 is too weak
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    let core_audits = &mut audits.audits["third-core"];
+    for e in core_audits {
+        if let AuditKind::Full { version, .. } = &e.kind {
+            if version.major == DEFAULT_VER {
+                e.criteria = "weak-reviewed".to_string();
+            }
+        }
+    }
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-core10-too-weak", stdout);
+}
+
+#[test]
+fn mock_complex_core10_partially_too_weak() {
+    // (Fail) Criteria for core10 is too weak for thirdA but not thirdA and thirdAB (full)
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    let core_audits = &mut audits.audits["third-core"];
+    for e in core_audits {
+        if let AuditKind::Full { version, .. } = &e.kind {
+            if version.major == DEFAULT_VER {
+                e.criteria = "weak-reviewed".to_string();
+            }
+        }
+    }
+
+    let audit_with_weaker_req = full_audit_dep(
+        ver(DEFAULT_VER),
+        "reviewed",
+        [("third-core".to_string(), vec!["weak-reviewed".to_string()])]
+            .into_iter()
+            .collect(),
+    );
+    audits.audits["thirdA"] = vec![audit_with_weaker_req.clone()];
+    audits.audits["thirdAB"] = vec![audit_with_weaker_req.clone()];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-core10-partially-too-weak", stdout);
+}
+
+#[test]
+fn mock_complex_core10_partially_too_weak_via_weak_delta() {
+    // (Fail) Criteria for core10 is too weak for thirdA but not thirdA and thirdAB (weak delta)
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    let core_audits = &mut audits.audits["third-core"];
+    for e in core_audits {
+        if let AuditKind::Full { version, .. } = &e.kind {
+            if version.major == DEFAULT_VER {
+                *e = delta_audit(ver(5), ver(DEFAULT_VER), "weak-reviewed");
+            }
+        }
+    }
+
+    let audit_with_weaker_req = full_audit_dep(
+        ver(DEFAULT_VER),
+        "reviewed",
+        [("third-core".to_string(), vec!["weak-reviewed".to_string()])]
+            .into_iter()
+            .collect(),
+    );
+    audits.audits["thirdA"] = vec![audit_with_weaker_req.clone()];
+    audits.audits["thirdAB"] = vec![audit_with_weaker_req.clone()];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!(
+        "mock-complex-core10-partially-too-weak-via-weak-delta",
+        stdout
+    );
+}
+
+#[test]
+fn mock_complex_core10_partially_too_weak_via_strong_delta() {
+    // (Fail) Criteria for core10 is too weak for thirdA but not thirdA and thirdAB
+    // because there's a strong delta from 5->10 but 0->5 is still weak!
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
+
+    let core_audits = &mut audits.audits["third-core"];
+    *core_audits = vec![
+        delta_audit(ver(5), ver(DEFAULT_VER), "reviewed"),
+        full_audit(ver(5), "weak-reviewed"),
+    ];
+
+    let audit_with_weaker_req = full_audit_dep(
+        ver(DEFAULT_VER),
+        "reviewed",
+        [("third-core".to_string(), vec!["weak-reviewed".to_string()])]
+            .into_iter()
+            .collect(),
+    );
+    audits.audits["thirdA"] = vec![audit_with_weaker_req.clone()];
+    audits.audits["thirdAB"] = vec![audit_with_weaker_req.clone()];
+
+    config.policy.insert(
+        "firstA".to_string(),
+        PolicyEntry {
+            dependency_criteria: [("third-core".to_string(), vec!["weak-reviewed".to_string()])]
+                .into_iter()
+                .collect(),
+            ..default_policy()
+        },
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!(
+        "mock-complex-core10-partially-too-weak-via-strong-delta",
+        stdout
+    );
 }
 
 // TESTING BACKLOG:
