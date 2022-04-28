@@ -1,19 +1,19 @@
 ---
 source: src/tests.rs
-assertion_line: 1091
+assertion_line: 1568
 expression: stdout
 ---
 Vetting Failed!
 
 1 unvetted dependencies:
-  third-party1:10.0.0 missing ["reviewed"]
+  third-party1:10.0.0 missing ["strong-reviewed"]
 
 dependency tree:
   root-package:10.0.0
     first-party:10.0.0
-      third-party1:10.0.0 needs ["reviewed"]
+      third-party1:10.0.0 needs ["strong-reviewed"]
 Use |cargo vet certify| to record the audits.
 recommended audits:
-    third-party1:10.0.0  5.0.0 -> 10.0.0 (+75) for ["reviewed"]
+    third-party1:10.0.0  0.0.0 -> 10.0.0 (+100) for ["strong-reviewed"]
 
 

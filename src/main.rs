@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs;
 use std::fs::OpenOptions;
@@ -5,6 +6,7 @@ use std::io::{BufReader, Read};
 use std::ops::Deref;
 use std::path::Path;
 use std::process::Command;
+use std::str::FromStr;
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package, Version};
@@ -19,7 +21,7 @@ use simplelog::{
 
 use crate::format::{
     AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
-    PolicyTable, StableMap, Store, UnauditedDependency,
+    StableMap, Store, UnauditedDependency,
 };
 
 pub mod format;
@@ -156,6 +158,24 @@ enum Verbose {
     Info,
     Debug,
     Trace,
+}
+
+impl Cli {
+    #[cfg(test)]
+    pub fn mock() -> Self {
+        use clap_cargo::{Features, Manifest, Workspace};
+
+        Self {
+            command: None,
+            manifest: Manifest::default(),
+            workspace: Workspace::default(),
+            features: Features::default(),
+            locked: true,
+            verbose: Verbose::Off,
+            output_file: None,
+            log_file: None,
+        }
+    }
 }
 
 /// Absolutely All The Global Configurations
@@ -499,13 +519,7 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
             default_criteria: format::get_default_criteria(),
             imports: StableMap::new(),
             unaudited: dependencies,
-            policy: PolicyTable {
-                criteria: format::get_default_policy_criteria(),
-                build_and_dev_criteria: format::get_default_policy_build_and_dev_criteria(),
-                dependency_criteria: StableMap::new(),
-                targets: None,
-                build_and_dev_targets: None,
-            },
+            policy: StableMap::new(),
         }
     };
 
@@ -517,9 +531,10 @@ fn cmd_inspect(out: &mut dyn Write, cfg: &Config, sub_args: &InspectArgs) -> Res
     let tmp = &cfg.tmp;
     clean_tmp(tmp)?;
 
-    let to_fetch = &[(&*sub_args.package, &*sub_args.version)];
+    let version = Version::from_str(&sub_args.version).expect("could not parse version");
+    let to_fetch = &[(&*sub_args.package, &version)];
     let fetch_dir = fetch_crates(cfg, tmp, "fetch", to_fetch)?;
-    let fetched = fetched_pkg(&fetch_dir, &sub_args.package, &sub_args.version);
+    let fetched = fetched_pkg(&fetch_dir, tmp, &sub_args.package, &version);
 
     #[cfg(target_family = "unix")]
     {
@@ -620,11 +635,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
     writeln!(out, "fetching current packages...")?;
     let fetched_saved = {
         let to_fetch: Vec<_> = foreign_packages(&cfg.metadata)
-            .map(|pkg| (&*pkg.name, pkg.version.to_string()))
-            .collect();
-        let to_fetch: Vec<_> = to_fetch
-            .iter()
-            .map(|(krate, version)| (*krate, &**version))
+            .map(|pkg| (&*pkg.name, &pkg.version))
             .collect();
         fetch_crates(cfg, tmp, "current", &to_fetch)?
     };
@@ -635,11 +646,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
         // TODO: do this
         warn!("fetching audited packages not yet implemented!");
         let to_fetch: Vec<_> = foreign_packages(&cfg.metadata)
-            .map(|pkg| (&*pkg.name, pkg.version.to_string()))
-            .collect();
-        let to_fetch: Vec<_> = to_fetch
-            .iter()
-            .map(|(krate, version)| (*krate, &**version))
+            .map(|pkg| (&*pkg.name, &pkg.version))
             .collect();
         fetch_crates(cfg, tmp, "audited", &to_fetch)?
     };
@@ -652,16 +659,15 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
         // If there are no audits, then diff from an empty dir
         let (base, base_ver) = if audits.audits.contains_key(&package.name) {
             // TODO: find the closest audited version <= sub_args.version!
-            let version = &package.version.to_string();
             (
-                fetched_pkg(&fetched_audited, &package.name, version),
+                fetched_pkg(&fetched_audited, tmp, &package.name, &package.version),
                 "TODO?".to_string(),
             )
         } else {
             (tmp.join(EMPTY_PACKAGE), "0.0.0".to_string())
         };
-        let current = fetched_pkg(&fetched_saved, &package.name, &package.version.to_string());
-        let stat = diffstat_crate(out, cfg, &base, &current)?;
+        let current = fetched_pkg(&fetched_saved, tmp, &package.name, &package.version);
+        let stat = diffstat_crate(cfg, &base, &current)?;
 
         // Ignore things that didn't change
         if stat.count > 0 {
@@ -708,9 +714,17 @@ fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<()
         "fetching {} {}...",
         sub_args.package, sub_args.version1
     )?;
-    let to_fetch1 = &[(&*sub_args.package, &*sub_args.version1)];
+    let version1 = sub_args
+        .version1
+        .parse()
+        .expect("Failed to parse first version");
+    let version2 = sub_args
+        .version2
+        .parse()
+        .expect("Failed to parse second version");
+    let to_fetch1 = &[(&*sub_args.package, &version1)];
     let fetch_dir1 = fetch_crates(cfg, tmp, "first", to_fetch1)?;
-    let fetched1 = fetched_pkg(&fetch_dir1, &sub_args.package, &sub_args.version1);
+    let fetched1 = fetched_pkg(&fetch_dir1, tmp, &sub_args.package, &version1);
     writeln!(
         out,
         "fetched {} {} to {:#?}",
@@ -722,9 +736,9 @@ fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<()
         "fetching {} {}...",
         sub_args.package, sub_args.version2
     )?;
-    let to_fetch2 = &[(&*sub_args.package, &*sub_args.version2)];
+    let to_fetch2 = &[(&*sub_args.package, &version2)];
     let fetch_dir2 = fetch_crates(cfg, tmp, "second", to_fetch2)?;
-    let fetched2 = fetched_pkg(&fetch_dir2, &sub_args.package, &sub_args.version2);
+    let fetched2 = fetched_pkg(&fetch_dir2, tmp, &sub_args.package, &version2);
     writeln!(
         out,
         "fetched {} {} to {:#?}",
@@ -759,7 +773,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports);
-    report.print_report(out)?;
+    report.print_report(out, cfg)?;
 
     // Only save imports if we succeeded, to avoid any modifications on error.
     if !report.has_errors() {
@@ -1010,8 +1024,9 @@ fn fetch_crates(
     cfg: &Config,
     tmp: &Path,
     fetch_dir: &str,
-    crates: &[(&str, &str)],
+    crates: &[(&str, &Version)],
 ) -> Result<PathBuf, VetError> {
+    clean_tmp(tmp)?;
     // Create a tempdir with a Cargo.toml referring to each package,
     // then run 'cargo fetch' on it to ensure the cargo cache is populated.
     // FIXME: maybe we should actually just check if we have all the packages
@@ -1042,6 +1057,10 @@ fn fetch_crates(
         let mut toml = OpenOptions::new().append(true).open(&fetch_toml)?;
 
         for (krate, version) in crates {
+            // This isn't a real crate, skip it
+            if *version == &resolver::ROOT_VERSION {
+                continue;
+            }
             // Mangle names so that cargo doesn't complain about multiple versions.
             // FIXME: probably want more reliable escaping...
             let rename = format!("{}_{}", krate, version);
@@ -1132,7 +1151,7 @@ fn fetch_crates(
 
     // FIXME: we probably shouldn't do this, but better to fail-fast when hacky.
     for (krate, version) in crates {
-        if !fetched_pkg(&real_src_dir, krate, version).exists() {
+        if !fetched_pkg(&real_src_dir, tmp, krate, version).exists() {
             error!("failed to fetch {}:{}", krate, version);
             std::process::exit(-1);
         }
@@ -1171,12 +1190,83 @@ struct DiffStat {
     count: u64,
 }
 
-fn diffstat_crate(
-    _out: &mut dyn Write,
-    _cfg: &Config,
-    version1: &Path,
-    version2: &Path,
-) -> Result<DiffStat, VetError> {
+pub struct DiffRecommendation<'a> {
+    from: &'a Version,
+    to: &'a Version,
+    diffstat: DiffStat,
+}
+
+pub fn fetch_and_diffstat_all<'a>(
+    cfg: &Config,
+    package: &str,
+    diffs: BTreeSet<(&'a Version, &'a Version)>,
+) -> Result<DiffRecommendation<'a>, VetError> {
+    let tmp = &cfg.tmp;
+    let mut all_versions = BTreeSet::new();
+    for (from, to) in &diffs {
+        all_versions.insert(*from);
+        all_versions.insert(*to);
+    }
+
+    let mut best_rec: Option<DiffRecommendation> = None;
+    if cfg.registry_src.is_some() {
+        let to_fetch = all_versions
+            .iter()
+            .map(|v| (package, *v))
+            .collect::<Vec<_>>();
+        let fetch_dir = fetch_crates(cfg, &cfg.tmp, "diff", &to_fetch)?;
+        let fetches = all_versions
+            .iter()
+            .map(|v| (*v, fetched_pkg(&fetch_dir, tmp, package, v)))
+            .collect::<BTreeMap<_, _>>();
+
+        for (from_ver, to_ver) in diffs {
+            let from = &fetches[from_ver];
+            let to = &fetches[to_ver];
+            let diffstat = diffstat_crate(cfg, from, to)?;
+            let rec = DiffRecommendation {
+                from: from_ver,
+                to: to_ver,
+                diffstat,
+            };
+
+            if let Some(best) = best_rec.as_ref() {
+                if best.diffstat.count > rec.diffstat.count {
+                    best_rec = Some(rec);
+                }
+            } else {
+                best_rec = Some(rec);
+            }
+        }
+    } else {
+        warn!("assuming we're in tests and mocking");
+        for (from, to) in &diffs {
+            let from_len = from.major * from.major;
+            let to_len: u64 = to.major * to.major;
+            let delta = to_len as i64 - from_len as i64;
+            let count = delta.unsigned_abs();
+            let raw = if delta < 0 {
+                format!("-{}", count)
+            } else {
+                format!("+{}", count)
+            };
+            let diffstat = DiffStat { raw, count };
+            let rec = DiffRecommendation { from, to, diffstat };
+
+            if let Some(best) = best_rec.as_ref() {
+                if best.diffstat.count > rec.diffstat.count {
+                    best_rec = Some(rec);
+                }
+            } else {
+                best_rec = Some(rec);
+            }
+        }
+    }
+
+    Ok(best_rec.unwrap())
+}
+
+fn diffstat_crate(_cfg: &Config, version1: &Path, version2: &Path) -> Result<DiffStat, VetError> {
     trace!("diffstating {version1:#?} {version2:#?}");
     // FIXME: mask out .cargo_vcs_info.json
     // FIXME: look into libgit2 vs just calling git
@@ -1262,7 +1352,11 @@ fn fetch_foreign_audits(
     Ok(ImportsFile { audits })
 }
 
-fn fetched_pkg(fetch_dir: &Path, name: &str, version: &str) -> PathBuf {
-    let dir_name = format!("{}-{}", name, version);
-    fetch_dir.join(dir_name)
+fn fetched_pkg(fetch_dir: &Path, tmp: &Path, name: &str, version: &Version) -> PathBuf {
+    if version == &resolver::ROOT_VERSION {
+        tmp.join(EMPTY_PACKAGE)
+    } else {
+        let dir_name = format!("{}-{}", name, version);
+        fetch_dir.join(dir_name)
+    }
 }

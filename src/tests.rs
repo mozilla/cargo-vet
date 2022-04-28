@@ -1,11 +1,13 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 
 use cargo_metadata::{Metadata, Version, VersionReq};
 use serde_json::{json, Value};
 
 use crate::{
-    format::{AuditKind, Delta, DependencyCriteria},
-    init_files, AuditEntry, AuditsFile, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
+    format::{AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry},
+    init_files,
+    resolver::Report,
+    AuditEntry, AuditsFile, Cli, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
     StableMap, UnauditedDependency,
 };
 
@@ -69,8 +71,182 @@ fn dep_ver(name: &'static str, version: u64) -> MockDependency {
     }
 }
 
+#[allow(dead_code)]
+fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependency {
+    UnauditedDependency {
+        version,
+        criteria: config.default_criteria.clone(),
+        notes: None,
+        suggest: true,
+    }
+}
+fn unaudited(version: Version, criteria: &str) -> UnauditedDependency {
+    UnauditedDependency {
+        version,
+        criteria: criteria.to_string(),
+        notes: None,
+        suggest: true,
+    }
+}
+
+fn delta_audit(from: Version, to: Version, criteria: &str) -> AuditEntry {
+    let delta = Delta { from, to };
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.to_string(),
+        kind: AuditKind::Delta {
+            delta,
+            dependency_criteria: DependencyCriteria::default(),
+        },
+    }
+}
+
+#[allow(dead_code)]
+fn delta_audit_dep(
+    from: Version,
+    to: Version,
+    criteria: &str,
+    dependency_criteria: impl IntoIterator<
+        Item = (
+            impl Into<String>,
+            impl IntoIterator<Item = impl Into<String>>,
+        ),
+    >,
+) -> AuditEntry {
+    let delta = Delta { from, to };
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.to_string(),
+        kind: AuditKind::Delta {
+            delta,
+            dependency_criteria: dependency_criteria
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k.into(),
+                        v.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                    )
+                })
+                .collect(),
+        },
+    }
+}
+
+fn full_audit(version: Version, criteria: &str) -> AuditEntry {
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.to_string(),
+        kind: AuditKind::Full {
+            version,
+            dependency_criteria: DependencyCriteria::default(),
+        },
+    }
+}
+
+fn full_audit_dep(
+    version: Version,
+    criteria: &str,
+    dependency_criteria: impl IntoIterator<
+        Item = (
+            impl Into<String>,
+            impl IntoIterator<Item = impl Into<String>>,
+        ),
+    >,
+) -> AuditEntry {
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.to_string(),
+        kind: AuditKind::Full {
+            version,
+            dependency_criteria: dependency_criteria
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k.into(),
+                        v.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                    )
+                })
+                .collect(),
+        },
+    }
+}
+
+fn violation_hard(version: VersionReq) -> AuditEntry {
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: "weak-reviewed".to_string(),
+        kind: AuditKind::Violation { violation: version },
+    }
+}
+#[allow(dead_code)]
+fn violation(version: VersionReq, criteria: &str) -> AuditEntry {
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.to_string(),
+        kind: AuditKind::Violation { violation: version },
+    }
+}
+
+fn default_policy() -> PolicyEntry {
+    PolicyEntry {
+        criteria: vec![],
+        build_and_dev_criteria: vec![],
+        dependency_criteria: StableMap::new(),
+        targets: None,
+        build_and_dev_targets: None,
+    }
+}
+
+fn self_policy(criteria: impl IntoIterator<Item = impl Into<String>>) -> PolicyEntry {
+    PolicyEntry {
+        criteria: criteria.into_iter().map(|s| s.into()).collect(),
+        ..default_policy()
+    }
+}
+
+fn dep_policy(
+    dependency_criteria: impl IntoIterator<
+        Item = (
+            impl Into<String>,
+            impl IntoIterator<Item = impl Into<String>>,
+        ),
+    >,
+) -> PolicyEntry {
+    PolicyEntry {
+        dependency_criteria: dependency_criteria
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k.into(),
+                    v.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                )
+            })
+            .collect(),
+        ..default_policy()
+    }
+}
+
 impl MockMetadata {
     fn simple() -> Self {
+        // A simple dependency tree to test basic functionality on.
+        //
+        //                                    Graph
+        // =======================================================================================
+        //
+        //                                 root-package
+        //                                       |
+        //                                 first-party
+        //                                /           \
+        //                       third-party1       third-party2
+        //                            |
+        //                  transitive-third-party1
+        //
         MockMetadata::new(vec![
             MockPackage {
                 name: "root-package",
@@ -96,6 +272,88 @@ impl MockMetadata {
             },
             MockPackage {
                 name: "transitive-third-party1",
+                ..Default::default()
+            },
+        ])
+    }
+
+    fn complex() -> Self {
+        // A Complex dependency tree to test more weird interactions and corner cases:
+        //
+        // * firstAB: first-party shared between two roots
+        // * firstB-nodeps: first-party with no third-parties
+        // * third-core: third-party used by everything, has two versions in-tree
+        //
+        //                                      Graph
+        // =======================================================================================
+        //
+        //                         rootA                rootB
+        //                        -------       ---------------------
+        //                       /       \     /          |          \
+        //                      /         \   /           |           \
+        //                    firstA     firstAB       firstB     firstB-nodeps
+        //                   /      \         \           |
+        //                  /        \         \          |
+        //                 /        thirdA    thirdAB     +
+        //                /             \        |       /
+        //               /               \       |      /
+        //        third-core:v5           third-core:v10
+        //
+        MockMetadata::new(vec![
+            MockPackage {
+                name: "rootA",
+                is_root: true,
+                is_first_party: true,
+                deps: vec![dep("firstA"), dep("firstAB")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "rootB",
+                is_root: true,
+                is_first_party: true,
+                deps: vec![dep("firstB"), dep("firstAB"), dep("firstB-nodeps")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "firstA",
+                is_first_party: true,
+                deps: vec![dep("thirdA"), dep_ver("third-core", 5)],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "firstAB",
+                is_first_party: true,
+                deps: vec![dep("thirdAB")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "firstB",
+                is_first_party: true,
+                deps: vec![dep("third-core")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "firstB-nodeps",
+                is_first_party: true,
+                ..Default::default()
+            },
+            MockPackage {
+                name: "thirdA",
+                deps: vec![dep("third-core")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "thirdAB",
+                deps: vec![dep("third-core")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "third-core",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "third-core",
+                version: ver(5),
                 ..Default::default()
             },
         ])
@@ -300,16 +558,31 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
         ),
     ]);
 
+    // Make the root packages use our custom criteria instead of the builtins
+    for pkgid in &metadata.workspace_members {
+        for package in &metadata.packages {
+            if package.id == *pkgid {
+                config.policy.insert(
+                    package.name.clone(),
+                    PolicyEntry {
+                        criteria: vec![DEFAULT_CRIT.to_string()],
+                        build_and_dev_criteria: vec![DEFAULT_CRIT.to_string()],
+                        dependency_criteria: DependencyCriteria::new(),
+                        targets: None,
+                        build_and_dev_targets: None,
+                    },
+                );
+            }
+        }
+    }
     config.default_criteria = DEFAULT_CRIT.to_string();
-    config.policy.criteria = vec![DEFAULT_CRIT.to_string()];
-    config.policy.build_and_dev_criteria = vec![DEFAULT_CRIT.to_string()];
 
     // Rewrite the default used by init
     for unaudited in &mut config.unaudited {
-        assert_eq!(unaudited.1.len(), 1);
-        let entry = unaudited.1.last_mut().unwrap();
-        assert_eq!(&*entry.criteria, "safe-to-deploy");
-        entry.criteria = DEFAULT_CRIT.to_string();
+        for entry in unaudited.1 {
+            assert_eq!(&*entry.criteria, "safe-to-deploy");
+            entry.criteria = DEFAULT_CRIT.to_string();
+        }
     }
 
     (config, audits, imports)
@@ -341,97 +614,18 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
     (config, audits, imports)
 }
 
-#[allow(dead_code)]
-fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependency {
-    UnauditedDependency {
-        version,
-        criteria: config.default_criteria.clone(),
-        notes: None,
-        suggest: true,
-    }
-}
-fn unaudited(version: Version, criteria: &str) -> UnauditedDependency {
-    UnauditedDependency {
-        version,
-        criteria: criteria.to_string(),
-        notes: None,
-        suggest: true,
-    }
-}
-
-fn delta_audit(from: Version, to: Version, criteria: &str) -> AuditEntry {
-    let delta = Delta { from, to };
-    AuditEntry {
-        who: None,
-        notes: None,
-        criteria: criteria.to_string(),
-        kind: AuditKind::Delta {
-            delta,
-            dependency_criteria: DependencyCriteria::default(),
-        },
-    }
-}
-
-#[allow(dead_code)]
-fn delta_audit_dep(
-    from: Version,
-    to: Version,
-    criteria: &str,
-    dependency_criteria: DependencyCriteria,
-) -> AuditEntry {
-    let delta = Delta { from, to };
-    AuditEntry {
-        who: None,
-        notes: None,
-        criteria: criteria.to_string(),
-        kind: AuditKind::Delta {
-            delta,
-            dependency_criteria,
-        },
-    }
-}
-fn full_audit(version: Version, criteria: &str) -> AuditEntry {
-    AuditEntry {
-        who: None,
-        notes: None,
-        criteria: criteria.to_string(),
-        kind: AuditKind::Full {
-            version,
-            dependency_criteria: DependencyCriteria::default(),
-        },
-    }
-}
-fn full_audit_dep(
-    version: Version,
-    criteria: &str,
-    dependency_criteria: DependencyCriteria,
-) -> AuditEntry {
-    AuditEntry {
-        who: None,
-        notes: None,
-        criteria: criteria.to_string(),
-        kind: AuditKind::Full {
-            version,
-            dependency_criteria,
-        },
-    }
-}
-fn violation_hard(version: VersionReq) -> AuditEntry {
-    AuditEntry {
-        who: None,
-        notes: None,
-        criteria: "weak-reviewed".to_string(),
-        kind: AuditKind::Violation { violation: version },
-    }
-}
-#[allow(dead_code)]
-fn violation(version: VersionReq, criteria: &str) -> AuditEntry {
-    AuditEntry {
-        who: None,
-        notes: None,
-        criteria: criteria.to_string(),
-        kind: AuditKind::Violation { violation: version },
-    }
+fn get_report(metadata: &Metadata, report: Report) -> String {
+    let cfg = Config {
+        metacfg: MetaConfig(vec![]),
+        metadata: metadata.clone(),
+        cli: Cli::mock(),
+        cargo: OsString::new(),
+        tmp: PathBuf::new(),
+        registry_src: None,
+    };
+    let mut stdout = Vec::new();
+    report.print_report(&mut stdout, &cfg).unwrap();
+    String::from_utf8(stdout).unwrap()
 }
 
 #[test]
@@ -444,10 +638,7 @@ fn mock_simple_init() {
     let (config, audits, imports) = files_inited(&metadata);
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
-
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-init", stdout);
 }
 
@@ -462,9 +653,7 @@ fn mock_simple_no_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-no-unaudited", stdout);
 }
 
@@ -479,9 +668,7 @@ fn mock_simple_full_audited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-full-audited", stdout);
 }
 
@@ -503,9 +690,7 @@ fn mock_simple_forbidden_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-forbidden-unaudited", stdout);
 }
 
@@ -522,9 +707,7 @@ fn mock_simple_missing_transitive() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-transitive", stdout);
 }
 
@@ -541,9 +724,7 @@ fn mock_simple_missing_direct_internal() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-direct-internal", stdout);
 }
 
@@ -560,9 +741,7 @@ fn mock_simple_missing_direct_leaf() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-direct-leaf", stdout);
 }
 
@@ -580,9 +759,7 @@ fn mock_simple_missing_leaves() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-leaves", stdout);
 }
 
@@ -604,19 +781,12 @@ fn mock_simple_weaker_transitive_req() {
     direct_audits.push(full_audit_dep(
         ver(DEFAULT_VER),
         "reviewed",
-        [(
-            "transitive-third-party1".to_string(),
-            vec!["weak-reviewed".to_string()],
-        )]
-        .into_iter()
-        .collect(),
+        [("transitive-third-party1", ["weak-reviewed"])],
     ));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-weaker-transitive-req", stdout);
 }
 
@@ -639,19 +809,12 @@ fn mock_simple_weaker_transitive_req_using_implies() {
     direct_audits.push(full_audit_dep(
         ver(DEFAULT_VER),
         "reviewed",
-        [(
-            "transitive-third-party1".to_string(),
-            vec!["weak-reviewed".to_string()],
-        )]
-        .into_iter()
-        .collect(),
+        [("transitive-third-party1", ["weak-reviewed"])],
     ));
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-weaker-transitive-req-using-implies", stdout);
 }
 
@@ -670,9 +833,7 @@ fn mock_simple_lower_version_review() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-lower-version-review", stdout);
 }
 
@@ -691,9 +852,7 @@ fn mock_simple_higher_version_review() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-higher-version-review", stdout);
 }
 
@@ -715,9 +874,7 @@ fn mock_simple_higher_and_lower_version_review() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-higher-and-lower-version-review", stdout);
 }
 
@@ -736,9 +893,7 @@ fn mock_simple_reviewed_too_weakly() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-reviewed-too-weakly", stdout);
 }
 
@@ -767,9 +922,7 @@ fn mock_simple_delta_to_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited", stdout);
 }
 
@@ -798,9 +951,7 @@ fn mock_simple_delta_to_unaudited_overshoot() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited-overshoot", stdout);
 }
 
@@ -829,9 +980,7 @@ fn mock_simple_delta_to_unaudited_undershoot() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited-undershoot", stdout);
 }
 
@@ -855,9 +1004,7 @@ fn mock_simple_delta_to_full_audit() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit", stdout);
 }
 
@@ -881,9 +1028,7 @@ fn mock_simple_delta_to_full_audit_overshoot() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit-overshoot", stdout);
 }
 
@@ -907,9 +1052,7 @@ fn mock_simple_delta_to_full_audit_undershoot() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit-undershoot", stdout);
 }
 
@@ -933,9 +1076,7 @@ fn mock_simple_reverse_delta_to_full_audit() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-reverse-delta-to-full-audit", stdout);
 }
 
@@ -964,9 +1105,7 @@ fn mock_simple_reverse_delta_to_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-reverse-delta-to-unaudited", stdout);
 }
 
@@ -995,9 +1134,7 @@ fn mock_simple_wrongly_reversed_delta_to_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-wrongly-reversed-delta-to-unaudited", stdout);
 }
 
@@ -1021,9 +1158,7 @@ fn mock_simple_wrongly_reversed_delta_to_full_audit() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-wrongly-reversed-delta-to-full-audit", stdout);
 }
 
@@ -1052,9 +1187,7 @@ fn mock_simple_needed_reversed_delta_to_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-needed-reversed-delta-to-unaudited", stdout);
 }
 
@@ -1083,9 +1216,7 @@ fn mock_simple_delta_to_unaudited_too_weak() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited-too-weak", stdout);
 }
 
@@ -1109,9 +1240,7 @@ fn mock_simple_delta_to_full_audit_too_weak() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit-too-weak", stdout);
 }
 
@@ -1135,10 +1264,436 @@ fn mock_simple_delta_to_too_weak_full_audit() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
 
-    let mut stdout = Vec::new();
-    report.print_report(&mut stdout).unwrap();
-    let stdout = String::from_utf8(stdout).unwrap();
+    let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-too-weak-full-audit", stdout);
+}
+
+#[test]
+fn mock_complex_no_unaudited() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, audits, imports) = files_no_unaudited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-no-unaudited", stdout);
+}
+
+#[test]
+fn mock_complex_full_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, audits, imports) = files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-full-audited", stdout);
+}
+
+#[test]
+fn mock_complex_missing_core5() {
+    // (Fail) Missing an audit for the v5 version of third-core
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    audits.audits["third-core"] = vec![full_audit(ver(DEFAULT_VER), "reviewed")];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-missing-core5", stdout);
+}
+
+#[test]
+fn mock_complex_missing_core10() {
+    // (Fail) Missing an audit for the v10 version of third-core
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    audits.audits["third-core"] = vec![full_audit(ver(5), "reviewed")];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-missing-core10", stdout);
+}
+
+#[test]
+fn mock_complex_core10_too_weak() {
+    // (Fail) Criteria for core10 is too weak
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    audits.audits["third-core"] = vec![
+        full_audit(ver(DEFAULT_VER), "weak-reviewed"),
+        full_audit(ver(5), "reviewed"),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-core10-too-weak", stdout);
+}
+
+#[test]
+fn mock_complex_core10_partially_too_weak() {
+    // (Fail) Criteria for core10 is too weak for thirdA but not thirdA and thirdAB (full)
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    audits.audits["third-core"] = vec![
+        full_audit(ver(DEFAULT_VER), "weak-reviewed"),
+        full_audit(ver(5), "reviewed"),
+    ];
+
+    let audit_with_weaker_req = full_audit_dep(
+        ver(DEFAULT_VER),
+        "reviewed",
+        [("third-core", ["weak-reviewed"])],
+    );
+    audits.audits["thirdA"] = vec![audit_with_weaker_req.clone()];
+    audits.audits["thirdAB"] = vec![audit_with_weaker_req];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-core10-partially-too-weak", stdout);
+}
+
+#[test]
+fn mock_complex_core10_partially_too_weak_via_weak_delta() {
+    // (Fail) Criteria for core10 is too weak for thirdA but not thirdA and thirdAB (weak delta)
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    audits.audits["third-core"] = vec![
+        delta_audit(ver(5), ver(DEFAULT_VER), "weak-reviewed"),
+        full_audit(ver(5), "reviewed"),
+    ];
+
+    let audit_with_weaker_req = full_audit_dep(
+        ver(DEFAULT_VER),
+        "reviewed",
+        [("third-core", ["weak-reviewed"])],
+    );
+    audits.audits["thirdA"] = vec![audit_with_weaker_req.clone()];
+    audits.audits["thirdAB"] = vec![audit_with_weaker_req];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!(
+        "mock-complex-core10-partially-too-weak-via-weak-delta",
+        stdout
+    );
+}
+
+#[test]
+fn mock_complex_core10_partially_too_weak_via_strong_delta() {
+    // (Fail) Criteria for core10 is too weak for thirdA but not thirdA and thirdAB
+    // because there's a strong delta from 5->10 but 0->5 is still weak!
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
+
+    audits.audits["third-core"] = vec![
+        delta_audit(ver(5), ver(DEFAULT_VER), "reviewed"),
+        full_audit(ver(5), "weak-reviewed"),
+    ];
+
+    let audit_with_weaker_req = full_audit_dep(
+        ver(DEFAULT_VER),
+        "reviewed",
+        [("third-core", ["weak-reviewed"])],
+    );
+    audits.audits["thirdA"] = vec![audit_with_weaker_req.clone()];
+    audits.audits["thirdAB"] = vec![audit_with_weaker_req];
+
+    config.policy.insert(
+        "firstA".to_string(),
+        dep_policy([("third-core", ["weak-reviewed"])]),
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!(
+        "mock-complex-core10-partially-too-weak-via-strong-delta",
+        stdout
+    );
+}
+
+#[test]
+fn mock_simple_policy_root_too_strong() {
+    // (Fail) Root policy is too strong
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = files_full_audited(&metadata);
+
+    config
+        .policy
+        .insert("root-package".to_string(), self_policy(["strong-reviewed"]));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-root-too-strong", stdout);
+}
+
+#[test]
+fn mock_simple_policy_root_weaker() {
+    // (Pass) Root policy weaker than necessary
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = files_full_audited(&metadata);
+
+    config
+        .policy
+        .insert("root-package".to_string(), self_policy(["weak-reviewed"]));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-root-weaker", stdout);
+}
+
+#[test]
+fn mock_simple_policy_first_too_strong() {
+    // (Fail) First-party policy is too strong
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = files_full_audited(&metadata);
+
+    config
+        .policy
+        .insert("first-party".to_string(), self_policy(["strong-reviewed"]));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-first-too-strong", stdout);
+}
+
+#[test]
+fn mock_simple_policy_first_weaker() {
+    // (Pass) First-party policy weaker than necessary
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = files_full_audited(&metadata);
+
+    config
+        .policy
+        .insert("first-party".to_string(), self_policy(["weak-reviewed"]));
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-first-weaker", stdout);
+}
+
+#[test]
+fn mock_simple_policy_root_dep_weaker() {
+    // (Pass) root->first-party policy weaker than necessary
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = files_full_audited(&metadata);
+
+    config.policy.insert(
+        "root-package".to_string(),
+        dep_policy([("first-party", ["weak-reviewed"])]),
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-root-dep-weaker", stdout);
+}
+
+#[test]
+fn mock_simple_policy_root_dep_too_strong() {
+    // (Pass) root->first-party policy stronger than necessary
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = files_full_audited(&metadata);
+
+    config.policy.insert(
+        "root-package".to_string(),
+        dep_policy([("first-party", ["strong-reviewed"])]),
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-root-dep-too-strong", stdout);
+}
+
+#[test]
+fn mock_simple_policy_first_dep_weaker() {
+    // (Pass) first-party->third-party policy weaker than necessary
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        dep_policy([("third-party1", ["weak-reviewed"])]),
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-first-dep-weaker", stdout);
+}
+
+#[test]
+fn mock_simple_policy_first_dep_too_strong() {
+    // (Pass) first-party->third-party policy too strong
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        dep_policy([("third-party1", ["strong-reviewed"])]),
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-first-dep-too-strong", stdout);
+}
+
+#[test]
+fn mock_simple_policy_first_dep_stronger() {
+    // (Pass) first-party->third-party policy stronger but satisfied
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        dep_policy([("third-party2", ["strong-reviewed"])]),
+    );
+
+    audits.audits["third-party2"] = vec![full_audit(ver(DEFAULT_VER), "strong-reviewed")];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-first-dep-stronger", stdout);
+}
+
+#[test]
+fn mock_simple_policy_first_dep_weaker_needed() {
+    // (Pass) first-party->third-party policy weaker out of necessity
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        dep_policy([("third-party1", ["weak-reviewed"])]),
+    );
+
+    audits.audits["third-party1"] = vec![full_audit(ver(DEFAULT_VER), "weak-reviewed")];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-first-dep-weaker-needed", stdout);
+}
+
+#[test]
+fn mock_simple_policy_first_dep_extra() {
+    // (Pass) first-party->third-party policy has extra satisfied criteria
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        dep_policy([("third-party2", ["reviewed", "fuzzed"])]),
+    );
+
+    audits.audits["third-party2"] = vec![
+        full_audit(ver(DEFAULT_VER), "reviewed"),
+        full_audit(ver(DEFAULT_VER), "fuzzed"),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-first-dep-extra", stdout);
+}
+
+#[test]
+fn mock_simple_policy_first_dep_extra_missing() {
+    // (Fail) first-party->third-party policy has extra unsatisfied criteria
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        dep_policy([("third-party2", ["reviewed", "fuzzed"])]),
+    );
+
+    audits.audits["third-party2"] = vec![full_audit(ver(DEFAULT_VER), "reviewed")];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-first-dep-extra-missing", stdout);
+}
+
+#[test]
+fn mock_simple_policy_first_extra_partially_missing() {
+    // (Fail) first-party policy has extra unsatisfied criteria
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        self_policy(["reviewed", "fuzzed"]),
+    );
+
+    audits.audits["third-party2"] = vec![
+        full_audit(ver(DEFAULT_VER), "reviewed"),
+        full_audit(ver(DEFAULT_VER), "fuzzed"),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-first-extra-partially-missing", stdout);
+}
+
+#[test]
+fn mock_simple_first_policy_redundant() {
+    // (Pass) first-party policy has redundant implied things
+
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        self_policy(["reviewed", "weak-reviewed"]),
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("simple-policy-first-policy-redundant", stdout);
 }
 
 // TESTING BACKLOG:
