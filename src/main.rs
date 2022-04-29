@@ -1165,9 +1165,17 @@ pub fn fetch_and_diffstat_all(
     package: &str,
     diffs: &BTreeSet<Delta>,
 ) -> Result<DiffRecommendation, VetError> {
+    // If there's no registry path setup, assume we're in tests and mocking.
+    let mocked = cfg.registry_src.is_none();
+
     let tmp = &cfg.tmp;
     let mut all_versions = BTreeSet::new();
-    let mut diff_cache = load_diffcache(tmp).unwrap_or_default();
+
+    let mut diff_cache = if mocked {
+        DiffCache::default()
+    } else {
+        load_diffcache(tmp).unwrap_or_default()
+    };
 
     for delta in diffs {
         let is_cached = diff_cache
@@ -1181,7 +1189,7 @@ pub fn fetch_and_diffstat_all(
     }
 
     let mut best_rec: Option<DiffRecommendation> = None;
-    if cfg.registry_src.is_some() {
+    if !mocked {
         let fetches: BTreeMap<&Version, PathBuf> = if all_versions.is_empty() {
             BTreeMap::new()
         } else {
@@ -1257,8 +1265,10 @@ pub fn fetch_and_diffstat_all(
         }
     }
 
-    // We don't care if this fails
-    let _ = store_diffcache(tmp, diff_cache);
+    if !mocked {
+        // We don't care if this fails
+        let _ = store_diffcache(tmp, diff_cache);
+    }
 
     Ok(best_rec.unwrap())
 }
