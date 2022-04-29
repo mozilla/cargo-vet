@@ -1138,7 +1138,7 @@ impl<'a> Report<'a> {
     pub fn print_report(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         if self.has_errors() {
             self.print_failure(out)?;
-            self.print_suggest(out, cfg, true)?;
+            self.print_suggest(out, cfg)?;
         } else {
             self.print_success(out)?;
         }
@@ -1243,12 +1243,7 @@ impl<'a> Report<'a> {
         Ok(())
     }
 
-    pub fn print_suggest(
-        &self,
-        out: &mut dyn Write,
-        cfg: &Config,
-        sorted: bool,
-    ) -> Result<(), VetError> {
+    pub fn print_suggest(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         if self.leaf_failures.is_empty() {
             writeln!(out, "nothing to recommend")?;
             return Ok(());
@@ -1335,80 +1330,81 @@ impl<'a> Report<'a> {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let parents = self.graph.reverse_deps[failure]
-                .iter()
-                .map(|parent| {
-                    &*self.graph.package_list[self.graph.package_index_by_pkgid[parent]].name
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            let rec = crate::fetch_and_diffstat_all(cfg, &package.name, &candidates)?;
-
-            // If we're sorting, defer the result
-            if sorted {
-                suggestions.push(SuggestItem {
-                    package,
-                    rec,
-                    criteria,
-                    parents,
-                })
+            // Don't list a billion reverse deps
+            let reverse_deps = &self.graph.reverse_deps[failure];
+            let parents = if reverse_deps.len() > 3 {
+                format!("{} packages", reverse_deps.len())
             } else {
-                writeln!(
-                    out,
-                    "    {}:{}  {} -> {} ({}) for {:?}",
-                    package.name,
-                    package.version,
-                    rec.from,
-                    rec.to,
-                    rec.diffstat.raw.trim(),
-                    &criteria,
-                )?;
+                reverse_deps
+                    .iter()
+                    .map(|parent| {
+                        &*self.graph.package_list[self.graph.package_index_by_pkgid[parent]].name
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+
+            match crate::fetch_and_diffstat_all(cfg, &package.name, &candidates) {
+                Ok(rec) => {
+                    suggestions.push(SuggestItem {
+                        package,
+                        rec,
+                        criteria,
+                        parents,
+                    });
+                }
+                Err(err) => {
+                    writeln!(
+                        out,
+                        "    error diffing {}:{} {}",
+                        package.name, package.version, err
+                    )?;
+                }
             }
         }
 
-        if sorted {
-            suggestions.sort_by_key(|item| item.rec.diffstat.count);
+        suggestions.sort_by_key(|item| item.rec.diffstat.count);
 
-            let strings = suggestions
-                .into_iter()
-                .map(|item| {
-                    (
-                        if item.rec.from == ROOT_VERSION {
-                            format!("{}:{}", item.package.name, item.rec.to)
-                        } else {
-                            format!(
-                                "{}:({} -> {})",
-                                item.package.name, item.rec.from, item.rec.to
-                            )
-                        },
-                        format!("for {}", item.criteria),
-                        if item.rec.from == ROOT_VERSION {
-                            format!("({} lines)", item.rec.diffstat.count)
-                        } else {
-                            format!("({})", item.rec.diffstat.raw.trim())
-                        },
-                        format!("(used by {})", item.parents),
-                    )
-                })
-                .collect::<Vec<_>>();
+        let strings = suggestions
+            .into_iter()
+            .map(|item| {
+                (
+                    if item.rec.from == ROOT_VERSION {
+                        format!("{}:{}", item.package.name, item.rec.to)
+                    } else {
+                        format!(
+                            "{}:({} -> {})",
+                            item.package.name, item.rec.from, item.rec.to
+                        )
+                    },
+                    format!("for {}", item.criteria),
+                    if item.rec.from == ROOT_VERSION {
+                        format!("({} lines)", item.rec.diffstat.count)
+                    } else {
+                        format!("({})", item.rec.diffstat.raw.trim())
+                    },
+                    format!("(used by {})", item.parents),
+                )
+            })
+            .collect::<Vec<_>>();
 
-            let max0 = strings.iter().max_by_key(|s| s.0.len()).unwrap().0.len();
-            let max1 = strings.iter().max_by_key(|s| s.1.len()).unwrap().1.len();
-            let max2 = strings.iter().max_by_key(|s| s.2.len()).unwrap().2.len();
-            let max3 = strings.iter().max_by_key(|s| s.3.len()).unwrap().3.len();
+        let max0 = strings.iter().max_by_key(|s| s.0.len()).unwrap().0.len();
+        let max1 = strings.iter().max_by_key(|s| s.1.len()).unwrap().1.len();
+        let max2 = strings.iter().max_by_key(|s| s.2.len()).unwrap().2.len();
 
-            for (s0, s1, s2, s3) in strings {
-                writeln!(
-                    out,
-                    "    {s0:width0$} {s1:width1$} {s2:width2$} {s3:width3$} ",
-                    width0 = max0,
-                    width1 = max1,
-                    width2 = max2,
-                    width3 = max3,
-                )?;
-            }
+        // Do not align the last one
+        // let max3 = strings.iter().max_by_key(|s| s.3.len()).unwrap().3.len();
+
+        for (s0, s1, s2, s3) in strings {
+            writeln!(
+                out,
+                "    {s0:width0$}  {s1:width1$}  {s2:width2$}  {s3} ",
+                width0 = max0,
+                width1 = max1,
+                width2 = max2,
+            )?;
         }
+
         writeln!(out)?;
         writeln!(out, "Use |cargo vet certify| to record the audits.")?;
 
