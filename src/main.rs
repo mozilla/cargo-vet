@@ -11,7 +11,7 @@ use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package, Version};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
-use format::{AuditEntry, AuditKind, Delta, MetaConfig};
+use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
 use serde::{de::Deserialize, ser::Serialize};
@@ -189,8 +189,12 @@ pub struct Config {
     registry_src: Option<PathBuf>,
 }
 
-static EMPTY_PACKAGE: &str = "empty";
+// tmp cache for various shenanigans
 static TEMP_DIR_SUFFIX: &str = "cargo-vet-checkout";
+static DIFF_CACHE: &str = "diff-cache.toml";
+static EMPTY_PACKAGE: &str = "empty";
+static FETCHES: &str = "fetches";
+
 static CARGO_ENV: &str = "CARGO";
 static CARGO_REGISTRY_SRC: &str = "registry/src/";
 static DEFAULT_STORE: &str = "supply-chain";
@@ -927,6 +931,13 @@ fn load_imports(store_path: &Path) -> Result<ImportsFile, VetError> {
     Ok(file)
 }
 
+fn load_diffcache(tmp: &Path) -> Result<DiffCache, VetError> {
+    // TODO: do integrity checks?
+    let path = tmp.join(DIFF_CACHE);
+    let file: DiffCache = load_toml(&path)?;
+    Ok(file)
+}
+
 fn store_audits(store_path: &Path, audits: AuditsFile) -> Result<(), VetError> {
     let heading = r###"
 # cargo-vet audits file
@@ -954,13 +965,28 @@ fn store_imports(store_path: &Path, imports: ImportsFile) -> Result<(), VetError
     store_toml(&path, heading, imports)?;
     Ok(())
 }
+fn store_diffcache(tmp: &Path, diffcache: DiffCache) -> Result<(), VetError> {
+    let heading = "";
+
+    let path = tmp.join(DIFF_CACHE);
+    store_toml(&path, heading, diffcache)?;
+    Ok(())
+}
 
 fn clean_tmp(tmp: &Path) -> Result<(), VetError> {
-    // Wipe out and remake tmp my making sure it exists, destroying it, and then remaking it.
-    fs::create_dir_all(tmp)?;
-    fs::remove_dir_all(tmp)?;
-    fs::create_dir_all(tmp)?;
-    fs::create_dir_all(tmp.join(EMPTY_PACKAGE))?;
+    // Wipe out temp fetches and make sure everything else exists
+    let empty = tmp.join(EMPTY_PACKAGE);
+    let fetches: PathBuf = tmp.join(FETCHES);
+    if !tmp.exists() {
+        fs::create_dir_all(tmp)?;
+    }
+    if !empty.exists() {
+        fs::create_dir_all(&empty)?;
+    }
+    if fetches.exists() {
+        fs::remove_dir_all(&fetches)?;
+    }
+    fs::create_dir_all(&fetches)?;
     Ok(())
 }
 
@@ -975,9 +1001,10 @@ fn fetch_crates(
     // then run 'cargo fetch' on it to ensure the cargo cache is populated.
     // FIXME: maybe we should actually just check if we have all the packages
     // first, to avoid doing a bunch of faffing around we don't need..?
+    let fetches = tmp.join(FETCHES);
     {
         let out = Command::new(&cfg.cargo)
-            .current_dir(tmp)
+            .current_dir(&fetches)
             .arg("new")
             .arg("--bin")
             .arg(fetch_dir)
@@ -993,7 +1020,7 @@ fn fetch_crates(
     }
 
     trace!("init to: {:#?}", tmp);
-    let fetch_dir = tmp.join(fetch_dir);
+    let fetch_dir = fetches.join(fetch_dir);
     let fetch_toml = fetch_dir.join("Cargo.toml");
 
     {
@@ -1129,48 +1156,69 @@ fn diff_crate(
     Ok(())
 }
 
-struct DiffStat {
-    raw: String,
-    count: u64,
-}
-
-pub struct DiffRecommendation<'a> {
-    from: &'a Version,
-    to: &'a Version,
+pub struct DiffRecommendation {
+    from: Version,
+    to: Version,
     diffstat: DiffStat,
 }
 
-pub fn fetch_and_diffstat_all<'a>(
+pub fn fetch_and_diffstat_all(
     cfg: &Config,
     package: &str,
-    diffs: BTreeSet<(&'a Version, &'a Version)>,
-) -> Result<DiffRecommendation<'a>, VetError> {
+    diffs: &BTreeSet<Delta>,
+) -> Result<DiffRecommendation, VetError> {
     let tmp = &cfg.tmp;
     let mut all_versions = BTreeSet::new();
-    for (from, to) in &diffs {
-        all_versions.insert(*from);
-        all_versions.insert(*to);
+    let mut diff_cache = load_diffcache(tmp).unwrap_or_default();
+
+    for delta in diffs {
+        let is_cached = diff_cache
+            .get(package)
+            .and_then(|cache| cache.get(delta))
+            .is_some();
+        if !is_cached {
+            all_versions.insert(&delta.from);
+            all_versions.insert(&delta.to);
+        }
     }
 
     let mut best_rec: Option<DiffRecommendation> = None;
     if cfg.registry_src.is_some() {
-        let to_fetch = all_versions
-            .iter()
-            .map(|v| (package, *v))
-            .collect::<Vec<_>>();
-        let fetch_dir = fetch_crates(cfg, &cfg.tmp, "diff", &to_fetch)?;
-        let fetches = all_versions
-            .iter()
-            .map(|v| (*v, fetched_pkg(&fetch_dir, tmp, package, v)))
-            .collect::<BTreeMap<_, _>>();
+        let fetches: BTreeMap<&Version, PathBuf> = if all_versions.is_empty() {
+            BTreeMap::new()
+        } else {
+            let to_fetch = all_versions
+                .iter()
+                .map(|v| (package, *v))
+                .collect::<Vec<_>>();
+            let fetch_dir = fetch_crates(cfg, &cfg.tmp, "diff", &to_fetch)?;
+            all_versions
+                .iter()
+                .map(|v| (*v, fetched_pkg(&fetch_dir, tmp, package, v)))
+                .collect()
+        };
 
-        for (from_ver, to_ver) in diffs {
-            let from = &fetches[from_ver];
-            let to = &fetches[to_ver];
-            let diffstat = diffstat_crate(cfg, from, to)?;
+        for delta in diffs {
+            let cached = diff_cache
+                .get(package)
+                .and_then(|cache| cache.get(delta))
+                .cloned();
+            let diffstat = if let Some(cached) = cached {
+                cached
+            } else {
+                let from = &fetches[&delta.from];
+                let to = &fetches[&delta.to];
+                let diffstat = diffstat_crate(cfg, from, to)?;
+                diff_cache
+                    .entry(package.to_string())
+                    .or_insert(StableMap::new())
+                    .insert(delta.clone(), diffstat.clone());
+                diffstat
+            };
+
             let rec = DiffRecommendation {
-                from: from_ver,
-                to: to_ver,
+                from: delta.from.clone(),
+                to: delta.to.clone(),
                 diffstat,
             };
 
@@ -1184,18 +1232,22 @@ pub fn fetch_and_diffstat_all<'a>(
         }
     } else {
         warn!("assuming we're in tests and mocking");
-        for (from, to) in &diffs {
-            let from_len = from.major * from.major;
-            let to_len: u64 = to.major * to.major;
-            let delta = to_len as i64 - from_len as i64;
-            let count = delta.unsigned_abs();
-            let raw = if delta < 0 {
+        for delta in diffs {
+            let from_len = delta.from.major * delta.from.major;
+            let to_len: u64 = delta.to.major * delta.to.major;
+            let diff = to_len as i64 - from_len as i64;
+            let count = diff.unsigned_abs();
+            let raw = if diff < 0 {
                 format!("-{}", count)
             } else {
                 format!("+{}", count)
             };
             let diffstat = DiffStat { raw, count };
-            let rec = DiffRecommendation { from, to, diffstat };
+            let rec = DiffRecommendation {
+                from: delta.from.clone(),
+                to: delta.to.clone(),
+                diffstat,
+            };
 
             if let Some(best) = best_rec.as_ref() {
                 if best.diffstat.count > rec.diffstat.count {
@@ -1206,6 +1258,9 @@ pub fn fetch_and_diffstat_all<'a>(
             }
         }
     }
+
+    // We don't care if this fails
+    let _ = store_diffcache(tmp, diff_cache);
 
     Ok(best_rec.unwrap())
 }

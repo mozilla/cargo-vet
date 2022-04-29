@@ -5,7 +5,7 @@ use std::io::Write;
 use cargo_metadata::{Metadata, Node, Package, PackageId, Version};
 use log::{error, trace, warn};
 
-use crate::format::{self, AuditKind};
+use crate::format::{self, AuditKind, Delta};
 use crate::{
     AuditEntry, AuditsFile, Config, ConfigFile, CriteriaEntry, DiffRecommendation, ImportsFile,
     PackageExt, StableMap, VetError,
@@ -1247,7 +1247,7 @@ impl<'a> Report<'a> {
 
         struct SuggestItem<'a> {
             package: &'a Package,
-            rec: DiffRecommendation<'a>,
+            rec: DiffRecommendation,
             criteria: Vec<&'a str>,
         }
 
@@ -1310,7 +1310,10 @@ impl<'a> Report<'a> {
                 }
 
                 for closest in closest_below.into_iter().chain(closest_above) {
-                    candidates.insert((closest, dest));
+                    candidates.insert(Delta {
+                        from: closest.clone(),
+                        to: dest.clone(),
+                    });
                 }
             }
 
@@ -1318,7 +1321,7 @@ impl<'a> Report<'a> {
                 .criteria_mapper
                 .criteria_names(&audit_failure.criteria_failures)
                 .collect::<Vec<_>>();
-            let rec = crate::fetch_and_diffstat_all(cfg, &package.name, candidates)?;
+            let rec = crate::fetch_and_diffstat_all(cfg, &package.name, &candidates)?;
 
             // If we're sorting, defer the result
             if sorted {
@@ -1349,7 +1352,7 @@ impl<'a> Report<'a> {
                 .map(|item| {
                     (
                         format!("{}:{}", item.package.name, item.package.version),
-                        if item.rec.from == &ROOT_VERSION {
+                        if item.rec.from == ROOT_VERSION {
                             format!("full {}", item.rec.to)
                         } else {
                             format!("{} -> {}", item.rec.from, item.rec.to)
