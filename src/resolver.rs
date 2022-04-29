@@ -1333,7 +1333,15 @@ impl<'a> Report<'a> {
             // Don't list a billion reverse deps
             let reverse_deps = &self.graph.reverse_deps[failure];
             let parents = if reverse_deps.len() > 3 {
-                format!("{} packages", reverse_deps.len())
+                let prefix = reverse_deps
+                    .iter()
+                    .map(|parent| {
+                        &*self.graph.package_list[self.graph.package_index_by_pkgid[parent]].name
+                    })
+                    .take(2)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}, and {} others", prefix, reverse_deps.len() - 2)
             } else {
                 reverse_deps
                     .iter()
