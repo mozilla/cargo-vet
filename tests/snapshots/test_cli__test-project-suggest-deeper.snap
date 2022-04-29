@@ -1,6 +1,6 @@
 ---
 source: tests/test-cli.rs
-assertion_line: 187
+assertion_line: 186
 expression: stdout
 ---
 recommended audits:
@@ -36,7 +36,6 @@ recommended audits:
     hyper-tls:0.5.0                     for safe-to-deploy  (1301 lines)    (used by reqwest) 
     wasm-bindgen-futures:0.4.30         for safe-to-deploy  (1304 lines)    (used by reqwest) 
     fastrand:1.7.0                      for safe-to-deploy  (1375 lines)    (used by tempfile) 
-    strsim:0.10.0                       for safe-to-deploy  (1574 lines)    (used by clap) 
     mime:0.3.16                         for safe-to-deploy  (1721 lines)    (used by reqwest) 
     pkg-config:0.3.25                   for safe-to-deploy  (1754 lines)    (used by openssl-sys) 
     tokio-native-tls:0.3.0              for safe-to-deploy  (1804 lines)    (used by hyper-tls, reqwest) 
@@ -105,7 +104,7 @@ recommended audits:
     web-sys:0.3.57                      for safe-to-deploy  (197014 lines)  (used by reqwest, wasm-bindgen-futures) 
     encoding_rs:0.8.31                  for safe-to-deploy  (507252 lines)  (used by reqwest) 
 
-estimated review backlog: 1773398 lines
+estimated review backlog: 1771824 lines
 
 Use |cargo vet certify| to record the audits.
 

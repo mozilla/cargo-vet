@@ -660,8 +660,10 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
         load_imports(store_path)?
     };
 
-    // Delete all unaudited entries
-    config.unaudited.clear();
+    // Delete all unaudited entries except those that are suggest=false
+    for (_package, versions) in &mut config.unaudited {
+        versions.retain(|e| !e.suggest);
+    }
 
     // DO THE THING!!!!
     let report = resolver::resolve(
