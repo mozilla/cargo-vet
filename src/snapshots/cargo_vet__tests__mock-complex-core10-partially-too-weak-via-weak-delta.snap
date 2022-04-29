@@ -8,12 +8,8 @@ Vetting Failed!
 1 unvetted dependencies:
   third-core:10.0.0 missing ["reviewed"]
 
-dependency tree:
-  rootB:10.0.0
-    firstB:10.0.0
-      third-core:10.0.0 needs ["reviewed"]
-Use |cargo vet certify| to record the audits.
 recommended audits:
-    third-core:10.0.0 5.0.0 -> 10.0.0 (+75) for ["reviewed"]
+    third-core:(5.0.0 -> 10.0.0)  for reviewed  (+75)  (used by firstB, thirdA, thirdAB) 
 
+Use |cargo vet certify| to record the audits.
 

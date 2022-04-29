@@ -9,15 +9,9 @@ Vetting Failed!
   third-party2:10.0.0 missing ["reviewed"]
   transitive-third-party1:10.0.0 missing ["reviewed"]
 
-dependency tree:
-  root-package:10.0.0
-    first-party:10.0.0
-      third-party1:10.0.0
-        transitive-third-party1:10.0.0 needs ["reviewed"]
-      third-party2:10.0.0 needs ["reviewed"]
-Use |cargo vet certify| to record the audits.
 recommended audits:
-    third-party2:10.0.0            full 10.0.0 (+100) for ["reviewed"]
-    transitive-third-party1:10.0.0 full 10.0.0 (+100) for ["reviewed"]
+    third-party2:10.0.0             for reviewed  (100 lines)  (used by first-party) 
+    transitive-third-party1:10.0.0  for reviewed  (100 lines)  (used by third-party1) 
 
+Use |cargo vet certify| to record the audits.
 

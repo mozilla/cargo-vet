@@ -645,7 +645,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
 
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports);
-    report.print_suggest(out, cfg, true)?;
+    report.print_suggest(out, cfg)?;
 
     Ok(())
 }
@@ -1011,11 +1011,11 @@ fn fetch_crates(
             .output()?;
 
         if !out.status.success() {
-            panic!(
+            return Err(eyre::eyre!(
                 "command failed!\nout:\n{}\nstderr:\n{}",
                 String::from_utf8(out.stdout).unwrap(),
                 String::from_utf8(out.stderr).unwrap()
-            )
+            ));
         }
     }
 
@@ -1054,25 +1054,23 @@ fn fetch_crates(
             .output()?;
 
         if !out.status.success() {
-            panic!(
+            return Err(eyre::eyre!(
                 "command failed!\nout:\n{}\nstderr:\n{}",
                 String::from_utf8(out.stdout).unwrap(),
                 String::from_utf8(out.stderr).unwrap()
-            )
+            ));
         }
     }
 
     trace!("fetched");
 
     if cfg.registry_src.is_none() {
-        error!("Could not resolve CARGO_HOME!?");
-        std::process::exit(-1);
+        return Err(eyre::eyre!("Could not resolve CARGO_HOME!?"));
     }
 
     let registry_src = cfg.registry_src.as_ref().unwrap();
     if !registry_src.exists() {
-        error!("Cargo registry src cache doesn't exist!?");
-        std::process::exit(-1);
+        return Err(eyre::eyre!("Cargo registry src cache doesn't exist!?"));
     }
 
     {
@@ -1083,11 +1081,11 @@ fn fetch_crates(
         let out = Command::new(&cfg.cargo).arg("fetch").output()?;
 
         if !out.status.success() {
-            panic!(
+            return Err(eyre::eyre!(
                 "command failed!\nout:\n{}\nstderr:\n{}",
                 String::from_utf8(out.stdout).unwrap(),
                 String::from_utf8(out.stderr).unwrap()
-            )
+            ));
         }
     }
 
@@ -1115,16 +1113,14 @@ fn fetch_crates(
         }
     }
     if real_src_dir.is_none() {
-        error!("failed to find cargo package sources");
-        std::process::exit(-1);
+        return Err(eyre::eyre!("failed to find cargo package sources"));
     }
     let real_src_dir = real_src_dir.unwrap();
 
     // FIXME: we probably shouldn't do this, but better to fail-fast when hacky.
     for (krate, version) in crates {
         if !fetched_pkg(&real_src_dir, tmp, krate, version).exists() {
-            error!("failed to fetch {}:{}", krate, version);
-            std::process::exit(-1);
+            return Err(eyre::eyre!("failed to fetch {}:{}", krate, version));
         }
     }
 
@@ -1150,7 +1146,9 @@ fn diff_crate(
     // TODO: pretty sure this is wrong, should use --exit-code and copy diffstat_crate's logic
     // (not actually sure what the default exit status logic is!)
     if !status.success() {
-        todo!()
+        return Err(eyre::eyre!(
+            "git diff failed! (this is probably just a bug in how we check error codes)"
+        ));
     }
 
     Ok(())
@@ -1167,9 +1165,17 @@ pub fn fetch_and_diffstat_all(
     package: &str,
     diffs: &BTreeSet<Delta>,
 ) -> Result<DiffRecommendation, VetError> {
+    // If there's no registry path setup, assume we're in tests and mocking.
+    let mocked = cfg.registry_src.is_none();
+
     let tmp = &cfg.tmp;
     let mut all_versions = BTreeSet::new();
-    let mut diff_cache = load_diffcache(tmp).unwrap_or_default();
+
+    let mut diff_cache = if mocked {
+        DiffCache::default()
+    } else {
+        load_diffcache(tmp).unwrap_or_default()
+    };
 
     for delta in diffs {
         let is_cached = diff_cache
@@ -1183,7 +1189,7 @@ pub fn fetch_and_diffstat_all(
     }
 
     let mut best_rec: Option<DiffRecommendation> = None;
-    if cfg.registry_src.is_some() {
+    if !mocked {
         let fetches: BTreeMap<&Version, PathBuf> = if all_versions.is_empty() {
             BTreeMap::new()
         } else {
@@ -1259,8 +1265,10 @@ pub fn fetch_and_diffstat_all(
         }
     }
 
-    // We don't care if this fails
-    let _ = store_diffcache(tmp, diff_cache);
+    if !mocked {
+        // We don't care if this fails
+        let _ = store_diffcache(tmp, diff_cache);
+    }
 
     Ok(best_rec.unwrap())
 }
@@ -1283,11 +1291,11 @@ fn diffstat_crate(_cfg: &Config, version1: &Path, version2: &Path) -> Result<Dif
     // 0 = empty
     // 1 = some diff
     if status != 0 && status != 1 {
-        panic!(
+        return Err(eyre::eyre!(
             "command failed!\nout:\n{}\nstderr:\n{}",
             String::from_utf8(out.stdout).unwrap(),
             String::from_utf8(out.stderr).unwrap()
-        )
+        ));
     }
 
     let diffstat = String::from_utf8(out.stdout)?;
@@ -1334,13 +1342,11 @@ fn fetch_foreign_audits(
         // FIXME: this should probably be async but that's a Whole Thing and these files are small.
         let audit_txt = req::get(url).and_then(|r| r.text());
         if let Err(e) = audit_txt {
-            error!("Could not load {name} @ {url} - {e}");
-            std::process::exit(-1);
+            return Err(eyre::eyre!("Could not load {name} @ {url} - {e}"));
         }
         let audit_file: Result<AuditsFile, _> = toml::from_str(&audit_txt.unwrap());
         if let Err(e) = audit_file {
-            error!("Could not parse {name} @ {url} - {e}");
-            std::process::exit(-1);
+            return Err(eyre::eyre!("Could not parse {name} @ {url} - {e}"));
         }
 
         // TODO: do integrity checks? (share code with load_audits/load_imports here...)

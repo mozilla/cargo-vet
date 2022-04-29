@@ -49,6 +49,8 @@ pub struct CriteriaMapper {
 pub struct DepGraph<'a> {
     pub package_list: &'a [Package],
     pub resolve_list: &'a [cargo_metadata::Node],
+    /// child -> parents in resolve
+    pub reverse_deps: BTreeMap<&'a PackageId, BTreeSet<&'a PackageId>>,
     pub package_index_by_pkgid: BTreeMap<&'a PackageId, usize>,
     pub resolve_index_by_pkgid: BTreeMap<&'a PackageId, usize>,
     pub pkgid_by_name_and_ver: HashMap<&'a str, HashMap<&'a Version, &'a PackageId>>,
@@ -229,28 +231,21 @@ impl CriteriaMapper {
         CriteriaSet::_all(self.len())
     }
 
+    /// Yields all the names of the set criteria with implied members filtered out.
     pub fn criteria_names<'a>(
         &'a self,
         criteria: &'a CriteriaSet,
     ) -> impl Iterator<Item = &'a str> + 'a {
-        criteria.indices().map(|idx| &*self.list[idx].0)
-    }
-
-    pub fn filter_implied<'a>(&self, input: &[&'a str]) -> Vec<&'a str> {
-        let mut result = vec![];
-        'outer: for a in input {
-            let a_idx = self.index[*a];
-            for b in input {
-                let b_idx = self.index[*b];
-                if a_idx != b_idx && self.implied_criteria[b_idx].has_criteria(a_idx) {
-                    // implied by something else, ignore it
-                    continue 'outer;
-                }
-            }
-            // implied by nothing else, report it
-            result.push(*a);
-        }
-        result
+        // Filter out any criteria implied by other criteria
+        criteria
+            .indices()
+            .filter(|&cur_idx| {
+                criteria.indices().all(|other_idx| {
+                    // Require that we aren't implied by other_idx (and ignore our own index)
+                    cur_idx == other_idx || !self.implied_criteria[other_idx].has_criteria(cur_idx)
+                })
+            })
+            .map(|idx| &*self.list[idx].0)
     }
 }
 
@@ -293,7 +288,17 @@ impl CriteriaSet {
         self.0 == 0
     }
     pub fn indices(&self) -> impl Iterator<Item = usize> + '_ {
-        (0..MAX_CRITERIA).filter(|&idx| self.has_criteria(idx))
+        // Yield all the offsets that are set by repeatedly getting the lowest 1 and clearing it
+        let mut raw = self.0;
+        std::iter::from_fn(move || {
+            if raw == 0 {
+                None
+            } else {
+                let next = raw.trailing_zeros() as usize;
+                raw &= !(1 << next);
+                Some(next)
+            }
+        })
     }
 }
 
@@ -369,6 +374,13 @@ impl<'a> DepGraph<'a> {
                 .insert(&pkg.version, &pkg.id);
         }
 
+        let mut reverse_deps = BTreeMap::<&PackageId, BTreeSet<&PackageId>>::new();
+        for parent in resolve_list {
+            for child in &parent.dependencies {
+                reverse_deps.entry(child).or_default().insert(&parent.id);
+            }
+        }
+
         // Do topological sort: just recursively visit all of a node's children, and only add it
         // to the node *after* visiting the children. In this way we have trivially already added
         // all of the dependencies of a node by the time we have
@@ -418,6 +430,7 @@ impl<'a> DepGraph<'a> {
         Self {
             package_list,
             resolve_list,
+            reverse_deps,
             package_index_by_pkgid,
             resolve_index_by_pkgid,
             pkgid_by_name_and_ver,
@@ -1125,7 +1138,7 @@ impl<'a> Report<'a> {
     pub fn print_report(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         if self.has_errors() {
             self.print_failure(out)?;
-            self.print_suggest(out, cfg, true)?;
+            self.print_suggest(out, cfg)?;
         } else {
             self.print_success(out)?;
         }
@@ -1168,15 +1181,14 @@ impl<'a> Report<'a> {
                 writeln!(
                     out,
                     "  {}:{} missing {:?}",
-                    failed_package.name,
-                    failed_package.version,
-                    self.criteria_mapper.filter_implied(&criteria)
+                    failed_package.name, failed_package.version, &criteria
                 )?;
             }
 
             writeln!(out)?;
-            writeln!(out, "dependency tree:")?;
 
+            /* Old "blame tree" printer, in case we ever want it again
+            writeln!(out, "dependency tree:")?;
             visit_failures(
                 &self.graph,
                 &self.results,
@@ -1197,7 +1209,7 @@ impl<'a> Report<'a> {
                             "",
                             package.name,
                             package.version,
-                            self.criteria_mapper.filter_implied(&criteria),
+                            &criteria,
                             width = indent
                         )?;
                     } else {
@@ -1214,6 +1226,7 @@ impl<'a> Report<'a> {
                     Ok(())
                 },
             )?;
+            */
         }
         if !self.violation_failed.is_empty() {
             writeln!(
@@ -1227,17 +1240,10 @@ impl<'a> Report<'a> {
             writeln!(out)?;
         }
 
-        writeln!(out, "Use |cargo vet certify| to record the audits.")?;
-
         Ok(())
     }
 
-    pub fn print_suggest(
-        &self,
-        out: &mut dyn Write,
-        cfg: &Config,
-        sorted: bool,
-    ) -> Result<(), VetError> {
+    pub fn print_suggest(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         if self.leaf_failures.is_empty() {
             writeln!(out, "nothing to recommend")?;
             return Ok(());
@@ -1248,7 +1254,8 @@ impl<'a> Report<'a> {
         struct SuggestItem<'a> {
             package: &'a Package,
             rec: DiffRecommendation,
-            criteria: Vec<&'a str>,
+            criteria: String,
+            parents: String,
         }
 
         let mut suggestions = vec![];
@@ -1320,66 +1327,86 @@ impl<'a> Report<'a> {
             let criteria = self
                 .criteria_mapper
                 .criteria_names(&audit_failure.criteria_failures)
-                .collect::<Vec<_>>();
-            let rec = crate::fetch_and_diffstat_all(cfg, &package.name, &candidates)?;
+                .collect::<Vec<_>>()
+                .join(", ");
 
-            // If we're sorting, defer the result
-            if sorted {
-                suggestions.push(SuggestItem {
-                    package,
-                    rec,
-                    criteria,
-                })
+            // Don't list a billion reverse deps
+            let reverse_deps = &self.graph.reverse_deps[failure];
+            let parents = if reverse_deps.len() > 3 {
+                format!("{} packages", reverse_deps.len())
             } else {
-                writeln!(
-                    out,
-                    "    {}:{}  {} -> {} ({}) for {:?}",
-                    package.name,
-                    package.version,
-                    rec.from,
-                    rec.to,
-                    rec.diffstat.raw.trim(),
-                    self.criteria_mapper.filter_implied(&criteria),
-                )?;
+                reverse_deps
+                    .iter()
+                    .map(|parent| {
+                        &*self.graph.package_list[self.graph.package_index_by_pkgid[parent]].name
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+
+            match crate::fetch_and_diffstat_all(cfg, &package.name, &candidates) {
+                Ok(rec) => {
+                    suggestions.push(SuggestItem {
+                        package,
+                        rec,
+                        criteria,
+                        parents,
+                    });
+                }
+                Err(err) => {
+                    writeln!(
+                        out,
+                        "    error diffing {}:{} {}",
+                        package.name, package.version, err
+                    )?;
+                }
             }
         }
 
-        if sorted {
-            suggestions.sort_by_key(|item| item.rec.diffstat.count);
+        suggestions.sort_by_key(|item| item.rec.diffstat.count);
 
-            let strings = suggestions
-                .into_iter()
-                .map(|item| {
-                    (
-                        format!("{}:{}", item.package.name, item.package.version),
-                        if item.rec.from == ROOT_VERSION {
-                            format!("full {}", item.rec.to)
-                        } else {
-                            format!("{} -> {}", item.rec.from, item.rec.to)
-                        },
-                        format!("({})", item.rec.diffstat.raw.trim()),
-                        format!("{:?}", self.criteria_mapper.filter_implied(&item.criteria)),
-                    )
-                })
-                .collect::<Vec<_>>();
+        let strings = suggestions
+            .into_iter()
+            .map(|item| {
+                (
+                    if item.rec.from == ROOT_VERSION {
+                        format!("{}:{}", item.package.name, item.rec.to)
+                    } else {
+                        format!(
+                            "{}:({} -> {})",
+                            item.package.name, item.rec.from, item.rec.to
+                        )
+                    },
+                    format!("for {}", item.criteria),
+                    if item.rec.from == ROOT_VERSION {
+                        format!("({} lines)", item.rec.diffstat.count)
+                    } else {
+                        format!("({})", item.rec.diffstat.raw.trim())
+                    },
+                    format!("(used by {})", item.parents),
+                )
+            })
+            .collect::<Vec<_>>();
 
-            let max0 = strings.iter().max_by_key(|s| s.0.len()).unwrap().0.len();
-            let max1 = strings.iter().max_by_key(|s| s.1.len()).unwrap().1.len();
-            let max2 = strings.iter().max_by_key(|s| s.2.len()).unwrap().2.len();
-            let max3 = strings.iter().max_by_key(|s| s.3.len()).unwrap().3.len();
+        let max0 = strings.iter().max_by_key(|s| s.0.len()).unwrap().0.len();
+        let max1 = strings.iter().max_by_key(|s| s.1.len()).unwrap().1.len();
+        let max2 = strings.iter().max_by_key(|s| s.2.len()).unwrap().2.len();
 
-            for (s0, s1, s2, s3) in strings {
-                writeln!(
-                    out,
-                    "    {s0:width0$} {s1:width1$} {s2:width2$} for {s3:width3$}",
-                    width0 = max0,
-                    width1 = max1,
-                    width2 = max2,
-                    width3 = max3,
-                )?;
-            }
+        // Do not align the last one
+        // let max3 = strings.iter().max_by_key(|s| s.3.len()).unwrap().3.len();
+
+        for (s0, s1, s2, s3) in strings {
+            writeln!(
+                out,
+                "    {s0:width0$}  {s1:width1$}  {s2:width2$}  {s3} ",
+                width0 = max0,
+                width1 = max1,
+                width2 = max2,
+            )?;
         }
+
         writeln!(out)?;
+        writeln!(out, "Use |cargo vet certify| to record the audits.")?;
 
         Ok(())
     }
