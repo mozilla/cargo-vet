@@ -1,0 +1,906 @@
+
+[atty."0.0.0 -> 0.2.14"]
+raw = " 12 files changed, 508 insertions(+)\n"
+count = 508
+[hermit-abi."0.0.0 -> 0.1.19"]
+raw = " 11 files changed, 938 insertions(+)\n"
+count = 938
+[indexmap."0.0.0 -> 1.8.1"]
+raw = " 33 files changed, 9452 insertions(+)\n"
+count = 9452
+
+[indexmap."0.0.0 -> 1.6.2"]
+raw = " 31 files changed, 8568 insertions(+)\n"
+count = 8568
+[libc."0.0.0 -> 0.2.123"]
+raw = " 217 files changed, 94067 insertions(+)\n"
+count = 94067
+
+[libc."0.0.0 -> 0.2.112"]
+raw = " 205 files changed, 91329 insertions(+)\n"
+count = 91329
+[os_str_bytes."0.0.0 -> 6.0.0"]
+raw = " 23 files changed, 2918 insertions(+)\n"
+count = 2918
+[reqwest."0.0.0 -> 0.11.10"]
+raw = " 63 files changed, 21663 insertions(+)\n"
+count = 21663
+[serde_json."0.0.0 -> 1.0.79"]
+raw = " 88 files changed, 22855 insertions(+)\n"
+count = 22855
+
+[serde_json."0.0.0 -> 1.0.72"]
+raw = " 47 files changed, 18059 insertions(+)\n"
+count = 18059
+[strsim."0.0.0 -> 0.10.0"]
+raw = " 15 files changed, 1574 insertions(+)\n"
+count = 1574
+[termcolor."0.0.0 -> 1.1.3"]
+raw = " 12 files changed, 2585 insertions(+)\n"
+count = 2585
+[textwrap."0.0.0 -> 0.15.0"]
+raw = " 18 files changed, 6165 insertions(+)\n"
+count = 6165
+[tokio."0.0.0 -> 1.17.0"]
+raw = " 405 files changed, 91278 insertions(+)\n"
+count = 91278
+
+[tokio."0.0.0 -> 0.2.25"]
+raw = " 396 files changed, 67418 insertions(+)\n"
+count = 67418
+[winapi."0.0.0 -> 0.3.9"]
+raw = " 412 files changed, 181329 insertions(+)\n"
+count = 181329
+[alsa."0.0.0 -> 0.4.3"]
+raw = " 23 files changed, 12197 insertions(+)\n"
+count = 12197
+[anyhow."0.0.0 -> 1.0.52"]
+raw = " 49 files changed, 6219 insertions(+)\n"
+count = 6219
+[app_units."0.0.0 -> 0.7.1"]
+raw = " 8 files changed, 507 insertions(+)\n"
+count = 507
+[arbitrary."0.0.0 -> 1.0.3"]
+raw = " 19 files changed, 3159 insertions(+)\n"
+count = 3159
+[arrayref."0.0.0 -> 0.3.6"]
+raw = " 13 files changed, 986 insertions(+)\n"
+count = 986
+[arrayvec."0.0.0 -> 0.5.2"]
+raw = " 22 files changed, 3776 insertions(+)\n"
+count = 3776
+
+[arrayvec."0.0.0 -> 0.7.2"]
+raw = " 22 files changed, 3998 insertions(+)\n"
+count = 3998
+[ash."0.0.0 -> 0.37.0+1.3.209"]
+raw = " 91 files changed, 112995 insertions(+)\n"
+count = 112995
+[async-trait."0.0.0 -> 0.1.52"]
+raw = " 42 files changed, 3626 insertions(+)\n"
+count = 3626
+[atomic_refcell."0.0.0 -> 0.1.8"]
+raw = " 9 files changed, 720 insertions(+)\n"
+count = 720
+[audio_thread_priority."0.0.0 -> 0.26.1"]
+raw = " 17 files changed, 2069 insertions(+)\n"
+count = 2069
+[authenticator."0.0.0 -> 0.3.1"]
+raw = " 86 files changed, 10263 insertions(+)\n"
+count = 10263
+[base64."0.0.0 -> 0.10.1"]
+raw = " 27 files changed, 5450 insertions(+)\n"
+count = 5450
+
+[base64."0.0.0 -> 0.12.3"]
+raw = " 31 files changed, 7929 insertions(+)\n"
+count = 7929
+[bincode."0.0.0 -> 1.3.3"]
+raw = " 24 files changed, 5153 insertions(+)\n"
+count = 5153
+[bindgen."0.0.0 -> 0.56.0"]
+raw = " 56 files changed, 27831 insertions(+)\n"
+count = 27831
+[bit-set."0.0.0 -> 0.5.2"]
+raw = " 11 files changed, 1786 insertions(+)\n"
+count = 1786
+[bitflags."0.0.0 -> 1.3.2"]
+raw = " 39 files changed, 3004 insertions(+)\n"
+count = 3004
+[bitflags_serde_shim."0.0.0 -> 0.2.2"]
+raw = " 4 files changed, 174 insertions(+)\n"
+count = 174
+[bitreader."0.0.0 -> 0.3.5"]
+raw = " 11 files changed, 1106 insertions(+)\n"
+count = 1106
+[block."0.0.0 -> 0.1.6"]
+raw = " 5 files changed, 493 insertions(+)\n"
+count = 493
+[build-parallel."0.0.0 -> 0.1.2"]
+raw = " 6 files changed, 284 insertions(+)\n"
+count = 284
+[bumpalo."0.0.0 -> 3.9.1"]
+raw = " 19 files changed, 10106 insertions(+)\n"
+count = 10106
+[byteorder."0.0.0 -> 1.4.3"]
+raw = " 15 files changed, 6460 insertions(+)\n"
+count = 6460
+[bytes."0.0.0 -> 0.5.6"]
+raw = " 44 files changed, 8795 insertions(+)\n"
+count = 8795
+
+[bytes."0.0.0 -> 1.1.0"]
+raw = " 45 files changed, 9213 insertions(+)\n"
+count = 9213
+[cc."0.0.0 -> 1.0.72"]
+raw = " 22 files changed, 6650 insertions(+)\n"
+count = 6650
+
+[cc."0.0.0 -> 1.0.73"]
+raw = " 22 files changed, 6671 insertions(+)\n"
+count = 6671
+[cfg-if."0.0.0 -> 0.1.10"]
+raw = " 11 files changed, 585 insertions(+)\n"
+count = 585
+
+[cfg-if."0.0.0 -> 1.0.0"]
+raw = " 11 files changed, 588 insertions(+)\n"
+count = 588
+[cfg_aliases."0.0.0 -> 0.1.1"]
+raw = " 9 files changed, 572 insertions(+)\n"
+count = 572
+[chrono."0.0.0 -> 0.4.19"]
+raw = " 43 files changed, 21364 insertions(+)\n"
+count = 21364
+[clap."0.0.0 -> 3.0.10"]
+raw = " 112 files changed, 30563 insertions(+)\n"
+count = 30563
+[codespan-reporting."0.0.0 -> 0.11.1"]
+raw = " 112 files changed, 7370 insertions(+)\n"
+count = 7370
+[comedy."0.0.0 -> 0.2.0"]
+raw = " 11 files changed, 1258 insertions(+)\n"
+count = 1258
+[cookie."0.0.0 -> 0.12.0"]
+raw = " 20 files changed, 3581 insertions(+)\n"
+count = 3581
+[copyless."0.0.0 -> 0.1.5"]
+raw = " 15 files changed, 498 insertions(+)\n"
+count = 498
+[core-foundation."0.0.0 -> 0.9.2"]
+raw = " 28 files changed, 3950 insertions(+)\n"
+count = 3950
+
+[core-foundation."0.0.0 -> 0.9.3"]
+raw = " 28 files changed, 3960 insertions(+)\n"
+count = 3960
+[core-foundation-sys."0.0.0 -> 0.8.3"]
+raw = " 28 files changed, 1971 insertions(+)\n"
+count = 1971
+[core-graphics."0.0.0 -> 0.22.3"]
+raw = " 27 files changed, 3893 insertions(+)\n"
+count = 3893
+[core-graphics-types."0.0.0 -> 0.1.1"]
+raw = " 7 files changed, 297 insertions(+)\n"
+count = 297
+[core-text."0.0.0 -> 19.2.0"]
+raw = " 20 files changed, 2175 insertions(+)\n"
+count = 2175
+[coremidi-sys."0.0.0 -> 3.0.1"]
+raw = " 12 files changed, 1144 insertions(+)\n"
+count = 1144
+[cose-c."0.0.0 -> 0.1.5"]
+raw = " 7 files changed, 541 insertions(+)\n"
+count = 541
+[cranelift-codegen."0.0.0 -> 0.74.0"]
+raw = " 197 files changed, 122486 insertions(+)\n"
+count = 122486
+[cranelift-wasm."0.0.0 -> 0.74.0"]
+raw = " 72 files changed, 75262 insertions(+)\n"
+count = 75262
+[crossbeam-channel."0.0.0 -> 0.5.4"]
+raw = " 44 files changed, 20248 insertions(+)\n"
+count = 20248
+[cssparser."0.0.0 -> 0.29.2"]
+raw = " 26 files changed, 7500 insertions(+)\n"
+count = 7500
+[cstr."0.0.0 -> 0.2.9"]
+raw = " 25 files changed, 605 insertions(+)\n"
+count = 605
+[darling."0.0.0 -> 0.13.1"]
+raw = " 39 files changed, 2356 insertions(+)\n"
+count = 2356
+[derive_more."0.0.0 -> 0.99.11"]
+raw = " 67 files changed, 10748 insertions(+)\n"
+count = 10748
+[dirs."0.0.0 -> 2.0.2"]
+raw = " 15 files changed, 888 insertions(+)\n"
+count = 888
+[dns-parser."0.0.0 -> 0.8.0"]
+raw = " 44 files changed, 3006 insertions(+)\n"
+count = 3006
+[dogear."0.0.0 -> 0.4.0"]
+raw = " 16 files changed, 8372 insertions(+)\n"
+count = 8372
+[dwrote."0.0.0 -> 0.11.0"]
+raw = " 28 files changed, 3177 insertions(+)\n"
+count = 3177
+[encoding_c."0.0.0 -> 0.9.8"]
+raw = " 16 files changed, 3963 insertions(+)\n"
+count = 3963
+[encoding_c_mem."0.0.0 -> 0.2.6"]
+raw = " 14 files changed, 2495 insertions(+)\n"
+count = 2495
+[encoding_rs."0.0.0 -> 0.8.22"]
+raw = " 102 files changed, 506887 insertions(+)\n"
+count = 506887
+
+[encoding_rs."0.0.0 -> 0.8.31"]
+raw = " 104 files changed, 507252 insertions(+)\n"
+count = 507252
+[enumset."0.0.0 -> 1.0.8"]
+raw = " 16 files changed, 1979 insertions(+)\n"
+count = 1979
+[env_logger."0.0.0 -> 0.8.4"]
+raw = " 26 files changed, 4661 insertions(+)\n"
+count = 4661
+[etagere."0.0.0 -> 0.2.6"]
+raw = " 10 files changed, 2347 insertions(+)\n"
+count = 2347
+[euclid."0.0.0 -> 0.22.6"]
+raw = " 32 files changed, 16357 insertions(+)\n"
+count = 16357
+[fallible_collections."0.0.0 -> 0.4.2"]
+raw = " 21 files changed, 7560 insertions(+)\n"
+count = 7560
+[ffi-support."0.0.0 -> 0.4.4"]
+raw = " 18 files changed, 3952 insertions(+)\n"
+count = 3952
+[filetime_win."0.0.0 -> 0.2.0"]
+raw = " 8 files changed, 564 insertions(+)\n"
+count = 564
+[fluent."0.0.0 -> 0.16.0"]
+raw = " 8 files changed, 519 insertions(+)\n"
+count = 519
+[fluent-bundle."0.0.0 -> 0.15.2"]
+raw = " 29 files changed, 4238 insertions(+)\n"
+count = 4238
+[fluent-fallback."0.0.0 -> 0.6.0"]
+raw = " 29 files changed, 3102 insertions(+)\n"
+count = 3102
+[fluent-langneg."0.0.0 -> 0.13.0"]
+raw = " 11 files changed, 1329 insertions(+)\n"
+count = 1329
+[fluent-pseudo."0.0.0 -> 0.3.1"]
+raw = " 8 files changed, 464 insertions(+)\n"
+count = 464
+[fnv."0.0.0 -> 1.0.7"]
+raw = " 10 files changed, 736 insertions(+)\n"
+count = 736
+[foreign-types."0.0.0 -> 0.3.2"]
+raw = " 7 files changed, 584 insertions(+)\n"
+count = 584
+[freetype."0.0.0 -> 0.7.0"]
+raw = " 17 files changed, 3042 insertions(+)\n"
+count = 3042
+[fuchsia-zircon."0.0.0 -> 0.3.3"]
+raw = " 26 files changed, 2871 insertions(+)\n"
+count = 2871
+[fuchsia-zircon-sys."0.0.0 -> 0.3.3"]
+raw = " 7 files changed, 1427 insertions(+)\n"
+count = 1427
+[futures."0.0.0 -> 0.3.19"]
+raw = " 65 files changed, 8382 insertions(+)\n"
+count = 8382
+[futures-channel."0.0.0 -> 0.3.19"]
+raw = " 20 files changed, 3958 insertions(+)\n"
+count = 3958
+
+[futures-channel."0.0.0 -> 0.3.21"]
+raw = " 20 files changed, 3999 insertions(+)\n"
+count = 3999
+[futures-task."0.0.0 -> 0.3.19"]
+raw = " 16 files changed, 1188 insertions(+)\n"
+count = 1188
+
+[futures-task."0.0.0 -> 0.3.21"]
+raw = " 16 files changed, 1187 insertions(+)\n"
+count = 1187
+[fxhash."0.0.0 -> 0.2.1"]
+raw = " 7 files changed, 539 insertions(+)\n"
+count = 539
+[gleam."0.0.0 -> 0.13.1"]
+raw = " 16 files changed, 5765 insertions(+)\n"
+count = 5765
+[glean."0.0.0 -> 44.0.0"]
+raw = " 48 files changed, 7386 insertions(+)\n"
+count = 7386
+[glean-ffi."0.0.0 -> 44.0.0"]
+raw = " 33 files changed, 4131 insertions(+)\n"
+count = 4131
+[glow."0.0.0 -> 0.11.2"]
+raw = " 18 files changed, 47092 insertions(+)\n"
+count = 47092
+[glsl."0.0.0 -> 4.1.1"]
+raw = " 22 files changed, 10218 insertions(+)\n"
+count = 10218
+[glslopt."0.0.0 -> 0.1.9"]
+raw = " 309 files changed, 184134 insertions(+)\n"
+count = 184134
+[goblin."0.0.0 -> 0.1.3"]
+raw = " 61 files changed, 17285 insertions(+)\n"
+count = 17285
+[gpu-alloc."0.0.0 -> 0.5.2"]
+raw = " 15 files changed, 2557 insertions(+)\n"
+count = 2557
+[gpu-descriptor."0.0.0 -> 0.2.1"]
+raw = " 6 files changed, 708 insertions(+)\n"
+count = 708
+[guid_win."0.0.0 -> 0.2.0"]
+raw = " 8 files changed, 481 insertions(+)\n"
+count = 481
+[hexf-parse."0.0.0 -> 0.2.1"]
+raw = " 5 files changed, 572 insertions(+)\n"
+count = 572
+[http."0.0.0 -> 0.2.5"]
+raw = " 41 files changed, 16823 insertions(+)\n"
+count = 16823
+
+[http."0.0.0 -> 0.2.6"]
+raw = " 41 files changed, 16826 insertions(+)\n"
+count = 16826
+[hyper."0.0.0 -> 0.13.6"]
+raw = " 59 files changed, 19743 insertions(+)\n"
+count = 19743
+
+[hyper."0.0.0 -> 0.14.18"]
+raw = " 72 files changed, 25617 insertions(+)\n"
+count = 25617
+[inherent."0.0.0 -> 0.1.6"]
+raw = " 24 files changed, 924 insertions(+)\n"
+count = 924
+[inplace_it."0.0.0 -> 0.3.3"]
+raw = " 26 files changed, 1269 insertions(+)\n"
+count = 1269
+[intl-memoizer."0.0.0 -> 0.5.1"]
+raw = " 10 files changed, 608 insertions(+)\n"
+count = 608
+[iovec."0.0.0 -> 0.1.4"]
+raw = " 18 files changed, 804 insertions(+)\n"
+count = 804
+[itertools."0.0.0 -> 0.8.2"]
+raw = " 66 files changed, 13607 insertions(+)\n"
+count = 13607
+[itoa."0.0.0 -> 0.4.8"]
+raw = " 15 files changed, 964 insertions(+)\n"
+count = 964
+
+[itoa."0.0.0 -> 1.0.1"]
+raw = " 15 files changed, 796 insertions(+)\n"
+count = 796
+[khronos-egl."0.0.0 -> 4.1.0"]
+raw = " 19 files changed, 4036 insertions(+)\n"
+count = 4036
+[lazy_static."0.0.0 -> 1.4.0"]
+raw = " 13 files changed, 882 insertions(+)\n"
+count = 882
+[libloading."0.0.0 -> 0.5.2"]
+raw = " 23 files changed, 1679 insertions(+)\n"
+count = 1679
+
+[libloading."0.0.0 -> 0.7.2"]
+raw = " 25 files changed, 2835 insertions(+)\n"
+count = 2835
+[lmdb-rkv-sys."0.0.0 -> 0.11.2"]
+raw = " 43 files changed, 18970 insertions(+)\n"
+count = 18970
+[log."0.0.0 -> 0.4.14"]
+raw = " 21 files changed, 4965 insertions(+)\n"
+count = 4965
+
+[log."0.0.0 -> 0.4.16"]
+raw = " 21 files changed, 5632 insertions(+)\n"
+count = 5632
+[malloc_size_of_derive."0.0.0 -> 0.1.2"]
+raw = " 8 files changed, 426 insertions(+)\n"
+count = 426
+[matches."0.0.0 -> 0.1.9"]
+raw = " 7 files changed, 211 insertions(+)\n"
+count = 211
+[memalloc."0.0.0 -> 0.1.0"]
+raw = " 6 files changed, 233 insertions(+)\n"
+count = 233
+[memchr."0.0.0 -> 2.4.1"]
+raw = " 48 files changed, 8718 insertions(+)\n"
+count = 8718
+[memmap2."0.0.0 -> 0.2.3"]
+raw = " 16 files changed, 2571 insertions(+)\n"
+count = 2571
+
+[memmap2."0.0.0 -> 0.3.1"]
+raw = " 16 files changed, 2748 insertions(+)\n"
+count = 2748
+[memoffset."0.0.0 -> 0.5.6"]
+raw = " 14 files changed, 889 insertions(+)\n"
+count = 889
+[mio-extras."0.0.0 -> 2.0.6"]
+raw = " 15 files changed, 2311 insertions(+)\n"
+count = 2311
+[miow."0.0.0 -> 0.3.7"]
+raw = " 16 files changed, 3135 insertions(+)\n"
+count = 3135
+[net2."0.0.0 -> 0.2.37"]
+raw = " 22 files changed, 3296 insertions(+)\n"
+count = 3296
+[new_debug_unreachable."0.0.0 -> 1.0.4"]
+raw = " 12 files changed, 193 insertions(+)\n"
+count = 193
+[nix."0.0.0 -> 0.15.0"]
+raw = " 97 files changed, 26548 insertions(+)\n"
+count = 26548
+[num-derive."0.0.0 -> 0.3.3"]
+raw = " 20 files changed, 1799 insertions(+)\n"
+count = 1799
+[num-integer."0.0.0 -> 0.1.44"]
+raw = " 18 files changed, 3420 insertions(+)\n"
+count = 3420
+[num-traits."0.0.0 -> 0.2.14"]
+raw = " 28 files changed, 7965 insertions(+)\n"
+count = 7965
+[num_cpus."0.0.0 -> 1.13.1"]
+raw = " 26 files changed, 1577 insertions(+)\n"
+count = 1577
+[objc."0.0.0 -> 0.2.7"]
+raw = " 28 files changed, 2906 insertions(+)\n"
+count = 2906
+[once_cell."0.0.0 -> 1.9.0"]
+raw = " 24 files changed, 4126 insertions(+)\n"
+count = 4126
+
+[once_cell."0.0.0 -> 1.10.0"]
+raw = " 24 files changed, 4140 insertions(+)\n"
+count = 4140
+[origin-trial-token."0.0.0 -> 0.1.0"]
+raw = " 7 files changed, 429 insertions(+)\n"
+count = 429
+[owning_ref."0.0.0 -> 0.4.1"]
+raw = " 10 files changed, 2177 insertions(+)\n"
+count = 2177
+[parking_lot."0.0.0 -> 0.11.1"]
+raw = " 25 files changed, 5561 insertions(+)\n"
+count = 5561
+[phf."0.0.0 -> 0.8.0"]
+raw = " 7 files changed, 517 insertions(+)\n"
+count = 517
+[phf_codegen."0.0.0 -> 0.8.0"]
+raw = " 5 files changed, 356 insertions(+)\n"
+count = 356
+[pin-project-lite."0.0.0 -> 0.2.7"]
+raw = " 72 files changed, 6247 insertions(+)\n"
+count = 6247
+
+[pin-project-lite."0.0.0 -> 0.2.8"]
+raw = " 72 files changed, 6107 insertions(+)\n"
+count = 6107
+[pkcs11."0.0.0 -> 0.4.2"]
+raw = " 15 files changed, 6743 insertions(+)\n"
+count = 6743
+[plane-split."0.0.0 -> 0.17.1"]
+raw = " 17 files changed, 2300 insertions(+)\n"
+count = 2300
+[plist."0.0.0 -> 0.5.5"]
+raw = " 34 files changed, 6231 insertions(+)\n"
+count = 6231
+[precomputed-hash."0.0.0 -> 0.1.1"]
+raw = " 6 files changed, 77 insertions(+)\n"
+count = 77
+[proc-macro2."0.0.0 -> 1.0.36"]
+raw = " 22 files changed, 5685 insertions(+)\n"
+count = 5685
+
+[proc-macro2."0.0.0 -> 1.0.37"]
+raw = " 22 files changed, 5702 insertions(+)\n"
+count = 5702
+[profiling."0.0.0 -> 1.0.5"]
+raw = " 52 files changed, 4679 insertions(+)\n"
+count = 4679
+[prost."0.0.0 -> 0.8.0"]
+raw = " 19 files changed, 3723 insertions(+)\n"
+count = 3723
+[prost-derive."0.0.0 -> 0.8.0"]
+raw = " 12 files changed, 2492 insertions(+)\n"
+count = 2492
+[qlog."0.0.0 -> 0.4.0"]
+raw = " 7 files changed, 4321 insertions(+)\n"
+count = 4321
+[quote."0.0.0 -> 1.0.14"]
+raw = " 35 files changed, 3698 insertions(+)\n"
+count = 3698
+
+[quote."0.0.0 -> 1.0.18"]
+raw = " 35 files changed, 3845 insertions(+)\n"
+count = 3845
+[rand."0.0.0 -> 0.7.3"]
+raw = " 56 files changed, 11946 insertions(+)\n"
+count = 11946
+[range-alloc."0.0.0 -> 0.1.2"]
+raw = " 5 files changed, 358 insertions(+)\n"
+count = 358
+[raw-window-handle."0.0.0 -> 0.4.2"]
+raw = " 21 files changed, 843 insertions(+)\n"
+count = 843
+[rayon."0.0.0 -> 1.5.1"]
+raw = " 118 files changed, 26830 insertions(+)\n"
+count = 26830
+[regex."0.0.0 -> 1.5.5"]
+raw = " 85 files changed, 26202 insertions(+)\n"
+count = 26202
+[renderdoc-sys."0.0.0 -> 0.7.1"]
+raw = " 7 files changed, 791 insertions(+)\n"
+count = 791
+[rental."0.0.0 -> 0.5.6"]
+raw = " 26 files changed, 1963 insertions(+)\n"
+count = 1963
+[replace_with."0.0.0 -> 0.1.7"]
+raw = " 12 files changed, 1093 insertions(+)\n"
+count = 1093
+[rkv."0.0.0 -> 0.17.0"]
+raw = " 68 files changed, 11545 insertions(+)\n"
+count = 11545
+[ron."0.0.0 -> 0.7.0"]
+raw = " 58 files changed, 7507 insertions(+)\n"
+count = 7507
+[rusqlite."0.0.0 -> 0.24.2"]
+raw = " 63 files changed, 16529 insertions(+)\n"
+count = 16529
+[rust-ini."0.0.0 -> 0.10.3"]
+raw = " 9 files changed, 1412 insertions(+)\n"
+count = 1412
+[rust_cascade."0.0.0 -> 1.2.0"]
+raw = " 18 files changed, 1050 insertions(+)\n"
+count = 1050
+[rustc-demangle."0.0.0 -> 0.1.21"]
+raw = " 14 files changed, 2829 insertions(+)\n"
+count = 2829
+[rustc-hash."0.0.0 -> 1.1.0"]
+raw = " 10 files changed, 497 insertions(+)\n"
+count = 497
+[rustc_version."0.0.0 -> 0.2.3"]
+raw = " 10 files changed, 795 insertions(+)\n"
+count = 795
+[semver."0.0.0 -> 0.9.0"]
+raw = " 14 files changed, 2401 insertions(+)\n"
+count = 2401
+[serde."0.0.0 -> 1.0.133"]
+raw = " 28 files changed, 16043 insertions(+)\n"
+count = 16043
+
+[serde."0.0.0 -> 1.0.136"]
+raw = " 29 files changed, 16148 insertions(+)\n"
+count = 16148
+[serde_bytes."0.0.0 -> 0.11.5"]
+raw = " 17 files changed, 1483 insertions(+)\n"
+count = 1483
+[serde_derive."0.0.0 -> 1.0.133"]
+raw = " 26 files changed, 9082 insertions(+)\n"
+count = 9082
+[serde_repr."0.0.0 -> 0.1.7"]
+raw = " 24 files changed, 828 insertions(+)\n"
+count = 828
+[serde_yaml."0.0.0 -> 0.8.23"]
+raw = " 27 files changed, 7510 insertions(+)\n"
+count = 7510
+[serial_test."0.0.0 -> 0.5.1"]
+raw = " 8 files changed, 219 insertions(+)\n"
+count = 219
+[sfv."0.0.0 -> 0.9.1"]
+raw = " 17 files changed, 3477 insertions(+)\n"
+count = 3477
+[sha2."0.0.0 -> 0.8.2"]
+raw = " 28 files changed, 1947 insertions(+)\n"
+count = 1947
+[slab."0.0.0 -> 0.4.5"]
+raw = " 11 files changed, 2584 insertions(+)\n"
+count = 2584
+
+[slab."0.0.0 -> 0.4.6"]
+raw = " 11 files changed, 2622 insertions(+)\n"
+count = 2622
+[smallbitvec."0.0.0 -> 2.5.1"]
+raw = " 12 files changed, 1994 insertions(+)\n"
+count = 1994
+[smallvec."0.0.0 -> 1.8.0"]
+raw = " 16 files changed, 3885 insertions(+)\n"
+count = 3885
+[socket2."0.0.0 -> 0.3.19"]
+raw = " 19 files changed, 4797 insertions(+)\n"
+count = 4797
+
+[socket2."0.0.0 -> 0.4.4"]
+raw = " 13 files changed, 6018 insertions(+)\n"
+count = 6018
+[spirv."0.0.0 -> 0.2.0+1.5.4"]
+raw = " 8 files changed, 4476 insertions(+)\n"
+count = 4476
+[stable_deref_trait."0.0.0 -> 1.2.0"]
+raw = " 9 files changed, 490 insertions(+)\n"
+count = 490
+[static_assertions."0.0.0 -> 1.1.0"]
+raw = " 18 files changed, 1792 insertions(+)\n"
+count = 1792
+[svg_fmt."0.0.0 -> 0.4.1"]
+raw = " 8 files changed, 742 insertions(+)\n"
+count = 742
+[syn."0.0.0 -> 1.0.85"]
+raw = " 98 files changed, 56943 insertions(+)\n"
+count = 56943
+
+[syn."0.0.0 -> 1.0.91"]
+raw = " 98 files changed, 57175 insertions(+)\n"
+count = 57175
+[synstructure."0.0.0 -> 0.12.6"]
+raw = " 8 files changed, 2991 insertions(+)\n"
+count = 2991
+[tempfile."0.0.0 -> 3.1.0"]
+raw = " 23 files changed, 3841 insertions(+)\n"
+count = 3841
+
+[tempfile."0.0.0 -> 3.3.0"]
+raw = " 24 files changed, 4066 insertions(+)\n"
+count = 4066
+[thin-vec."0.0.0 -> 0.2.5"]
+raw = " 8 files changed, 2895 insertions(+)\n"
+count = 2895
+[thiserror."0.0.0 -> 1.0.30"]
+raw = " 66 files changed, 2448 insertions(+)\n"
+count = 2448
+[threadbound."0.0.0 -> 0.1.2"]
+raw = " 10 files changed, 535 insertions(+)\n"
+count = 535
+[time."0.0.0 -> 0.1.43"]
+raw = " 13 files changed, 3836 insertions(+)\n"
+count = 3836
+[toml."0.0.0 -> 0.4.10"]
+raw = " 21 files changed, 7314 insertions(+)\n"
+count = 7314
+[tracy-rs."0.0.0 -> 0.1.2"]
+raw = " 10 files changed, 682 insertions(+)\n"
+count = 682
+[uluru."0.0.0 -> 1.1.1"]
+raw = " 10 files changed, 1016 insertions(+)\n"
+count = 1016
+[unic-langid."0.0.0 -> 0.9.0"]
+raw = " 7 files changed, 363 insertions(+)\n"
+count = 363
+[unicode-bidi."0.0.0 -> 0.3.7"]
+raw = " 23 files changed, 3398 insertions(+)\n"
+count = 3398
+
+[unicode-bidi."0.0.0 -> 0.2.0"]
+raw = " 14 files changed, 595897 insertions(+)\n"
+count = 595897
+[unicode-segmentation."0.0.0 -> 1.8.0"]
+raw = " 23 files changed, 8336 insertions(+)\n"
+count = 8336
+[unicode-xid."0.0.0 -> 0.2.2"]
+raw = " 14 files changed, 2050 insertions(+)\n"
+count = 2050
+[unix_path."0.0.0 -> 1.0.1"]
+raw = " 10 files changed, 3413 insertions(+)\n"
+count = 3413
+[url."0.0.0 -> 2.1.0"]
+raw = " 25 files changed, 14675 insertions(+)\n"
+count = 14675
+
+[url."0.0.0 -> 2.2.2"]
+raw = " 17 files changed, 16350 insertions(+)\n"
+count = 16350
+[uuid."0.0.0 -> 0.8.1"]
+raw = " 39 files changed, 5404 insertions(+)\n"
+count = 5404
+[void."0.0.0 -> 1.0.2"]
+raw = " 6 files changed, 221 insertions(+)\n"
+count = 221
+[walkdir."0.0.0 -> 2.3.2"]
+raw = " 20 files changed, 3509 insertions(+)\n"
+count = 3509
+[warp."0.0.0 -> 0.2.3"]
+raw = " 94 files changed, 15525 insertions(+)\n"
+count = 15525
+[wasm-smith."0.0.0 -> 0.8.0"]
+raw = " 13 files changed, 8951 insertions(+)\n"
+count = 8951
+[wasmparser."0.0.0 -> 0.78.2"]
+raw = " 42 files changed, 13591 insertions(+)\n"
+count = 13591
+[wat."0.0.0 -> 1.0.41"]
+raw = " 7 files changed, 674 insertions(+)\n"
+count = 674
+[webrtc-sdp."0.0.0 -> 0.3.9"]
+raw = " 69 files changed, 10569 insertions(+)\n"
+count = 10569
+[winreg."0.0.0 -> 0.5.1"]
+raw = " 22 files changed, 2894 insertions(+)\n"
+count = 2894
+
+[winreg."0.0.0 -> 0.10.1"]
+raw = " 29 files changed, 4276 insertions(+)\n"
+count = 4276
+[wio."0.0.0 -> 0.2.2"]
+raw = " 18 files changed, 938 insertions(+)\n"
+count = 938
+[xmldecl."0.0.0 -> 0.2.0"]
+raw = " 11 files changed, 711 insertions(+)\n"
+count = 711
+[zip."0.0.0 -> 0.4.2"]
+raw = " 27 files changed, 2704 insertions(+)\n"
+count = 2704
+[fastrand."0.0.0 -> 1.7.0"]
+raw = " 12 files changed, 1375 insertions(+)\n"
+count = 1375
+[foreign-types-shared."0.0.0 -> 0.1.1"]
+raw = " 6 files changed, 303 insertions(+)\n"
+count = 303
+[form_urlencoded."0.0.0 -> 1.0.1"]
+raw = " 7 files changed, 695 insertions(+)\n"
+count = 695
+[futures-core."0.0.0 -> 0.3.21"]
+raw = " 16 files changed, 1182 insertions(+)\n"
+count = 1182
+[futures-sink."0.0.0 -> 0.3.21"]
+raw = " 8 files changed, 551 insertions(+)\n"
+count = 551
+[futures-util."0.0.0 -> 0.3.21"]
+raw = " 187 files changed, 25074 insertions(+)\n"
+count = 25074
+[h2."0.0.0 -> 0.3.13"]
+raw = " 66 files changed, 26066 insertions(+)\n"
+count = 26066
+[hashbrown."0.0.0 -> 0.11.2"]
+raw = " 33 files changed, 14609 insertions(+)\n"
+count = 14609
+[http-body."0.0.0 -> 0.4.4"]
+raw = " 19 files changed, 1262 insertions(+)\n"
+count = 1262
+[httparse."0.0.0 -> 1.7.0"]
+raw = " 20 files changed, 7265 insertions(+)\n"
+count = 7265
+[httpdate."0.0.0 -> 1.0.2"]
+raw = " 12 files changed, 1001 insertions(+)\n"
+count = 1001
+[hyper-tls."0.0.0 -> 0.5.0"]
+raw = " 14 files changed, 1301 insertions(+)\n"
+count = 1301
+[idna."0.0.0 -> 0.2.3"]
+raw = " 19 files changed, 32538 insertions(+)\n"
+count = 32538
+[instant."0.0.0 -> 0.1.12"]
+raw = " 14 files changed, 678 insertions(+)\n"
+count = 678
+[ipnet."0.0.0 -> 2.4.0"]
+raw = " 15 files changed, 3980 insertions(+)\n"
+count = 3980
+[js-sys."0.0.0 -> 0.3.57"]
+raw = " 63 files changed, 12875 insertions(+)\n"
+count = 12875
+[mime."0.0.0 -> 0.3.16"]
+raw = " 15 files changed, 1721 insertions(+)\n"
+count = 1721
+[mio."0.0.0 -> 0.8.2"]
+raw = " 65 files changed, 11882 insertions(+)\n"
+count = 11882
+[native-tls."0.0.0 -> 0.2.10"]
+raw = " 21 files changed, 4089 insertions(+)\n"
+count = 4089
+[ntapi."0.0.0 -> 0.3.7"]
+raw = " 44 files changed, 21234 insertions(+)\n"
+count = 21234
+[openssl."0.0.0 -> 0.10.38"]
+raw = " 85 files changed, 28634 insertions(+)\n"
+count = 28634
+[openssl-probe."0.0.0 -> 0.1.5"]
+raw = " 12 files changed, 456 insertions(+)\n"
+count = 456
+[openssl-sys."0.0.0 -> 0.9.72"]
+raw = " 48 files changed, 9484 insertions(+)\n"
+count = 9484
+[percent-encoding."0.0.0 -> 2.1.0"]
+raw = " 7 files changed, 708 insertions(+)\n"
+count = 708
+[pin-utils."0.0.0 -> 0.1.0"]
+raw = " 15 files changed, 544 insertions(+)\n"
+count = 544
+[pkg-config."0.0.0 -> 0.3.25"]
+raw = " 16 files changed, 1754 insertions(+)\n"
+count = 1754
+[redox_syscall."0.0.0 -> 0.2.13"]
+raw = " 32 files changed, 3897 insertions(+)\n"
+count = 3897
+[remove_dir_all."0.0.0 -> 0.5.3"]
+raw = " 9 files changed, 598 insertions(+)\n"
+count = 598
+[ryu."0.0.0 -> 1.0.9"]
+raw = " 37 files changed, 4531 insertions(+)\n"
+count = 4531
+[schannel."0.0.0 -> 0.1.19"]
+raw = " 34 files changed, 4607 insertions(+)\n"
+count = 4607
+[security-framework."0.0.0 -> 2.6.1"]
+raw = " 45 files changed, 9776 insertions(+)\n"
+count = 9776
+[security-framework-sys."0.0.0 -> 2.6.1"]
+raw = " 29 files changed, 2023 insertions(+)\n"
+count = 2023
+[serde_urlencoded."0.0.0 -> 0.7.1"]
+raw = " 19 files changed, 2127 insertions(+)\n"
+count = 2127
+[tinyvec."0.0.0 -> 1.5.1"]
+raw = " 27 files changed, 16758 insertions(+)\n"
+count = 16758
+[tinyvec_macros."0.0.0 -> 0.1.0"]
+raw = " 7 files changed, 87 insertions(+)\n"
+count = 87
+[tokio-native-tls."0.0.0 -> 0.3.0"]
+raw = " 19 files changed, 1804 insertions(+)\n"
+count = 1804
+[tokio-util."0.0.0 -> 0.7.1"]
+raw = " 67 files changed, 13877 insertions(+)\n"
+count = 13877
+[tower-service."0.0.0 -> 0.3.1"]
+raw = " 8 files changed, 507 insertions(+)\n"
+count = 507
+[tracing."0.0.0 -> 0.1.33"]
+raw = " 34 files changed, 10957 insertions(+)\n"
+count = 10957
+[tracing-attributes."0.0.0 -> 0.1.20"]
+raw = " 20 files changed, 3964 insertions(+)\n"
+count = 3964
+[tracing-core."0.0.0 -> 0.1.25"]
+raw = " 28 files changed, 6163 insertions(+)\n"
+count = 6163
+[try-lock."0.0.0 -> 0.2.3"]
+raw = " 8 files changed, 386 insertions(+)\n"
+count = 386
+[unicode-normalization."0.0.0 -> 0.1.19"]
+raw = " 26 files changed, 28628 insertions(+)\n"
+count = 28628
+[vcpkg."0.0.0 -> 0.2.15"]
+raw = " 834 files changed, 42648 insertions(+)\n"
+count = 42648
+[want."0.0.0 -> 0.3.0"]
+raw = " 9 files changed, 703 insertions(+)\n"
+count = 703
+[wasi."0.0.0 -> 0.11.0+wasi-snapshot-preview1"]
+raw = " 17 files changed, 3309 insertions(+)\n"
+count = 3309
+[wasm-bindgen."0.0.0 -> 0.2.80"]
+raw = " 243 files changed, 20978 insertions(+)\n"
+count = 20978
+[wasm-bindgen-backend."0.0.0 -> 0.2.80"]
+raw = " 11 files changed, 3019 insertions(+)\n"
+count = 3019
+[wasm-bindgen-futures."0.0.0 -> 0.4.30"]
+raw = " 13 files changed, 1304 insertions(+)\n"
+count = 1304
+[wasm-bindgen-macro."0.0.0 -> 0.2.80"]
+raw = " 46 files changed, 1275 insertions(+)\n"
+count = 1275
+[wasm-bindgen-macro-support."0.0.0 -> 0.2.80"]
+raw = " 7 files changed, 1966 insertions(+)\n"
+count = 1966
+[wasm-bindgen-shared."0.0.0 -> 0.2.80"]
+raw = " 8 files changed, 516 insertions(+)\n"
+count = 516
+[web-sys."0.0.0 -> 0.3.57"]
+raw = " 2203 files changed, 197014 insertions(+)\n"
+count = 197014
+[winapi-i686-pc-windows-gnu."0.0.0 -> 0.4.0"]
+raw = " 1392 files changed, 1133 insertions(+)\n"
+count = 1133
+[winapi-util."0.0.0 -> 0.1.5"]
+raw = " 15 files changed, 1101 insertions(+)\n"
+count = 1101
+[winapi-x86_64-pc-windows-gnu."0.0.0 -> 0.4.0"]
+raw = " 1421 files changed, 1168 insertions(+)\n"
+count = 1168
+

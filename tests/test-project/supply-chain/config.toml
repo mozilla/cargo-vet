@@ -331,6 +331,7 @@ notes = "automatically imported by 'cargo vet init'"
 version = "0.10.0"
 criteria = "safe-to-deploy"
 notes = "automatically imported by 'cargo vet init'"
+suggest = false
 
 [[unaudited.syn]]
 version = "1.0.91"

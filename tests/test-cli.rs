@@ -118,6 +118,8 @@ fn test_project() {
         .arg("vet")
         .arg("--manifest-path")
         .arg("Cargo.toml")
+        .arg("--diff-cache")
+        .arg("../diff-cache.toml")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -127,6 +129,61 @@ fn test_project() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     insta::assert_snapshot!("test-project", stdout);
+    assert!(output.status.success());
+    assert_eq!(stderr, "");
+}
+
+#[test]
+fn test_project_suggest() {
+    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-project");
+    let bin = env!("CARGO_BIN_EXE_cargo-vet");
+    let output = Command::new(bin)
+        .current_dir(&project)
+        .arg("vet")
+        .arg("--diff-cache")
+        .arg("../diff-cache.toml")
+        .arg("--manifest-path")
+        .arg("Cargo.toml")
+        .arg("suggest")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+
+    insta::assert_snapshot!("test-project-suggest", stdout);
+    assert!(output.status.success());
+    assert_eq!(stderr, "");
+}
+
+#[test]
+fn test_project_suggest_deeper() {
+    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-project");
+    let bin = env!("CARGO_BIN_EXE_cargo-vet");
+    let output = Command::new(bin)
+        .current_dir(&project)
+        .arg("vet")
+        .arg("--diff-cache")
+        .arg("../diff-cache.toml")
+        .arg("--manifest-path")
+        .arg("Cargo.toml")
+        .arg("suggest")
+        .arg("--guess-deeper")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+
+    insta::assert_snapshot!("test-project-suggest-deeper", stdout);
     assert!(output.status.success());
     assert_eq!(stderr, "");
 }

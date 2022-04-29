@@ -116,10 +116,18 @@ Suggest some low-hanging fruit to review
 
 ### cargo vet suggest USAGE
 ```
-cargo vet suggest
+cargo vet suggest [OPTIONS]
 ```
 
 ### cargo vet suggest OPTIONS
+#### `--guess-deeper`
+Try to suggest even deeper down the dependency tree (approximate guessing).
+
+By default, if a dependency doesn't have sufficient audits for *itself* then we won't
+try to speculate on anything about its dependencies, because we lack sufficient
+information to say for certain what is required of those dependencies. This overrides
+that by making us assume the dependencies all need the same criteria as the parent.
+
 #### `-h, --help`
 Print help information
 

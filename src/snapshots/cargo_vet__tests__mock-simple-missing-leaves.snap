@@ -13,5 +13,7 @@ recommended audits:
     third-party2:10.0.0             for reviewed  (100 lines)  (used by first-party) 
     transitive-third-party1:10.0.0  for reviewed  (100 lines)  (used by third-party1) 
 
+estimated review backlog: 200 lines
+
 Use |cargo vet certify| to record the audits.
 

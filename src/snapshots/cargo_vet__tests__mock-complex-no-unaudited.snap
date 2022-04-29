@@ -17,5 +17,7 @@ recommended audits:
     thirdA:10.0.0      for reviewed  (100 lines)  (used by firstA) 
     thirdAB:10.0.0     for reviewed  (100 lines)  (used by firstAB) 
 
+estimated review backlog: 325 lines
+
 Use |cargo vet certify| to record the audits.
 

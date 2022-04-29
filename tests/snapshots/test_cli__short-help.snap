@@ -11,6 +11,7 @@ USAGE:
 
 OPTIONS:
         --all-features                 Activate all available features
+        --diff-cache <DIFF_CACHE>      Use the following path as the diff-cache
         --exclude <SPEC>               Exclude packages from being processed
         --features <FEATURES>          Space-separated list of features to activate
     -h, --help                         Print help information

@@ -448,6 +448,7 @@ pub fn resolve<'a>(
     config: &'a ConfigFile,
     audits: &'a AuditsFile,
     imports: &'a ImportsFile,
+    guess_deeper: bool,
 ) -> Report<'a> {
     let mut violation_failed = vec![];
 
@@ -525,6 +526,7 @@ pub fn resolve<'a>(
         &graph,
         &results,
         &root_failures,
+        guess_deeper,
         |failure, _depth, own_failure| {
             if let Some(criteria_failures) = own_failure {
                 leaf_failures
@@ -1259,6 +1261,7 @@ impl<'a> Report<'a> {
         }
 
         let mut suggestions = vec![];
+        let mut total_lines: u64 = 0;
         for (failure, audit_failure) in &self.leaf_failures {
             let package = &self.graph.package_list[self.graph.package_index_by_pkgid[failure]];
             let resolve_idx = self.graph.resolve_index_by_pkgid[failure];
@@ -1354,6 +1357,7 @@ impl<'a> Report<'a> {
 
             match crate::fetch_and_diffstat_all(cfg, &package.name, &candidates) {
                 Ok(rec) => {
+                    total_lines += rec.diffstat.count;
                     suggestions.push(SuggestItem {
                         package,
                         rec,
@@ -1412,7 +1416,8 @@ impl<'a> Report<'a> {
                 width2 = max2,
             )?;
         }
-
+        writeln!(out)?;
+        writeln!(out, "estimated review backlog: {total_lines} lines")?;
         writeln!(out)?;
         writeln!(out, "Use |cargo vet certify| to record the audits.")?;
 
@@ -1424,10 +1429,19 @@ fn visit_failures<'a, T>(
     graph: &DepGraph<'a>,
     results: &[ResolveResult<'a>],
     failures: &[&'a PackageId],
+    guess_deeper: bool,
     mut callback: impl FnMut(&'a PackageId, usize, Option<&CriteriaSet>) -> Result<(), T>,
 ) -> Result<(), T> {
     for &failure in failures {
-        visit_failures_internal(graph, results, failure, &mut callback, 0, None)?;
+        visit_failures_internal(
+            graph,
+            results,
+            failure,
+            guess_deeper,
+            &mut callback,
+            0,
+            None,
+        )?;
     }
 
     Ok(())
@@ -1436,11 +1450,13 @@ fn visit_failures_internal<'a, T>(
     graph: &DepGraph<'a>,
     results: &[ResolveResult<'a>],
     failure: &'a PackageId,
+    guess_deeper: bool,
     callback: &mut impl FnMut(&'a PackageId, usize, Option<&CriteriaSet>) -> Result<(), T>,
     depth: usize,
     cur_criteria: Option<&CriteriaSet>,
 ) -> Result<(), T> {
     let resolve_idx = graph.resolve_index_by_pkgid[failure];
+    let resolve = &graph.resolve_list[resolve_idx];
     let result = &results[resolve_idx];
 
     if !result.policy_failures.is_empty() {
@@ -1451,6 +1467,7 @@ fn visit_failures_internal<'a, T>(
                 graph,
                 results,
                 failed_dep,
+                guess_deeper,
                 callback,
                 depth + 1,
                 Some(failed_criteria),
@@ -1459,6 +1476,7 @@ fn visit_failures_internal<'a, T>(
     } else if let Some(failed_criteria) = cur_criteria {
         let mut own_fault = CriteriaSet::default();
         let mut dep_faults = BTreeMap::<&PackageId, CriteriaSet>::new();
+        let mut deeper_faults = BTreeMap::<&PackageId, CriteriaSet>::new();
 
         // Collect up details of how we failed the criteria
         for criteria_idx in failed_criteria.indices() {
@@ -1478,6 +1496,21 @@ fn visit_failures_internal<'a, T>(
                 SearchResult::Disconnected { .. } => {
                     // Oh dang ok we *are* to blame, our bad
                     own_fault.set_criteria(criteria_idx);
+
+                    if guess_deeper {
+                        // Try to Guess Deeper by blaming our children for all |self| failures
+                        // by assuming we would need them to conform to our own criteria too.
+                        for dep in &resolve.dependencies {
+                            let dep_resolve_idx = graph.resolve_index_by_pkgid[dep];
+                            let dep_result = &results[dep_resolve_idx];
+                            if !dep_result.validated_criteria.has_criteria(criteria_idx) {
+                                deeper_faults
+                                    .entry(dep)
+                                    .or_default()
+                                    .set_criteria(criteria_idx);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1490,14 +1523,30 @@ fn visit_failures_internal<'a, T>(
         }
 
         // Now visit our children
-        for (failed_dep, failed_criteria) in dep_faults {
+        for (failed_dep, failed_criteria) in &dep_faults {
             visit_failures_internal(
                 graph,
                 results,
                 failed_dep,
+                guess_deeper,
                 callback,
                 depth + 1,
-                Some(&failed_criteria),
+                Some(failed_criteria),
+            )?;
+        }
+        for (failed_dep, failed_criteria) in &deeper_faults {
+            if dep_faults.contains_key(failed_dep) {
+                // We already visited them more precisely
+                continue;
+            }
+            visit_failures_internal(
+                graph,
+                results,
+                failed_dep,
+                guess_deeper,
+                callback,
+                depth + 1,
+                Some(failed_criteria),
             )?;
         }
     } else {
