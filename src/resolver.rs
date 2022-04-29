@@ -1176,8 +1176,9 @@ impl<'a> Report<'a> {
             }
 
             writeln!(out)?;
-            writeln!(out, "dependency tree:")?;
 
+            /* Old "blame tree" printer, in case we ever want it again
+            writeln!(out, "dependency tree:")?;
             visit_failures(
                 &self.graph,
                 &self.results,
@@ -1215,6 +1216,7 @@ impl<'a> Report<'a> {
                     Ok(())
                 },
             )?;
+            */
         }
         if !self.violation_failed.is_empty() {
             writeln!(
@@ -1227,8 +1229,6 @@ impl<'a> Report<'a> {
             }
             writeln!(out)?;
         }
-
-        writeln!(out, "Use |cargo vet certify| to record the audits.")?;
 
         Ok(())
     }
@@ -1381,6 +1381,7 @@ impl<'a> Report<'a> {
             }
         }
         writeln!(out)?;
+        writeln!(out, "Use |cargo vet certify| to record the audits.")?;
 
         Ok(())
     }

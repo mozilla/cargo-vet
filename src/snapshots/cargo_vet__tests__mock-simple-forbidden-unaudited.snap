@@ -1,6 +1,6 @@
 ---
 source: src/tests.rs
-assertion_line: 531
+assertion_line: 694
 expression: stdout
 ---
 Vetting Failed!
@@ -8,6 +8,5 @@ Vetting Failed!
 1 forbidden dependencies:
   third-party1:10.0.0
 
-Use |cargo vet certify| to record the audits.
 nothing to recommend
 
