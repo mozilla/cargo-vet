@@ -49,6 +49,8 @@ pub struct CriteriaMapper {
 pub struct DepGraph<'a> {
     pub package_list: &'a [Package],
     pub resolve_list: &'a [cargo_metadata::Node],
+    /// child -> parents in resolve
+    pub reverse_deps: BTreeMap<&'a PackageId, BTreeSet<&'a PackageId>>,
     pub package_index_by_pkgid: BTreeMap<&'a PackageId, usize>,
     pub resolve_index_by_pkgid: BTreeMap<&'a PackageId, usize>,
     pub pkgid_by_name_and_ver: HashMap<&'a str, HashMap<&'a Version, &'a PackageId>>,
@@ -372,6 +374,13 @@ impl<'a> DepGraph<'a> {
                 .insert(&pkg.version, &pkg.id);
         }
 
+        let mut reverse_deps = BTreeMap::<&PackageId, BTreeSet<&PackageId>>::new();
+        for parent in resolve_list {
+            for child in &parent.dependencies {
+                reverse_deps.entry(child).or_default().insert(&parent.id);
+            }
+        }
+
         // Do topological sort: just recursively visit all of a node's children, and only add it
         // to the node *after* visiting the children. In this way we have trivially already added
         // all of the dependencies of a node by the time we have
@@ -421,6 +430,7 @@ impl<'a> DepGraph<'a> {
         Self {
             package_list,
             resolve_list,
+            reverse_deps,
             package_index_by_pkgid,
             resolve_index_by_pkgid,
             pkgid_by_name_and_ver,
@@ -1249,7 +1259,8 @@ impl<'a> Report<'a> {
         struct SuggestItem<'a> {
             package: &'a Package,
             rec: DiffRecommendation,
-            criteria: Vec<&'a str>,
+            criteria: String,
+            parents: String,
         }
 
         let mut suggestions = vec![];
@@ -1321,7 +1332,17 @@ impl<'a> Report<'a> {
             let criteria = self
                 .criteria_mapper
                 .criteria_names(&audit_failure.criteria_failures)
-                .collect::<Vec<_>>();
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let parents = self.graph.reverse_deps[failure]
+                .iter()
+                .map(|parent| {
+                    &*self.graph.package_list[self.graph.package_index_by_pkgid[parent]].name
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+
             let rec = crate::fetch_and_diffstat_all(cfg, &package.name, &candidates)?;
 
             // If we're sorting, defer the result
@@ -1330,6 +1351,7 @@ impl<'a> Report<'a> {
                     package,
                     rec,
                     criteria,
+                    parents,
                 })
             } else {
                 writeln!(
@@ -1352,14 +1374,21 @@ impl<'a> Report<'a> {
                 .into_iter()
                 .map(|item| {
                     (
-                        format!("{}:{}", item.package.name, item.package.version),
                         if item.rec.from == ROOT_VERSION {
-                            format!("full {}", item.rec.to)
+                            format!("{}:{}", item.package.name, item.rec.to)
                         } else {
-                            format!("{} -> {}", item.rec.from, item.rec.to)
+                            format!(
+                                "{}:({} -> {})",
+                                item.package.name, item.rec.from, item.rec.to
+                            )
                         },
-                        format!("({})", item.rec.diffstat.raw.trim()),
-                        format!("{:?}", &item.criteria),
+                        format!("for {}", item.criteria),
+                        if item.rec.from == ROOT_VERSION {
+                            format!("({} lines)", item.rec.diffstat.count)
+                        } else {
+                            format!("({})", item.rec.diffstat.raw.trim())
+                        },
+                        format!("(used by {})", item.parents),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -1372,7 +1401,7 @@ impl<'a> Report<'a> {
             for (s0, s1, s2, s3) in strings {
                 writeln!(
                     out,
-                    "    {s0:width0$} {s1:width1$} {s2:width2$} for {s3:width3$}",
+                    "    {s0:width0$} {s1:width1$} {s2:width2$} {s3:width3$} ",
                     width0 = max0,
                     width1 = max1,
                     width2 = max2,

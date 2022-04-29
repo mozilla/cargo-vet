@@ -9,7 +9,7 @@ Vetting Failed!
   third-party1:10.0.0 missing ["reviewed"]
 
 recommended audits:
-    third-party1:10.0.0 5.0.0 -> 7.0.0 (+24) for ["reviewed"]
+    third-party1:(5.0.0 -> 7.0.0) for reviewed (+24) (used by first-party) 
 
 Use |cargo vet certify| to record the audits.
 
