@@ -138,7 +138,16 @@ struct CertifyArgs {
 }
 
 #[derive(clap::Args)]
-struct SuggestArgs {}
+struct SuggestArgs {
+    /// Try to suggest even deeper down the dependency tree (approximate guessing).
+    ///
+    /// By default, if a dependency doesn't have sufficient audits for *itself* then we won't
+    /// try to speculate on anything about its dependencies, because we lack sufficient
+    /// information to say for certain what is required of those dependencies. This overrides
+    /// that by making us assume the dependencies all need the same criteria as the parent.
+    #[clap(long)]
+    guess_deeper: bool,
+}
 
 #[derive(clap::Args)]
 struct FmtArgs {}
@@ -621,7 +630,7 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
     Ok(())
 }
 
-fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Result<(), VetError> {
+fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
 
@@ -644,7 +653,13 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
     config.unaudited.clear();
 
     // DO THE THING!!!!
-    let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports);
+    let report = resolver::resolve(
+        &cfg.metadata,
+        &config,
+        &audits,
+        &imports,
+        sub_args.guess_deeper,
+    );
     report.print_suggest(out, cfg)?;
 
     Ok(())
@@ -720,7 +735,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     };
 
     // DO THE THING!!!!
-    let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports);
+    let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports, false);
     report.print_report(out, cfg)?;
 
     // Only save imports if we succeeded, to avoid any modifications on error.

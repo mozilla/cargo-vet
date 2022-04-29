@@ -11,5 +11,7 @@ Vetting Failed!
 recommended audits:
     third-party1:5.0.0  for reviewed  (25 lines)  (used by first-party) 
 
+estimated review backlog: 25 lines
+
 Use |cargo vet certify| to record the audits.
 
