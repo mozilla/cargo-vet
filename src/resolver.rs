@@ -229,28 +229,21 @@ impl CriteriaMapper {
         CriteriaSet::_all(self.len())
     }
 
+    /// Yields all the names of the set criteria with implied members filtered out.
     pub fn criteria_names<'a>(
         &'a self,
         criteria: &'a CriteriaSet,
     ) -> impl Iterator<Item = &'a str> + 'a {
-        criteria.indices().map(|idx| &*self.list[idx].0)
-    }
-
-    pub fn filter_implied<'a>(&self, input: &[&'a str]) -> Vec<&'a str> {
-        let mut result = vec![];
-        'outer: for a in input {
-            let a_idx = self.index[*a];
-            for b in input {
-                let b_idx = self.index[*b];
-                if a_idx != b_idx && self.implied_criteria[b_idx].has_criteria(a_idx) {
-                    // implied by something else, ignore it
-                    continue 'outer;
-                }
-            }
-            // implied by nothing else, report it
-            result.push(*a);
-        }
-        result
+        // Filter out any criteria implied by other criteria
+        criteria
+            .indices()
+            .filter(|&cur_idx| {
+                criteria.indices().all(|other_idx| {
+                    // Require that we aren't implied by other_idx (and ignore our own index)
+                    cur_idx == other_idx || !self.implied_criteria[other_idx].has_criteria(cur_idx)
+                })
+            })
+            .map(|idx| &*self.list[idx].0)
     }
 }
 
@@ -293,7 +286,17 @@ impl CriteriaSet {
         self.0 == 0
     }
     pub fn indices(&self) -> impl Iterator<Item = usize> + '_ {
-        (0..MAX_CRITERIA).filter(|&idx| self.has_criteria(idx))
+        // Yield all the offsets that are set by repeatedly getting the lowest 1 and clearing it
+        let mut raw = self.0;
+        std::iter::from_fn(move || {
+            if raw == 0 {
+                None
+            } else {
+                let next = raw.trailing_zeros() as usize;
+                raw &= !(1 << next);
+                Some(next)
+            }
+        })
     }
 }
 
@@ -1168,9 +1171,7 @@ impl<'a> Report<'a> {
                 writeln!(
                     out,
                     "  {}:{} missing {:?}",
-                    failed_package.name,
-                    failed_package.version,
-                    self.criteria_mapper.filter_implied(&criteria)
+                    failed_package.name, failed_package.version, &criteria
                 )?;
             }
 
@@ -1197,7 +1198,7 @@ impl<'a> Report<'a> {
                             "",
                             package.name,
                             package.version,
-                            self.criteria_mapper.filter_implied(&criteria),
+                            &criteria,
                             width = indent
                         )?;
                     } else {
@@ -1339,7 +1340,7 @@ impl<'a> Report<'a> {
                     rec.from,
                     rec.to,
                     rec.diffstat.raw.trim(),
-                    self.criteria_mapper.filter_implied(&criteria),
+                    &criteria,
                 )?;
             }
         }
@@ -1358,7 +1359,7 @@ impl<'a> Report<'a> {
                             format!("{} -> {}", item.rec.from, item.rec.to)
                         },
                         format!("({})", item.rec.diffstat.raw.trim()),
-                        format!("{:?}", self.criteria_mapper.filter_implied(&item.criteria)),
+                        format!("{:?}", &item.criteria),
                     )
                 })
                 .collect::<Vec<_>>();
