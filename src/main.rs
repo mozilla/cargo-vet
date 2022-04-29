@@ -73,6 +73,16 @@ struct Cli {
     /// Instead of stderr, write logs to this file (only used after successful CLI parsing).
     #[clap(long)]
     log_file: Option<PathBuf>,
+
+    /// Use the following path as the diff-cache.
+    ///
+    /// The diff-cache stores the summary results used by vet's suggestion machinery.
+    /// This is automatically managed in vet's tempdir, but if you want to manually store
+    /// it somewhere more reliable, you can.
+    ///
+    /// This mostly exists for testing vet itself.
+    #[clap(long)]
+    diff_cache: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -183,6 +193,7 @@ impl Cli {
             verbose: Verbose::Off,
             output_file: None,
             log_file: None,
+            diff_cache: None,
         }
     }
 }
@@ -946,9 +957,14 @@ fn load_imports(store_path: &Path) -> Result<ImportsFile, VetError> {
     Ok(file)
 }
 
-fn load_diffcache(tmp: &Path) -> Result<DiffCache, VetError> {
-    // TODO: do integrity checks?
-    let path = tmp.join(DIFF_CACHE);
+fn load_diffcache(cfg: &Config, tmp: &Path) -> Result<DiffCache, VetError> {
+    // If there's an explicit diff_cache, use that, otherwise use tmp
+    let path = cfg
+        .cli
+        .diff_cache
+        .as_ref()
+        .cloned()
+        .unwrap_or_else(|| tmp.join(DIFF_CACHE));
     let file: DiffCache = load_toml(&path)?;
     Ok(file)
 }
@@ -1189,7 +1205,7 @@ pub fn fetch_and_diffstat_all(
     let mut diff_cache = if mocked {
         DiffCache::default()
     } else {
-        load_diffcache(tmp).unwrap_or_default()
+        load_diffcache(cfg, tmp).unwrap_or_default()
     };
 
     for delta in diffs {

@@ -13,6 +13,15 @@ OPTIONS:
         --all-features
             Activate all available features
 
+        --diff-cache <DIFF_CACHE>
+            Use the following path as the diff-cache.
+            
+            The diff-cache stores the summary results used by vet's suggestion machinery. This is
+            automatically managed in vet's tempdir, but if you want to manually store it somewhere
+            more reliable, you can.
+            
+            This mostly exists for testing vet itself.
+
         --exclude <SPEC>
             Exclude packages from being processed
 
