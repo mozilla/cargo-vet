@@ -86,6 +86,8 @@ pub type AuditedDependencies = StableMap<String, Vec<AuditEntry>>;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct AuditsFile {
     /// A map of criteria_name to details on that criteria.
+    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(default)]
     pub criteria: StableMap<String, CriteriaEntry>,
     /// Actual audits.
     pub audits: AuditedDependencies,
@@ -230,13 +232,22 @@ pub struct ConfigFile {
     #[serde(default = "get_default_criteria")]
     #[serde(skip_serializing_if = "is_default_criteria")]
     pub default_criteria: String,
+
     /// Remote audits.toml's that we trust and want to import.
+    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(default)]
     pub imports: StableMap<String, RemoteImport>,
+
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
+    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(default)]
     pub unaudited: StableMap<String, Vec<UnauditedDependency>>,
+
     /// A table of policies for first-party crates.
+    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(default)]
     pub policy: StableMap<String, PolicyEntry>,
 }
 
