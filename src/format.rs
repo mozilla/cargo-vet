@@ -165,7 +165,7 @@ pub enum AuditKind {
 pub type DependencyCriteria = StableMap<String, Vec<String>>;
 
 /// A "VERSION -> VERSION"
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Delta {
     pub from: Version,
     pub to: Version,
@@ -394,4 +394,22 @@ impl ImportsFile {
         // TODO
         Ok(())
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+//                                                                                //
+//                                                                                //
+//                                                                                //
+//                               diffcache.toml                                   //
+//                                                                                //
+//                                                                                //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+
+pub type DiffCache = StableMap<String, StableMap<Delta, DiffStat>>;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DiffStat {
+    pub raw: String,
+    pub count: u64,
 }
