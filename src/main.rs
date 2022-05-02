@@ -366,7 +366,8 @@ fn main() -> Result<(), VetError> {
         }
     };
 
-    trace!("Got Metadata! {:#?}", metadata);
+    trace!("Got Metadata!");
+    // trace!("Got Metadata! {:#?}", metadata);
 
     //////////////////////////////////////////////////////
     // Parse out our own configuration
