@@ -1189,47 +1189,6 @@ impl<'a> Report<'a> {
             }
 
             writeln!(out)?;
-
-            /* Old "blame tree" printer, in case we ever want it again
-            writeln!(out, "dependency tree:")?;
-            visit_failures(
-                &self.graph,
-                &self.results,
-                &self.root_failures,
-                |failure, depth, own_failure| -> Result<(), VetError> {
-                    let package =
-                        &self.graph.package_list[self.graph.package_index_by_pkgid[failure]];
-                    let indent = (depth + 1) * 2;
-
-                    if let Some(failed_criteria) = own_failure {
-                        let criteria = self
-                            .criteria_mapper
-                            .criteria_names(failed_criteria)
-                            .collect::<Vec<_>>();
-                        writeln!(
-                            out,
-                            "{:width$}{}:{} needs {:?}",
-                            "",
-                            package.name,
-                            package.version,
-                            &criteria,
-                            width = indent
-                        )?;
-                    } else {
-                        writeln!(
-                            out,
-                            "{:width$}{}:{}",
-                            "",
-                            package.name,
-                            package.version,
-                            width = indent
-                        )?;
-                    }
-
-                    Ok(())
-                },
-            )?;
-            */
         }
         if !self.violation_failed.is_empty() {
             writeln!(
@@ -1434,126 +1393,138 @@ fn visit_failures<'a, T>(
     guess_deeper: bool,
     mut callback: impl FnMut(&'a PackageId, usize, Option<&CriteriaSet>) -> Result<(), T>,
 ) -> Result<(), T> {
-    for &failure in failures {
-        visit_failures_internal(
-            graph,
-            results,
-            failure,
-            guess_deeper,
-            &mut callback,
-            0,
-            None,
-        )?;
-    }
+    trace!("blame: traversing blame tree");
 
-    Ok(())
-}
-fn visit_failures_internal<'a, T>(
-    graph: &DepGraph<'a>,
-    results: &[ResolveResult<'a>],
-    failure: &'a PackageId,
-    guess_deeper: bool,
-    callback: &mut impl FnMut(&'a PackageId, usize, Option<&CriteriaSet>) -> Result<(), T>,
-    depth: usize,
-    cur_criteria: Option<&CriteriaSet>,
-) -> Result<(), T> {
-    let resolve_idx = graph.resolve_index_by_pkgid[failure];
-    let resolve = &graph.resolve_list[resolve_idx];
-    let result = &results[resolve_idx];
+    // The crate graph can be messy in several ways:
+    //
+    // 1. The depth of the graph can be very large, so recursion could blow the stack.
+    //
+    // 2. The "tree" view of the graph can have an exponential number of nodes because
+    //    of duplicated subgraphs from shared dependencies. Unfortunately, that is
+    //    the representation we "have" to traverse to properly blame packages for
+    //    specific policty failures.
+    //
+    // 3. Different "targets" for one package are actually logically separate crates,
+    //    and naively unifying them can result in cycles. In particular, the "dev"
+    //    version of a crate (tests and benches) can have dev-dependencies which depend
+    //    on the "real" version of that crate, so if you combine "dev" and "normal"
+    //    then you can have cycles. Horrifyingly, people do rely on this.
+    //
+    // Problem 1 is easy to fix: just use an explicit stack instead of recursion.
+    //
+    // Problem 2 can be solved by noting that, as long as we don't actually care about
+    // *printing* the entire blame-tree and just want to figure out what the leaves
+    // are and what criteria they need, we can use the usual "keep a set of visited
+    // nodes and don't revisit nodes in that set" pattern *except* modified to include
+    // the set of criteria it has been visited with. We then only revisit a node if
+    // our current path has criteria that aren't yet in the visitor set.
+    //
+    // Problem 3 is trickier. Really we should "desugar" a node into its different
+    // targets, but there are effectively infinite targets due to all the possible
+    // cfg combinations and feature flags, so we'd *really* like to be able to abstractly
+    // handle those. I *think* we only *really* need to split up "dev" from "everything else"
+    // but I want to think about this more. For now we just rely on the solution to problem 2
+    // to avoid infinite loops and just don't worry about the semantics.
+    let mut search_stack = failures.iter().map(|f| (*f, 0, None)).collect::<Vec<_>>();
+    let mut visited = BTreeMap::<&PackageId, CriteriaSet>::new();
+    let no_criteria = CriteriaSet::default();
 
-    if !result.policy_failures.is_empty() {
-        // We're not to blame, it's our children who failed our policies!
-        callback(failure, depth, None)?;
-        for (failed_dep, failed_criteria) in &result.policy_failures {
-            visit_failures_internal(
-                graph,
-                results,
-                failed_dep,
-                guess_deeper,
-                callback,
-                depth + 1,
-                Some(failed_criteria),
-            )?;
+    while let Some((failure, depth, cur_criteria)) = search_stack.pop() {
+        match visited.entry(failure) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(cur_criteria.clone().unwrap_or_else(|| no_criteria.clone()));
+            }
+            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                let cur = cur_criteria.as_ref().unwrap_or(&no_criteria);
+                if entry.get().contains(cur) {
+                    continue;
+                } else {
+                    entry.get_mut().unioned_with(cur);
+                }
+            }
         }
-    } else if let Some(failed_criteria) = cur_criteria {
-        let mut own_fault = CriteriaSet::default();
-        let mut dep_faults = BTreeMap::<&PackageId, CriteriaSet>::new();
-        let mut deeper_faults = BTreeMap::<&PackageId, CriteriaSet>::new();
 
-        // Collect up details of how we failed the criteria
-        for criteria_idx in failed_criteria.indices() {
-            match &result.search_results[criteria_idx] {
-                SearchResult::Connected { .. } => {
-                    // Do nothing, this package is good
-                }
-                SearchResult::PossiblyConnected { failed_deps } => {
-                    // We're not to blame, it's our children who failed!
-                    for &failed_dep in failed_deps {
-                        dep_faults
-                            .entry(failed_dep)
-                            .or_default()
-                            .set_criteria(criteria_idx);
+        let resolve_idx = graph.resolve_index_by_pkgid[failure];
+        let resolve = &graph.resolve_list[resolve_idx];
+        let result = &results[resolve_idx];
+        let package = &graph.package_list[graph.package_index_by_pkgid[failure]];
+        trace!(
+            "blame: {:width$}visiting {}:{}",
+            "",
+            package.name,
+            package.version,
+            width = depth
+        );
+
+        if !result.policy_failures.is_empty() {
+            // We're not to blame, it's our children who failed our policies!
+            callback(failure, depth, None)?;
+            for (failed_dep, failed_criteria) in &result.policy_failures {
+                search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
+            }
+        } else if let Some(failed_criteria) = cur_criteria {
+            let mut own_fault = CriteriaSet::default();
+            let mut dep_faults = BTreeMap::<&PackageId, CriteriaSet>::new();
+            let mut deeper_faults = BTreeMap::<&PackageId, CriteriaSet>::new();
+
+            // Collect up details of how we failed the criteria
+            for criteria_idx in failed_criteria.indices() {
+                match &result.search_results[criteria_idx] {
+                    SearchResult::Connected { .. } => {
+                        // Do nothing, this package is good
                     }
-                }
-                SearchResult::Disconnected { .. } => {
-                    // Oh dang ok we *are* to blame, our bad
-                    own_fault.set_criteria(criteria_idx);
+                    SearchResult::PossiblyConnected { failed_deps } => {
+                        // We're not to blame, it's our children who failed!
+                        for &failed_dep in failed_deps {
+                            dep_faults
+                                .entry(failed_dep)
+                                .or_default()
+                                .set_criteria(criteria_idx);
+                        }
+                    }
+                    SearchResult::Disconnected { .. } => {
+                        // Oh dang ok we *are* to blame, our bad
+                        own_fault.set_criteria(criteria_idx);
 
-                    if guess_deeper {
-                        // Try to Guess Deeper by blaming our children for all |self| failures
-                        // by assuming we would need them to conform to our own criteria too.
-                        for dep in &resolve.dependencies {
-                            let dep_resolve_idx = graph.resolve_index_by_pkgid[dep];
-                            let dep_result = &results[dep_resolve_idx];
-                            if !dep_result.validated_criteria.has_criteria(criteria_idx) {
-                                deeper_faults
-                                    .entry(dep)
-                                    .or_default()
-                                    .set_criteria(criteria_idx);
+                        if guess_deeper {
+                            // Try to Guess Deeper by blaming our children for all |self| failures
+                            // by assuming we would need them to conform to our own criteria too.
+                            for dep in &resolve.dependencies {
+                                let dep_resolve_idx = graph.resolve_index_by_pkgid[dep];
+                                let dep_result = &results[dep_resolve_idx];
+                                if !dep_result.validated_criteria.has_criteria(criteria_idx) {
+                                    deeper_faults
+                                        .entry(dep)
+                                        .or_default()
+                                        .set_criteria(criteria_idx);
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        // Visit ourselves based on whether we're to blame at all
-        if own_fault.is_empty() {
-            callback(failure, depth, None)?;
-        } else {
-            callback(failure, depth, Some(&own_fault))?;
-        }
-
-        // Now visit our children
-        for (failed_dep, failed_criteria) in &dep_faults {
-            visit_failures_internal(
-                graph,
-                results,
-                failed_dep,
-                guess_deeper,
-                callback,
-                depth + 1,
-                Some(failed_criteria),
-            )?;
-        }
-        for (failed_dep, failed_criteria) in &deeper_faults {
-            if dep_faults.contains_key(failed_dep) {
-                // We already visited them more precisely
-                continue;
+            // Visit ourselves based on whether we're to blame at all
+            if own_fault.is_empty() {
+                callback(failure, depth, None)?;
+            } else {
+                callback(failure, depth, Some(&own_fault))?;
             }
-            visit_failures_internal(
-                graph,
-                results,
-                failed_dep,
-                guess_deeper,
-                callback,
-                depth + 1,
-                Some(failed_criteria),
-            )?;
-        }
-    } else {
-        unreachable!("I don't think this should happen..?");
-    }
 
+            // Now visit our children
+            for (failed_dep, failed_criteria) in deeper_faults {
+                if dep_faults.contains_key(failed_dep) {
+                    // We already visited them more precisely
+                    continue;
+                }
+                search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
+            }
+            for (failed_dep, failed_criteria) in dep_faults {
+                search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
+            }
+        } else {
+            unreachable!("I don't think this should happen..?");
+        }
+    }
     Ok(())
 }
