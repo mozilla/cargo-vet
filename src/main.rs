@@ -1,16 +1,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
-use std::fs;
 use std::fs::OpenOptions;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Seek};
 use std::ops::Deref;
 use std::path::Path;
 use std::process::Command;
 use std::str::FromStr;
+use std::{fs, mem};
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package, Version};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
+use eyre::Context;
+use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
@@ -18,6 +20,7 @@ use serde::{de::Deserialize, ser::Serialize};
 use simplelog::{
     ColorChoice, ConfigBuilder, Level, LevelFilter, TermLogger, TerminalMode, WriteLogger,
 };
+use tar::Archive;
 
 use crate::format::{
     AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
@@ -204,7 +207,7 @@ pub struct Config {
     metacfg: MetaConfig,
     metadata: Metadata,
     cli: Cli,
-    cargo: OsString,
+    _cargo: OsString,
     tmp: PathBuf,
     registry_src: Option<PathBuf>,
 }
@@ -213,7 +216,9 @@ pub struct Config {
 static TEMP_DIR_SUFFIX: &str = "cargo-vet-checkout";
 static DIFF_CACHE: &str = "diff-cache.toml";
 static EMPTY_PACKAGE: &str = "empty";
-static FETCHES: &str = "fetches";
+static PACKAGES: &str = "packages";
+static CARGO_OK_FILE: &str = ".cargo-ok";
+static CARGO_OK_BODY: &str = "ok";
 
 static CARGO_ENV: &str = "CARGO";
 static CARGO_REGISTRY_SRC: &str = "registry/src/";
@@ -366,7 +371,8 @@ fn main() -> Result<(), VetError> {
         }
     };
 
-    trace!("Got Metadata! {:#?}", metadata);
+    // trace!("Got Metadata! {:#?}", metadata);
+    trace!("Got Metadata!");
 
     //////////////////////////////////////////////////////
     // Parse out our own configuration
@@ -467,7 +473,7 @@ fn main() -> Result<(), VetError> {
         metacfg,
         metadata,
         cli,
-        cargo,
+        _cargo: cargo,
         tmp,
         registry_src,
     };
@@ -552,13 +558,14 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
 
 fn cmd_inspect(out: &mut dyn Write, cfg: &Config, sub_args: &InspectArgs) -> Result<(), VetError> {
     // Download a crate's source to a temp location for review
-    let tmp = &cfg.tmp;
-    clean_tmp(tmp)?;
+    let mut cache = Cache::acquire(cfg)?;
 
+    let package = &*sub_args.package;
     let version = Version::from_str(&sub_args.version).expect("could not parse version");
-    let to_fetch = &[(&*sub_args.package, &version)];
-    let fetch_dir = fetch_crates(cfg, tmp, "fetch", to_fetch)?;
-    let fetched = fetched_pkg(&fetch_dir, tmp, &sub_args.package, &version);
+
+    let to_fetch = &[(package, &version)];
+    let fetched_paths = cache.fetch_packages(to_fetch)?;
+    let fetched = &fetched_paths[package][&version];
 
     #[cfg(target_family = "unix")]
     {
@@ -678,18 +685,9 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
     Ok(())
 }
 fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<(), VetError> {
-    // * download version1 of the package
-    // * download version2 of the package
-    // * diff the two
-    // * emit the diff
-    let tmp = &cfg.tmp;
-    clean_tmp(tmp)?;
+    let mut cache = Cache::acquire(cfg)?;
 
-    writeln!(
-        out,
-        "fetching {} {}...",
-        sub_args.package, sub_args.version1
-    )?;
+    let package = &*sub_args.package;
     let version1 = sub_args
         .version1
         .parse()
@@ -698,32 +696,21 @@ fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<()
         .version2
         .parse()
         .expect("Failed to parse second version");
-    let to_fetch1 = &[(&*sub_args.package, &version1)];
-    let fetch_dir1 = fetch_crates(cfg, tmp, "first", to_fetch1)?;
-    let fetched1 = fetched_pkg(&fetch_dir1, tmp, &sub_args.package, &version1);
-    writeln!(
-        out,
-        "fetched {} {} to {:#?}",
-        sub_args.package, sub_args.version1, fetched1
-    )?;
 
     writeln!(
         out,
-        "fetching {} {}...",
-        sub_args.package, sub_args.version2
+        "fetching {} {} and {} ...",
+        sub_args.package, version1, version2,
     )?;
-    let to_fetch2 = &[(&*sub_args.package, &version2)];
-    let fetch_dir2 = fetch_crates(cfg, tmp, "second", to_fetch2)?;
-    let fetched2 = fetched_pkg(&fetch_dir2, tmp, &sub_args.package, &version2);
-    writeln!(
-        out,
-        "fetched {} {} to {:#?}",
-        sub_args.package, sub_args.version2, fetched2
-    )?;
+
+    let to_fetch = &[(package, &version1), (package, &version2)];
+    let fetched_paths = cache.fetch_packages(to_fetch)?;
+    let fetched1 = &fetched_paths[package][&version1];
+    let fetched2 = &fetched_paths[package][&version2];
 
     writeln!(out)?;
 
-    diff_crate(out, cfg, &fetched1, &fetched2)?;
+    diff_crate(out, cfg, fetched1, fetched2)?;
 
     Ok(())
 }
@@ -959,15 +946,8 @@ fn load_imports(store_path: &Path) -> Result<ImportsFile, VetError> {
     Ok(file)
 }
 
-fn load_diffcache(cfg: &Config, tmp: &Path) -> Result<DiffCache, VetError> {
-    // If there's an explicit diff_cache, use that, otherwise use tmp
-    let path = cfg
-        .cli
-        .diff_cache
-        .as_ref()
-        .cloned()
-        .unwrap_or_else(|| tmp.join(DIFF_CACHE));
-    let file: DiffCache = load_toml(&path)?;
+fn load_diff_cache(diff_cache_path: &Path) -> Result<DiffCache, VetError> {
+    let file: DiffCache = load_toml(diff_cache_path)?;
     Ok(file)
 }
 
@@ -998,105 +978,341 @@ fn store_imports(store_path: &Path, imports: ImportsFile) -> Result<(), VetError
     store_toml(&path, heading, imports)?;
     Ok(())
 }
-fn store_diffcache(tmp: &Path, diffcache: DiffCache) -> Result<(), VetError> {
+fn store_diff_cache(diff_cache_path: &Path, diff_cache: DiffCache) -> Result<(), VetError> {
     let heading = "";
 
-    let path = tmp.join(DIFF_CACHE);
-    store_toml(&path, heading, diffcache)?;
+    store_toml(diff_cache_path, heading, diff_cache)?;
     Ok(())
 }
 
-fn clean_tmp(tmp: &Path) -> Result<(), VetError> {
-    // Wipe out temp fetches and make sure everything else exists
-    let empty = tmp.join(EMPTY_PACKAGE);
-    let fetches: PathBuf = tmp.join(FETCHES);
-    if !tmp.exists() {
-        fs::create_dir_all(tmp)?;
-    }
-    if !empty.exists() {
-        fs::create_dir_all(&empty)?;
-    }
-    if fetches.exists() {
-        fs::remove_dir_all(&fetches)?;
-    }
-    fs::create_dir_all(&fetches)?;
-    Ok(())
+pub struct Cache {
+    // FIXME: stubbed out
+    _lock: Option<()>,
+    root: Option<PathBuf>,
+    cargo_registry: Option<PathBuf>,
+    diff_cache_path: Option<PathBuf>,
+    diff_cache: DiffCache,
 }
 
-fn fetch_crates(
-    cfg: &Config,
-    tmp: &Path,
-    fetch_dir: &str,
-    crates: &[(&str, &Version)],
-) -> Result<PathBuf, VetError> {
-    clean_tmp(tmp)?;
-    // Create a tempdir with a Cargo.toml referring to each package,
-    // then run 'cargo fetch' on it to ensure the cargo cache is populated.
-    // FIXME: maybe we should actually just check if we have all the packages
-    // first, to avoid doing a bunch of faffing around we don't need..?
-    let fetches = tmp.join(FETCHES);
-    {
-        let out = Command::new(&cfg.cargo)
-            .current_dir(&fetches)
-            .arg("new")
-            .arg("--bin")
-            .arg(fetch_dir)
-            .output()?;
-
-        if !out.status.success() {
-            return Err(eyre::eyre!(
-                "command failed!\nout:\n{}\nstderr:\n{}",
-                String::from_utf8(out.stdout).unwrap(),
-                String::from_utf8(out.stderr).unwrap()
-            ));
+impl Drop for Cache {
+    fn drop(&mut self) {
+        if let Some(_lock) = self._lock {
+            // FIXME: Release the lock
+        }
+        if let Some(diff_cache_path) = &self.diff_cache_path {
+            // Write back the diff_cache
+            store_diff_cache(
+                diff_cache_path,
+                mem::replace(&mut self.diff_cache, DiffCache::new()),
+            )
+            .unwrap();
         }
     }
+}
 
-    trace!("init to: {:#?}", tmp);
-    let fetch_dir = fetches.join(fetch_dir);
-    let fetch_toml = fetch_dir.join("Cargo.toml");
+impl Cache {
+    pub fn acquire(cfg: &Config) -> Result<Self, VetError> {
+        if cfg.registry_src.is_none() {
+            // If the registry_src isn't set, then assume we're running in tests and mocked.
+            // In that case, don't read/write disk for the DiffCache
+            return Ok(Cache {
+                _lock: None,
+                root: None,
+                cargo_registry: None,
+                diff_cache_path: None,
+                diff_cache: DiffCache::new(),
+            });
+        }
 
-    {
-        // FIXME: properly parse the toml instead of assuming structure
-        let mut toml = OpenOptions::new().append(true).open(&fetch_toml)?;
+        let root = cfg.tmp.clone();
+        let empty = root.join(EMPTY_PACKAGE);
+        let packages: PathBuf = root.join(PACKAGES);
 
-        for (krate, version) in crates {
-            // This isn't a real crate, skip it
-            if *version == &resolver::ROOT_VERSION {
-                continue;
+        // Make sure our cache exists
+        if !root.exists() {
+            fs::create_dir_all(&root)?;
+        }
+        // Now acquire the lockfile
+        let lock: () = {
+            // FIXME: implement some kind of lockfile mechanism to avoid concurrent modification
+        };
+
+        // Make sure everything else exists
+        if !empty.exists() {
+            fs::create_dir_all(&empty)?;
+        }
+        if !packages.exists() {
+            fs::create_dir_all(&packages)?;
+        }
+
+        // Setup the diff_cache.
+        let diff_cache_path = cfg
+            .cli
+            .diff_cache
+            .clone()
+            .unwrap_or_else(|| root.join(DIFF_CACHE));
+        let diff_cache = if let Ok(cache) = load_diff_cache(&diff_cache_path) {
+            cache
+        } else {
+            // Might be our first run, create a fresh diff-cache that we'll write back at the end
+            DiffCache::new()
+        };
+
+        // Try to get the cargo registry
+        let cargo_registry = find_cargo_registry(cfg);
+        if let Err(e) = &cargo_registry {
+            warn!("Couldn't find cargo registry: {e}");
+        }
+
+        Ok(Self {
+            _lock: Some(lock),
+            root: Some(root),
+            diff_cache_path: Some(diff_cache_path),
+            diff_cache,
+            cargo_registry: cargo_registry.ok(),
+        })
+    }
+
+    pub fn fetch_packages<'a>(
+        &mut self,
+        packages: &[(&'a str, &'a Version)],
+    ) -> Result<BTreeMap<&'a str, BTreeMap<&'a Version, PathBuf>>, VetError> {
+        // Don't do anything if we're mocked, or there is no work to do
+        if self.root.is_none() || packages.is_empty() {
+            return Ok(BTreeMap::new());
+        }
+
+        let root = self.root.as_ref().unwrap();
+        let fetch_dir = root.join(PACKAGES);
+        let cargo_registry = self.cargo_registry.as_ref();
+
+        let mut paths = BTreeMap::<&str, BTreeMap<&Version, PathBuf>>::new();
+        let mut to_download = Vec::new();
+
+        // Get all the cached things / find out what needs to be downloaded.
+        for (name, version) in packages {
+            let path = if **version == resolver::ROOT_VERSION {
+                // Empty package
+                root.join(EMPTY_PACKAGE)
+            } else {
+                // First try to get a cached copy from cargo's register or our own
+                let dir_name = format!("{}-{}", name, version);
+
+                let cached = cargo_registry
+                    .map(|reg| reg.join(&dir_name))
+                    .filter(|path| fetch_is_ok(path))
+                    .unwrap_or_else(|| fetch_dir.join(&dir_name));
+
+                if !fetch_is_ok(&cached) {
+                    // If we don't have a cached copy, push this to the download queue
+                    to_download.push((name, version, cached.clone()));
+                }
+
+                // Either this path exists or we'll download it, either way, it's right
+                cached
+            };
+
+            paths.entry(name).or_default().insert(version, path);
+        }
+
+        if !to_download.is_empty() {
+            trace!("downloading {} packages", to_download.len());
+        }
+        // If there is anything to download, do it
+        for (name, version, to_dir) in to_download {
+            trace!("  downloading {}:{} to {}", name, version, to_dir.display());
+            // FIXME: make this all async instead of blocking
+            self.download_package(name, version, &to_dir)?;
+        }
+
+        trace!("all fetched!");
+
+        Ok(paths)
+    }
+
+    pub fn fetch_and_diffstat_all(
+        &mut self,
+        package: &str,
+        diffs: &BTreeSet<Delta>,
+    ) -> Result<DiffRecommendation, VetError> {
+        // If there's no registry path setup, assume we're in tests and mocking.
+        let mut all_versions = BTreeSet::new();
+
+        for delta in diffs {
+            let is_cached = self
+                .diff_cache
+                .get(package)
+                .and_then(|cache| cache.get(delta))
+                .is_some();
+            if !is_cached {
+                all_versions.insert(&delta.from);
+                all_versions.insert(&delta.to);
             }
-            // Mangle names so that cargo doesn't complain about multiple versions.
-            // FIXME: probably want more reliable escaping...
-            let rename = format!("{}_{}", krate, version);
-            let rename = rename.replace('.', "_");
-            let rename = rename.replace('+', "_");
-            writeln!(
-                toml,
-                r#""{}" = {{ version = "={}", package = "{}" }}"#,
-                rename, version, krate
-            )?;
         }
+
+        let mut best_rec: Option<DiffRecommendation> = None;
+        let to_fetch = all_versions
+            .iter()
+            .map(|v| (package, *v))
+            .collect::<Vec<_>>();
+        let fetches = self.fetch_packages(&to_fetch)?;
+
+        for delta in diffs {
+            let cached = self
+                .diff_cache
+                .get(package)
+                .and_then(|cache| cache.get(delta))
+                .cloned();
+
+            let diffstat = if let Some(cached) = cached {
+                // Hooray, we have the cached result!
+                cached
+            } else {
+                let from = fetches.get(package).and_then(|m| m.get(&delta.from));
+                let to = fetches.get(package).and_then(|m| m.get(&delta.to));
+
+                if let (Some(from), Some(to)) = (from, to) {
+                    // Have fetches, do a real diffstat
+                    let diffstat = diffstat_crate(from, to)?;
+                    self.diff_cache
+                        .entry(package.to_string())
+                        .or_insert(StableMap::new())
+                        .insert(delta.clone(), diffstat.clone());
+                    diffstat
+                } else {
+                    // If we don't have fetches, assume we want mocked results
+                    warn!("Missing fetches, assuming we're in tests and mocking");
+
+                    let from_len = delta.from.major * delta.from.major;
+                    let to_len: u64 = delta.to.major * delta.to.major;
+                    let diff = to_len as i64 - from_len as i64;
+                    let count = diff.unsigned_abs();
+                    let raw = if diff < 0 {
+                        format!("-{}", count)
+                    } else {
+                        format!("+{}", count)
+                    };
+                    DiffStat { raw, count }
+                }
+            };
+
+            let rec = DiffRecommendation {
+                from: delta.from.clone(),
+                to: delta.to.clone(),
+                diffstat,
+            };
+
+            if let Some(best) = best_rec.as_ref() {
+                if best.diffstat.count > rec.diffstat.count {
+                    best_rec = Some(rec);
+                }
+            } else {
+                best_rec = Some(rec);
+            }
+        }
+
+        Ok(best_rec.unwrap())
     }
 
-    trace!("updated: {:#?}", fetch_toml);
+    fn download_package(
+        &mut self,
+        package: &str,
+        version: &Version,
+        to_dir: &Path,
+    ) -> Result<(), VetError> {
+        // Download to an anonymous temp file
+        let url = format!("https://crates.io/api/v1/crates/{package}/{version}/download");
+        let mut tempfile = tempfile::tempfile()?;
+        let bytes = req::get(url).and_then(|r| r.bytes())?;
+        tempfile.write_all(&bytes[..])?;
+        tempfile.rewind()?;
 
-    {
-        let out = Command::new(&cfg.cargo)
-            .current_dir(&fetch_dir)
-            .arg("fetch")
-            .output()?;
+        // Now unpack it
+        self.unpack_package(&tempfile, to_dir)?;
 
-        if !out.status.success() {
-            return Err(eyre::eyre!(
-                "command failed!\nout:\n{}\nstderr:\n{}",
-                String::from_utf8(out.stdout).unwrap(),
-                String::from_utf8(out.stderr).unwrap()
-            ));
-        }
+        Ok(())
     }
 
-    trace!("fetched");
+    fn unpack_package(&mut self, tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
+        // If we get here and the unpack_dir exists, this implies we had a previously failed fetch,
+        // blast it away so we can have a clean slate!
+        if unpack_dir.exists() {
+            fs::remove_dir_all(unpack_dir)?;
+        }
+        fs::create_dir(unpack_dir)?;
+        let lockfile = unpack_dir.join(CARGO_OK_FILE);
+        let gz = GzDecoder::new(tarball);
+        let mut tar = Archive::new(gz);
+        let prefix = unpack_dir.file_name().unwrap();
+        let parent = unpack_dir.parent().unwrap();
+        for entry in tar.entries()? {
+            let mut entry = entry.wrap_err("failed to iterate over archive")?;
+            let entry_path = entry
+                .path()
+                .wrap_err("failed to read entry path")?
+                .into_owned();
 
+            // We're going to unpack this tarball into the global source
+            // directory, but we want to make sure that it doesn't accidentally
+            // (or maliciously) overwrite source code from other crates. Cargo
+            // itself should never generate a tarball that hits this error, and
+            // crates.io should also block uploads with these sorts of tarballs,
+            // but be extra sure by adding a check here as well.
+            if !entry_path.starts_with(prefix) {
+                return Err(eyre::eyre!(
+                    "invalid tarball downloaded, contains \
+                        a file at {:?} which isn't under {:?}",
+                    entry_path,
+                    prefix
+                ));
+            }
+            // Unpacking failed
+            let result = entry.unpack_in(parent).map_err(VetError::from);
+            result.wrap_err_with(|| {
+                format!("failed to unpack entry at `{}`", entry_path.display())
+            })?;
+        }
+
+        // The lock file is created after unpacking so we overwrite a lock file
+        // which may have been extracted from the package.
+        let mut ok = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(&lockfile)
+            .wrap_err_with(|| format!("failed to open `{}`", lockfile.display()))?;
+
+        // Write to the lock file to indicate that unpacking was successful.
+        write!(ok, "ok")?;
+
+        Ok(())
+    }
+}
+
+fn fetch_is_ok(fetch: &Path) -> bool {
+    if !fetch.exists() || !fetch.is_dir() {
+        return false;
+    }
+
+    let ok_contents = || -> Result<String, std::io::Error> {
+        let mut ok_file = File::open(fetch.join(CARGO_OK_FILE))?;
+        let mut contents = String::new();
+        ok_file.read_to_string(&mut contents)?;
+        Ok(contents)
+    };
+
+    if let Ok(ok) = ok_contents() {
+        ok == CARGO_OK_BODY
+    } else {
+        false
+    }
+}
+
+fn find_cargo_registry(cfg: &Config) -> Result<PathBuf, VetError> {
+    // Find the cargo registry
+    //
+    // This is all unstable nonsense so being a bit paranoid here so that we can notice
+    // when things get weird and understand corner cases better...
     if cfg.registry_src.is_none() {
         return Err(eyre::eyre!("Could not resolve CARGO_HOME!?"));
     }
@@ -1106,24 +1322,7 @@ fn fetch_crates(
         return Err(eyre::eyre!("Cargo registry src cache doesn't exist!?"));
     }
 
-    {
-        // TODO: we need to be smarter about this and tell fetch what we actually need.
-        // This is currently both overbroad and insufficent, but might work well enough
-        // for the MVP. What exactly we should do here depends on what packages we actually
-        // want to compare in practice (how much we can just copy an existing lockfile).
-        let out = Command::new(&cfg.cargo).arg("fetch").output()?;
-
-        if !out.status.success() {
-            return Err(eyre::eyre!(
-                "command failed!\nout:\n{}\nstderr:\n{}",
-                String::from_utf8(out.stdout).unwrap(),
-                String::from_utf8(out.stderr).unwrap()
-            ));
-        }
-    }
-
-    // This is all unstable nonsense so being a bit paranoid here so that we can notice
-    // when things get weird and understand corner cases better...
+    // There's some weird opaque directory name here, so no hardcoding of the path
     let mut real_src_dir = None;
     for entry in std::fs::read_dir(registry_src)? {
         let entry = entry?;
@@ -1145,19 +1344,12 @@ fn fetch_crates(
             }
         }
     }
-    if real_src_dir.is_none() {
-        return Err(eyre::eyre!("failed to find cargo package sources"));
-    }
-    let real_src_dir = real_src_dir.unwrap();
 
-    // FIXME: we probably shouldn't do this, but better to fail-fast when hacky.
-    for (krate, version) in crates {
-        if !fetched_pkg(&real_src_dir, tmp, krate, version).exists() {
-            return Err(eyre::eyre!("failed to fetch {}:{}", krate, version));
-        }
+    if let Some(real_src_dir) = real_src_dir {
+        Ok(real_src_dir)
+    } else {
+        Err(eyre::eyre!("failed to find cargo package sources"))
     }
-
-    Ok(real_src_dir)
 }
 
 fn diff_crate(
@@ -1193,120 +1385,7 @@ pub struct DiffRecommendation {
     diffstat: DiffStat,
 }
 
-pub fn fetch_and_diffstat_all(
-    cfg: &Config,
-    package: &str,
-    diffs: &BTreeSet<Delta>,
-) -> Result<DiffRecommendation, VetError> {
-    // If there's no registry path setup, assume we're in tests and mocking.
-    let mocked = cfg.registry_src.is_none();
-
-    let tmp = &cfg.tmp;
-    let mut all_versions = BTreeSet::new();
-
-    let mut diff_cache = if mocked {
-        DiffCache::default()
-    } else {
-        load_diffcache(cfg, tmp).unwrap_or_default()
-    };
-
-    for delta in diffs {
-        let is_cached = diff_cache
-            .get(package)
-            .and_then(|cache| cache.get(delta))
-            .is_some();
-        if !is_cached {
-            all_versions.insert(&delta.from);
-            all_versions.insert(&delta.to);
-        }
-    }
-
-    let mut best_rec: Option<DiffRecommendation> = None;
-    if !mocked {
-        let fetches: BTreeMap<&Version, PathBuf> = if all_versions.is_empty() {
-            BTreeMap::new()
-        } else {
-            let to_fetch = all_versions
-                .iter()
-                .map(|v| (package, *v))
-                .collect::<Vec<_>>();
-            let fetch_dir = fetch_crates(cfg, &cfg.tmp, "diff", &to_fetch)?;
-            all_versions
-                .iter()
-                .map(|v| (*v, fetched_pkg(&fetch_dir, tmp, package, v)))
-                .collect()
-        };
-
-        for delta in diffs {
-            let cached = diff_cache
-                .get(package)
-                .and_then(|cache| cache.get(delta))
-                .cloned();
-            let diffstat = if let Some(cached) = cached {
-                cached
-            } else {
-                let from = &fetches[&delta.from];
-                let to = &fetches[&delta.to];
-                let diffstat = diffstat_crate(cfg, from, to)?;
-                diff_cache
-                    .entry(package.to_string())
-                    .or_insert(StableMap::new())
-                    .insert(delta.clone(), diffstat.clone());
-                diffstat
-            };
-
-            let rec = DiffRecommendation {
-                from: delta.from.clone(),
-                to: delta.to.clone(),
-                diffstat,
-            };
-
-            if let Some(best) = best_rec.as_ref() {
-                if best.diffstat.count > rec.diffstat.count {
-                    best_rec = Some(rec);
-                }
-            } else {
-                best_rec = Some(rec);
-            }
-        }
-    } else {
-        warn!("assuming we're in tests and mocking");
-        for delta in diffs {
-            let from_len = delta.from.major * delta.from.major;
-            let to_len: u64 = delta.to.major * delta.to.major;
-            let diff = to_len as i64 - from_len as i64;
-            let count = diff.unsigned_abs();
-            let raw = if diff < 0 {
-                format!("-{}", count)
-            } else {
-                format!("+{}", count)
-            };
-            let diffstat = DiffStat { raw, count };
-            let rec = DiffRecommendation {
-                from: delta.from.clone(),
-                to: delta.to.clone(),
-                diffstat,
-            };
-
-            if let Some(best) = best_rec.as_ref() {
-                if best.diffstat.count > rec.diffstat.count {
-                    best_rec = Some(rec);
-                }
-            } else {
-                best_rec = Some(rec);
-            }
-        }
-    }
-
-    if !mocked {
-        // We don't care if this fails
-        let _ = store_diffcache(tmp, diff_cache);
-    }
-
-    Ok(best_rec.unwrap())
-}
-
-fn diffstat_crate(_cfg: &Config, version1: &Path, version2: &Path) -> Result<DiffStat, VetError> {
+fn diffstat_crate(version1: &Path, version2: &Path) -> Result<DiffStat, VetError> {
     trace!("diffstating {version1:#?} {version2:#?}");
     // FIXME: mask out .cargo_vcs_info.json
     // FIXME: look into libgit2 vs just calling git
@@ -1390,11 +1469,6 @@ fn fetch_foreign_audits(
     Ok(ImportsFile { audits })
 }
 
-fn fetched_pkg(fetch_dir: &Path, tmp: &Path, name: &str, version: &Version) -> PathBuf {
-    if version == &resolver::ROOT_VERSION {
-        tmp.join(EMPTY_PACKAGE)
-    } else {
-        let dir_name = format!("{}-{}", name, version);
-        fetch_dir.join(dir_name)
-    }
-}
+/*
+
+*/
