@@ -619,7 +619,7 @@ fn get_report(metadata: &Metadata, report: Report) -> String {
         metacfg: MetaConfig(vec![]),
         metadata: metadata.clone(),
         cli: Cli::mock(),
-        cargo: OsString::new(),
+        _cargo: OsString::new(),
         tmp: PathBuf::new(),
         registry_src: None,
     };

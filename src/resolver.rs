@@ -7,8 +7,8 @@ use log::{error, trace, warn};
 
 use crate::format::{self, AuditKind, Delta};
 use crate::{
-    AuditEntry, AuditsFile, Config, ConfigFile, CriteriaEntry, DiffRecommendation, ImportsFile,
-    PackageExt, StableMap, VetError,
+    AuditEntry, AuditsFile, Cache, Config, ConfigFile, CriteriaEntry, DiffRecommendation,
+    ImportsFile, PackageExt, StableMap, VetError,
 };
 
 #[derive(Debug, Clone)]
@@ -455,7 +455,8 @@ pub fn resolve<'a>(
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
     let graph = DepGraph::new(metadata);
-    trace!("graph: {:#?}", graph);
+    // trace!("built DepGraph: {:#?}", graph);
+    trace!("built DepGraph!");
 
     let criteria_mapper = CriteriaMapper::new(&audits.criteria);
 
@@ -1260,6 +1261,7 @@ impl<'a> Report<'a> {
             parents: String,
         }
 
+        let mut cache = Cache::acquire(cfg)?;
         let mut suggestions = vec![];
         let mut total_lines: u64 = 0;
         for (failure, audit_failure) in &self.leaf_failures {
@@ -1355,7 +1357,7 @@ impl<'a> Report<'a> {
                     .join(", ")
             };
 
-            match crate::fetch_and_diffstat_all(cfg, &package.name, &candidates) {
+            match cache.fetch_and_diffstat_all(&package.name, &candidates) {
                 Ok(rec) => {
                     total_lines += rec.diffstat.count;
                     suggestions.push(SuggestItem {
