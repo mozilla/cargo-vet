@@ -37,6 +37,14 @@ the dependency even if it's listed in the `unaudited` table.
 
 Specifies the relevant criteria for this audit. This field is required.
 
+## `checksum`
+
+For `version` audits, a hash of the package contents. For `delta`
+audits, an array of two hashes for the contents of the two relevant
+packages.
+
+Required for `version` and `delta` entries, unused for `violation` entries.
+
 ## `targets`
 
 A string or array of strings specifying the targets for which this audit is
