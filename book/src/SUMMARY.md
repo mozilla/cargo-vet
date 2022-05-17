@@ -9,6 +9,7 @@
   - [Recording Audits](./recording-audits.md)
   - [Performing Audits](./performing-audits.md)
   - [Specifying Policies](./specifying-policies.md)
+  - [Multiple Repositories](./multiple-repositories.md)
   - [Configuring CI](./configuring-ci.md)
 - [Reference](./reference.md)
   - [Configuration](./config.md)

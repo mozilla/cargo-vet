@@ -1,12 +1,9 @@
 # Importing Audits
 
 The fastest way to shrink the `unaudited` list is to pull in the audit sets from
-other projects that you trust via `imports` directives in `config.toml`.
-
-## Specifying Imports
-
-This directive allows you to virtually merge audit lists from other projects
-into your own:
+other projects that you trust via `imports` directives in `config.toml`.  This
+directive allows you to virtually merge audit lists from other projects into
+your own:
 
 ```
 [imports.foo]
@@ -31,13 +28,3 @@ appending that same audit to your own `audits.toml`. By default, custom criteria
 defined in a foreign audit file exist in a private namespace and have no meaning
 in the local project. However, they can be [mapped](config.md#criteria-map) as
 desired to locally-defined criteria.
-
-
-## Multiple Repositories
-
-The `imports` directive can also be used to coordinate audits across a single
-organization with multiple repositories. There are two primary approaches:
-* Record audits in a central repository, and have each repository reference that
-  central audit set in its `config.toml`.
-* Record audits in the repository where they're first needed, and have each
-  repository reference each other repository.
