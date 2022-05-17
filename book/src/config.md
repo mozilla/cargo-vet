@@ -108,6 +108,12 @@ criteria-map = [ { theirs: "b", ours: ["y", "z"] },
                  { theirs: ["c", "d"], ours: "z" } ]
 ```
 
+#### `exclude`
+
+A list of crates whose audit entries should not be imported from this source.
+This can be used as a last resort to resolve disagreements over the suitability
+of a given crate.
+
 ### the `policy` Table
 
 This table maps first-party crates to the audit requirements that `cargo vet`
