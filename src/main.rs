@@ -203,13 +203,33 @@ impl Cli {
 
 /// Absolutely All The Global Configurations
 pub struct Config {
-    // file: ConfigFile,
+    /// Cargo.toml `metadata.vet`
     metacfg: MetaConfig,
+    /// `cargo metadata`
     metadata: Metadata,
+    /// Freestanding configuration values
+    _rest: PartialConfig,
+}
+
+/// Configuration vars that are available in a free-standing situation
+/// (no actual cargo-vet instance to load/query).
+pub struct PartialConfig {
+    /// Details of the CLI invocation (args)
     cli: Cli,
-    _cargo: OsString,
+    /// Path to the `cargo` binary that invoked us
+    cargo: OsString,
+    /// Path to the global tmp we're using
     tmp: PathBuf,
+    /// Path to the cargo registry's src, which we opportunistically use for inspect/diff
     registry_src: Option<PathBuf>,
+}
+
+// Makes it a bit easier to have both a "partial" and "full" config
+impl Deref for Config {
+    type Target = PartialConfig;
+    fn deref(&self) -> &Self::Target {
+        &self._rest
+    }
 }
 
 // tmp cache for various shenanigans
@@ -246,6 +266,8 @@ impl PackageExt for Package {
 }
 
 fn main() -> Result<(), VetError> {
+    use Commands::*;
+
     let fake_cli = FakeCli::parse();
     let FakeCli::Vet(cli) = fake_cli;
 
@@ -326,13 +348,39 @@ fn main() -> Result<(), VetError> {
         &mut stdout
     };
 
+    ////////////////////////////////////////////////////
+    // Potentially handle freestanding commands
+    ////////////////////////////////////////////////////
+
+    // TODO: make this configurable
+    let cargo = std::env::var_os(CARGO_ENV).expect("Cargo failed to set $CARGO, how?");
+    let tmp = std::env::temp_dir().join(TEMP_DIR_SUFFIX);
+    let registry_src = home::cargo_home()
+        .ok()
+        .map(|path| path.join(CARGO_REGISTRY_SRC));
+    let partial_cfg = PartialConfig {
+        cli,
+        cargo,
+        tmp,
+        registry_src,
+    };
+
+    match &partial_cfg.cli.command {
+        Some(Inspect(sub_args)) => return cmd_inspect(out, &partial_cfg, sub_args),
+        Some(Diff(sub_args)) => return cmd_diff(out, &partial_cfg, sub_args),
+        Some(HelpMarkdown(sub_args)) => return cmd_help_md(out, &partial_cfg, sub_args),
+        _ => {
+            // Not a freestanding command, time to do full parsing and setup
+        }
+    }
+
     ///////////////////////////////////////////////////
     // Fetch cargo metadata
     ///////////////////////////////////////////////////
 
-    let cargo = std::env::var_os(CARGO_ENV).expect("Cargo failed to set $CARGO, how?");
+    let cli = &partial_cfg.cli;
     let mut cmd = cargo_metadata::MetadataCommand::new();
-    cmd.cargo_path(&cargo);
+    cmd.cargo_path(&partial_cfg.cargo);
     if let Some(manifest_path) = &cli.manifest.manifest_path {
         cmd.manifest_path(manifest_path);
     }
@@ -438,14 +486,6 @@ fn main() -> Result<(), VetError> {
     // Run the actual command
     //////////////////////////////////////////////////////
 
-    // These commands don't need an instance and can be run anywhere
-    let command_is_freestanding = matches!(
-        cli.command,
-        Some(Commands::HelpMarkdown { .. })
-            | Some(Commands::Inspect { .. })
-            | Some(Commands::Diff { .. })
-    );
-
     let init = is_init(&metacfg);
     if matches!(cli.command, Some(Commands::Init { .. })) {
         if init {
@@ -455,7 +495,7 @@ fn main() -> Result<(), VetError> {
             );
             std::process::exit(-1);
         }
-    } else if !init && !command_is_freestanding {
+    } else if !init {
         error!(
             "You must run 'cargo vet init' (store not found at {:#?})",
             metacfg.store_path()
@@ -463,32 +503,21 @@ fn main() -> Result<(), VetError> {
         std::process::exit(-1);
     }
 
-    // TODO: make this configurable
-    // TODO: maybe this wants to be actually totally random to allow multi-vets?
-    let tmp = std::env::temp_dir().join(TEMP_DIR_SUFFIX);
-    let registry_src = home::cargo_home()
-        .ok()
-        .map(|path| path.join(CARGO_REGISTRY_SRC));
     let cfg = Config {
         metacfg,
         metadata,
-        cli,
-        _cargo: cargo,
-        tmp,
-        registry_src,
+        _rest: partial_cfg,
     };
 
-    use Commands::*;
     match &cfg.cli.command {
         None => cmd_vet(out, &cfg),
         Some(Init(sub_args)) => cmd_init(out, &cfg, sub_args),
         Some(AcceptCriteriaChange(sub_args)) => cmd_accept_criteria_change(out, &cfg, sub_args),
-        Some(Inspect(sub_args)) => cmd_inspect(out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
-        Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
-        Some(HelpMarkdown(sub_args)) => cmd_help_md(out, &cfg, sub_args),
+        // Need to be non-exhaustive because freestanding commands were handled earlier
+        _ => unreachable!("did you add a new command and forget to implement it?"),
     }
 }
 
@@ -556,7 +585,11 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
     Ok((config, audits, imports))
 }
 
-fn cmd_inspect(out: &mut dyn Write, cfg: &Config, sub_args: &InspectArgs) -> Result<(), VetError> {
+fn cmd_inspect(
+    out: &mut dyn Write,
+    cfg: &PartialConfig,
+    sub_args: &InspectArgs,
+) -> Result<(), VetError> {
     // Download a crate's source to a temp location for review
     let mut cache = Cache::acquire(cfg)?;
 
@@ -684,7 +717,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
 
     Ok(())
 }
-fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<(), VetError> {
+fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Result<(), VetError> {
     let mut cache = Cache::acquire(cfg)?;
 
     let package = &*sub_args.package;
@@ -776,7 +809,7 @@ fn cmd_accept_criteria_change(
 /// Perform crimes on clap long_help to generate markdown docs
 fn cmd_help_md(
     out: &mut dyn Write,
-    _cfg: &Config,
+    _cfg: &PartialConfig,
     _sub_args: &HelpMarkdownArgs,
 ) -> Result<(), VetError> {
     let app_name = "cargo-vet";
@@ -1011,7 +1044,7 @@ impl Drop for Cache {
 }
 
 impl Cache {
-    pub fn acquire(cfg: &Config) -> Result<Self, VetError> {
+    pub fn acquire(cfg: &PartialConfig) -> Result<Self, VetError> {
         if cfg.registry_src.is_none() {
             // If the registry_src isn't set, then assume we're running in tests and mocked.
             // In that case, don't read/write disk for the DiffCache
@@ -1308,7 +1341,7 @@ fn fetch_is_ok(fetch: &Path) -> bool {
     }
 }
 
-fn find_cargo_registry(cfg: &Config) -> Result<PathBuf, VetError> {
+fn find_cargo_registry(cfg: &PartialConfig) -> Result<PathBuf, VetError> {
     // Find the cargo registry
     //
     // This is all unstable nonsense so being a bit paranoid here so that we can notice
@@ -1354,7 +1387,7 @@ fn find_cargo_registry(cfg: &Config) -> Result<PathBuf, VetError> {
 
 fn diff_crate(
     _out: &mut dyn Write,
-    _cfg: &Config,
+    _cfg: &PartialConfig,
     version1: &Path,
     version2: &Path,
 ) -> Result<(), VetError> {
@@ -1468,7 +1501,3 @@ fn fetch_foreign_audits(
 
     Ok(ImportsFile { audits })
 }
-
-/*
-
-*/

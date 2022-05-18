@@ -8,7 +8,7 @@ use crate::{
     init_files,
     resolver::Report,
     AuditEntry, AuditsFile, Cli, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
-    StableMap, UnauditedDependency,
+    PartialConfig, StableMap, UnauditedDependency,
 };
 
 // Some room above and below
@@ -618,10 +618,12 @@ fn get_report(metadata: &Metadata, report: Report) -> String {
     let cfg = Config {
         metacfg: MetaConfig(vec![]),
         metadata: metadata.clone(),
-        cli: Cli::mock(),
-        _cargo: OsString::new(),
-        tmp: PathBuf::new(),
-        registry_src: None,
+        _rest: PartialConfig {
+            cli: Cli::mock(),
+            cargo: OsString::new(),
+            tmp: PathBuf::new(),
+            registry_src: None,
+        },
     };
     let mut stdout = Vec::new();
     report.print_report(&mut stdout, &cfg).unwrap();
