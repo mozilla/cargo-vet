@@ -172,10 +172,6 @@ Specifies the exact version which should be exempted.
 
 Specifies the criteria covered by the exemption.
 
-#### `checksum`
-
-A hash of the package contents.
-
 #### `notes`
 
 Free-form string for recording rationale or other relevant information.
