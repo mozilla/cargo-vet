@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::fs::OpenOptions;
 use std::io::{BufReader, Read, Seek};
@@ -11,6 +11,7 @@ use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package, Version};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
+use console::Term;
 use eyre::Context;
 use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig};
@@ -203,25 +204,49 @@ impl Cli {
 
 /// Absolutely All The Global Configurations
 pub struct Config {
-    // file: ConfigFile,
+    /// Cargo.toml `metadata.vet`
     metacfg: MetaConfig,
+    /// `cargo metadata`
     metadata: Metadata,
+    /// Freestanding configuration values
+    _rest: PartialConfig,
+}
+
+/// Configuration vars that are available in a free-standing situation
+/// (no actual cargo-vet instance to load/query).
+pub struct PartialConfig {
+    /// Details of the CLI invocation (args)
     cli: Cli,
-    _cargo: OsString,
+    /// Path to the `cargo` binary that invoked us
+    cargo: OsString,
+    /// Path to the cargo's home, whose registry/cache, we opportunistically use for inspect/diff
+    cargo_home: Option<PathBuf>,
+    /// Path to the global tmp we're using
     tmp: PathBuf,
-    registry_src: Option<PathBuf>,
+}
+
+// Makes it a bit easier to have both a "partial" and "full" config
+impl Deref for Config {
+    type Target = PartialConfig;
+    fn deref(&self) -> &Self::Target {
+        &self._rest
+    }
 }
 
 // tmp cache for various shenanigans
 static TEMP_DIR_SUFFIX: &str = "cargo-vet-checkout";
-static DIFF_CACHE: &str = "diff-cache.toml";
-static EMPTY_PACKAGE: &str = "empty";
-static PACKAGES: &str = "packages";
+static TEMP_DIFF_CACHE: &str = "diff-cache.toml";
+static TEMP_EMPTY_PACKAGE: &str = "empty";
+static TEMP_REGISTRY_SRC: &str = "packages";
+
+// Various cargo values
+static CARGO_ENV: &str = "CARGO";
+static CARGO_REGISTRY: &str = "registry";
+static CARGO_REGISTRY_SRC: &str = "src";
+static CARGO_REGISTRY_CACHE: &str = "cache";
 static CARGO_OK_FILE: &str = ".cargo-ok";
 static CARGO_OK_BODY: &str = "ok";
 
-static CARGO_ENV: &str = "CARGO";
-static CARGO_REGISTRY_SRC: &str = "registry/src/";
 static DEFAULT_STORE: &str = "supply-chain";
 // package.metadata.vet
 static PACKAGE_VET_CONFIG: &str = "vet";
@@ -246,6 +271,8 @@ impl PackageExt for Package {
 }
 
 fn main() -> Result<(), VetError> {
+    use Commands::*;
+
     let fake_cli = FakeCli::parse();
     let FakeCli::Vet(cli) = fake_cli;
 
@@ -326,13 +353,37 @@ fn main() -> Result<(), VetError> {
         &mut stdout
     };
 
+    ////////////////////////////////////////////////////
+    // Potentially handle freestanding commands
+    ////////////////////////////////////////////////////
+
+    // TODO: make this configurable
+    let cargo = std::env::var_os(CARGO_ENV).expect("Cargo failed to set $CARGO, how?");
+    let tmp = std::env::temp_dir().join(TEMP_DIR_SUFFIX);
+    let cargo_home = home::cargo_home().ok();
+    let partial_cfg = PartialConfig {
+        cli,
+        cargo,
+        tmp,
+        cargo_home,
+    };
+
+    match &partial_cfg.cli.command {
+        Some(Inspect(sub_args)) => return cmd_inspect(out, &partial_cfg, sub_args),
+        Some(Diff(sub_args)) => return cmd_diff(out, &partial_cfg, sub_args),
+        Some(HelpMarkdown(sub_args)) => return cmd_help_md(out, &partial_cfg, sub_args),
+        _ => {
+            // Not a freestanding command, time to do full parsing and setup
+        }
+    }
+
     ///////////////////////////////////////////////////
     // Fetch cargo metadata
     ///////////////////////////////////////////////////
 
-    let cargo = std::env::var_os(CARGO_ENV).expect("Cargo failed to set $CARGO, how?");
+    let cli = &partial_cfg.cli;
     let mut cmd = cargo_metadata::MetadataCommand::new();
-    cmd.cargo_path(&cargo);
+    cmd.cargo_path(&partial_cfg.cargo);
     if let Some(manifest_path) = &cli.manifest.manifest_path {
         cmd.manifest_path(manifest_path);
     }
@@ -438,14 +489,6 @@ fn main() -> Result<(), VetError> {
     // Run the actual command
     //////////////////////////////////////////////////////
 
-    // These commands don't need an instance and can be run anywhere
-    let command_is_freestanding = matches!(
-        cli.command,
-        Some(Commands::HelpMarkdown { .. })
-            | Some(Commands::Inspect { .. })
-            | Some(Commands::Diff { .. })
-    );
-
     let init = is_init(&metacfg);
     if matches!(cli.command, Some(Commands::Init { .. })) {
         if init {
@@ -455,7 +498,7 @@ fn main() -> Result<(), VetError> {
             );
             std::process::exit(-1);
         }
-    } else if !init && !command_is_freestanding {
+    } else if !init {
         error!(
             "You must run 'cargo vet init' (store not found at {:#?})",
             metacfg.store_path()
@@ -463,32 +506,21 @@ fn main() -> Result<(), VetError> {
         std::process::exit(-1);
     }
 
-    // TODO: make this configurable
-    // TODO: maybe this wants to be actually totally random to allow multi-vets?
-    let tmp = std::env::temp_dir().join(TEMP_DIR_SUFFIX);
-    let registry_src = home::cargo_home()
-        .ok()
-        .map(|path| path.join(CARGO_REGISTRY_SRC));
     let cfg = Config {
         metacfg,
         metadata,
-        cli,
-        _cargo: cargo,
-        tmp,
-        registry_src,
+        _rest: partial_cfg,
     };
 
-    use Commands::*;
     match &cfg.cli.command {
         None => cmd_vet(out, &cfg),
         Some(Init(sub_args)) => cmd_init(out, &cfg, sub_args),
         Some(AcceptCriteriaChange(sub_args)) => cmd_accept_criteria_change(out, &cfg, sub_args),
-        Some(Inspect(sub_args)) => cmd_inspect(out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
-        Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
-        Some(HelpMarkdown(sub_args)) => cmd_help_md(out, &cfg, sub_args),
+        // Need to be non-exhaustive because freestanding commands were handled earlier
+        _ => unreachable!("did you add a new command and forget to implement it?"),
     }
 }
 
@@ -556,7 +588,11 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
     Ok((config, audits, imports))
 }
 
-fn cmd_inspect(out: &mut dyn Write, cfg: &Config, sub_args: &InspectArgs) -> Result<(), VetError> {
+fn cmd_inspect(
+    out: &mut dyn Write,
+    cfg: &PartialConfig,
+    sub_args: &InspectArgs,
+) -> Result<(), VetError> {
     // Download a crate's source to a temp location for review
     let mut cache = Cache::acquire(cfg)?;
 
@@ -587,7 +623,7 @@ fn cmd_inspect(out: &mut dyn Write, cfg: &Config, sub_args: &InspectArgs) -> Res
     Ok(())
 }
 
-fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
+fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
     // Certify that you have reviewed a crate's source for some version / delta
     let store_path = cfg.metacfg.store_path();
     let mut audits = load_audits(store_path)?;
@@ -617,26 +653,62 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
             dependency_criteria,
         }
     };
-
+    // TODO: define some way to select this
     let criteria = config.default_criteria;
+    let user_info = get_user_info()?;
+    let eula = if let Some(eula) = eula_for_criteria(&audits, &criteria) {
+        eula
+    } else {
+        error!("couldn't get description of criteria");
+        std::process::exit(-1);
+    };
+    let who = Some(format!("{} ({})", user_info.username, user_info.email,));
+    let notes = None;
 
-    // TODO: source this from git
-    let who = Some("?TODO?".to_string());
-    // TODO: start an interactive prompt
-    let notes = Some("?TODO?".to_string());
+    // FIXME: can we check if the version makes sense..?
+    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+        error!("'{}' isn't one of your foreign packages", sub_args.package);
+        std::process::exit(-1);
+    }
 
+    // Print out the EULA and prompt
+    write!(
+        out,
+        "I, {}, certify that I have audited ",
+        user_info.username
+    )?;
+    match &kind {
+        AuditKind::Full { version, .. } => {
+            write!(out, "version {} ", version)?;
+        }
+        AuditKind::Delta { delta, .. } => {
+            write!(out, "from version {} to {} ", delta.from, delta.to)?;
+        }
+        AuditKind::Violation { .. } => unreachable!(),
+    }
+    writeln!(
+        out,
+        "of {} in accordance with the following criteria:",
+        sub_args.package
+    )?;
+    writeln!(out, "{}\n", eula)?;
+    write!(out, r#"(type "yes" to certify): "#)?;
+    out.flush()?;
+
+    let term = Term::stdout();
+    let answer = term.read_line()?.trim().to_lowercase();
+    if answer != "yes" {
+        writeln!(out, "rejected certification")?;
+        std::process::exit(-1);
+    }
+
+    // Ok! Ready to commit the audit!
     let new_entry = AuditEntry {
         kind,
         criteria,
         who,
         notes,
     };
-
-    // TODO: check if the version makes sense..?
-    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
-        error!("'{}' isn't one of your foreign packages", sub_args.package);
-        std::process::exit(-1);
-    }
 
     audits
         .audits
@@ -684,7 +756,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
 
     Ok(())
 }
-fn cmd_diff(out: &mut dyn Write, cfg: &Config, sub_args: &DiffArgs) -> Result<(), VetError> {
+fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Result<(), VetError> {
     let mut cache = Cache::acquire(cfg)?;
 
     let package = &*sub_args.package;
@@ -776,7 +848,7 @@ fn cmd_accept_criteria_change(
 /// Perform crimes on clap long_help to generate markdown docs
 fn cmd_help_md(
     out: &mut dyn Write,
-    _cfg: &Config,
+    _cfg: &PartialConfig,
     _sub_args: &HelpMarkdownArgs,
 ) -> Result<(), VetError> {
     let app_name = "cargo-vet";
@@ -989,9 +1061,25 @@ pub struct Cache {
     // FIXME: stubbed out
     _lock: Option<()>,
     root: Option<PathBuf>,
-    cargo_registry: Option<PathBuf>,
+    cargo_registry: Option<CargoRegistry>,
     diff_cache_path: Option<PathBuf>,
     diff_cache: DiffCache,
+}
+
+pub struct CargoRegistry {
+    base_dir: PathBuf,
+    registry: OsString,
+}
+
+impl CargoRegistry {
+    pub fn src(&self) -> PathBuf {
+        self.base_dir.join(CARGO_REGISTRY_SRC).join(&self.registry)
+    }
+    pub fn cache(&self) -> PathBuf {
+        self.base_dir
+            .join(CARGO_REGISTRY_CACHE)
+            .join(&self.registry)
+    }
 }
 
 impl Drop for Cache {
@@ -1011,8 +1099,8 @@ impl Drop for Cache {
 }
 
 impl Cache {
-    pub fn acquire(cfg: &Config) -> Result<Self, VetError> {
-        if cfg.registry_src.is_none() {
+    pub fn acquire(cfg: &PartialConfig) -> Result<Self, VetError> {
+        if cfg.cargo_home.is_none() {
             // If the registry_src isn't set, then assume we're running in tests and mocked.
             // In that case, don't read/write disk for the DiffCache
             return Ok(Cache {
@@ -1025,8 +1113,8 @@ impl Cache {
         }
 
         let root = cfg.tmp.clone();
-        let empty = root.join(EMPTY_PACKAGE);
-        let packages: PathBuf = root.join(PACKAGES);
+        let empty = root.join(TEMP_EMPTY_PACKAGE);
+        let packages: PathBuf = root.join(TEMP_REGISTRY_SRC);
 
         // Make sure our cache exists
         if !root.exists() {
@@ -1050,7 +1138,7 @@ impl Cache {
             .cli
             .diff_cache
             .clone()
-            .unwrap_or_else(|| root.join(DIFF_CACHE));
+            .unwrap_or_else(|| root.join(TEMP_DIFF_CACHE));
         let diff_cache = if let Ok(cache) = load_diff_cache(&diff_cache_path) {
             cache
         } else {
@@ -1083,7 +1171,7 @@ impl Cache {
         }
 
         let root = self.root.as_ref().unwrap();
-        let fetch_dir = root.join(PACKAGES);
+        let fetch_dir = root.join(TEMP_REGISTRY_SRC);
         let cargo_registry = self.cargo_registry.as_ref();
 
         let mut paths = BTreeMap::<&str, BTreeMap<&Version, PathBuf>>::new();
@@ -1093,13 +1181,13 @@ impl Cache {
         for (name, version) in packages {
             let path = if **version == resolver::ROOT_VERSION {
                 // Empty package
-                root.join(EMPTY_PACKAGE)
+                root.join(TEMP_EMPTY_PACKAGE)
             } else {
                 // First try to get a cached copy from cargo's register or our own
                 let dir_name = format!("{}-{}", name, version);
 
                 let cached = cargo_registry
-                    .map(|reg| reg.join(&dir_name))
+                    .map(|reg| reg.src().join(&dir_name))
                     .filter(|path| fetch_is_ok(path))
                     .unwrap_or_else(|| fetch_dir.join(&dir_name));
 
@@ -1308,45 +1396,42 @@ fn fetch_is_ok(fetch: &Path) -> bool {
     }
 }
 
-fn find_cargo_registry(cfg: &Config) -> Result<PathBuf, VetError> {
+fn find_cargo_registry(cfg: &PartialConfig) -> Result<CargoRegistry, VetError> {
     // Find the cargo registry
     //
     // This is all unstable nonsense so being a bit paranoid here so that we can notice
     // when things get weird and understand corner cases better...
-    if cfg.registry_src.is_none() {
+    if cfg.cargo_home.is_none() {
         return Err(eyre::eyre!("Could not resolve CARGO_HOME!?"));
     }
 
-    let registry_src = cfg.registry_src.as_ref().unwrap();
+    let base_dir = cfg.cargo_home.as_ref().unwrap().join(CARGO_REGISTRY);
+    let registry_src = base_dir.join(CARGO_REGISTRY_SRC);
     if !registry_src.exists() {
         return Err(eyre::eyre!("Cargo registry src cache doesn't exist!?"));
     }
 
     // There's some weird opaque directory name here, so no hardcoding of the path
-    let mut real_src_dir = None;
+    let mut registry = None;
     for entry in std::fs::read_dir(registry_src)? {
         let entry = entry?;
         let path = entry.path();
+        let dir_name = path.file_name().unwrap().to_owned();
         if path.is_dir() {
-            if real_src_dir.is_some() {
+            if registry.is_some() {
                 warn!("Found multiple subdirectories in CARGO_HOME/registry/src");
                 warn!("  Preferring any named github.com-*");
-                if path
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .starts_with("github.com-")
-                {
-                    real_src_dir = Some(path);
+                if dir_name.to_string_lossy().starts_with("github.com-") {
+                    registry = Some(dir_name);
                 }
             } else {
-                real_src_dir = Some(path);
+                registry = Some(dir_name);
             }
         }
     }
 
-    if let Some(real_src_dir) = real_src_dir {
-        Ok(real_src_dir)
+    if let Some(registry) = registry {
+        Ok(CargoRegistry { base_dir, registry })
     } else {
         Err(eyre::eyre!("failed to find cargo package sources"))
     }
@@ -1354,7 +1439,7 @@ fn find_cargo_registry(cfg: &Config) -> Result<PathBuf, VetError> {
 
 fn diff_crate(
     _out: &mut dyn Write,
-    _cfg: &Config,
+    _cfg: &PartialConfig,
     version1: &Path,
     version2: &Path,
 ) -> Result<(), VetError> {
@@ -1368,12 +1453,12 @@ fn diff_crate(
         .arg(version2)
         .status()?;
 
-    // TODO: pretty sure this is wrong, should use --exit-code and copy diffstat_crate's logic
-    // (not actually sure what the default exit status logic is!)
-    if !status.success() {
-        return Err(eyre::eyre!(
-            "git diff failed! (this is probably just a bug in how we check error codes)"
-        ));
+    let status = status.code().unwrap();
+
+    // 0 = empty
+    // 1 = some diff
+    if status != 0 && status != 1 {
+        return Err(eyre::eyre!("git diff failed!\n {}", status,));
     }
 
     Ok(())
@@ -1469,6 +1554,82 @@ fn fetch_foreign_audits(
     Ok(ImportsFile { audits })
 }
 
-/*
+struct UserInfo {
+    username: String,
+    email: String,
+}
 
-*/
+fn get_user_info() -> Result<UserInfo, VetError> {
+    let username = {
+        let out = Command::new("git")
+            .arg("config")
+            .arg("--get")
+            .arg("user.name")
+            .output()?;
+
+        if !out.status.success() {
+            return Err(eyre::eyre!(
+                "could not get user.name from git!\nout:\n{}\nstderr:\n{}",
+                String::from_utf8(out.stdout).unwrap(),
+                String::from_utf8(out.stderr).unwrap()
+            ));
+        }
+        String::from_utf8(out.stdout)?
+    };
+
+    let email = {
+        let out = Command::new("git")
+            .arg("config")
+            .arg("--get")
+            .arg("user.email")
+            .output()?;
+
+        if !out.status.success() {
+            return Err(eyre::eyre!(
+                "could not get user.email from git!\nout:\n{}\nstderr:\n{}",
+                String::from_utf8(out.stdout).unwrap(),
+                String::from_utf8(out.stderr).unwrap()
+            ));
+        }
+
+        String::from_utf8(out.stdout)?
+    };
+
+    Ok(UserInfo {
+        username: username.trim().to_string(),
+        email: email.trim().to_string(),
+    })
+}
+
+fn eula_for_criteria(audits: &AuditsFile, criteria: &str) -> Option<String> {
+    let builtin_eulas = [
+        (format::SAFE_TO_DEPLOY, "safe-to-deploy dummy eula"),
+        (format::SAFE_TO_RUN, "safe-to-run dummy eula"),
+    ]
+    .into_iter()
+    .collect::<HashMap<_, _>>();
+
+    // Several fallbacks
+    // * Try to get the builtin criteria
+    // * Try to get the criteria's description
+    // * Try to fetch the criteria's url
+    // * Just display the url
+    builtin_eulas
+        .get(criteria)
+        .map(|s| s.to_string())
+        .or_else(|| {
+            audits.criteria.get(criteria).and_then(|c| {
+                c.description.clone().or_else(|| {
+                    c.description_url.as_ref().map(|url| {
+                        req::get(url)
+                            .and_then(|r| r.text())
+                            .map_err(|e| {
+                                warn!("Could not fetch criteria description: {e}");
+                            })
+                            .ok()
+                            .unwrap_or_else(|| format!("See criteria description at {url}"))
+                    })
+                })
+            })
+        })
+}
