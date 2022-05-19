@@ -1416,12 +1416,12 @@ fn diff_crate(
         .arg(version2)
         .status()?;
 
-    // TODO: pretty sure this is wrong, should use --exit-code and copy diffstat_crate's logic
-    // (not actually sure what the default exit status logic is!)
-    if !status.success() {
-        return Err(eyre::eyre!(
-            "git diff failed! (this is probably just a bug in how we check error codes)"
-        ));
+    let status = status.code().unwrap();
+
+    // 0 = empty
+    // 1 = some diff
+    if status != 0 && status != 1 {
+        return Err(eyre::eyre!("git diff failed!\n {}", status,));
     }
 
     Ok(())
