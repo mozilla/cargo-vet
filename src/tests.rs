@@ -622,7 +622,7 @@ fn get_report(metadata: &Metadata, report: Report) -> String {
             cli: Cli::mock(),
             cargo: OsString::new(),
             tmp: PathBuf::new(),
-            registry_src: None,
+            cargo_home: None,
         },
     };
     let mut stdout = Vec::new();

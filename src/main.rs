@@ -218,10 +218,10 @@ pub struct PartialConfig {
     cli: Cli,
     /// Path to the `cargo` binary that invoked us
     cargo: OsString,
+    /// Path to the cargo's home, whose registry/cache, we opportunistically use for inspect/diff
+    cargo_home: Option<PathBuf>,
     /// Path to the global tmp we're using
     tmp: PathBuf,
-    /// Path to the cargo registry's src, which we opportunistically use for inspect/diff
-    registry_src: Option<PathBuf>,
 }
 
 // Makes it a bit easier to have both a "partial" and "full" config
@@ -234,14 +234,18 @@ impl Deref for Config {
 
 // tmp cache for various shenanigans
 static TEMP_DIR_SUFFIX: &str = "cargo-vet-checkout";
-static DIFF_CACHE: &str = "diff-cache.toml";
-static EMPTY_PACKAGE: &str = "empty";
-static PACKAGES: &str = "packages";
+static TEMP_DIFF_CACHE: &str = "diff-cache.toml";
+static TEMP_EMPTY_PACKAGE: &str = "empty";
+static TEMP_REGISTRY_SRC: &str = "packages";
+
+// Various cargo values
+static CARGO_ENV: &str = "CARGO";
+static CARGO_REGISTRY: &str = "registry";
+static CARGO_REGISTRY_SRC: &str = "src";
+static CARGO_REGISTRY_CACHE: &str = "cache";
 static CARGO_OK_FILE: &str = ".cargo-ok";
 static CARGO_OK_BODY: &str = "ok";
 
-static CARGO_ENV: &str = "CARGO";
-static CARGO_REGISTRY_SRC: &str = "registry/src/";
 static DEFAULT_STORE: &str = "supply-chain";
 // package.metadata.vet
 static PACKAGE_VET_CONFIG: &str = "vet";
@@ -355,14 +359,12 @@ fn main() -> Result<(), VetError> {
     // TODO: make this configurable
     let cargo = std::env::var_os(CARGO_ENV).expect("Cargo failed to set $CARGO, how?");
     let tmp = std::env::temp_dir().join(TEMP_DIR_SUFFIX);
-    let registry_src = home::cargo_home()
-        .ok()
-        .map(|path| path.join(CARGO_REGISTRY_SRC));
+    let cargo_home = home::cargo_home().ok();
     let partial_cfg = PartialConfig {
         cli,
         cargo,
         tmp,
-        registry_src,
+        cargo_home,
     };
 
     match &partial_cfg.cli.command {
@@ -1022,9 +1024,25 @@ pub struct Cache {
     // FIXME: stubbed out
     _lock: Option<()>,
     root: Option<PathBuf>,
-    cargo_registry: Option<PathBuf>,
+    cargo_registry: Option<CargoRegistry>,
     diff_cache_path: Option<PathBuf>,
     diff_cache: DiffCache,
+}
+
+pub struct CargoRegistry {
+    base_dir: PathBuf,
+    registry: OsString,
+}
+
+impl CargoRegistry {
+    pub fn src(&self) -> PathBuf {
+        self.base_dir.join(CARGO_REGISTRY_SRC).join(&self.registry)
+    }
+    pub fn cache(&self) -> PathBuf {
+        self.base_dir
+            .join(CARGO_REGISTRY_CACHE)
+            .join(&self.registry)
+    }
 }
 
 impl Drop for Cache {
@@ -1045,7 +1063,7 @@ impl Drop for Cache {
 
 impl Cache {
     pub fn acquire(cfg: &PartialConfig) -> Result<Self, VetError> {
-        if cfg.registry_src.is_none() {
+        if cfg.cargo_home.is_none() {
             // If the registry_src isn't set, then assume we're running in tests and mocked.
             // In that case, don't read/write disk for the DiffCache
             return Ok(Cache {
@@ -1058,8 +1076,8 @@ impl Cache {
         }
 
         let root = cfg.tmp.clone();
-        let empty = root.join(EMPTY_PACKAGE);
-        let packages: PathBuf = root.join(PACKAGES);
+        let empty = root.join(TEMP_EMPTY_PACKAGE);
+        let packages: PathBuf = root.join(TEMP_REGISTRY_SRC);
 
         // Make sure our cache exists
         if !root.exists() {
@@ -1083,7 +1101,7 @@ impl Cache {
             .cli
             .diff_cache
             .clone()
-            .unwrap_or_else(|| root.join(DIFF_CACHE));
+            .unwrap_or_else(|| root.join(TEMP_DIFF_CACHE));
         let diff_cache = if let Ok(cache) = load_diff_cache(&diff_cache_path) {
             cache
         } else {
@@ -1116,7 +1134,7 @@ impl Cache {
         }
 
         let root = self.root.as_ref().unwrap();
-        let fetch_dir = root.join(PACKAGES);
+        let fetch_dir = root.join(TEMP_REGISTRY_SRC);
         let cargo_registry = self.cargo_registry.as_ref();
 
         let mut paths = BTreeMap::<&str, BTreeMap<&Version, PathBuf>>::new();
@@ -1126,13 +1144,13 @@ impl Cache {
         for (name, version) in packages {
             let path = if **version == resolver::ROOT_VERSION {
                 // Empty package
-                root.join(EMPTY_PACKAGE)
+                root.join(TEMP_EMPTY_PACKAGE)
             } else {
                 // First try to get a cached copy from cargo's register or our own
                 let dir_name = format!("{}-{}", name, version);
 
                 let cached = cargo_registry
-                    .map(|reg| reg.join(&dir_name))
+                    .map(|reg| reg.src().join(&dir_name))
                     .filter(|path| fetch_is_ok(path))
                     .unwrap_or_else(|| fetch_dir.join(&dir_name));
 
@@ -1341,45 +1359,42 @@ fn fetch_is_ok(fetch: &Path) -> bool {
     }
 }
 
-fn find_cargo_registry(cfg: &PartialConfig) -> Result<PathBuf, VetError> {
+fn find_cargo_registry(cfg: &PartialConfig) -> Result<CargoRegistry, VetError> {
     // Find the cargo registry
     //
     // This is all unstable nonsense so being a bit paranoid here so that we can notice
     // when things get weird and understand corner cases better...
-    if cfg.registry_src.is_none() {
+    if cfg.cargo_home.is_none() {
         return Err(eyre::eyre!("Could not resolve CARGO_HOME!?"));
     }
 
-    let registry_src = cfg.registry_src.as_ref().unwrap();
+    let base_dir = cfg.cargo_home.as_ref().unwrap().join(CARGO_REGISTRY);
+    let registry_src = base_dir.join(CARGO_REGISTRY_SRC);
     if !registry_src.exists() {
         return Err(eyre::eyre!("Cargo registry src cache doesn't exist!?"));
     }
 
     // There's some weird opaque directory name here, so no hardcoding of the path
-    let mut real_src_dir = None;
+    let mut registry = None;
     for entry in std::fs::read_dir(registry_src)? {
         let entry = entry?;
         let path = entry.path();
+        let dir_name = path.file_name().unwrap().to_owned();
         if path.is_dir() {
-            if real_src_dir.is_some() {
+            if registry.is_some() {
                 warn!("Found multiple subdirectories in CARGO_HOME/registry/src");
                 warn!("  Preferring any named github.com-*");
-                if path
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .starts_with("github.com-")
-                {
-                    real_src_dir = Some(path);
+                if dir_name.to_string_lossy().starts_with("github.com-") {
+                    registry = Some(dir_name);
                 }
             } else {
-                real_src_dir = Some(path);
+                registry = Some(dir_name);
             }
         }
     }
 
-    if let Some(real_src_dir) = real_src_dir {
-        Ok(real_src_dir)
+    if let Some(registry) = registry {
+        Ok(CargoRegistry { base_dir, registry })
     } else {
         Err(eyre::eyre!("failed to find cargo package sources"))
     }
