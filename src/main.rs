@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::fs::OpenOptions;
 use std::io::{BufReader, Read, Seek};
@@ -11,6 +11,7 @@ use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package, Version};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
+use console::Term;
 use eyre::Context;
 use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig};
@@ -622,7 +623,7 @@ fn cmd_inspect(
     Ok(())
 }
 
-fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
+fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
     // Certify that you have reviewed a crate's source for some version / delta
     let store_path = cfg.metacfg.store_path();
     let mut audits = load_audits(store_path)?;
@@ -652,26 +653,62 @@ fn cmd_certify(_out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Re
             dependency_criteria,
         }
     };
-
+    // TODO: define some way to select this
     let criteria = config.default_criteria;
+    let user_info = get_user_info()?;
+    let eula = if let Some(eula) = eula_for_criteria(&audits, &criteria) {
+        eula
+    } else {
+        error!("couldn't get description of criteria");
+        std::process::exit(-1);
+    };
+    let who = Some(format!("{} ({})", user_info.username, user_info.email,));
+    let notes = None;
 
-    // TODO: source this from git
-    let who = Some("?TODO?".to_string());
-    // TODO: start an interactive prompt
-    let notes = Some("?TODO?".to_string());
+    // FIXME: can we check if the version makes sense..?
+    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+        error!("'{}' isn't one of your foreign packages", sub_args.package);
+        std::process::exit(-1);
+    }
 
+    // Print out the EULA and prompt
+    write!(
+        out,
+        "I, {}, certify that I have audited ",
+        user_info.username
+    )?;
+    match &kind {
+        AuditKind::Full { version, .. } => {
+            write!(out, "version {} ", version)?;
+        }
+        AuditKind::Delta { delta, .. } => {
+            write!(out, "from version {} to {} ", delta.from, delta.to)?;
+        }
+        AuditKind::Violation { .. } => unreachable!(),
+    }
+    writeln!(
+        out,
+        "of {} in accordance with the following criteria:",
+        sub_args.package
+    )?;
+    writeln!(out, "{}\n", eula)?;
+    write!(out, r#"(type "yes" to certify): "#)?;
+    out.flush()?;
+
+    let term = Term::stdout();
+    let answer = term.read_line()?.trim().to_lowercase();
+    if answer != "yes" {
+        writeln!(out, "rejected certification")?;
+        std::process::exit(-1);
+    }
+
+    // Ok! Ready to commit the audit!
     let new_entry = AuditEntry {
         kind,
         criteria,
         who,
         notes,
     };
-
-    // TODO: check if the version makes sense..?
-    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
-        error!("'{}' isn't one of your foreign packages", sub_args.package);
-        std::process::exit(-1);
-    }
 
     audits
         .audits
@@ -1515,4 +1552,84 @@ fn fetch_foreign_audits(
     }
 
     Ok(ImportsFile { audits })
+}
+
+struct UserInfo {
+    username: String,
+    email: String,
+}
+
+fn get_user_info() -> Result<UserInfo, VetError> {
+    let username = {
+        let out = Command::new("git")
+            .arg("config")
+            .arg("--get")
+            .arg("user.name")
+            .output()?;
+
+        if !out.status.success() {
+            return Err(eyre::eyre!(
+                "could not get user.name from git!\nout:\n{}\nstderr:\n{}",
+                String::from_utf8(out.stdout).unwrap(),
+                String::from_utf8(out.stderr).unwrap()
+            ));
+        }
+        String::from_utf8(out.stdout)?
+    };
+
+    let email = {
+        let out = Command::new("git")
+            .arg("config")
+            .arg("--get")
+            .arg("user.email")
+            .output()?;
+
+        if !out.status.success() {
+            return Err(eyre::eyre!(
+                "could not get user.email from git!\nout:\n{}\nstderr:\n{}",
+                String::from_utf8(out.stdout).unwrap(),
+                String::from_utf8(out.stderr).unwrap()
+            ));
+        }
+
+        String::from_utf8(out.stdout)?
+    };
+
+    Ok(UserInfo {
+        username: username.trim().to_string(),
+        email: email.trim().to_string(),
+    })
+}
+
+fn eula_for_criteria(audits: &AuditsFile, criteria: &str) -> Option<String> {
+    let builtin_eulas = [
+        (format::SAFE_TO_DEPLOY, "safe-to-deploy dummy eula"),
+        (format::SAFE_TO_RUN, "safe-to-run dummy eula"),
+    ]
+    .into_iter()
+    .collect::<HashMap<_, _>>();
+
+    // Several fallbacks
+    // * Try to get the builtin criteria
+    // * Try to get the criteria's description
+    // * Try to fetch the criteria's url
+    // * Just display the url
+    builtin_eulas
+        .get(criteria)
+        .map(|s| s.to_string())
+        .or_else(|| {
+            audits.criteria.get(criteria).and_then(|c| {
+                c.description.clone().or_else(|| {
+                    c.description_url.as_ref().map(|url| {
+                        req::get(url)
+                            .and_then(|r| r.text())
+                            .map_err(|e| {
+                                warn!("Could not fetch criteria description: {e}");
+                            })
+                            .ok()
+                            .unwrap_or_else(|| format!("See criteria description at {url}"))
+                    })
+                })
+            })
+        })
 }

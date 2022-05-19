@@ -578,6 +578,10 @@ count = 16043
 [serde."0.0.0 -> 1.0.136"]
 raw = " 29 files changed, 16148 insertions(+)\n"
 count = 16148
+
+[serde."1.0.0 -> 1.0.136"]
+raw = " 29 files changed, 6610 insertions(+), 2168 deletions(-)\n"
+count = 8778
 [serde_bytes."0.0.0 -> 0.11.5"]
 raw = " 17 files changed, 1483 insertions(+)\n"
 count = 1483
