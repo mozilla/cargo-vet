@@ -672,25 +672,20 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     }
 
     // Print out the EULA and prompt
-    write!(
-        out,
-        "I, {}, certify that I have audited ",
-        user_info.username
-    )?;
-    match &kind {
+    let what_version = match &kind {
         AuditKind::Full { version, .. } => {
-            write!(out, "version {} ", version)?;
+            format!("version {}", version)
         }
         AuditKind::Delta { delta, .. } => {
-            write!(out, "from version {} to {} ", delta.from, delta.to)?;
+            format!("the changes from version {} to {}", delta.from, delta.to)
         }
         AuditKind::Violation { .. } => unreachable!(),
-    }
-    writeln!(
-        out,
-        "of {} in accordance with the following criteria:",
-        sub_args.package
-    )?;
+    };
+    let statement = format!(
+        "I, {}, certify that I have audited {} of {} in accordance with the following criteria:",
+        user_info.username, what_version, sub_args.package,
+    );
+    write!(out, "\n{}\n\n", textwrap::fill(&statement, 80))?;
     writeln!(out, "{}\n", eula)?;
     write!(out, r#"(type "yes" to certify): "#)?;
     out.flush()?;
