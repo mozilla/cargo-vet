@@ -1211,8 +1211,6 @@ impl<'a> Report<'a> {
             return Ok(());
         }
 
-        writeln!(out, "recommended audits:")?;
-
         struct SuggestItem<'a> {
             package: &'a Package,
             rec: DiffRecommendation,
@@ -1294,27 +1292,30 @@ impl<'a> Report<'a> {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            // Don't list a billion reverse deps
-            let reverse_deps = &self.graph.reverse_deps[failure];
-            let parents = if reverse_deps.len() > 3 {
-                let prefix = reverse_deps
-                    .iter()
-                    .map(|parent| {
-                        &*self.graph.package_list[self.graph.package_index_by_pkgid[parent]].name
-                    })
-                    .take(2)
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{}, and {} others", prefix, reverse_deps.len() - 2)
-            } else {
-                reverse_deps
-                    .iter()
-                    .map(|parent| {
-                        &*self.graph.package_list[self.graph.package_index_by_pkgid[parent]].name
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            };
+            let mut reverse_deps = self.graph.reverse_deps[failure]
+                .iter()
+                .map(|parent| {
+                    self.graph.package_list[self.graph.package_index_by_pkgid[parent]]
+                        .name
+                        .clone()
+                })
+                .collect::<Vec<_>>();
+
+            // To keep the display compact, sort by name length and truncate long lists.
+            reverse_deps.sort_by_key(|item| item.len());
+            let cutoff_index = reverse_deps
+                .iter()
+                .scan(0, |sum, s| {
+                    *sum += s.len();
+                    Some(*sum)
+                })
+                .position(|count| count > 20);
+            let remainder = cutoff_index.map(|i| reverse_deps.len() - i).unwrap_or(0);
+            if remainder > 1 {
+                reverse_deps.truncate(cutoff_index.unwrap());
+                reverse_deps.push(format!("and {} others", remainder));
+            }
+            let parents = reverse_deps.join(", ");
 
             match cache.fetch_and_diffstat_all(&package.name, &candidates) {
                 Ok(rec) => {
@@ -1337,48 +1338,58 @@ impl<'a> Report<'a> {
         }
 
         suggestions.sort_by_key(|item| item.rec.diffstat.count);
-
-        let strings = suggestions
-            .into_iter()
-            .map(|item| {
-                (
-                    if item.rec.from == ROOT_VERSION {
-                        format!("{}:{}", item.package.name, item.rec.to)
-                    } else {
-                        format!(
-                            "{}:({} -> {})",
-                            item.package.name, item.rec.from, item.rec.to
-                        )
-                    },
-                    format!("for {}", item.criteria),
-                    if item.rec.from == ROOT_VERSION {
-                        format!("({} lines)", item.rec.diffstat.count)
-                    } else {
-                        format!("({})", item.rec.diffstat.raw.trim())
-                    },
-                    format!("(used by {})", item.parents),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let max0 = strings.iter().max_by_key(|s| s.0.len()).unwrap().0.len();
-        let max1 = strings.iter().max_by_key(|s| s.1.len()).unwrap().1.len();
-        let max2 = strings.iter().max_by_key(|s| s.2.len()).unwrap().2.len();
-
-        // Do not align the last one
-        // let max3 = strings.iter().max_by_key(|s| s.3.len()).unwrap().3.len();
-
-        for (s0, s1, s2, s3) in strings {
-            writeln!(
-                out,
-                "    {s0:width0$}  {s1:width1$}  {s2:width2$}  {s3} ",
-                width0 = max0,
-                width1 = max1,
-                width2 = max2,
-            )?;
+        let mut by_criteria = BTreeMap::new();
+        for s in suggestions.into_iter() {
+            by_criteria
+                .entry(s.criteria.clone())
+                .or_insert_with(Vec::new)
+                .push(s);
         }
-        writeln!(out)?;
-        writeln!(out, "estimated review backlog: {total_lines} lines")?;
+
+        for (criteria, suggestions) in by_criteria.into_iter() {
+            writeln!(out, "recommended audits for {}:", criteria)?;
+
+            let strings = suggestions
+                .into_iter()
+                .map(|item| {
+                    (
+                        if item.rec.from == ROOT_VERSION {
+                            format!("cargo vet inspect {} {}", item.package.name, item.rec.to)
+                        } else {
+                            format!(
+                                "cargo vet diff {} {} {}",
+                                item.package.name, item.rec.from, item.rec.to
+                            )
+                        },
+                        format!("(used by {})", item.parents),
+                        if item.rec.from == ROOT_VERSION {
+                            format!("({} lines)", item.rec.diffstat.count)
+                        } else {
+                            format!("({})", item.rec.diffstat.raw.trim())
+                        },
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            let max0 = strings.iter().max_by_key(|s| s.0.len()).unwrap().0.len();
+            let max1 = strings.iter().max_by_key(|s| s.1.len()).unwrap().1.len();
+
+            // Do not align the last one
+            // let max3 = strings.iter().max_by_key(|s| s.3.len()).unwrap().3.len();
+
+            for (s0, s1, s2) in strings {
+                writeln!(
+                    out,
+                    "    {s0:width0$}  {s1:width1$}  {s2}",
+                    width0 = max0,
+                    width1 = max1,
+                )?;
+            }
+
+            writeln!(out)?;
+        }
+
+        writeln!(out, "estimated audit backlog: {total_lines} lines")?;
         writeln!(out)?;
         writeln!(out, "Use |cargo vet certify| to record the audits.")?;
 

@@ -1,6 +1,5 @@
 ---
 source: src/tests.rs
-assertion_line: 856
 expression: stdout
 ---
 Vetting Failed!
@@ -8,10 +7,10 @@ Vetting Failed!
 1 unvetted dependencies:
   third-party1:10.0.0 missing ["reviewed"]
 
-recommended audits:
-    third-party1:(11.0.0 -> 10.0.0)  for reviewed  (-21)  (used by first-party) 
+recommended audits for reviewed:
+    cargo vet diff third-party1 11.0.0 10.0.0  (used by first-party)  (-21)
 
-estimated review backlog: 21 lines
+estimated audit backlog: 21 lines
 
 Use |cargo vet certify| to record the audits.
 
