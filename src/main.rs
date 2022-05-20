@@ -1603,8 +1603,11 @@ fn get_user_info() -> Result<UserInfo, VetError> {
 
 fn eula_for_criteria(audits: &AuditsFile, criteria: &str) -> Option<String> {
     let builtin_eulas = [
-        (format::SAFE_TO_DEPLOY, "safe-to-deploy dummy eula"),
-        (format::SAFE_TO_RUN, "safe-to-run dummy eula"),
+        (
+            format::SAFE_TO_DEPLOY,
+            include_str!("criteria/safe-to-deploy.txt"),
+        ),
+        (format::SAFE_TO_RUN, include_str!("criteria/safe-to-run.txt")),
     ]
     .into_iter()
     .collect::<HashMap<_, _>>();
