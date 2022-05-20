@@ -1,22 +1,23 @@
 ---
 source: tests/test-cli.rs
-assertion_line: 158
 expression: stdout
 ---
-recommended audits:
-    atty:0.2.14         for safe-to-deploy  (508 lines)     (used by clap) 
-    hermit-abi:0.1.19   for safe-to-run     (938 lines)     (used by atty) 
-    termcolor:1.1.3     for safe-to-deploy  (2585 lines)    (used by clap) 
-    os_str_bytes:6.0.0  for safe-to-deploy  (2918 lines)    (used by clap) 
-    textwrap:0.15.0     for safe-to-deploy  (6165 lines)    (used by clap) 
-    indexmap:1.8.1      for safe-to-deploy  (9452 lines)    (used by clap, h2) 
-    reqwest:0.11.10     for safe-to-deploy  (21663 lines)   (used by test-project) 
-    serde_json:1.0.79   for safe-to-deploy  (22855 lines)   (used by reqwest, test-project) 
-    tokio:1.17.0        for safe-to-deploy  (91278 lines)   (used by h2, hyper, and 5 others) 
-    libc:0.2.123        for safe-to-run     (94067 lines)   (used by atty, core-foundation, and 10 others) 
-    winapi:0.3.9        for safe-to-run     (181329 lines)  (used by atty, mio, and 9 others) 
+recommended audits for safe-to-deploy:
+    cargo vet inspect atty 0.2.14         (used by clap)                              (508 lines)
+    cargo vet inspect termcolor 1.1.3     (used by clap)                              (2585 lines)
+    cargo vet inspect os_str_bytes 6.0.0  (used by clap)                              (2918 lines)
+    cargo vet inspect textwrap 0.15.0     (used by clap)                              (6165 lines)
+    cargo vet inspect indexmap 1.8.1      (used by h2, clap)                          (9452 lines)
+    cargo vet inspect reqwest 0.11.10     (used by test-project)                      (21663 lines)
+    cargo vet inspect serde_json 1.0.79   (used by reqwest, test-project)             (22855 lines)
+    cargo vet inspect tokio 1.17.0        (used by h2, hyper, reqwest, and 4 others)  (91278 lines)
 
-estimated review backlog: 433758 lines
+recommended audits for safe-to-run:
+    cargo vet inspect hermit-abi 0.1.19  (used by atty)                                     (938 lines)
+    cargo vet inspect libc 0.2.123       (used by mio, atty, tokio, openssl, and 8 others)  (94067 lines)
+    cargo vet inspect winapi 0.3.9       (used by mio, atty, miow, ntapi, and 7 others)     (181329 lines)
+
+estimated audit backlog: 433758 lines
 
 Use |cargo vet certify| to record the audits.
 
