@@ -1211,8 +1211,6 @@ impl<'a> Report<'a> {
             return Ok(());
         }
 
-        writeln!(out, "recommended audits:")?;
-
         struct SuggestItem<'a> {
             package: &'a Package,
             rec: DiffRecommendation,
@@ -1334,44 +1332,54 @@ impl<'a> Report<'a> {
         }
 
         suggestions.sort_by_key(|item| item.rec.diffstat.count);
-
-        let strings = suggestions
-            .into_iter()
-            .map(|item| {
-                (
-                    if item.rec.from == ROOT_VERSION {
-                        format!("cargo vet inspect {} {}", item.package.name, item.rec.to)
-                    } else {
-                        format!(
-                            "cargo vet diff {} {} {}",
-                            item.package.name, item.rec.from, item.rec.to
-                        )
-                    },
-                    format!("(used by {})", item.parents),
-                    if item.rec.from == ROOT_VERSION {
-                        format!("({} lines)", item.rec.diffstat.count)
-                    } else {
-                        format!("({})", item.rec.diffstat.raw.trim())
-                    },
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let max0 = strings.iter().max_by_key(|s| s.0.len()).unwrap().0.len();
-        let max1 = strings.iter().max_by_key(|s| s.1.len()).unwrap().1.len();
-
-        // Do not align the last one
-        // let max3 = strings.iter().max_by_key(|s| s.3.len()).unwrap().3.len();
-
-        for (s0, s1, s2) in strings {
-            writeln!(
-                out,
-                "    {s0:width0$}  {s1:width1$}  {s2}",
-                width0 = max0,
-                width1 = max1,
-            )?;
+        let mut by_criteria = StableMap::new();
+        for s in suggestions.into_iter() {
+            by_criteria.entry(s.criteria.clone()).or_insert_with(Vec::new).push(s);
         }
-        writeln!(out)?;
+
+        for (criteria, suggestions) in by_criteria.into_iter() {
+            writeln!(out, "recommended audits for {}:", criteria)?;
+
+            let strings = suggestions
+                .into_iter()
+                .map(|item| {
+                    (
+                        if item.rec.from == ROOT_VERSION {
+                            format!("cargo vet inspect {} {}", item.package.name, item.rec.to)
+                        } else {
+                            format!(
+                                "cargo vet diff {} {} {}",
+                                item.package.name, item.rec.from, item.rec.to
+                            )
+                        },
+                        format!("(used by {})", item.parents),
+                        if item.rec.from == ROOT_VERSION {
+                            format!("({} lines)", item.rec.diffstat.count)
+                        } else {
+                            format!("({})", item.rec.diffstat.raw.trim())
+                        },
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            let max0 = strings.iter().max_by_key(|s| s.0.len()).unwrap().0.len();
+            let max1 = strings.iter().max_by_key(|s| s.1.len()).unwrap().1.len();
+
+            // Do not align the last one
+            // let max3 = strings.iter().max_by_key(|s| s.3.len()).unwrap().3.len();
+
+            for (s0, s1, s2) in strings {
+                writeln!(
+                    out,
+                    "    {s0:width0$}  {s1:width1$}  {s2}",
+                    width0 = max0,
+                    width1 = max1,
+                )?;
+            }
+
+            writeln!(out)?;
+        }
+
         writeln!(out, "estimated audit backlog: {total_lines} lines")?;
         writeln!(out)?;
         writeln!(out, "Use |cargo vet certify| to record the audits.")?;
