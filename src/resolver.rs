@@ -1295,14 +1295,20 @@ impl<'a> Report<'a> {
             let mut reverse_deps = self.graph.reverse_deps[failure]
                 .iter()
                 .map(|parent| {
-                    self.graph.package_list[self.graph.package_index_by_pkgid[parent]].name.clone()
+                    self.graph.package_list[self.graph.package_index_by_pkgid[parent]]
+                        .name
+                        .clone()
                 })
                 .collect::<Vec<_>>();
 
             // To keep the display compact, sort by name length and truncate long lists.
             reverse_deps.sort_by_key(|item| item.len());
-            let cutoff_index = reverse_deps.iter()
-                .scan(0, |sum, s| { *sum += s.len(); Some(*sum) })
+            let cutoff_index = reverse_deps
+                .iter()
+                .scan(0, |sum, s| {
+                    *sum += s.len();
+                    Some(*sum)
+                })
                 .position(|count| count > 20);
             let remainder = cutoff_index.map(|i| reverse_deps.len() - i).unwrap_or(0);
             if remainder > 1 {
@@ -1334,7 +1340,10 @@ impl<'a> Report<'a> {
         suggestions.sort_by_key(|item| item.rec.diffstat.count);
         let mut by_criteria = StableMap::new();
         for s in suggestions.into_iter() {
-            by_criteria.entry(s.criteria.clone()).or_insert_with(Vec::new).push(s);
+            by_criteria
+                .entry(s.criteria.clone())
+                .or_insert_with(Vec::new)
+                .push(s);
         }
 
         for (criteria, suggestions) in by_criteria.into_iter() {
