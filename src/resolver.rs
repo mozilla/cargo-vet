@@ -1338,7 +1338,7 @@ impl<'a> Report<'a> {
         }
 
         suggestions.sort_by_key(|item| item.rec.diffstat.count);
-        let mut by_criteria = StableMap::new();
+        let mut by_criteria = BTreeMap::new();
         for s in suggestions.into_iter() {
             by_criteria
                 .entry(s.criteria.clone())
