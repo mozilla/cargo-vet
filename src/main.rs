@@ -11,7 +11,7 @@ use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package, Version};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
-use console::Term;
+use console::{style, Term};
 use eyre::Context;
 use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig};
@@ -672,26 +672,26 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     }
 
     // Print out the EULA and prompt
-    write!(
-        out,
-        "I, {}, certify that I have audited ",
-        user_info.username
-    )?;
-    match &kind {
+    let what_version = match &kind {
         AuditKind::Full { version, .. } => {
-            write!(out, "version {} ", version)?;
+            format!("version {}", version)
         }
         AuditKind::Delta { delta, .. } => {
-            write!(out, "from version {} to {} ", delta.from, delta.to)?;
+            format!("the changes from version {} to {}", delta.from, delta.to)
         }
         AuditKind::Violation { .. } => unreachable!(),
-    }
-    writeln!(
+    };
+    let statement = format!(
+        "I, {}, certify that I have audited {} of {} in accordance with the following criteria:",
+        user_info.username, what_version, sub_args.package,
+    );
+
+    write!(
         out,
-        "of {} in accordance with the following criteria:",
-        sub_args.package
+        "\n{}\n\n",
+        style(textwrap::fill(&statement, 80)).yellow().bold()
     )?;
-    writeln!(out, "{}\n", eula)?;
+    writeln!(out, "{}\n", style(eula).cyan())?;
     write!(out, r#"(type "yes" to certify): "#)?;
     out.flush()?;
 
@@ -1603,8 +1603,11 @@ fn get_user_info() -> Result<UserInfo, VetError> {
 
 fn eula_for_criteria(audits: &AuditsFile, criteria: &str) -> Option<String> {
     let builtin_eulas = [
-        (format::SAFE_TO_DEPLOY, "safe-to-deploy dummy eula"),
-        (format::SAFE_TO_RUN, "safe-to-run dummy eula"),
+        (
+            format::SAFE_TO_DEPLOY,
+            include_str!("criteria/safe-to-deploy.txt"),
+        ),
+        (format::SAFE_TO_RUN, include_str!("criteria/safe-to-run.txt")),
     ]
     .into_iter()
     .collect::<HashMap<_, _>>();

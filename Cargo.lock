@@ -87,6 +87,7 @@ dependencies = [
  "simplelog",
  "tar",
  "tempfile",
+ "textwrap",
  "toml",
 ]
 
