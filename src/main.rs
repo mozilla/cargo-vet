@@ -1607,7 +1607,10 @@ fn eula_for_criteria(audits: &AuditsFile, criteria: &str) -> Option<String> {
             format::SAFE_TO_DEPLOY,
             include_str!("criteria/safe-to-deploy.txt"),
         ),
-        (format::SAFE_TO_RUN, include_str!("criteria/safe-to-run.txt")),
+        (
+            format::SAFE_TO_RUN,
+            include_str!("criteria/safe-to-run.txt"),
+        ),
     ]
     .into_iter()
     .collect::<HashMap<_, _>>();
