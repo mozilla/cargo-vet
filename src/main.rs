@@ -567,7 +567,7 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
             // NOTE: May have multiple copies of a package!
             let item = UnauditedDependency {
                 version: package.version.clone(),
-                notes: Some("automatically imported by 'cargo vet init'".to_string()),
+                notes: None,
                 suggest: true,
                 // TODO: use whether this is a build_and_dev to make this weaker
                 criteria: format::DEFAULT_CRITERIA.to_string(),
