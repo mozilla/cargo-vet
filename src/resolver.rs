@@ -428,7 +428,6 @@ impl<'a> DepGraph<'a> {
                     &mut topo_index,
                     &mut visited,
                     &interner_by_pkgid,
-                    &interner_by_name_and_ver,
                     &resolve_index_by_pkgid,
                     resolve_list,
                     node_idx,
@@ -439,7 +438,6 @@ impl<'a> DepGraph<'a> {
                 topo_index: &mut Vec<PackageIdx>,
                 visited: &mut HashMap<PackageIdx, ()>,
                 interner_by_pkgid: &BTreeMap<&'a PackageId, PackageIdx>,
-                interner_by_name_and_ver: &BTreeMap<&'a str, BTreeMap<&'a Version, PackageIdx>>,
                 resolve_index_by_pkgid: &BTreeMap<&'a PackageId, usize>,
                 resolve_list: &'a [cargo_metadata::Node],
                 normal_idx: PackageIdx,
@@ -452,10 +450,13 @@ impl<'a> DepGraph<'a> {
                         &resolve_list[resolve_index_by_pkgid[nodes[normal_idx].package_id]];
 
                     // Compute the different kinds of dependencies
-                    let all_deps = resolve_node.dependencies.iter().map(|pkgid| interner_by_pkgid[pkgid]).collect::<Vec<_>>();
+                    let all_deps = resolve_node
+                        .dependencies
+                        .iter()
+                        .map(|pkgid| interner_by_pkgid[pkgid])
+                        .collect::<Vec<_>>();
                     let build_deps = deps(resolve_node, DependencyKind::Build, interner_by_pkgid);
-                    let normal_deps =
-                        deps(resolve_node, DependencyKind::Normal, interner_by_pkgid);
+                    let normal_deps = deps(resolve_node, DependencyKind::Normal, interner_by_pkgid);
                     let dev_deps =
                         deps(resolve_node, DependencyKind::Development, interner_by_pkgid);
 
@@ -466,7 +467,6 @@ impl<'a> DepGraph<'a> {
                             topo_index,
                             visited,
                             interner_by_pkgid,
-                            interner_by_name_and_ver,
                             resolve_index_by_pkgid,
                             resolve_list,
                             child,
@@ -482,7 +482,6 @@ impl<'a> DepGraph<'a> {
                             topo_index,
                             visited,
                             interner_by_pkgid,
-                            interner_by_name_and_ver,
                             resolve_index_by_pkgid,
                             resolve_list,
                             child,
@@ -501,7 +500,6 @@ impl<'a> DepGraph<'a> {
                             topo_index,
                             visited,
                             interner_by_pkgid,
-                            interner_by_name_and_ver,
                             resolve_index_by_pkgid,
                             resolve_list,
                             child,
@@ -696,6 +694,10 @@ fn resolve_third_party<'a>(
     pkgidx: PackageIdx,
 ) {
     let package = &graph.nodes[pkgidx];
+    assert!(
+        package.dev_deps.is_empty(),
+        "third-party packages shouldn't have dev-deps!"
+    );
     let unaudited = config.unaudited.get(package.name);
 
     // Just merge all the entries from the foreign audit files and our audit file.
@@ -907,7 +909,7 @@ fn resolve_third_party<'a>(
         let result = search_for_path(
             criteria,
             &ROOT_VERSION,
-            &package.version,
+            package.version,
             &forward_nodes,
             graph,
             package,
@@ -935,7 +937,7 @@ fn resolve_third_party<'a>(
                 // can reach from the other side, so we have our candidates for suggestions.
                 let rev_result = search_for_path(
                     criteria,
-                    &package.version,
+                    package.version,
                     &ROOT_VERSION,
                     &backward_nodes,
                     graph,
@@ -1169,7 +1171,7 @@ fn search_for_path<'a>(
                     for &dependency in &package.all_deps {
                         let dep_package = &dep_graph.nodes[dependency];
                         let dep_vet_result = &mut results[dependency];
-                         
+
                         // If no custom criteria is specified, then require our dependency to match
                         // the same criteria that this delta claims to provide.
                         // e.g. a 'secure' audit requires all dependencies to be 'secure' by default.
@@ -1273,7 +1275,11 @@ impl<'a> Report<'a> {
         writeln!(out)?;
         if !self.root_failures.is_empty() {
             writeln!(out, "{} unvetted dependencies:", self.leaf_failures.len())?;
-            let  mut failures = self.leaf_failures.iter().map(|(&failed_idx, failure)| (&self.graph.nodes[failed_idx], failure)).collect::<Vec<_>>();
+            let mut failures = self
+                .leaf_failures
+                .iter()
+                .map(|(&failed_idx, failure)| (&self.graph.nodes[failed_idx], failure))
+                .collect::<Vec<_>>();
             failures.sort_by_key(|(failed, _)| failed.version);
             failures.sort_by_key(|(failed, _)| failed.name);
             for (failed_package, failed_audit) in failures {
@@ -1392,13 +1398,10 @@ impl<'a> Report<'a> {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let mut reverse_deps = self.graph.nodes[failure_idx].reverse_deps
+            let mut reverse_deps = self.graph.nodes[failure_idx]
+                .reverse_deps
                 .iter()
-                .map(|&parent| {
-                    self.graph.nodes[parent]
-                        .name
-                        .to_string()
-                })
+                .map(|&parent| self.graph.nodes[parent].name.to_string())
                 .collect::<Vec<_>>();
 
             // To keep the display compact, sort by name length and truncate long lists.
@@ -1420,7 +1423,7 @@ impl<'a> Report<'a> {
             }
             let parents = reverse_deps.join(", ");
 
-            match cache.fetch_and_diffstat_all(&package.name, &candidates) {
+            match cache.fetch_and_diffstat_all(package.name, &candidates) {
                 Ok(rec) => {
                     total_lines += rec.diffstat.count;
                     suggestions.push(SuggestItem {
