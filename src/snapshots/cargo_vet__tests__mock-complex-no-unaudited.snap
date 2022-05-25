@@ -1,12 +1,13 @@
 ---
 source: src/tests.rs
+assertion_line: 1283
 expression: stdout
 ---
 Vetting Failed!
 
 4 unvetted dependencies:
-  third-core:10.0.0 missing ["reviewed"]
   third-core:5.0.0 missing ["reviewed"]
+  third-core:10.0.0 missing ["reviewed"]
   thirdA:10.0.0 missing ["reviewed"]
   thirdAB:10.0.0 missing ["reviewed"]
 
