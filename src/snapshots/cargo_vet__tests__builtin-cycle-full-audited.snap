@@ -1,0 +1,7 @@
+---
+source: src/tests.rs
+assertion_line: 2024
+expression: stdout
+---
+Vetting Succeeded (2 fully audited)
+

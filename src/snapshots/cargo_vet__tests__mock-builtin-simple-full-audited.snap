@@ -1,6 +1,6 @@
 ---
 source: src/tests.rs
-assertion_line: 1806
+assertion_line: 791
 expression: stdout
 ---
 Vetting Succeeded (3 fully audited)

@@ -1,9 +1,8 @@
+use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
 use core::fmt;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::io::Write;
-
-use cargo_metadata::{Metadata, Node, Package, PackageId, Version};
 use log::{error, trace, warn};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::io::Write;
 
 use crate::format::{self, AuditKind, Delta};
 use crate::{
@@ -16,14 +15,14 @@ pub struct Report<'a> {
     unaudited_count: u64,
     partially_audited_count: u64,
     fully_audited_count: u64,
-    useless_unaudited: Vec<&'a Package>,
+    useless_unaudited: Vec<PackageIdx>,
     /// These packages are the roots of the graph that transitively failed.
-    root_failures: Vec<&'a PackageId>,
+    root_failures: Vec<PackageIdx>,
     /// These packages are to blame and need to be fixed
-    leaf_failures: BTreeMap<&'a PackageId, AuditFailure>,
+    leaf_failures: BTreeMap<PackageIdx, AuditFailure>,
     results: Vec<ResolveResult<'a>>,
     graph: DepGraph<'a>,
-    violation_failed: Vec<&'a Package>,
+    violation_failed: Vec<PackageIdx>,
     criteria_mapper: CriteriaMapper,
 }
 
@@ -44,18 +43,32 @@ pub struct CriteriaMapper {
     implied_criteria: Vec<CriteriaSet>,
 }
 
+type PackageIdx = usize;
+
+#[derive(Debug, Clone)]
+pub struct PackageNode<'a> {
+    pub build_type: DependencyKind,
+    pub package_id: &'a PackageId,
+    pub name: &'a str,
+    pub version: &'a Version,
+    pub normal_deps: Vec<PackageIdx>,
+    pub build_deps: Vec<PackageIdx>,
+    pub dev_deps: Vec<PackageIdx>,
+    pub all_deps: Vec<PackageIdx>,
+    pub reverse_deps: HashSet<PackageIdx>,
+    pub is_workspace_member: bool,
+    pub is_third_party: bool,
+    pub is_root: bool,
+    pub has_non_dev_reverse_deps: bool,
+}
+
 /// The dependency graph in a form we can use more easily.
 #[derive(Debug, Clone)]
 pub struct DepGraph<'a> {
-    pub package_list: &'a [Package],
-    pub resolve_list: &'a [cargo_metadata::Node],
-    /// child -> parents in resolve
-    pub reverse_deps: BTreeMap<&'a PackageId, BTreeSet<&'a PackageId>>,
-    pub package_index_by_pkgid: BTreeMap<&'a PackageId, usize>,
-    pub resolve_index_by_pkgid: BTreeMap<&'a PackageId, usize>,
-    pub pkgid_by_name_and_ver: HashMap<&'a str, HashMap<&'a Version, &'a PackageId>>,
-    /// Toplogical sorting of the dependencies (linear iteration will do things in dependency order)
-    pub topo_index: Vec<&'a PackageId>,
+    pub nodes: Vec<PackageNode<'a>>,
+    pub interner_by_pkgid: BTreeMap<&'a PackageId, PackageIdx>,
+    pub interner_by_name_and_ver: BTreeMap<&'a str, BTreeMap<&'a Version, PackageIdx>>,
+    pub topo_index: Vec<PackageIdx>,
 }
 
 /// Results and notes from running vet on a particular package.
@@ -75,7 +88,7 @@ pub struct ResolveResult<'a> {
     pub needed_unaudited: bool,
 }
 
-pub type PolicyFailures<'a> = BTreeMap<&'a PackageId, CriteriaSet>;
+pub type PolicyFailures<'a> = BTreeMap<PackageIdx, CriteriaSet>;
 
 #[derive(Default, Debug, Clone)]
 pub struct AuditFailure {
@@ -98,7 +111,7 @@ pub enum SearchResult<'a> {
         /// This is currently overbroad in corner cases where there are two possible
         /// paths blocked by two different dependencies and so only fixing one would
         /// actually be sufficient, but, whatever.
-        failed_deps: BTreeSet<&'a PackageId>,
+        failed_deps: BTreeSet<PackageIdx>,
     },
     /// We failed to find any path, criteria not valid.
     Disconnected {
@@ -345,11 +358,6 @@ impl ResolveResult<'_> {
 
 impl<'a> DepGraph<'a> {
     pub fn new(metadata: &'a Metadata) -> Self {
-        // FIXME: study the nature of the 'resolve' field more carefully.
-        // In particular how resolver version 2 describes normal vs build/dev-deps.
-        // Worst case we might need to invoke 'cargo metadata' multiple times to get
-        // the proper description of both situations.
-
         let package_list = &*metadata.packages;
         let resolve_list = &*metadata
             .resolve
@@ -360,80 +368,197 @@ impl<'a> DepGraph<'a> {
             .iter()
             .enumerate()
             .map(|(idx, pkg)| (&pkg.id, idx))
-            .collect();
+            .collect::<BTreeMap<_, _>>();
         let resolve_index_by_pkgid = resolve_list
             .iter()
             .enumerate()
             .map(|(idx, pkg)| (&pkg.id, idx))
             .collect();
-        let mut pkgid_by_name_and_ver = HashMap::<&str, HashMap<&Version, &PackageId>>::new();
-        for pkg in package_list {
-            pkgid_by_name_and_ver
-                .entry(&*pkg.name)
-                .or_default()
-                .insert(&pkg.version, &pkg.id);
-        }
 
-        let mut reverse_deps = BTreeMap::<&PackageId, BTreeSet<&PackageId>>::new();
-        for parent in resolve_list {
-            for child in &parent.dependencies {
-                reverse_deps.entry(child).or_default().insert(&parent.id);
-            }
+        // Do a first-pass where we populate skeletons of the primary nodes
+        // and setup the interners, which will only ever refer to these nodes
+        let mut interner_by_pkgid = BTreeMap::<&PackageId, PackageIdx>::new();
+        let mut interner_by_name_and_ver = BTreeMap::<&str, BTreeMap<&Version, PackageIdx>>::new();
+        let mut nodes = vec![];
+        for resolve_node in resolve_list {
+            let idx = nodes.len();
+            let package = &package_list[package_index_by_pkgid[&resolve_node.id]];
+            nodes.push(PackageNode {
+                build_type: DependencyKind::Normal,
+                package_id: &resolve_node.id,
+                name: &package.name,
+                version: &package.version,
+                is_third_party: package.is_third_party(),
+                // These will get computed later
+                normal_deps: vec![],
+                build_deps: vec![],
+                dev_deps: vec![],
+                all_deps: vec![],
+                reverse_deps: HashSet::new(),
+                is_workspace_member: false,
+                is_root: false,
+                has_non_dev_reverse_deps: false,
+            });
+            assert!(interner_by_pkgid.insert(&resolve_node.id, idx).is_none());
+            assert!(interner_by_name_and_ver
+                .entry(&package.name)
+                .or_default()
+                .insert(&package.version, idx)
+                .is_none());
         }
 
         // Do topological sort: just recursively visit all of a node's children, and only add it
-        // to the node *after* visiting the children. In this way we have trivially already added
-        // all of the dependencies of a node by the time we have
-        let mut topo_index = Vec::with_capacity(package_list.len());
+        // to the list *after* visiting the children. In this way we have trivially already added
+        // all of the dependencies of a node to the list by the time we add itself to the list.
+
+        let mut topo_index = vec![];
         {
-            // FIXME: cargo uses BTreeSet, PackageIds are long strings, so maybe this makes sense?
-            let mut visited = BTreeMap::new();
+            let mut visited = HashMap::new();
             // All of the roots can be found in the workspace_members.
-            // It's fine if some aren't roots, toplogical sort works even if do all nodes.
-            // FIXME: is it better to actually use resolve.root? Seems like it won't
-            // work right for workspaces with multiple roots!
+            // First we visit all the workspace members while ignoring dev-deps,
+            // this should get us an analysis of the "normal" build graph, which
+            // we should compute roots from. Then we will do a second pass on
+            // the dev-deps. If we don't do it this way, then dev-dep cycles can
+            // confuse us about which nodes are roots or not (potentially resulting
+            // in no roots at all!
             for pkgid in &metadata.workspace_members {
+                let node_idx = interner_by_pkgid[pkgid];
+                nodes[node_idx].is_workspace_member = true;
                 visit_node(
+                    &mut nodes,
                     &mut topo_index,
                     &mut visited,
+                    &interner_by_pkgid,
                     &resolve_index_by_pkgid,
                     resolve_list,
-                    pkgid,
+                    node_idx,
                 );
             }
+
+            // Now that we've visited the normal build graph, mark the nodes that are roots
+            for pkgid in &metadata.workspace_members {
+                let node = &mut nodes[interner_by_pkgid[pkgid]];
+                node.is_root = !node.has_non_dev_reverse_deps;
+            }
+
+            // And finally visit workspace-members' dev-deps, safe in the knowledge that
+            // we know what all the roots are now.
+            for pkgid in &metadata.workspace_members {
+                let node_idx = interner_by_pkgid[pkgid];
+                let resolve_node = &resolve_list[resolve_index_by_pkgid[pkgid]];
+                let dev_deps = deps(
+                    resolve_node,
+                    DependencyKind::Development,
+                    &interner_by_pkgid,
+                );
+
+                // Now visit all the dev deps
+                for &child in &dev_deps {
+                    visit_node(
+                        &mut nodes,
+                        &mut topo_index,
+                        &mut visited,
+                        &interner_by_pkgid,
+                        &resolve_index_by_pkgid,
+                        resolve_list,
+                        child,
+                    );
+                    nodes[child].reverse_deps.insert(node_idx);
+                }
+
+                let node = &mut nodes[node_idx];
+                node.dev_deps = dev_deps;
+                // This may have gotten clobbered, fix it just to avoid inconsistencies
+                node.has_non_dev_reverse_deps = !node.is_root;
+            }
             fn visit_node<'a>(
-                topo_index: &mut Vec<&'a PackageId>,
-                visited: &mut BTreeMap<&'a PackageId, ()>,
+                nodes: &mut Vec<PackageNode<'a>>,
+                topo_index: &mut Vec<PackageIdx>,
+                visited: &mut HashMap<PackageIdx, ()>,
+                interner_by_pkgid: &BTreeMap<&'a PackageId, PackageIdx>,
                 resolve_index_by_pkgid: &BTreeMap<&'a PackageId, usize>,
                 resolve_list: &'a [cargo_metadata::Node],
-                pkgid: &'a PackageId,
+                normal_idx: PackageIdx,
             ) {
-                // Don't revisit a node (fine for correctness, wasteful for perf)
-                let query = visited.entry(pkgid);
-                if matches!(query, std::collections::btree_map::Entry::Vacant(..)) {
+                // Don't revisit a node we've already seen
+                let query = visited.entry(normal_idx);
+                if matches!(query, std::collections::hash_map::Entry::Vacant(..)) {
                     query.or_insert(());
-                    let node = &resolve_list[resolve_index_by_pkgid[pkgid]];
-                    for child in &node.dependencies {
+                    let resolve_node =
+                        &resolve_list[resolve_index_by_pkgid[nodes[normal_idx].package_id]];
+
+                    // Compute the different kinds of dependencies
+                    let all_deps = resolve_node
+                        .dependencies
+                        .iter()
+                        .map(|pkgid| interner_by_pkgid[pkgid])
+                        .collect::<Vec<_>>();
+                    let build_deps = deps(resolve_node, DependencyKind::Build, interner_by_pkgid);
+                    let normal_deps = deps(resolve_node, DependencyKind::Normal, interner_by_pkgid);
+
+                    // Now visit all the build deps
+                    for &child in &build_deps {
                         visit_node(
+                            nodes,
                             topo_index,
                             visited,
+                            interner_by_pkgid,
                             resolve_index_by_pkgid,
                             resolve_list,
                             child,
                         );
+                        nodes[child].reverse_deps.insert(normal_idx);
+                        nodes[child].has_non_dev_reverse_deps = true;
                     }
-                    topo_index.push(pkgid);
+
+                    // Now visit all the normal deps
+                    for &child in &normal_deps {
+                        visit_node(
+                            nodes,
+                            topo_index,
+                            visited,
+                            interner_by_pkgid,
+                            resolve_index_by_pkgid,
+                            resolve_list,
+                            child,
+                        );
+                        nodes[child].reverse_deps.insert(normal_idx);
+                        nodes[child].has_non_dev_reverse_deps = true;
+                    }
+
+                    // Now visit the node itself
+                    topo_index.push(normal_idx);
+
+                    // Now commit all the deps
+                    let cur_node = &mut nodes[normal_idx];
+                    cur_node.build_deps = build_deps;
+                    cur_node.normal_deps = normal_deps;
+                    cur_node.all_deps = all_deps;
+
+                    // dev-deps will be handled in a second pass
                 }
+            }
+            fn deps(
+                resolve_node: &Node,
+                kind: DependencyKind,
+                interner_by_pkgid: &BTreeMap<&PackageId, PackageIdx>,
+            ) -> Vec<PackageIdx> {
+                // Note that dep_kinds has target cfg info. If we want to handle targets
+                // we should gather those up with filter/fold instead of just 'any'.
+                // TODO: map normal-deps that whose package has a "proc-macro" target to be build-deps
+                resolve_node
+                    .deps
+                    .iter()
+                    .filter(|dep| dep.dep_kinds.iter().any(|dep_kind| dep_kind.kind == kind))
+                    .map(|dep| interner_by_pkgid[&dep.pkg])
+                    .collect()
             }
         }
 
         Self {
-            package_list,
-            resolve_list,
-            reverse_deps,
-            package_index_by_pkgid,
-            resolve_index_by_pkgid,
-            pkgid_by_name_and_ver,
+            interner_by_pkgid,
+            interner_by_name_and_ver,
+            nodes,
             topo_index,
         }
     }
@@ -450,8 +575,6 @@ pub fn resolve<'a>(
     imports: &'a ImportsFile,
     guess_deeper: bool,
 ) -> Report<'a> {
-    let mut violation_failed = vec![];
-
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
     let graph = DepGraph::new(metadata);
@@ -461,18 +584,16 @@ pub fn resolve<'a>(
     let criteria_mapper = CriteriaMapper::new(&audits.criteria);
 
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
-    let mut results = vec![
-        ResolveResult::with_no_criteria(criteria_mapper.no_criteria());
-        graph.resolve_list.len()
-    ];
+    let mut results =
+        vec![ResolveResult::with_no_criteria(criteria_mapper.no_criteria()); graph.nodes.len()];
     let mut root_failures = vec![];
-    // Actually vet the dependencies
-    for pkgid in &graph.topo_index {
-        let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
-        let resolve = &graph.resolve_list[resolve_idx];
-        let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
+    let mut violation_failed = vec![];
 
-        if package.is_third_party() {
+    // Actually vet the build graph
+    for &pkgidx in &graph.topo_index {
+        let package = &graph.nodes[pkgidx];
+
+        if package.is_third_party {
             resolve_third_party(
                 metadata,
                 config,
@@ -483,9 +604,7 @@ pub fn resolve<'a>(
                 &mut results,
                 &mut violation_failed,
                 &mut root_failures,
-                resolve_idx,
-                resolve,
-                package,
+                pkgidx,
             );
         } else {
             resolve_first_party(
@@ -498,9 +617,57 @@ pub fn resolve<'a>(
                 &mut results,
                 &mut violation_failed,
                 &mut root_failures,
-                resolve_idx,
-                resolve,
-                package,
+                pkgidx,
+            );
+        }
+    }
+
+    // Now that we've processed the "normal" graph we need to check the dev (test/bench) builds.
+    // This needs to be done as a separate pass because tests can introduce apparent cycles in
+    // the Cargo graph, because our X's tests can depend on Y which in turn depend on X again.
+    //
+    // This is fine for Cargo because the tests are a completely different build from X itself
+    // so the cycle completely disappears once the graph is "desugarred" into actual build units,
+    // but it's an annoying problem for us because it essentially means we cannot fully analyze
+    // X in one shot. However we have a few useful insights we can leverage:
+    //
+    // * Nothing can "depend" on X's tests, and therefore ignoring the tests on our first pass
+    //   shouldn't logically affect any other node's results. i.e. UsesX being safe-to-run
+    //   does not depend on X's tests being safe-to-run. If we were to desugar X into two nodes
+    //   as Cargo does, the "dev" node would always be a root, so we should treat it as such
+    //   during this second pass.
+    //
+    // * We don't actually *care* if a node *has* tests/benches. All we care about is if
+    //   the node has dev-dependencies, because that's the only thing that could change the
+    //   results of the previous pass. (TODO: is this actually true? Root nodes get special
+    //   default policies, so maybe all nodes that are testable should get rescanned? But
+    //   also tests are expected to have weaker requirements... hmm...)
+    //
+    // * We will only ever test/bench a workspace member, and workspace members are always
+    //   first-party packages. This means we can avoid thinking about all the complicated
+    //   graph search stuff and just need to do simple one-shot analysis of our deps and
+    //   check against root policies.
+    for &pkgidx in &graph.topo_index {
+        let package = &graph.nodes[pkgidx];
+        if package.is_workspace_member {
+            resolve_dev(
+                metadata,
+                config,
+                audits,
+                imports,
+                &graph,
+                &criteria_mapper,
+                &mut results,
+                &mut violation_failed,
+                &mut root_failures,
+                pkgidx,
+            );
+        } else {
+            assert!(
+                package.dev_deps.is_empty(),
+                "{}:{} isn't a workspace member but has dev-deps!",
+                package.name,
+                package.version
             );
         }
     }
@@ -522,7 +689,7 @@ pub fn resolve<'a>(
     }
 
     // Gather statistics
-    let mut leaf_failures = BTreeMap::<&PackageId, AuditFailure>::new();
+    let mut leaf_failures = BTreeMap::<PackageIdx, AuditFailure>::new();
     visit_failures(
         &graph,
         &results,
@@ -545,12 +712,15 @@ pub fn resolve<'a>(
     let mut fully_audited_count = 0;
     let mut partially_audited_count = 0;
     let mut useless_unaudited = vec![];
-    for &pkgid in &graph.topo_index {
-        let resolve_idx = graph.resolve_index_by_pkgid[pkgid];
-        let package = &graph.package_list[graph.package_index_by_pkgid[pkgid]];
-        let result = &results[resolve_idx];
+    for &pkgidx in &graph.topo_index {
+        let package = &graph.nodes[pkgidx];
+        if !package.is_third_party {
+            // We only want to report on third-parties, which cause the errors.
+            continue;
+        }
+        let result = &results[pkgidx];
 
-        if !result.needed_unaudited || !package.is_third_party() {
+        if !result.needed_unaudited {
             fully_audited_count += 1;
         } else if result.directly_unaudited {
             unaudited_count += 1;
@@ -559,7 +729,7 @@ pub fn resolve<'a>(
         }
 
         if result.directly_unaudited && !result.needed_unaudited {
-            useless_unaudited.push(package);
+            useless_unaudited.push(pkgidx);
         }
     }
 
@@ -586,20 +756,23 @@ fn resolve_third_party<'a>(
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
-    violation_failed: &mut Vec<&'a Package>,
-    _root_failures: &mut Vec<&'a PackageId>,
-    resolve_idx: usize,
-    resolve: &'a Node,
-    package: &'a Package,
+    violation_failed: &mut Vec<PackageIdx>,
+    _root_failures: &mut Vec<PackageIdx>,
+    pkgidx: PackageIdx,
 ) {
-    let unaudited = config.unaudited.get(&package.name);
+    let package = &graph.nodes[pkgidx];
+    assert!(
+        package.dev_deps.is_empty(),
+        "third-party packages shouldn't have dev-deps!"
+    );
+    let unaudited = config.unaudited.get(package.name);
 
     // Just merge all the entries from the foreign audit files and our audit file.
     let foreign_audits = imports
         .audits
         .values()
-        .flat_map(|audit_file| audit_file.audits.get(&package.name).unwrap_or(&NO_AUDITS));
-    let own_audits = audits.audits.get(&package.name).unwrap_or(&NO_AUDITS);
+        .flat_map(|audit_file| audit_file.audits.get(package.name).unwrap_or(&NO_AUDITS));
+    let own_audits = audits.audits.get(package.name).unwrap_or(&NO_AUDITS);
 
     // Deltas are flipped so that we have a map of 'to: [froms]'. This lets
     // us start at the current version and look up all the deltas that *end* at that
@@ -667,7 +840,7 @@ fn resolve_third_party<'a>(
 
         for entry in foreign_audits
             .audits
-            .get(&package.name)
+            .get(package.name)
             .unwrap_or(&NO_AUDITS)
         {
             // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
@@ -759,8 +932,8 @@ fn resolve_third_party<'a>(
         }
         // Having current versions overlap with a violations is less horrifyingly bad,
         // so just gather them up as part of the normal report.
-        if violation_range.matches(&package.version) {
-            violation_failed.push(package);
+        if violation_range.matches(package.version) {
+            violation_failed.push(pkgidx);
             return;
         }
     }
@@ -773,7 +946,7 @@ fn resolve_third_party<'a>(
     // Also register all the unaudited entries as "roots" for search.
     if let Some(alloweds) = unaudited {
         for allowed in alloweds {
-            if allowed.version == package.version {
+            if &allowed.version == package.version {
                 directly_unaudited = true;
             }
             let from_ver = &ROOT_VERSION;
@@ -803,10 +976,10 @@ fn resolve_third_party<'a>(
         let result = search_for_path(
             criteria,
             &ROOT_VERSION,
-            &package.version,
+            package.version,
             &forward_nodes,
             graph,
-            resolve,
+            package,
             results,
         );
         match result {
@@ -831,11 +1004,11 @@ fn resolve_third_party<'a>(
                 // can reach from the other side, so we have our candidates for suggestions.
                 let rev_result = search_for_path(
                     criteria,
-                    &package.version,
+                    package.version,
                     &ROOT_VERSION,
                     &backward_nodes,
                     graph,
-                    resolve,
+                    package,
                     results,
                 );
                 if let SearchResult::Disconnected {
@@ -855,7 +1028,7 @@ fn resolve_third_party<'a>(
     }
 
     // We've completed our graph analysis for this package, now record the results
-    results[resolve_idx] = ResolveResult {
+    results[pkgidx] = ResolveResult {
         validated_criteria,
         fully_audited_criteria,
         directly_unaudited,
@@ -868,46 +1041,46 @@ fn resolve_third_party<'a>(
 
 #[allow(clippy::too_many_arguments, clippy::ptr_arg)]
 fn resolve_first_party<'a>(
-    metadata: &'a Metadata,
+    _metadata: &'a Metadata,
     config: &'a ConfigFile,
     _audits: &'a AuditsFile,
     _imports: &'a ImportsFile,
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
-    _violation_failed: &mut Vec<&'a Package>,
-    root_failures: &mut Vec<&'a PackageId>,
-    resolve_idx: usize,
-    resolve: &'a Node,
-    package: &'a Package,
+    _violation_failed: &mut Vec<PackageIdx>,
+    root_failures: &mut Vec<PackageIdx>,
+    pkgidx: PackageIdx,
 ) {
-    // Compute the "policy" criteria
+    // Check the build-deps and normal-deps of this package. dev-deps are checking in `resolve_dep`
+    // In this pass we properly use package.is_root, but in the next pass all nodes are "roots"
+    let package = &graph.nodes[pkgidx];
+    let is_root = package.is_root;
 
+    // Root nodes adopt this policy if they don't have an explicit one
     let default_root_policy = criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
-    let _default_build_and_dev_policy =
+    let _default_root_build_and_dev_policy =
         criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA]);
 
-    let is_root = metadata.workspace_members.contains(&package.id);
     let mut policy_failures = PolicyFailures::new();
 
     // Any dependencies that have explicit policies are checked first
     let mut passed_dependencies = BTreeSet::new();
-    if let Some(policy) = config.policy.get(&package.name) {
-        for dep in &resolve.dependencies {
-            let dep_resolve_idx = graph.resolve_index_by_pkgid[dep];
-            let dep_package = &graph.package_list[graph.package_index_by_pkgid[dep]];
+    if let Some(policy) = config.policy.get(package.name) {
+        for &depidx in package.normal_deps.iter().chain(&package.build_deps) {
+            let dep_package = &graph.nodes[depidx];
             let dep_policy = policy
                 .dependency_criteria
-                .get(&dep_package.name)
+                .get(dep_package.name)
                 .map(|p| criteria_mapper.criteria_from_list(p))
                 .unwrap_or_else(|| criteria_mapper.no_criteria());
 
             for criteria_idx in dep_policy.indices() {
-                if results[dep_resolve_idx].has_criteria(criteria_idx) {
-                    passed_dependencies.insert(dep);
+                if results[depidx].has_criteria(criteria_idx) {
+                    passed_dependencies.insert(depidx);
                 } else {
                     policy_failures
-                        .entry(dep)
+                        .entry(depidx)
                         .or_insert_with(|| criteria_mapper.no_criteria())
                         .set_criteria(criteria_idx);
                 }
@@ -920,14 +1093,16 @@ fn resolve_first_party<'a>(
         let mut search_results = vec![];
         for criteria in criteria_mapper.criteria_iter() {
             let mut failed_deps = BTreeSet::new();
-            for dep in &resolve.dependencies {
-                if passed_dependencies.contains(dep) {
+            // TODO: this isn't quite right. We want to analyze build-deps distinctly but we're
+            // just merging them in with normal deps... I need to think about this more.
+            // The semantic of policies is unclear for build-deps, I think...
+            for &depidx in package.normal_deps.iter().chain(&package.build_deps) {
+                if passed_dependencies.contains(&depidx) {
                     // This dep is already fine, ignore it (implicitly all_criteria now)
                     continue;
                 }
-                let dep_resolve_idx = graph.resolve_index_by_pkgid[dep];
-                if !results[dep_resolve_idx].contains(criteria) {
-                    failed_deps.insert(dep);
+                if !results[depidx].contains(criteria) {
+                    failed_deps.insert(depidx);
                 }
             }
 
@@ -942,7 +1117,7 @@ fn resolve_first_party<'a>(
         }
 
         // Now check that we pass our own policy
-        let own_policy = if let Some(policy) = config.policy.get(&package.name) {
+        let own_policy = if let Some(policy) = config.policy.get(package.name) {
             criteria_mapper.criteria_from_list(&policy.criteria)
         } else if is_root {
             default_root_policy
@@ -962,15 +1137,143 @@ fn resolve_first_party<'a>(
         }
 
         if policy_failures.is_empty() {
-            results[resolve_idx].search_results = search_results;
-            results[resolve_idx].validated_criteria = validated_criteria;
+            results[pkgidx].search_results = search_results;
+            results[pkgidx].validated_criteria = validated_criteria;
         }
     }
 
     if !policy_failures.is_empty() && is_root {
-        root_failures.push(&package.id);
+        root_failures.push(pkgidx);
     }
-    results[resolve_idx].policy_failures = policy_failures;
+    for (dep, failure) in policy_failures {
+        results[pkgidx]
+            .policy_failures
+            .entry(dep)
+            .or_insert_with(|| criteria_mapper.no_criteria())
+            .unioned_with(&failure);
+    }
+}
+
+#[allow(clippy::too_many_arguments, clippy::ptr_arg)]
+fn resolve_dev<'a>(
+    _metadata: &'a Metadata,
+    config: &'a ConfigFile,
+    _audits: &'a AuditsFile,
+    _imports: &'a ImportsFile,
+    graph: &DepGraph<'a>,
+    criteria_mapper: &CriteriaMapper,
+    results: &mut [ResolveResult<'a>],
+    _violation_failed: &mut Vec<PackageIdx>,
+    root_failures: &mut Vec<PackageIdx>,
+    pkgidx: PackageIdx,
+) {
+    // This is a copy of resolve_first_party but tweaked to handle dev-deps specifically.
+    // In this version we are logically processing a "dev" (test/bench) node which depends
+    // on the normal build. It is always a root, and so we don't need to record any details
+    // if this passes. The only thing that needs to be recorded are explicitly policy failures
+    // which can be folded in with the rest of the normal analysis.
+    let package = &graph.nodes[pkgidx];
+    let is_root = true;
+
+    // Root nodes adopt this policy if they don't have an explicit one
+    let _default_root_policy =
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
+    let default_root_build_and_dev_policy =
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA]);
+
+    let mut policy_failures = PolicyFailures::new();
+
+    // Any dependencies that have explicit policies are checked first
+    let mut passed_dependencies = BTreeSet::new();
+    if let Some(policy) = config.policy.get(package.name) {
+        for &depidx in &package.dev_deps {
+            let dep_package = &graph.nodes[depidx];
+            let dep_policy = policy
+                .dependency_criteria
+                .get(dep_package.name)
+                .map(|p| criteria_mapper.criteria_from_list(p))
+                .unwrap_or_else(|| criteria_mapper.no_criteria());
+
+            for criteria_idx in dep_policy.indices() {
+                if results[depidx].has_criteria(criteria_idx) {
+                    passed_dependencies.insert(depidx);
+                } else {
+                    policy_failures
+                        .entry(depidx)
+                        .or_insert_with(|| criteria_mapper.no_criteria())
+                        .set_criteria(criteria_idx);
+                }
+            }
+        }
+    }
+
+    if policy_failures.is_empty() {
+        let mut validated_criteria = criteria_mapper.no_criteria();
+        let mut search_results = vec![];
+        for criteria in criteria_mapper.criteria_iter() {
+            let mut failed_deps = BTreeSet::new();
+            for &depidx in &package.dev_deps {
+                if passed_dependencies.contains(&depidx) {
+                    // This dep is already fine, ignore it (implicitly all_criteria now)
+                    continue;
+                }
+                if !results[depidx].contains(criteria) {
+                    failed_deps.insert(depidx);
+                }
+            }
+
+            if failed_deps.is_empty() {
+                search_results.push(SearchResult::Connected {
+                    fully_audited: true,
+                });
+                validated_criteria.unioned_with(criteria);
+            } else {
+                search_results.push(SearchResult::PossiblyConnected { failed_deps })
+            }
+        }
+
+        // Now check that we pass our own policy
+        let own_policy = if let Some(policy) = config.policy.get(package.name) {
+            criteria_mapper.criteria_from_list(&policy.build_and_dev_criteria)
+        } else if is_root {
+            default_root_build_and_dev_policy
+        } else {
+            unreachable!("dev nodes are always roots!")
+        };
+
+        // TODO: arguably we should also include our normal self's results because we
+        // depend on it..?
+        for criteria_idx in own_policy.indices() {
+            if let SearchResult::PossiblyConnected { failed_deps } = &search_results[criteria_idx] {
+                for &dep in failed_deps {
+                    policy_failures
+                        .entry(dep)
+                        .or_insert_with(|| criteria_mapper.no_criteria())
+                        .set_criteria(criteria_idx);
+                }
+            }
+        }
+
+        // Don't commit successes, this is the fake "dev" node which doesn't effect others,
+        // so if there's no failures then we don't care about this node at all!
+        /*
+        if policy_failures.is_empty() {
+            results[pkgidx].search_results = search_results;
+            results[pkgidx].validated_criteria = validated_criteria;
+        }
+        */
+    }
+
+    if !policy_failures.is_empty() && is_root {
+        root_failures.push(pkgidx);
+    }
+    for (dep, failure) in policy_failures {
+        results[pkgidx]
+            .policy_failures
+            .entry(dep)
+            .or_insert_with(|| criteria_mapper.no_criteria())
+            .unioned_with(&failure);
+    }
 }
 
 fn search_for_path<'a>(
@@ -979,7 +1282,7 @@ fn search_for_path<'a>(
     to_version: &'a Version,
     version_nodes: &BTreeMap<&'a Version, Vec<DeltaEdge<'a>>>,
     dep_graph: &DepGraph<'a>,
-    resolve: &'a Node,
+    package: &PackageNode<'a>,
     results: &mut [ResolveResult],
 ) -> SearchResult<'a> {
     // Search for any path through the graph with edges that satisfy cur_criteria.
@@ -1066,11 +1369,9 @@ fn search_for_path<'a>(
 
                     // Deltas should only apply if dependencies satisfy dep_criteria
                     let mut deps_satisfied = true;
-                    for dependency in &resolve.dependencies {
-                        let dep_resolve_idx = dep_graph.resolve_index_by_pkgid[dependency];
-                        let dep_package =
-                            &dep_graph.package_list[dep_graph.package_index_by_pkgid[dependency]];
-                        let dep_vet_result = &mut results[dep_resolve_idx];
+                    for &dependency in &package.all_deps {
+                        let dep_package = &dep_graph.nodes[dependency];
+                        let dep_vet_result = &mut results[dependency];
 
                         // If no custom criteria is specified, then require our dependency to match
                         // the same criteria that this delta claims to provide.
@@ -1149,11 +1450,44 @@ impl<'a> Report<'a> {
     }
 
     fn print_success(&self, out: &mut dyn Write) -> Result<(), VetError> {
-        writeln!(
-            out,
-            "Vetting Succeeded ({} fully audited, {} partially audited, {} unaudited)",
-            self.fully_audited_count, self.partially_audited_count, self.unaudited_count,
-        )?;
+        // Figure out how many entries we're going to print
+        let mut count_count = (self.fully_audited_count != 0) as usize
+            + (self.partially_audited_count != 0) as usize
+            + (self.unaudited_count != 0) as usize;
+
+        // Print out a summary of how we succeeded
+        if count_count == 0 {
+            writeln!(
+                out,
+                "Vetting Succeeded (because you have no third-party dependencies)"
+            )?;
+        } else {
+            write!(out, "Vetting Succeeded (")?;
+
+            if self.fully_audited_count != 0 {
+                write!(out, "{} fully audited", self.fully_audited_count)?;
+                count_count -= 1;
+                if count_count > 0 {
+                    write!(out, ", ")?;
+                }
+            }
+            if self.partially_audited_count != 0 {
+                write!(out, "{} partially audited", self.partially_audited_count)?;
+                count_count -= 1;
+                if count_count > 0 {
+                    write!(out, ", ")?;
+                }
+            }
+            if self.unaudited_count != 0 {
+                write!(out, "{} unaudited", self.unaudited_count)?;
+                count_count -= 1;
+                if count_count > 0 {
+                    write!(out, ", ")?;
+                }
+            }
+
+            writeln!(out, ")")?;
+        }
 
         // Warn about useless unaudited entries
         if !self.useless_unaudited.is_empty() {
@@ -1161,7 +1495,8 @@ impl<'a> Report<'a> {
                 out,
                 "  warning: some dependencies are listed in unaudited, but didn't need it:"
             )?;
-            for package in &self.useless_unaudited {
+            for &pkgidx in &self.useless_unaudited {
+                let package = &self.graph.nodes[pkgidx];
                 writeln!(out, "    {}:{}", package.name, package.version)?;
             }
         }
@@ -1174,9 +1509,14 @@ impl<'a> Report<'a> {
         writeln!(out)?;
         if !self.root_failures.is_empty() {
             writeln!(out, "{} unvetted dependencies:", self.leaf_failures.len())?;
-            for (failed, failed_audit) in &self.leaf_failures {
-                let failed_package =
-                    &self.graph.package_list[self.graph.package_index_by_pkgid[failed]];
+            let mut failures = self
+                .leaf_failures
+                .iter()
+                .map(|(&failed_idx, failure)| (&self.graph.nodes[failed_idx], failure))
+                .collect::<Vec<_>>();
+            failures.sort_by_key(|(failed, _)| failed.version);
+            failures.sort_by_key(|(failed, _)| failed.name);
+            for (failed_package, failed_audit) in failures {
                 let criteria = self
                     .criteria_mapper
                     .criteria_names(&failed_audit.criteria_failures)
@@ -1196,7 +1536,8 @@ impl<'a> Report<'a> {
                 "{} forbidden dependencies:",
                 self.violation_failed.len()
             )?;
-            for package in &self.violation_failed {
+            for &pkgidx in &self.violation_failed {
+                let package = &self.graph.nodes[pkgidx];
                 writeln!(out, "  {}:{}", package.name, package.version)?;
             }
             writeln!(out)?;
@@ -1212,7 +1553,7 @@ impl<'a> Report<'a> {
         }
 
         struct SuggestItem<'a> {
-            package: &'a Package,
+            package: &'a PackageNode<'a>,
             rec: DiffRecommendation,
             criteria: String,
             parents: String,
@@ -1221,10 +1562,9 @@ impl<'a> Report<'a> {
         let mut cache = Cache::acquire(cfg)?;
         let mut suggestions = vec![];
         let mut total_lines: u64 = 0;
-        for (failure, audit_failure) in &self.leaf_failures {
-            let package = &self.graph.package_list[self.graph.package_index_by_pkgid[failure]];
-            let resolve_idx = self.graph.resolve_index_by_pkgid[failure];
-            let result = &self.results[resolve_idx];
+        for (&failure_idx, audit_failure) in &self.leaf_failures {
+            let package = &self.graph.nodes[failure_idx];
+            let result = &self.results[failure_idx];
 
             // Collect up the details of how we failed
             let mut from_root = None::<BTreeSet<&Version>>;
@@ -1292,16 +1632,16 @@ impl<'a> Report<'a> {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let mut reverse_deps = self.graph.reverse_deps[failure]
+            let mut reverse_deps = self.graph.nodes[failure_idx]
+                .reverse_deps
                 .iter()
-                .map(|parent| {
-                    self.graph.package_list[self.graph.package_index_by_pkgid[parent]]
-                        .name
-                        .clone()
-                })
+                .map(|&parent| self.graph.nodes[parent].name.to_string())
                 .collect::<Vec<_>>();
 
             // To keep the display compact, sort by name length and truncate long lists.
+            // We first sort by name because rust defaults to a stable sort and this will
+            // have by-name as the tie breaker.
+            reverse_deps.sort();
             reverse_deps.sort_by_key(|item| item.len());
             let cutoff_index = reverse_deps
                 .iter()
@@ -1317,7 +1657,7 @@ impl<'a> Report<'a> {
             }
             let parents = reverse_deps.join(", ");
 
-            match cache.fetch_and_diffstat_all(&package.name, &candidates) {
+            match cache.fetch_and_diffstat_all(package.name, &candidates) {
                 Ok(rec) => {
                     total_lines += rec.diffstat.count;
                     suggestions.push(SuggestItem {
@@ -1337,6 +1677,8 @@ impl<'a> Report<'a> {
             }
         }
 
+        suggestions.sort_by_key(|item| item.package.version);
+        suggestions.sort_by_key(|item| item.package.name);
         suggestions.sort_by_key(|item| item.rec.diffstat.count);
         let mut by_criteria = BTreeMap::new();
         for s in suggestions.into_iter() {
@@ -1400,9 +1742,9 @@ impl<'a> Report<'a> {
 fn visit_failures<'a, T>(
     graph: &DepGraph<'a>,
     results: &[ResolveResult<'a>],
-    failures: &[&'a PackageId],
+    failures: &[PackageIdx],
     guess_deeper: bool,
-    mut callback: impl FnMut(&'a PackageId, usize, Option<&CriteriaSet>) -> Result<(), T>,
+    mut callback: impl FnMut(PackageIdx, usize, Option<&CriteriaSet>) -> Result<(), T>,
 ) -> Result<(), T> {
     trace!("blame: traversing blame tree");
 
@@ -1437,15 +1779,15 @@ fn visit_failures<'a, T>(
     // but I want to think about this more. For now we just rely on the solution to problem 2
     // to avoid infinite loops and just don't worry about the semantics.
     let mut search_stack = failures.iter().map(|f| (*f, 0, None)).collect::<Vec<_>>();
-    let mut visited = BTreeMap::<&PackageId, CriteriaSet>::new();
+    let mut visited = HashMap::<PackageIdx, CriteriaSet>::new();
     let no_criteria = CriteriaSet::default();
 
-    while let Some((failure, depth, cur_criteria)) = search_stack.pop() {
-        match visited.entry(failure) {
-            std::collections::btree_map::Entry::Vacant(entry) => {
+    while let Some((failure_idx, depth, cur_criteria)) = search_stack.pop() {
+        match visited.entry(failure_idx) {
+            std::collections::hash_map::Entry::Vacant(entry) => {
                 entry.insert(cur_criteria.clone().unwrap_or_else(|| no_criteria.clone()));
             }
-            std::collections::btree_map::Entry::Occupied(mut entry) => {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
                 let cur = cur_criteria.as_ref().unwrap_or(&no_criteria);
                 if entry.get().contains(cur) {
                     continue;
@@ -1455,10 +1797,8 @@ fn visit_failures<'a, T>(
             }
         }
 
-        let resolve_idx = graph.resolve_index_by_pkgid[failure];
-        let resolve = &graph.resolve_list[resolve_idx];
-        let result = &results[resolve_idx];
-        let package = &graph.package_list[graph.package_index_by_pkgid[failure]];
+        let result = &results[failure_idx];
+        let package = &graph.nodes[failure_idx];
         trace!(
             "blame: {:width$}visiting {}:{}",
             "",
@@ -1469,14 +1809,14 @@ fn visit_failures<'a, T>(
 
         if !result.policy_failures.is_empty() {
             // We're not to blame, it's our children who failed our policies!
-            callback(failure, depth, None)?;
-            for (failed_dep, failed_criteria) in &result.policy_failures {
+            callback(failure_idx, depth, None)?;
+            for (&failed_dep, failed_criteria) in &result.policy_failures {
                 search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
             }
         } else if let Some(failed_criteria) = cur_criteria {
             let mut own_fault = CriteriaSet::default();
-            let mut dep_faults = BTreeMap::<&PackageId, CriteriaSet>::new();
-            let mut deeper_faults = BTreeMap::<&PackageId, CriteriaSet>::new();
+            let mut dep_faults = BTreeMap::<PackageIdx, CriteriaSet>::new();
+            let mut deeper_faults = BTreeMap::<PackageIdx, CriteriaSet>::new();
 
             // Collect up details of how we failed the criteria
             for criteria_idx in failed_criteria.indices() {
@@ -1500,12 +1840,11 @@ fn visit_failures<'a, T>(
                         if guess_deeper {
                             // Try to Guess Deeper by blaming our children for all |self| failures
                             // by assuming we would need them to conform to our own criteria too.
-                            for dep in &resolve.dependencies {
-                                let dep_resolve_idx = graph.resolve_index_by_pkgid[dep];
-                                let dep_result = &results[dep_resolve_idx];
+                            for &dep_idx in &package.all_deps {
+                                let dep_result = &results[dep_idx];
                                 if !dep_result.validated_criteria.has_criteria(criteria_idx) {
                                     deeper_faults
-                                        .entry(dep)
+                                        .entry(dep_idx)
                                         .or_default()
                                         .set_criteria(criteria_idx);
                                 }
@@ -1517,14 +1856,14 @@ fn visit_failures<'a, T>(
 
             // Visit ourselves based on whether we're to blame at all
             if own_fault.is_empty() {
-                callback(failure, depth, None)?;
+                callback(failure_idx, depth, None)?;
             } else {
-                callback(failure, depth, Some(&own_fault))?;
+                callback(failure_idx, depth, Some(&own_fault))?;
             }
 
             // Now visit our children
             for (failed_dep, failed_criteria) in deeper_faults {
-                if dep_faults.contains_key(failed_dep) {
+                if dep_faults.contains_key(&failed_dep) {
                     // We already visited them more precisely
                     continue;
                 }

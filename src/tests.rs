@@ -4,7 +4,7 @@ use cargo_metadata::{Metadata, Version, VersionReq};
 use serde_json::{json, Value};
 
 use crate::{
-    format::{AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry},
+    format::{AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, SAFE_TO_DEPLOY},
     init_files,
     resolver::Report,
     AuditEntry, AuditsFile, Cli, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
@@ -27,6 +27,7 @@ struct MockPackage {
     deps: Vec<MockDependency>,
     dev_deps: Vec<MockDependency>,
     build_deps: Vec<MockDependency>,
+    targets: Vec<&'static str>,
     is_root: bool,
     is_first_party: bool,
 }
@@ -44,6 +45,7 @@ impl Default for MockPackage {
             deps: vec![],
             dev_deps: vec![],
             build_deps: vec![],
+            targets: vec!["lib"],
             is_root: false,
             is_first_party: false,
         }
@@ -358,6 +360,72 @@ impl MockMetadata {
             },
         ])
     }
+
+    fn simple_deps() -> Self {
+        // Different dependency cases
+        MockMetadata::new(vec![
+            MockPackage {
+                name: "root",
+                is_root: true,
+                is_first_party: true,
+                deps: vec![dep("normal"), dep("proc-macro")],
+                dev_deps: vec![dep("dev"), dep("dev-proc-macro")],
+                build_deps: vec![dep("build"), dep("build-proc-macro")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "normal",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "dev",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "build",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "proc-macro",
+                targets: vec!["proc-macro"],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "dev-proc-macro",
+                targets: vec!["proc-macro"],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "build-proc-macro",
+                targets: vec!["proc-macro"],
+                ..Default::default()
+            },
+        ])
+    }
+
+    fn cycle() -> Self {
+        // Different dependency cases
+        MockMetadata::new(vec![
+            MockPackage {
+                name: "root",
+                is_root: true,
+                is_first_party: true,
+                deps: vec![dep("normal")],
+                dev_deps: vec![dep("dev-cycle")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "normal",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "dev-cycle",
+                deps: vec![dep("root")],
+                ..Default::default()
+            },
+        ])
+    }
+
     fn new(packages: Vec<MockPackage>) -> Self {
         let mut pkgids = vec![];
         let mut idx_by_name_and_ver = BTreeMap::<&str, BTreeMap<Version, usize>>::new();
@@ -385,13 +453,6 @@ impl MockMetadata {
                 package.name,
                 package.version
             );
-
-            if !package.build_deps.is_empty() {
-                unimplemented!("build-deps aren't mockable yet");
-            }
-            if !package.dev_deps.is_empty() {
-                unimplemented!("dev-deps aren't mockable yet");
-            }
         }
 
         Self {
@@ -431,7 +492,7 @@ impl MockMetadata {
                 "license_file": null,
                 "description": "whatever",
                 "source": self.source(package),
-                "dependencies": package.deps.iter().map(|dep| json!({
+                "dependencies": package.deps.iter().chain(&package.dev_deps).chain(&package.build_deps).map(|dep| json!({
                     "name": dep.name,
                     "source": self.source(self.package_by(dep.name, &dep.version)),
                     "req": format!("={}", dep.version),
@@ -443,22 +504,20 @@ impl MockMetadata {
                     "target": null,
                     "registry": null
                 })).collect::<Vec<_>>(),
-                "targets": [
-                    {
-                        "kind": [
-                            "lib"
-                        ],
-                        "crate_types": [
-                            "lib"
-                        ],
-                        "name": package.name,
-                        "src_path": "C:\\Users\\fake_user\\.cargo\\registry\\src\\github.com-1ecc6299db9ec823\\DUMMY\\src\\lib.rs",
-                        "edition": "2015",
-                        "doc": true,
-                        "doctest": true,
-                        "test": true
-                    },
-                ],
+                "targets": package.targets.iter().map(|target| json!({
+                    "kind": [
+                        target
+                    ],
+                    "crate_types": [
+                        target
+                    ],
+                    "name": package.name,
+                    "src_path": "C:\\Users\\fake_user\\.cargo\\registry\\src\\github.com-1ecc6299db9ec823\\DUMMY\\src\\lib.rs",
+                    "edition": "2015",
+                    "doc": true,
+                    "doctest": true,
+                    "test": true
+                })).collect::<Vec<_>>(),
                 "features": {},
                 "manifest_path": "C:\\Users\\fake_user\\.cargo\\registry\\src\\github.com-1ecc6299db9ec823\\DUMMY\\Cargo.toml",
                 "metadata": null,
@@ -483,22 +542,30 @@ impl MockMetadata {
                 }
             }).collect::<Vec<_>>(),
             "resolve": {
-                "nodes": self.packages.iter().map(|package| json!({
-                    "id": self.pkgid(package),
-                    "dependencies": package.deps.iter().map(|dep| {
-                        self.pkgid_by(dep.name, &dep.version)
-                    }).collect::<Vec<_>>(),
-                    "deps": package.deps.iter().map(|dep| json!({
-                        "name": dep.name,
-                        "pkg": self.pkgid_by(dep.name, &dep.version),
-                        "dep_kinds": [
-                            {
-                                "kind": null,
+                "nodes": self.packages.iter().map(|package| {
+                    let mut all_deps = BTreeMap::<(&str, &Version), Vec<Option<&str>>>::new();
+                    for dep in &package.deps {
+                        all_deps.entry((dep.name, &dep.version)).or_default().push(None);
+                    }
+                    for dep in &package.build_deps {
+                        all_deps.entry((dep.name, &dep.version)).or_default().push(Some("build"));
+                    }
+                    for dep in &package.dev_deps {
+                        all_deps.entry((dep.name, &dep.version)).or_default().push(Some("dev"));
+                    }
+                    json!({
+                        "id": self.pkgid(package),
+                        "dependencies": all_deps.keys().map(|(name, version)| self.pkgid_by(name, version)).collect::<Vec<_>>(),
+                        "deps": all_deps.iter().map(|((name, version), kinds)| json!({
+                            "name": name,
+                            "pkg": self.pkgid_by(name, version),
+                            "dep_kinds": kinds.iter().map(|kind| json!({
+                                "kind": kind,
                                 "target": null,
-                            }
-                        ],
-                    })).collect::<Vec<_>>(),
-                })).collect::<Vec<_>>(),
+                            })).collect::<Vec<_>>(),
+                        })).collect::<Vec<_>>(),
+                    })
+                }).collect::<Vec<_>>(),
                 "root": null,
             },
             "target_directory": "C:\\FAKE\\target",
@@ -614,6 +681,35 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
     (config, audits, imports)
 }
 
+fn builtin_files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
+    init_files(metadata).unwrap()
+}
+
+fn builtin_files_no_unaudited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
+    let (mut config, audits, imports) = builtin_files_inited(metadata);
+
+    // Just clear all the unaudited entries out
+    config.unaudited.clear();
+
+    (config, audits, imports)
+}
+fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
+    let (config, mut audits, imports) = builtin_files_no_unaudited(metadata);
+
+    let mut audited = StableMap::<String, Vec<AuditEntry>>::new();
+    for package in &metadata.packages {
+        if package.is_third_party() {
+            audited
+                .entry(package.name.clone())
+                .or_insert(vec![])
+                .push(full_audit(package.version.clone(), SAFE_TO_DEPLOY));
+        }
+    }
+    audits.audits = audited;
+
+    (config, audits, imports)
+}
+
 fn get_report(metadata: &Metadata, report: Report) -> String {
     let cfg = Config {
         metacfg: MetaConfig(vec![]),
@@ -672,6 +768,50 @@ fn mock_simple_full_audited() {
 
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-full-audited", stdout);
+}
+
+#[test]
+fn mock_builtin_simple_init() {
+    // (Pass) Should look the same as a fresh 'vet init'.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_inited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-builtin-simple-init", stdout);
+}
+
+#[test]
+fn mock_builtin_simple_no_unaudited() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-builtin-simple-no-unaudited", stdout);
+}
+
+#[test]
+fn mock_builtin_simple_full_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-builtin-simple-full-audited", stdout);
 }
 
 #[test]
@@ -1271,6 +1411,19 @@ fn mock_simple_delta_to_too_weak_full_audit() {
 }
 
 #[test]
+fn mock_complex_inited() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, audits, imports) = files_inited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-complex-inited", stdout);
+}
+
+#[test]
 fn mock_complex_no_unaudited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
@@ -1294,6 +1447,45 @@ fn mock_complex_full_audited() {
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("mock-complex-full-audited", stdout);
+}
+
+#[test]
+fn mock_builtin_complex_inited() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_inited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-builtin-complex-inited", stdout);
+}
+
+#[test]
+fn mock_builtin_complex_no_unaudited() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-builtin-complex-no-unaudited", stdout);
+}
+
+#[test]
+fn mock_builtin_complex_full_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-builtin-complex-full-audited", stdout);
 }
 
 #[test]
@@ -1696,6 +1888,140 @@ fn mock_simple_first_policy_redundant() {
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-policy-redundant", stdout);
+}
+
+#[test]
+fn builtin_simple_deps_inited() {
+    // (Pass) Should look the same as a fresh 'vet init'.
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_inited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-deps-init", stdout);
+}
+
+#[test]
+fn builtin_simple_deps_no_unaudited() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-deps-no-unaudited", stdout);
+}
+
+#[test]
+fn builtin_simple_deps_full_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-deps-full-audited", stdout);
+}
+
+#[test]
+fn builtin_no_deps() {
+    // (Pass) No actual deps
+    let mock = MockMetadata::new(vec![MockPackage {
+        name: "root-package",
+        is_root: true,
+        is_first_party: true,
+        deps: vec![],
+        ..Default::default()
+    }]);
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-no-deps", stdout);
+}
+
+#[test]
+fn builtin_only_first_deps() {
+    // (Pass) No actual deps
+    let mock = MockMetadata::new(vec![
+        MockPackage {
+            name: "root-package",
+            is_root: true,
+            is_first_party: true,
+            deps: vec![dep("first-party")],
+            ..Default::default()
+        },
+        MockPackage {
+            name: "first-party",
+            is_first_party: true,
+            deps: vec![],
+            ..Default::default()
+        },
+    ]);
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-only-first-deps", stdout);
+}
+
+#[test]
+fn builtin_cycle_inited() {
+    // (Pass) Should look the same as a fresh 'vet init'.
+    let mock = MockMetadata::cycle();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_inited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-cycle-inited", stdout);
+}
+
+#[test]
+fn builtin_cycle_unaudited() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+
+    let mock = MockMetadata::cycle();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-cycle-unaudited", stdout);
+}
+
+#[test]
+fn builtin_cycle_full_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let mock = MockMetadata::cycle();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-cycle-full-audited", stdout);
 }
 
 // TESTING BACKLOG:
