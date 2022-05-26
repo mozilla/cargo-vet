@@ -12,3 +12,7 @@ filesystem access) are hardened against manipulation and consistent with the
 advertised behavior of the crate. However, some discretion is permitted. In such
 cases, the nature of the discretion should be recorded in the `notes` field of
 the audit record.
+
+For crates which generate deployed code (e.g. build dependencies or procedural
+macros), reasonable usage of the crate should output code which meets the above
+criteria.
