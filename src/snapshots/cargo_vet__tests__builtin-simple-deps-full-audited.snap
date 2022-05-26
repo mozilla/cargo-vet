@@ -1,7 +1,7 @@
 ---
 source: src/tests.rs
-assertion_line: 1900
+assertion_line: 1910
 expression: stdout
 ---
-Vetting Succeeded (5 fully audited, 0 partially audited, 0 unaudited)
+Vetting Succeeded (7 fully audited, 0 partially audited, 0 unaudited)
 

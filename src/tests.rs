@@ -369,8 +369,8 @@ impl MockMetadata {
                 is_root: true,
                 is_first_party: true,
                 deps: vec![dep("normal"), dep("proc-macro")],
-                dev_deps: vec![dep("dev")],
-                build_deps: vec![dep("build")],
+                dev_deps: vec![dep("dev"), dep("dev-proc-macro")],
+                build_deps: vec![dep("build"), dep("build-proc-macro")],
                 ..Default::default()
             },
             MockPackage {
@@ -387,6 +387,16 @@ impl MockMetadata {
             },
             MockPackage {
                 name: "proc-macro",
+                targets: vec!["proc-macro"],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "dev-proc-macro",
+                targets: vec!["proc-macro"],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "build-proc-macro",
                 targets: vec!["proc-macro"],
                 ..Default::default()
             },
