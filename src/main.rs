@@ -684,7 +684,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         error!("couldn't get description of criteria");
         std::process::exit(-1);
     };
-    let who = Some(format!("{} ({})", user_info.username, user_info.email,));
+    let who = Some(format!("{} <{}>", user_info.username, user_info.email,));
     let notes = None;
 
     // FIXME: can we check if the version makes sense..?
