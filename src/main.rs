@@ -119,6 +119,10 @@ enum Commands {
     #[clap(disable_version_flag = true)]
     Fmt(FmtArgs),
 
+    /// Print a mermaid-js visualization of the cargo build graph as understood by cargo-vet
+    #[clap(disable_version_flag = true)]
+    DumpGraph(DumpGraphArgs),
+
     /// Print --help as markdown (for generating docs)
     #[clap(disable_version_flag = true)]
     #[clap(hide = true)]
@@ -171,6 +175,23 @@ struct AcceptCriteriaChangeArgs {}
 
 #[derive(clap::Args)]
 struct HelpMarkdownArgs {}
+
+#[derive(clap::Args)]
+pub struct DumpGraphArgs {
+    /// The depth of the graph to print (for a large project, the full graph is a HUGE MESS).
+    #[clap(long, arg_enum)]
+    #[clap(default_value_t = DumpGraphDepth::FirstParty)]
+    depth: DumpGraphDepth,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum DumpGraphDepth {
+    Roots,
+    Workspace,
+    FirstParty,
+    FirstPartyAndDirects,
+    Full,
+}
 
 /// Logging verbosity levels
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -519,6 +540,7 @@ fn main() -> Result<(), VetError> {
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
+        Some(DumpGraph(sub_args)) => cmd_dump_graph(out, &cfg, sub_args),
         // Need to be non-exhaustive because freestanding commands were handled earlier
         _ => unreachable!("did you add a new command and forget to implement it?"),
     }
@@ -815,6 +837,20 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         trace!("Saving imports.lock...");
         store_imports(store_path, imports)?;
     }
+
+    Ok(())
+}
+
+fn cmd_dump_graph(
+    out: &mut dyn Write,
+    cfg: &Config,
+    sub_args: &DumpGraphArgs,
+) -> Result<(), VetError> {
+    // Dump a mermaid-js graph
+    trace!("dumping...");
+
+    let graph = resolver::DepGraph::new(&cfg.metadata);
+    graph.print_mermaid(out, sub_args)?;
 
     Ok(())
 }

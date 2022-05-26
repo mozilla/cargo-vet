@@ -7,7 +7,7 @@ use std::io::Write;
 use crate::format::{self, AuditKind, Delta};
 use crate::{
     AuditEntry, AuditsFile, Cache, Config, ConfigFile, CriteriaEntry, DiffRecommendation,
-    ImportsFile, PackageExt, StableMap, VetError,
+    DumpGraphArgs, ImportsFile, PackageExt, StableMap, VetError,
 };
 
 #[derive(Debug, Clone)]
@@ -567,6 +567,101 @@ impl<'a> DepGraph<'a> {
             nodes,
             topo_index,
         }
+    }
+
+    pub fn print_mermaid(
+        &self,
+        out: &mut dyn Write,
+        sub_args: &DumpGraphArgs,
+    ) -> Result<(), VetError> {
+        use crate::DumpGraphDepth::*;
+        let depth = sub_args.depth;
+
+        let mut visible_nodes = BTreeSet::new();
+        let mut nodes_with_children = BTreeSet::new();
+        let mut shown = BTreeSet::new();
+
+        for (idx, package) in self.nodes.iter().enumerate() {
+            if (package.is_root && depth >= Roots)
+                || (package.is_workspace_member && depth >= Workspace)
+                || (!package.is_third_party && depth >= FirstParty)
+                || depth >= Full
+            {
+                visible_nodes.insert(idx);
+                nodes_with_children.insert(idx);
+
+                if depth >= FirstPartyAndDirects {
+                    for &dep in &package.all_deps {
+                        visible_nodes.insert(dep);
+                    }
+                }
+            }
+        }
+
+        writeln!(out, "graph LR")?;
+
+        writeln!(out, "    subgraph roots")?;
+        for &idx in &visible_nodes {
+            let package = &self.nodes[idx];
+            if package.is_root && shown.insert(idx) {
+                writeln!(
+                    out,
+                    "        node{idx}{{{}:{}}}",
+                    package.name, package.version
+                )?;
+            }
+        }
+        writeln!(out, "    end")?;
+
+        writeln!(out, "    subgraph workspace-members")?;
+        for &idx in &visible_nodes {
+            let package = &self.nodes[idx];
+            if package.is_workspace_member && shown.insert(idx) {
+                writeln!(
+                    out,
+                    "        node{idx}[/{}:{}/]",
+                    package.name, package.version
+                )?;
+            }
+        }
+        writeln!(out, "    end")?;
+
+        writeln!(out, "    subgraph first-party")?;
+        for &idx in &visible_nodes {
+            let package = &self.nodes[idx];
+            if !package.is_third_party && shown.insert(idx) {
+                writeln!(
+                    out,
+                    "        node{idx}[{}:{}]",
+                    package.name, package.version
+                )?;
+            }
+        }
+        writeln!(out, "    end")?;
+
+        writeln!(out, "    subgraph third-party")?;
+        for &idx in &visible_nodes {
+            let package = &self.nodes[idx];
+            if shown.insert(idx) {
+                writeln!(
+                    out,
+                    "        node{idx}({}:{})",
+                    package.name, package.version
+                )?;
+            }
+        }
+        writeln!(out, "    end")?;
+
+        for &idx in &nodes_with_children {
+            let package = &self.nodes[idx];
+            for &dep_idx in &package.all_deps {
+                if visible_nodes.contains(&dep_idx) {
+                    writeln!(out, "    node{idx} --> node{dep_idx}")?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

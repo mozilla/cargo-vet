@@ -70,6 +70,7 @@ Process all packages in the workspace
 * [accept-criteria-change](#cargo-vet-accept-criteria-change): Accept changes that a foreign audits.toml made to their criteria
 * [certify](#cargo-vet-certify): Mark `$package $version` as reviewed with `$message`
 * [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
+* [dump-graph](#cargo-vet-dump-graph): Print a mermaid-js visualization of the cargo build graph as understood by cargo-vet
 * [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
 * [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 * [init](#cargo-vet-init): initialize cargo-vet for your project
@@ -99,6 +100,25 @@ cargo vet help-markdown
 ```
 
 ### cargo vet help-markdown OPTIONS
+#### `-h, --help`
+Print help information
+
+<br><br><br>
+## cargo vet dump-graph 
+Print a mermaid-js visualization of the cargo build graph as understood by cargo-vet
+
+### cargo vet dump-graph USAGE
+```
+cargo vet dump-graph [OPTIONS]
+```
+
+### cargo vet dump-graph OPTIONS
+#### `--depth <DEPTH>`
+The depth of the graph to print (for a large project, the full graph is a HUGE MESS)
+
+\[default: first-party]  
+\[possible values: roots, workspace, first-party, first-party-and-directs, full]  
+
 #### `-h, --help`
 Print help information
 

@@ -31,6 +31,8 @@ SUBCOMMANDS:
     accept-criteria-change    Accept changes that a foreign audits.toml made to their criteria
     certify                   Mark `$package $version` as reviewed with `$message`
     diff                      Yield a diff against the last reviewed version
+    dump-graph                Print a mermaid-js visualization of the cargo build graph as
+                                  understood by cargo-vet
     fmt                       Reformat all of vet's files (in case you hand-edited them)
     help                      Print this message or the help of the given subcommand(s)
     init                      initialize cargo-vet for your project
