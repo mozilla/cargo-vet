@@ -1910,6 +1910,54 @@ fn builtin_simple_deps_full_audited() {
     insta::assert_snapshot!("builtin-simple-deps-full-audited", stdout);
 }
 
+#[test]
+fn builtin_no_deps() {
+    // (Pass) No actual deps
+    let mock = MockMetadata::new(vec![MockPackage {
+        name: "root-package",
+        is_root: true,
+        is_first_party: true,
+        deps: vec![],
+        ..Default::default()
+    }]);
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-no-deps", stdout);
+}
+
+#[test]
+fn builtin_only_first_deps() {
+    // (Pass) No actual deps
+    let mock = MockMetadata::new(vec![
+        MockPackage {
+            name: "root-package",
+            is_root: true,
+            is_first_party: true,
+            deps: vec![dep("first-party")],
+            ..Default::default()
+        },
+        MockPackage {
+            name: "first-party",
+            is_first_party: true,
+            deps: vec![],
+            ..Default::default()
+        },
+    ]);
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-only-first-deps", stdout);
+}
+
 // TESTING BACKLOG:
 //
 // * custom policies

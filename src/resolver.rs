@@ -1,9 +1,8 @@
+use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
 use core::fmt;
+use log::{error, trace, warn};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::Write;
-
-use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
-use log::{error, trace, warn};
 
 use crate::format::{self, AuditKind, Delta};
 use crate::{
@@ -700,10 +699,14 @@ pub fn resolve<'a>(
     let mut partially_audited_count = 0;
     let mut useless_unaudited = vec![];
     for &pkgidx in &graph.topo_index {
-        let node = &graph.nodes[pkgidx];
+        let package = &graph.nodes[pkgidx];
+        if !package.is_third_party {
+            // We only want to report on third-parties, which cause the errors.
+            continue;
+        }
         let result = &results[pkgidx];
 
-        if !result.needed_unaudited || !node.is_third_party {
+        if !result.needed_unaudited {
             fully_audited_count += 1;
         } else if result.directly_unaudited {
             unaudited_count += 1;
@@ -1421,11 +1424,44 @@ impl<'a> Report<'a> {
     }
 
     fn print_success(&self, out: &mut dyn Write) -> Result<(), VetError> {
-        writeln!(
-            out,
-            "Vetting Succeeded ({} fully audited, {} partially audited, {} unaudited)",
-            self.fully_audited_count, self.partially_audited_count, self.unaudited_count,
-        )?;
+        // Figure out how many entries we're going to print
+        let mut count_count = (self.fully_audited_count != 0) as usize
+            + (self.partially_audited_count != 0) as usize
+            + (self.unaudited_count != 0) as usize;
+
+        // Print out a summary of how we succeeded
+        if count_count == 0 {
+            writeln!(
+                out,
+                "Vetting Succeeded (because you have no third-party dependencies)"
+            )?;
+        } else {
+            write!(out, "Vetting Succeeded (")?;
+
+            if self.fully_audited_count != 0 {
+                write!(out, "{} fully audited", self.fully_audited_count)?;
+                count_count -= 1;
+                if count_count > 0 {
+                    write!(out, ", ")?;
+                }
+            }
+            if self.partially_audited_count != 0 {
+                write!(out, "{} partially audited", self.partially_audited_count)?;
+                count_count -= 1;
+                if count_count > 0 {
+                    write!(out, ", ")?;
+                }
+            }
+            if self.unaudited_count != 0 {
+                write!(out, "{} unaudited", self.unaudited_count)?;
+                count_count -= 1;
+                if count_count > 0 {
+                    write!(out, ", ")?;
+                }
+            }
+
+            writeln!(out, ")")?;
+        }
 
         // Warn about useless unaudited entries
         if !self.useless_unaudited.is_empty() {
