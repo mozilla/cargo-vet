@@ -10,7 +10,7 @@ You might find yourself using a crate authored either by someone you personally
 know or by a well-known member the community, in which case you might see low
 value in an additional audit. In this situation, you are of course free to
 simply leave the crate in the `unaudited` list indefinitely, perhaps with a
-note indicating that this specific audit is a low priority.
+`suggest = false` and note indicating that this specific audit is a low priority.
 
 There are, of course, dangers in being too permissive in these cases. Crates are
 often a collaborative effort, and it may not be the case that this trusted
@@ -44,6 +44,24 @@ record-violation`. This isn't supported for three reasons:
 * When the situation does arise, the effort required to manually update
   `audits.toml` is dwarfed by the effort of actually extricating the dependency
   from your project.
+
+## Why does `cargo vet` require audits for overridden dependencies?
+
+Cargo supports [dependency
+overrides](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html),
+which allows developers to replace public crates in their dependency graph with
+a custom version. Strictly speaking, these overrides are first-party code, but
+`cargo vet` nevertheless requires a corresponding audit for the public version.
+
+The reason is that this custom version might be generated in one of two ways: by
+building a semantically-compatible replacement from scratch, or by starting with
+the source of the original crate and making some (potentially-minimal)
+modifications. The latter case is quite common, and in practice rarely entails a
+full audit of the original crate despite formally transforming it into
+first-party code.  Since `cargo vet` has no way to distinguish this case from a
+from-scratch rewrite, it conservatively assumes the former. The latter case can
+be handled by adding an entry to the `unaudited` table with `suggest = false`
+and a note explaining the situation.
 
 ## How does this relate to `cargo crev`?
 
