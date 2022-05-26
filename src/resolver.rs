@@ -562,8 +562,6 @@ pub fn resolve<'a>(
     imports: &'a ImportsFile,
     guess_deeper: bool,
 ) -> Report<'a> {
-    let mut violation_failed = vec![];
-
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
     let graph = DepGraph::new(metadata);
@@ -576,11 +574,13 @@ pub fn resolve<'a>(
     let mut results =
         vec![ResolveResult::with_no_criteria(criteria_mapper.no_criteria()); graph.nodes.len()];
     let mut root_failures = vec![];
-    // Actually vet the dependencies
-    for &pkgidx in &graph.topo_index {
-        let node = &graph.nodes[pkgidx];
+    let mut violation_failed = vec![];
 
-        if node.is_third_party {
+    // Actually vet the build graph
+    for &pkgidx in &graph.topo_index {
+        let package = &graph.nodes[pkgidx];
+
+        if package.is_third_party {
             resolve_third_party(
                 metadata,
                 config,
@@ -605,6 +605,56 @@ pub fn resolve<'a>(
                 &mut violation_failed,
                 &mut root_failures,
                 pkgidx,
+            );
+        }
+    }
+
+    // Now that we've processed the "normal" graph we need to check the dev (test/bench) builds.
+    // This needs to be done as a separate pass because tests can introduce apparent cycles in
+    // the Cargo graph, because our X's tests can depend on Y which in turn depend on X again.
+    //
+    // This is fine for Cargo because the tests are a completely different build from X itself
+    // so the cycle completely disappears once the graph is "desugarred" into actual build units,
+    // but it's an annoying problem for us because it essentially means we cannot fully analyze
+    // X in one shot. However we have a few useful insights we can leverage:
+    //
+    // * Nothing can "depend" on X's tests, and therefore ignoring the tests on our first pass
+    //   shouldn't logically affect any other node's results. i.e. UsesX being safe-to-run
+    //   does not depend on X's tests being safe-to-run. If we were to desugar X into two nodes
+    //   as Cargo does, the "dev" node would always be a root, so we should treat it as such
+    //   during this second pass.
+    //
+    // * We don't actually *care* if a node *has* tests/benches. All we care about is if
+    //   the node has dev-dependencies, because that's the only thing that could change the
+    //   results of the previous pass. (TODO: is this actually true? Root nodes get special
+    //   default policies, so maybe all nodes that are testable should get rescanned? But
+    //   also tests are expected to have weaker requirements... hmm...)
+    //
+    // * We will only ever test/bench a workspace member, and workspace members are always
+    //   first-party packages. This means we can avoid thinking about all the complicated
+    //   graph search stuff and just need to do simple one-shot analysis of our deps and
+    //   check against root policies.
+    for &pkgidx in &graph.topo_index {
+        let package = &graph.nodes[pkgidx];
+        if package.is_workspace_member {
+            resolve_dev(
+                metadata,
+                config,
+                audits,
+                imports,
+                &graph,
+                &criteria_mapper,
+                &mut results,
+                &mut violation_failed,
+                &mut root_failures,
+                pkgidx,
+            );
+        } else {
+            assert!(
+                package.dev_deps.is_empty(),
+                "{}:{} isn't a workspace member but has dev-deps!",
+                package.name,
+                package.version
             );
         }
     }
@@ -985,11 +1035,14 @@ fn resolve_first_party<'a>(
     root_failures: &mut Vec<PackageIdx>,
     pkgidx: PackageIdx,
 ) {
-    // Compute the "policy" criteria
+    // Check the build-deps and normal-deps of this package. dev-deps are checking in `resolve_dep`
+    // In this pass we properly use package.is_root, but in the next pass all nodes are "roots"
     let package = &graph.nodes[pkgidx];
+    let is_root = package.is_root;
 
+    // Root nodes adopt this policy if they don't have an explicit one
     let default_root_policy = criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
-    let _default_build_and_dev_policy =
+    let _default_root_build_and_dev_policy =
         criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA]);
 
     let mut policy_failures = PolicyFailures::new();
@@ -997,7 +1050,7 @@ fn resolve_first_party<'a>(
     // Any dependencies that have explicit policies are checked first
     let mut passed_dependencies = BTreeSet::new();
     if let Some(policy) = config.policy.get(package.name) {
-        for &depidx in &package.all_deps {
+        for &depidx in package.normal_deps.iter().chain(&package.build_deps) {
             let dep_package = &graph.nodes[depidx];
             let dep_policy = policy
                 .dependency_criteria
@@ -1023,7 +1076,10 @@ fn resolve_first_party<'a>(
         let mut search_results = vec![];
         for criteria in criteria_mapper.criteria_iter() {
             let mut failed_deps = BTreeSet::new();
-            for &depidx in &package.all_deps {
+            // TODO: this isn't quite right. We want to analyze build-deps distinctly but we're
+            // just merging them in with normal deps... I need to think about this more.
+            // The semantic of policies is unclear for build-deps, I think...
+            for &depidx in package.normal_deps.iter().chain(&package.build_deps) {
                 if passed_dependencies.contains(&depidx) {
                     // This dep is already fine, ignore it (implicitly all_criteria now)
                     continue;
@@ -1046,7 +1102,7 @@ fn resolve_first_party<'a>(
         // Now check that we pass our own policy
         let own_policy = if let Some(policy) = config.policy.get(package.name) {
             criteria_mapper.criteria_from_list(&policy.criteria)
-        } else if package.is_root {
+        } else if is_root {
             default_root_policy
         } else {
             criteria_mapper.no_criteria()
@@ -1069,10 +1125,126 @@ fn resolve_first_party<'a>(
         }
     }
 
-    if !policy_failures.is_empty() && package.is_root {
+    if !policy_failures.is_empty() && is_root {
         root_failures.push(pkgidx);
     }
-    results[pkgidx].policy_failures = policy_failures;
+    results[pkgidx].policy_failures.append(&mut policy_failures);
+}
+
+#[allow(clippy::too_many_arguments, clippy::ptr_arg)]
+fn resolve_dev<'a>(
+    _metadata: &'a Metadata,
+    config: &'a ConfigFile,
+    _audits: &'a AuditsFile,
+    _imports: &'a ImportsFile,
+    graph: &DepGraph<'a>,
+    criteria_mapper: &CriteriaMapper,
+    results: &mut [ResolveResult<'a>],
+    _violation_failed: &mut Vec<PackageIdx>,
+    root_failures: &mut Vec<PackageIdx>,
+    pkgidx: PackageIdx,
+) {
+    // This is a copy of resolve_first_party but tweaked to handle dev-deps specifically.
+    // In this version we are logically processing a "dev" (test/bench) node which depends
+    // on the normal build. It is always a root, and so we don't need to record any details
+    // if this passes. The only thing that needs to be recorded are explicitly policy failures
+    // which can be folded in with the rest of the normal analysis.
+    let package = &graph.nodes[pkgidx];
+    let is_root = true;
+
+    // Root nodes adopt this policy if they don't have an explicit one
+    let _default_root_policy =
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
+    let default_root_build_and_dev_policy =
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA]);
+
+    let mut policy_failures = PolicyFailures::new();
+
+    // Any dependencies that have explicit policies are checked first
+    let mut passed_dependencies = BTreeSet::new();
+    if let Some(policy) = config.policy.get(package.name) {
+        for &depidx in &package.dev_deps {
+            let dep_package = &graph.nodes[depidx];
+            let dep_policy = policy
+                .dependency_criteria
+                .get(dep_package.name)
+                .map(|p| criteria_mapper.criteria_from_list(p))
+                .unwrap_or_else(|| criteria_mapper.no_criteria());
+
+            for criteria_idx in dep_policy.indices() {
+                if results[depidx].has_criteria(criteria_idx) {
+                    passed_dependencies.insert(depidx);
+                } else {
+                    policy_failures
+                        .entry(depidx)
+                        .or_insert_with(|| criteria_mapper.no_criteria())
+                        .set_criteria(criteria_idx);
+                }
+            }
+        }
+    }
+
+    if policy_failures.is_empty() {
+        let mut validated_criteria = criteria_mapper.no_criteria();
+        let mut search_results = vec![];
+        for criteria in criteria_mapper.criteria_iter() {
+            let mut failed_deps = BTreeSet::new();
+            for &depidx in &package.dev_deps {
+                if passed_dependencies.contains(&depidx) {
+                    // This dep is already fine, ignore it (implicitly all_criteria now)
+                    continue;
+                }
+                if !results[depidx].contains(criteria) {
+                    failed_deps.insert(depidx);
+                }
+            }
+
+            if failed_deps.is_empty() {
+                search_results.push(SearchResult::Connected {
+                    fully_audited: true,
+                });
+                validated_criteria.unioned_with(criteria);
+            } else {
+                search_results.push(SearchResult::PossiblyConnected { failed_deps })
+            }
+        }
+
+        // Now check that we pass our own policy
+        let own_policy = if let Some(policy) = config.policy.get(package.name) {
+            criteria_mapper.criteria_from_list(&policy.build_and_dev_criteria)
+        } else if is_root {
+            default_root_build_and_dev_policy
+        } else {
+            unreachable!("dev nodes are always roots!")
+        };
+
+        // TODO: arguably we should also include our normal self's results because we
+        // depend on it..?
+        for criteria_idx in own_policy.indices() {
+            if let SearchResult::PossiblyConnected { failed_deps } = &search_results[criteria_idx] {
+                for &dep in failed_deps {
+                    policy_failures
+                        .entry(dep)
+                        .or_insert_with(|| criteria_mapper.no_criteria())
+                        .set_criteria(criteria_idx);
+                }
+            }
+        }
+
+        // Don't commit successes, this is the fake "dev" node which doesn't effect others,
+        // so if there's no failures then we don't care about this node at all!
+        /*
+        if policy_failures.is_empty() {
+            results[pkgidx].search_results = search_results;
+            results[pkgidx].validated_criteria = validated_criteria;
+        }
+        */
+    }
+
+    if !policy_failures.is_empty() && is_root {
+        root_failures.push(pkgidx);
+    }
+    results[pkgidx].policy_failures.append(&mut policy_failures);
 }
 
 fn search_for_path<'a>(

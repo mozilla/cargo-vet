@@ -3,9 +3,5 @@ source: src/tests.rs
 assertion_line: 1870
 expression: stdout
 ---
-Vetting Failed!
-
-0 unvetted dependencies:
-
-nothing to recommend
+Vetting Succeeded (1 fully audited, 0 partially audited, 4 unaudited)
 
