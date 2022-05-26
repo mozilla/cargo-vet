@@ -68,6 +68,8 @@ SUBCOMMANDS:
             Mark `$package $version` as reviewed with `$message`
     diff
             Yield a diff against the last reviewed version
+    dump-graph
+            Print a mermaid-js visualization of the cargo build graph as understood by cargo-vet
     fmt
             Reformat all of vet's files (in case you hand-edited them)
     help

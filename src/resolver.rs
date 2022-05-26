@@ -7,7 +7,7 @@ use std::io::Write;
 use crate::format::{self, AuditKind, Delta};
 use crate::{
     AuditEntry, AuditsFile, Cache, Config, ConfigFile, CriteriaEntry, DiffRecommendation,
-    ImportsFile, PackageExt, StableMap, VetError,
+    DumpGraphArgs, ImportsFile, PackageExt, StableMap, VetError,
 };
 
 #[derive(Debug, Clone)]
@@ -56,10 +56,14 @@ pub struct PackageNode<'a> {
     pub dev_deps: Vec<PackageIdx>,
     pub all_deps: Vec<PackageIdx>,
     pub reverse_deps: HashSet<PackageIdx>,
+    /// Whether this package is a workspace member (can have dev-deps)
     pub is_workspace_member: bool,
+    /// Whether this package is third-party (from crates.io)
     pub is_third_party: bool,
+    /// Whether this package is a root in the "normal" build graph
     pub is_root: bool,
-    pub has_non_dev_reverse_deps: bool,
+    /// Whether this package only shows up in dev (test/bench) builds
+    pub is_dev_only: bool,
 }
 
 /// The dependency graph in a form we can use more easily.
@@ -389,7 +393,7 @@ impl<'a> DepGraph<'a> {
                 name: &package.name,
                 version: &package.version,
                 is_third_party: package.is_third_party(),
-                // These will get computed later
+                // These will get (re)computed later
                 normal_deps: vec![],
                 build_deps: vec![],
                 dev_deps: vec![],
@@ -397,7 +401,7 @@ impl<'a> DepGraph<'a> {
                 reverse_deps: HashSet::new(),
                 is_workspace_member: false,
                 is_root: false,
-                has_non_dev_reverse_deps: false,
+                is_dev_only: true,
             });
             assert!(interner_by_pkgid.insert(&resolve_node.id, idx).is_none());
             assert!(interner_by_name_and_ver
@@ -435,10 +439,15 @@ impl<'a> DepGraph<'a> {
                 );
             }
 
+            // Anything we visited in the first pass isn't dev-only
+            for (&node_idx, ()) in &visited {
+                nodes[node_idx].is_dev_only = false;
+            }
+
             // Now that we've visited the normal build graph, mark the nodes that are roots
             for pkgid in &metadata.workspace_members {
                 let node = &mut nodes[interner_by_pkgid[pkgid]];
-                node.is_root = !node.has_non_dev_reverse_deps;
+                node.is_root = node.reverse_deps.is_empty();
             }
 
             // And finally visit workspace-members' dev-deps, safe in the knowledge that
@@ -463,13 +472,12 @@ impl<'a> DepGraph<'a> {
                         resolve_list,
                         child,
                     );
+                    // Note that these edges do not change whether something is a "root"
                     nodes[child].reverse_deps.insert(node_idx);
                 }
 
                 let node = &mut nodes[node_idx];
                 node.dev_deps = dev_deps;
-                // This may have gotten clobbered, fix it just to avoid inconsistencies
-                node.has_non_dev_reverse_deps = !node.is_root;
             }
             fn visit_node<'a>(
                 nodes: &mut Vec<PackageNode<'a>>,
@@ -508,7 +516,6 @@ impl<'a> DepGraph<'a> {
                             child,
                         );
                         nodes[child].reverse_deps.insert(normal_idx);
-                        nodes[child].has_non_dev_reverse_deps = true;
                     }
 
                     // Now visit all the normal deps
@@ -523,7 +530,6 @@ impl<'a> DepGraph<'a> {
                             child,
                         );
                         nodes[child].reverse_deps.insert(normal_idx);
-                        nodes[child].has_non_dev_reverse_deps = true;
                     }
 
                     // Now visit the node itself
@@ -561,6 +567,101 @@ impl<'a> DepGraph<'a> {
             nodes,
             topo_index,
         }
+    }
+
+    pub fn print_mermaid(
+        &self,
+        out: &mut dyn Write,
+        sub_args: &DumpGraphArgs,
+    ) -> Result<(), VetError> {
+        use crate::DumpGraphDepth::*;
+        let depth = sub_args.depth;
+
+        let mut visible_nodes = BTreeSet::new();
+        let mut nodes_with_children = BTreeSet::new();
+        let mut shown = BTreeSet::new();
+
+        for (idx, package) in self.nodes.iter().enumerate() {
+            if (package.is_root && depth >= Roots)
+                || (package.is_workspace_member && depth >= Workspace)
+                || (!package.is_third_party && depth >= FirstParty)
+                || depth >= Full
+            {
+                visible_nodes.insert(idx);
+                nodes_with_children.insert(idx);
+
+                if depth >= FirstPartyAndDirects {
+                    for &dep in &package.all_deps {
+                        visible_nodes.insert(dep);
+                    }
+                }
+            }
+        }
+
+        writeln!(out, "graph LR")?;
+
+        writeln!(out, "    subgraph roots")?;
+        for &idx in &visible_nodes {
+            let package = &self.nodes[idx];
+            if package.is_root && shown.insert(idx) {
+                writeln!(
+                    out,
+                    "        node{idx}{{{}:{}}}",
+                    package.name, package.version
+                )?;
+            }
+        }
+        writeln!(out, "    end")?;
+
+        writeln!(out, "    subgraph workspace-members")?;
+        for &idx in &visible_nodes {
+            let package = &self.nodes[idx];
+            if package.is_workspace_member && shown.insert(idx) {
+                writeln!(
+                    out,
+                    "        node{idx}[/{}:{}/]",
+                    package.name, package.version
+                )?;
+            }
+        }
+        writeln!(out, "    end")?;
+
+        writeln!(out, "    subgraph first-party")?;
+        for &idx in &visible_nodes {
+            let package = &self.nodes[idx];
+            if !package.is_third_party && shown.insert(idx) {
+                writeln!(
+                    out,
+                    "        node{idx}[{}:{}]",
+                    package.name, package.version
+                )?;
+            }
+        }
+        writeln!(out, "    end")?;
+
+        writeln!(out, "    subgraph third-party")?;
+        for &idx in &visible_nodes {
+            let package = &self.nodes[idx];
+            if shown.insert(idx) {
+                writeln!(
+                    out,
+                    "        node{idx}({}:{})",
+                    package.name, package.version
+                )?;
+            }
+        }
+        writeln!(out, "    end")?;
+
+        for &idx in &nodes_with_children {
+            let package = &self.nodes[idx];
+            for &dep_idx in &package.all_deps {
+                if visible_nodes.contains(&dep_idx) {
+                    writeln!(out, "    node{idx} --> node{dep_idx}")?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
