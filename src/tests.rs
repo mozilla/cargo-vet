@@ -403,6 +403,29 @@ impl MockMetadata {
         ])
     }
 
+    fn cycle() -> Self {
+        // Different dependency cases
+        MockMetadata::new(vec![
+            MockPackage {
+                name: "root",
+                is_root: true,
+                is_first_party: true,
+                deps: vec![dep("normal")],
+                dev_deps: vec![dep("dev-cycle")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "normal",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "dev-cycle",
+                deps: vec![dep("root")],
+                ..Default::default()
+            },
+        ])
+    }
+
     fn new(packages: Vec<MockPackage>) -> Self {
         let mut pkgids = vec![];
         let mut idx_by_name_and_ver = BTreeMap::<&str, BTreeMap<Version, usize>>::new();
@@ -1956,6 +1979,49 @@ fn builtin_only_first_deps() {
 
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-only-first-deps", stdout);
+}
+
+#[test]
+fn builtin_cycle_inited() {
+    // (Pass) Should look the same as a fresh 'vet init'.
+    let mock = MockMetadata::cycle();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_inited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-cycle-inited", stdout);
+}
+
+#[test]
+fn builtin_cycle_unaudited() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+
+    let mock = MockMetadata::cycle();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-cycle-unaudited", stdout);
+}
+
+#[test]
+fn builtin_cycle_full_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let mock = MockMetadata::cycle();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-cycle-full-audited", stdout);
 }
 
 // TESTING BACKLOG:

@@ -408,17 +408,19 @@ impl<'a> DepGraph<'a> {
         }
 
         // Do topological sort: just recursively visit all of a node's children, and only add it
-        // to the node *after* visiting the children. In this way we have trivially already added
-        // all of the dependencies of a node by the time we have
+        // to the list *after* visiting the children. In this way we have trivially already added
+        // all of the dependencies of a node to the list by the time we add itself to the list.
 
         let mut topo_index = vec![];
         {
-            // FIXME: cargo uses BTreeSet, PackageIds are long strings, so maybe this makes sense?
             let mut visited = HashMap::new();
             // All of the roots can be found in the workspace_members.
-            // It's fine if some aren't roots, toplogical sort works even if do all nodes.
-            // FIXME: is it better to actually use resolve.root? Seems like it won't
-            // work right for workspaces with multiple roots!
+            // First we visit all the workspace members while ignoring dev-deps,
+            // this should get us an analysis of the "normal" build graph, which
+            // we should compute roots from. Then we will do a second pass on
+            // the dev-deps. If we don't do it this way, then dev-dep cycles can
+            // confuse us about which nodes are roots or not (potentially resulting
+            // in no roots at all!
             for pkgid in &metadata.workspace_members {
                 let node_idx = interner_by_pkgid[pkgid];
                 nodes[node_idx].is_workspace_member = true;
@@ -431,6 +433,43 @@ impl<'a> DepGraph<'a> {
                     resolve_list,
                     node_idx,
                 );
+            }
+
+            // Now that we've visited the normal build graph, mark the nodes that are roots
+            for pkgid in &metadata.workspace_members {
+                let node = &mut nodes[interner_by_pkgid[pkgid]];
+                node.is_root = !node.has_non_dev_reverse_deps;
+            }
+
+            // And finally visit workspace-members' dev-deps, safe in the knowledge that
+            // we know what all the roots are now.
+            for pkgid in &metadata.workspace_members {
+                let node_idx = interner_by_pkgid[pkgid];
+                let resolve_node = &resolve_list[resolve_index_by_pkgid[pkgid]];
+                let dev_deps = deps(
+                    resolve_node,
+                    DependencyKind::Development,
+                    &interner_by_pkgid,
+                );
+
+                // Now visit all the dev deps
+                for &child in &dev_deps {
+                    visit_node(
+                        &mut nodes,
+                        &mut topo_index,
+                        &mut visited,
+                        &interner_by_pkgid,
+                        &resolve_index_by_pkgid,
+                        resolve_list,
+                        child,
+                    );
+                    nodes[child].reverse_deps.insert(node_idx);
+                }
+
+                let node = &mut nodes[node_idx];
+                node.dev_deps = dev_deps;
+                // This may have gotten clobbered, fix it just to avoid inconsistencies
+                node.has_non_dev_reverse_deps = !node.is_root;
             }
             fn visit_node<'a>(
                 nodes: &mut Vec<PackageNode<'a>>,
@@ -456,8 +495,6 @@ impl<'a> DepGraph<'a> {
                         .collect::<Vec<_>>();
                     let build_deps = deps(resolve_node, DependencyKind::Build, interner_by_pkgid);
                     let normal_deps = deps(resolve_node, DependencyKind::Normal, interner_by_pkgid);
-                    let dev_deps =
-                        deps(resolve_node, DependencyKind::Development, interner_by_pkgid);
 
                     // Now visit all the build deps
                     for &child in &build_deps {
@@ -492,29 +529,13 @@ impl<'a> DepGraph<'a> {
                     // Now visit the node itself
                     topo_index.push(normal_idx);
 
-                    // Now visit all the dev deps
-                    for &child in &dev_deps {
-                        visit_node(
-                            nodes,
-                            topo_index,
-                            visited,
-                            interner_by_pkgid,
-                            resolve_index_by_pkgid,
-                            resolve_list,
-                            child,
-                        );
-                        nodes[child].reverse_deps.insert(normal_idx);
-                        // NOTE: we don't set has_non_dev_reverse_deps here
-                        // so that we don't think things aren't roots just because
-                        // some tests import them.
-                    }
-
                     // Now commit all the deps
                     let cur_node = &mut nodes[normal_idx];
                     cur_node.build_deps = build_deps;
                     cur_node.normal_deps = normal_deps;
-                    cur_node.dev_deps = dev_deps;
                     cur_node.all_deps = all_deps;
+
+                    // dev-deps will be handled in a second pass
                 }
             }
             fn deps(
@@ -532,13 +553,6 @@ impl<'a> DepGraph<'a> {
                     .map(|dep| interner_by_pkgid[&dep.pkg])
                     .collect()
             }
-        }
-
-        // Now that we've visited the whole graph, mark the nodes that are workspace members
-        for pkgid in &metadata.workspace_members {
-            let node = &mut nodes[interner_by_pkgid[pkgid]];
-            node.is_workspace_member = true;
-            node.is_root = !node.has_non_dev_reverse_deps;
         }
 
         Self {
@@ -1131,7 +1145,13 @@ fn resolve_first_party<'a>(
     if !policy_failures.is_empty() && is_root {
         root_failures.push(pkgidx);
     }
-    results[pkgidx].policy_failures.append(&mut policy_failures);
+    for (dep, failure) in policy_failures {
+        results[pkgidx]
+            .policy_failures
+            .entry(dep)
+            .or_insert_with(|| criteria_mapper.no_criteria())
+            .unioned_with(&failure);
+    }
 }
 
 #[allow(clippy::too_many_arguments, clippy::ptr_arg)]
@@ -1247,7 +1267,13 @@ fn resolve_dev<'a>(
     if !policy_failures.is_empty() && is_root {
         root_failures.push(pkgidx);
     }
-    results[pkgidx].policy_failures.append(&mut policy_failures);
+    for (dep, failure) in policy_failures {
+        results[pkgidx]
+            .policy_failures
+            .entry(dep)
+            .or_insert_with(|| criteria_mapper.no_criteria())
+            .unioned_with(&failure);
+    }
 }
 
 fn search_for_path<'a>(
