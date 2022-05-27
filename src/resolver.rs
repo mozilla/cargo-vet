@@ -1,6 +1,8 @@
 use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
 use core::fmt;
 use log::{error, trace, warn};
+use serde::Serialize;
+use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::Write;
 
@@ -55,18 +57,18 @@ pub struct Success {
 
 #[derive(Debug, Clone)]
 pub struct FailForViolationConflict {
-    pub violations: FastMap<PackageIdx, Vec<ViolationConflict>>,
+    pub violations: SortedMap<PackageIdx, Vec<ViolationConflict>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FailForVet {
     /// These packages are to blame and need to be fixed
-    pub failures: FastMap<PackageIdx, AuditFailure>,
+    pub failures: SortedMap<PackageIdx, AuditFailure>,
     pub suggest: Option<Suggest>,
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ViolationConflict {
     CurVersionConflict {
         source: AuditSource,
@@ -80,16 +82,16 @@ pub enum ViolationConflict {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum AuditSource {
     OwnAudits,
     Foreign(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Suggest {
     pub suggestions: Vec<SuggestItem>,
-    pub suggestions_by_criteria: BTreeMap<String, Vec<SuggestItem>>,
+    pub suggestions_by_criteria: SortedMap<String, Vec<SuggestItem>>,
     pub total_lines: u64,
 }
 
@@ -101,7 +103,7 @@ pub struct SuggestItem {
     pub notable_parents: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DiffRecommendation {
     pub from: Version,
     pub to: Version,
@@ -130,7 +132,7 @@ pub struct CriteriaMapper {
 /// In the current implementation it can be used to directly index into the `graph` or `results`.
 pub type PackageIdx = usize;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PackageNode<'a> {
     pub build_type: DependencyKind,
     pub package_id: &'a PackageId,
@@ -774,7 +776,7 @@ pub fn resolve<'a>(
     let mut results =
         vec![ResolveResult::with_no_criteria(criteria_mapper.no_criteria()); graph.nodes.len()];
     let mut root_failures = FastSet::new();
-    let mut violations = FastMap::new();
+    let mut violations = SortedMap::new();
 
     // Actually vet the build graph
     for &pkgidx in &graph.topo_index {
@@ -873,7 +875,7 @@ pub fn resolve<'a>(
 
     // There weren't any violations, so now compute the final failures by pushing blame
     // down from the roots to the leaves that caused those failures.
-    let mut failures = FastMap::<PackageIdx, AuditFailure>::new();
+    let mut failures = SortedMap::<PackageIdx, AuditFailure>::new();
     visit_failures(
         &graph,
         &results,
@@ -960,7 +962,7 @@ fn resolve_third_party<'a>(
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
-    violations: &mut FastMap<PackageIdx, Vec<ViolationConflict>>,
+    violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
     _root_failures: &mut FastSet<PackageIdx>,
     pkgidx: PackageIdx,
 ) {
@@ -1446,7 +1448,7 @@ fn resolve_first_party<'a>(
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
-    _violations: &mut FastMap<PackageIdx, Vec<ViolationConflict>>,
+    _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
     root_failures: &mut FastSet<PackageIdx>,
     pkgidx: PackageIdx,
 ) {
@@ -1561,7 +1563,7 @@ fn resolve_dev<'a>(
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
-    _violations: &mut FastMap<PackageIdx, Vec<ViolationConflict>>,
+    _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
     root_failures: &mut FastSet<PackageIdx>,
     pkgidx: PackageIdx,
 ) {
@@ -1834,26 +1836,6 @@ impl<'a> ResolveReport<'a> {
         }
     }
 
-    /// Print a full human-readable report
-    pub fn print_human(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
-        match &self.conclusion {
-            Conclusion::Success(res) => res.print_human(out, self, cfg),
-            Conclusion::FailForViolationConflict(res) => res.print_human(out, self, cfg),
-            Conclusion::FailForVet(res) => res.print_human(out, self, cfg),
-        }
-    }
-
-    /// Print only the suggest portion of a human-readable report
-    pub fn print_suggest_human(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
-        if let Some(suggest) = self.compute_suggest(cfg)? {
-            suggest.print_human(out, self)?;
-        } else {
-            // This API is only used for vet-suggest
-            writeln!(out, "Nothing to suggest, you're fully audited!")?;
-        }
-        Ok(())
-    }
-
     pub fn compute_suggest(&self, cfg: &Config) -> Result<Option<Suggest>, VetError> {
         let fail = if let Conclusion::FailForVet(fail) = &self.conclusion {
             fail
@@ -1996,6 +1978,88 @@ impl<'a> ResolveReport<'a> {
             suggestions_by_criteria,
             total_lines,
         }))
+    }
+
+    /// Print a full human-readable report
+    pub fn print_human(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
+        match &self.conclusion {
+            Conclusion::Success(res) => res.print_human(out, self, cfg),
+            Conclusion::FailForViolationConflict(res) => res.print_human(out, self, cfg),
+            Conclusion::FailForVet(res) => res.print_human(out, self, cfg),
+        }
+    }
+
+    /// Print only the suggest portion of a human-readable report
+    pub fn print_suggest_human(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
+        if let Some(suggest) = self.compute_suggest(cfg)? {
+            suggest.print_human(out, self)?;
+        } else {
+            // This API is only used for vet-suggest
+            writeln!(out, "Nothing to suggest, you're fully audited!")?;
+        }
+        Ok(())
+    }
+
+    /// Print a full human-readable report
+    pub fn print_json(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
+        let result = match &self.conclusion {
+            Conclusion::Success(success) => {
+                let json_package = |pkgidx: &PackageIdx| {
+                    let package = &self.graph.nodes[*pkgidx];
+                    json!({
+                        "name": package.name,
+                        "version": package.version,
+                    })
+                };
+                json!({
+                    "conclusion": "success",
+                    "vetted_fully": success.vetted_fully.iter().map(json_package).collect::<Vec<_>>(),
+                    "vetted_partially": success.vetted_partially.iter().map(json_package).collect::<Vec<_>>(),
+                    "vetted_with_unaudited": success.vetted_with_unaudited.iter().map(json_package).collect::<Vec<_>>(),
+                    "useless_unaudited": success.useless_unaudited.iter().map(json_package).collect::<Vec<_>>(),
+                })
+            }
+            Conclusion::FailForViolationConflict(fail) => json!({
+                "conclusion": "fail (violation)",
+                "violations": fail.violations.iter().map(|(pkgidx, violations)| {
+                    let package = &self.graph.nodes[*pkgidx];
+                    let key = format!("{}:{}", package.name, package.version);
+                    (key, violations)
+                }).collect::<StableMap<_,_>>(),
+            }),
+            Conclusion::FailForVet(fail) => {
+                let suggest = self.compute_suggest(cfg)?;
+                let json_suggest_item = |item: &SuggestItem| {
+                    let package = &self.graph.nodes[item.package];
+                    json!({
+                        "name": package.name,
+                        "notable_parents": item.notable_parents,
+                        "suggested_criteria": self.criteria_mapper.criteria_names(&item.suggested_criteria).collect::<Vec<_>>(),
+                        "suggested_diff": item.suggested_diff,
+                    })
+                };
+                json!({
+                    "conclusion": "fail (vetting)",
+                    "failures": fail.failures.iter().map(|(&pkgidx, audit_fail)| {
+                        let package = &self.graph.nodes[pkgidx];
+                        json!({
+                            "name": package.name,
+                            "version": package.version,
+                            "missing_criteria": self.criteria_mapper.criteria_names(&audit_fail.criteria_failures).collect::<Vec<_>>(),
+                        })
+                    }).collect::<Vec<_>>(),
+                    "suggest": suggest.map(|suggest| json!({
+                        "suggestions": suggest.suggestions.iter().map(json_suggest_item).collect::<Vec<_>>(),
+                        "suggest_by_criteria": suggest.suggestions_by_criteria.iter().map(|(criteria, items)| (criteria, items.iter().map(json_suggest_item).collect::<Vec<_>>())).collect::<SortedMap<_,_>>(),
+                        "total_lines": suggest.total_lines,
+                    })),
+                })
+            }
+        };
+
+        serde_json::to_writer_pretty(out, &result)?;
+
+        Ok(())
     }
 }
 

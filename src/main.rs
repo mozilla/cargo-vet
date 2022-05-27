@@ -79,6 +79,11 @@ struct Cli {
     #[clap(long)]
     log_file: Option<PathBuf>,
 
+    /// The format of the output.
+    #[clap(long, arg_enum)]
+    #[clap(default_value_t = OutputFormat::Human)]
+    output_format: OutputFormat,
+
     /// Use the following path as the diff-cache.
     ///
     /// The diff-cache stores the summary results used by vet's suggestion machinery.
@@ -205,6 +210,12 @@ enum Verbose {
     Trace,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum OutputFormat {
+    Human,
+    Json,
+}
+
 impl Cli {
     #[cfg(test)]
     pub fn mock() -> Self {
@@ -218,6 +229,7 @@ impl Cli {
             locked: true,
             verbose: Verbose::Off,
             output_file: None,
+            output_format: OutputFormat::Human,
             log_file: None,
             diff_cache: None,
         }
@@ -775,7 +787,10 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
         &imports,
         sub_args.guess_deeper,
     );
-    report.print_suggest_human(out, cfg)?;
+    match cfg.cli.output_format {
+        OutputFormat::Human => report.print_suggest_human(out, cfg)?,
+        OutputFormat::Json => report.print_json(out, cfg)?,
+    }
 
     Ok(())
 }
@@ -831,7 +846,10 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports, false);
-    report.print_human(out, cfg)?;
+    match cfg.cli.output_format {
+        OutputFormat::Human => report.print_human(out, cfg)?,
+        OutputFormat::Json => report.print_json(out, cfg)?,
+    }
 
     // Only save imports if we succeeded, to avoid any modifications on error.
     if !report.has_errors() {
@@ -851,7 +869,10 @@ fn cmd_dump_graph(
     trace!("dumping...");
 
     let graph = resolver::DepGraph::new(&cfg.metadata);
-    graph.print_mermaid(out, sub_args)?;
+    match cfg.cli.output_format {
+        OutputFormat::Human => graph.print_mermaid(out, sub_args)?,
+        OutputFormat::Json => serde_json::to_writer_pretty(out, &graph.nodes)?,
+    }
 
     Ok(())
 }

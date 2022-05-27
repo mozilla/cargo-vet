@@ -46,6 +46,12 @@ OPTIONS:
         --output-file <OUTPUT_FILE>
             Instead of stdout, write output to this file
 
+        --output-format <OUTPUT_FORMAT>
+            The format of the output
+            
+            [default: human]
+            [possible values: human, json]
+
     -p, --package <SPEC>
             Package to process (see `cargo help pkgid`)
 
