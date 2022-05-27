@@ -23,7 +23,7 @@ pub type SortedSet<T> = BTreeSet<T>;
 pub struct ResolveReport<'a> {
     /// The Cargo dependency graph as parsed and understood by cargo-vet.
     ///
-    /// All [`PackageIdx`][] values are indices into this graph's [`nodes`].
+    /// All [`PackageIdx`][] values are indices into this graph's nodes.
     pub graph: DepGraph<'a>,
     /// Mappings between criteria names and CriteriaSets/Indices.
     pub criteria_mapper: CriteriaMapper,
