@@ -17,6 +17,7 @@ use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
+use resolver::DiffRecommendation;
 use serde::{de::Deserialize, ser::Serialize};
 use simplelog::{
     ColorChoice, ConfigBuilder, Level, LevelFilter, TermLogger, TerminalMode, WriteLogger,
@@ -774,7 +775,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
         &imports,
         sub_args.guess_deeper,
     );
-    report.print_suggest(out, cfg)?;
+    report.print_suggest_human(out, cfg)?;
 
     Ok(())
 }
@@ -830,7 +831,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports, false);
-    report.print_report(out, cfg)?;
+    report.print_human(out, cfg)?;
 
     // Only save imports if we succeeded, to avoid any modifications on error.
     if !report.has_errors() {
@@ -1498,12 +1499,6 @@ fn diff_crate(
     }
 
     Ok(())
-}
-
-pub struct DiffRecommendation {
-    from: Version,
-    to: Version,
-    diffstat: DiffStat,
 }
 
 fn diffstat_crate(version1: &Path, version2: &Path) -> Result<DiffStat, VetError> {

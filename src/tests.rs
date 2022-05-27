@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use crate::{
     format::{AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, SAFE_TO_DEPLOY},
     init_files,
-    resolver::Report,
+    resolver::ResolveReport,
     AuditEntry, AuditsFile, Cli, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
     PartialConfig, StableMap, UnauditedDependency,
 };
@@ -710,7 +710,7 @@ fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
     (config, audits, imports)
 }
 
-fn get_report(metadata: &Metadata, report: Report) -> String {
+fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
     let cfg = Config {
         metacfg: MetaConfig(vec![]),
         metadata: metadata.clone(),
@@ -722,7 +722,7 @@ fn get_report(metadata: &Metadata, report: Report) -> String {
         },
     };
     let mut stdout = Vec::new();
-    report.print_report(&mut stdout, &cfg).unwrap();
+    report.print_human(&mut stdout, &cfg).unwrap();
     String::from_utf8(stdout).unwrap()
 }
 
