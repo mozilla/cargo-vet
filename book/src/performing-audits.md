@@ -112,3 +112,23 @@ More precisely, `cargo vet suggest` computes the number of lines that would need
 to be reviewed for each unaudited dependency, and displays them in order. This
 is the same information you'd get if you emptied out `unaudited` and re-ran
 `cargo vet`.
+
+## Suggestions from the Registry
+
+When `cargo vet` suggests audits — either after a failed vet or during `cargo
+vet suggest` — it also fetches the contents of the
+[registry](importing-audits.md#the-registry) and checks whether any of the
+available sets contain audits which would fill some or all of the gap. If so, it
+enumerates them so that the developer can consider importing them in lieu of
+performing the entire audit themselves:
+
+```
+$ cargo vet suggest
+  recommended audits for safe-to-deploy:
+      cargo vet inspect baz 1.3  (2033 lines)
+        Note: "firefox" contains an audit for baz 1.2, consider importing it.
+
+  estimated audit backlog: 2033 lines
+
+  Use |cargo vet certify| to record the audits.
+```

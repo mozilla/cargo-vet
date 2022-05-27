@@ -28,3 +28,18 @@ appending that same audit to your own `audits.toml`. By default, custom criteria
 defined in a foreign audit file exist in a private namespace and have no meaning
 in the local project. However, they can be [mapped](config.md#criteria-map) as
 desired to locally-defined criteria.
+
+## The Registry
+
+To ease discovery, `cargo vet` maintains a central registry of the audit sets
+published by well-known organizations. This information is stored in the
+[`registry.toml`](https://raw.githubusercontent.com/bholley/cargo-vet/main/registry.toml)
+file alongside the source code in the `cargo vet`
+[repository](https://github.com/bholley/cargo-vet). You can request the
+inclusion of your audit set in the registry by submitting a pull request.
+
+You can inspect the registry directly to find audit sets you wish to import.
+Moreover, when suggesting audits, `cargo vet` will fetch the sets listed in the
+registry and surface any entries that could be imported to address the
+identified gaps. This is described later [in more
+detail](performing-audits.md#suggestions-from-the-registry).

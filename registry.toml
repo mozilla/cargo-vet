@@ -1,0 +1,2 @@
+[registry.firefox]
+url = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
