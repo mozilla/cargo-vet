@@ -1,0 +1,428 @@
+---
+source: tests/test-cli.rs
+assertion_line: 214
+expression: stdout
+---
+{
+  "conclusion": "fail (vetting)",
+  "failures": [
+    {
+      "missing_criteria": [
+        "safe-to-deploy"
+      ],
+      "name": "atty",
+      "version": "0.2.14"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-run"
+      ],
+      "name": "hermit-abi",
+      "version": "0.1.19"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-deploy"
+      ],
+      "name": "indexmap",
+      "version": "1.8.1"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-run"
+      ],
+      "name": "libc",
+      "version": "0.2.123"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-deploy"
+      ],
+      "name": "os_str_bytes",
+      "version": "6.0.0"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-deploy"
+      ],
+      "name": "reqwest",
+      "version": "0.11.10"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-deploy"
+      ],
+      "name": "serde_json",
+      "version": "1.0.79"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-deploy"
+      ],
+      "name": "termcolor",
+      "version": "1.1.3"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-deploy"
+      ],
+      "name": "textwrap",
+      "version": "0.15.0"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-deploy"
+      ],
+      "name": "tokio",
+      "version": "1.17.0"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-run"
+      ],
+      "name": "winapi",
+      "version": "0.3.9"
+    }
+  ],
+  "suggest": {
+    "suggest_by_criteria": {
+      "safe-to-deploy": [
+        {
+          "name": "atty",
+          "notable_parents": "clap",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 508,
+              "raw": " 12 files changed, 508 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "0.2.14"
+          }
+        },
+        {
+          "name": "termcolor",
+          "notable_parents": "clap",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 2585,
+              "raw": " 12 files changed, 2585 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "1.1.3"
+          }
+        },
+        {
+          "name": "os_str_bytes",
+          "notable_parents": "clap",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 2918,
+              "raw": " 23 files changed, 2918 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "6.0.0"
+          }
+        },
+        {
+          "name": "textwrap",
+          "notable_parents": "clap",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 6165,
+              "raw": " 18 files changed, 6165 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "0.15.0"
+          }
+        },
+        {
+          "name": "indexmap",
+          "notable_parents": "h2, clap",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 9452,
+              "raw": " 33 files changed, 9452 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "1.8.1"
+          }
+        },
+        {
+          "name": "reqwest",
+          "notable_parents": "test-project",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 21663,
+              "raw": " 63 files changed, 21663 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "0.11.10"
+          }
+        },
+        {
+          "name": "serde_json",
+          "notable_parents": "reqwest, test-project",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 22855,
+              "raw": " 88 files changed, 22855 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "1.0.79"
+          }
+        },
+        {
+          "name": "tokio",
+          "notable_parents": "h2, hyper, reqwest, and 4 others",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 91278,
+              "raw": " 405 files changed, 91278 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "1.17.0"
+          }
+        }
+      ],
+      "safe-to-run": [
+        {
+          "name": "hermit-abi",
+          "notable_parents": "atty",
+          "suggested_criteria": [
+            "safe-to-run"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 938,
+              "raw": " 11 files changed, 938 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "0.1.19"
+          }
+        },
+        {
+          "name": "libc",
+          "notable_parents": "mio, atty, tokio, openssl, and 8 others",
+          "suggested_criteria": [
+            "safe-to-run"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 94067,
+              "raw": " 217 files changed, 94067 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "0.2.123"
+          }
+        },
+        {
+          "name": "winapi",
+          "notable_parents": "mio, atty, miow, ntapi, and 7 others",
+          "suggested_criteria": [
+            "safe-to-run"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 181329,
+              "raw": " 412 files changed, 181329 insertions(+)\n"
+            },
+            "from": "0.0.0",
+            "to": "0.3.9"
+          }
+        }
+      ]
+    },
+    "suggestions": [
+      {
+        "name": "atty",
+        "notable_parents": "clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 508,
+            "raw": " 12 files changed, 508 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "0.2.14"
+        }
+      },
+      {
+        "name": "hermit-abi",
+        "notable_parents": "atty",
+        "suggested_criteria": [
+          "safe-to-run"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 938,
+            "raw": " 11 files changed, 938 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "0.1.19"
+        }
+      },
+      {
+        "name": "termcolor",
+        "notable_parents": "clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 2585,
+            "raw": " 12 files changed, 2585 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "1.1.3"
+        }
+      },
+      {
+        "name": "os_str_bytes",
+        "notable_parents": "clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 2918,
+            "raw": " 23 files changed, 2918 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "6.0.0"
+        }
+      },
+      {
+        "name": "textwrap",
+        "notable_parents": "clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 6165,
+            "raw": " 18 files changed, 6165 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "0.15.0"
+        }
+      },
+      {
+        "name": "indexmap",
+        "notable_parents": "h2, clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 9452,
+            "raw": " 33 files changed, 9452 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "1.8.1"
+        }
+      },
+      {
+        "name": "reqwest",
+        "notable_parents": "test-project",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 21663,
+            "raw": " 63 files changed, 21663 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "0.11.10"
+        }
+      },
+      {
+        "name": "serde_json",
+        "notable_parents": "reqwest, test-project",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 22855,
+            "raw": " 88 files changed, 22855 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "1.0.79"
+        }
+      },
+      {
+        "name": "tokio",
+        "notable_parents": "h2, hyper, reqwest, and 4 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 91278,
+            "raw": " 405 files changed, 91278 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "1.17.0"
+        }
+      },
+      {
+        "name": "libc",
+        "notable_parents": "mio, atty, tokio, openssl, and 8 others",
+        "suggested_criteria": [
+          "safe-to-run"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 94067,
+            "raw": " 217 files changed, 94067 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "0.2.123"
+        }
+      },
+      {
+        "name": "winapi",
+        "notable_parents": "mio, atty, miow, ntapi, and 7 others",
+        "suggested_criteria": [
+          "safe-to-run"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 181329,
+            "raw": " 412 files changed, 181329 insertions(+)\n"
+          },
+          "from": "0.0.0",
+          "to": "0.3.9"
+        }
+      }
+    ],
+    "total_lines": 433758
+  }
+}

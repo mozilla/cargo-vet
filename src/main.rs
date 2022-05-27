@@ -17,6 +17,7 @@ use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
+use resolver::DiffRecommendation;
 use serde::{de::Deserialize, ser::Serialize};
 use simplelog::{
     ColorChoice, ConfigBuilder, Level, LevelFilter, TermLogger, TerminalMode, WriteLogger,
@@ -77,6 +78,11 @@ struct Cli {
     /// Instead of stderr, write logs to this file (only used after successful CLI parsing).
     #[clap(long)]
     log_file: Option<PathBuf>,
+
+    /// The format of the output.
+    #[clap(long, arg_enum)]
+    #[clap(default_value_t = OutputFormat::Human)]
+    output_format: OutputFormat,
 
     /// Use the following path as the diff-cache.
     ///
@@ -204,6 +210,12 @@ enum Verbose {
     Trace,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum OutputFormat {
+    Human,
+    Json,
+}
+
 impl Cli {
     #[cfg(test)]
     pub fn mock() -> Self {
@@ -217,6 +229,7 @@ impl Cli {
             locked: true,
             verbose: Verbose::Off,
             output_file: None,
+            output_format: OutputFormat::Human,
             log_file: None,
             diff_cache: None,
         }
@@ -774,7 +787,10 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
         &imports,
         sub_args.guess_deeper,
     );
-    report.print_suggest(out, cfg)?;
+    match cfg.cli.output_format {
+        OutputFormat::Human => report.print_suggest_human(out, cfg)?,
+        OutputFormat::Json => report.print_json(out, cfg)?,
+    }
 
     Ok(())
 }
@@ -830,7 +846,10 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports, false);
-    report.print_report(out, cfg)?;
+    match cfg.cli.output_format {
+        OutputFormat::Human => report.print_human(out, cfg)?,
+        OutputFormat::Json => report.print_json(out, cfg)?,
+    }
 
     // Only save imports if we succeeded, to avoid any modifications on error.
     if !report.has_errors() {
@@ -850,7 +869,10 @@ fn cmd_dump_graph(
     trace!("dumping...");
 
     let graph = resolver::DepGraph::new(&cfg.metadata);
-    graph.print_mermaid(out, sub_args)?;
+    match cfg.cli.output_format {
+        OutputFormat::Human => graph.print_mermaid(out, sub_args)?,
+        OutputFormat::Json => serde_json::to_writer_pretty(out, &graph.nodes)?,
+    }
 
     Ok(())
 }
@@ -1498,12 +1520,6 @@ fn diff_crate(
     }
 
     Ok(())
-}
-
-pub struct DiffRecommendation {
-    from: Version,
-    to: Version,
-    diffstat: DiffStat,
 }
 
 fn diffstat_crate(version1: &Path, version2: &Path) -> Result<DiffStat, VetError> {

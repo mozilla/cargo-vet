@@ -10,22 +10,51 @@ USAGE:
     cargo vet [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
-        --all-features                 Activate all available features
-        --diff-cache <DIFF_CACHE>      Use the following path as the diff-cache
-        --exclude <SPEC>               Exclude packages from being processed
-        --features <FEATURES>          Space-separated list of features to activate
-    -h, --help                         Print help information
-        --locked                       Do not pull in new "audits"
-        --log-file <LOG_FILE>          Instead of stderr, write logs to this file (only used after
-                                       successful CLI parsing)
-        --manifest-path <PATH>         Path to Cargo.toml
-        --no-default-features          Do not activate the `default` feature
-        --output-file <OUTPUT_FILE>    Instead of stdout, write output to this file
-    -p, --package <SPEC>               Package to process (see `cargo help pkgid`)
-    -V, --version                      Print version information
-        --verbose <VERBOSE>            How verbose logging should be (log level) [default: warn]
-                                       [possible values: off, error, warn, info, debug, trace]
-        --workspace                    Process all packages in the workspace
+        --all-features
+            Activate all available features
+
+        --diff-cache <DIFF_CACHE>
+            Use the following path as the diff-cache
+
+        --exclude <SPEC>
+            Exclude packages from being processed
+
+        --features <FEATURES>
+            Space-separated list of features to activate
+
+    -h, --help
+            Print help information
+
+        --locked
+            Do not pull in new "audits"
+
+        --log-file <LOG_FILE>
+            Instead of stderr, write logs to this file (only used after successful CLI parsing)
+
+        --manifest-path <PATH>
+            Path to Cargo.toml
+
+        --no-default-features
+            Do not activate the `default` feature
+
+        --output-file <OUTPUT_FILE>
+            Instead of stdout, write output to this file
+
+        --output-format <OUTPUT_FORMAT>
+            The format of the output [default: human] [possible values: human, json]
+
+    -p, --package <SPEC>
+            Package to process (see `cargo help pkgid`)
+
+    -V, --version
+            Print version information
+
+        --verbose <VERBOSE>
+            How verbose logging should be (log level) [default: warn] [possible values: off, error,
+            warn, info, debug, trace]
+
+        --workspace
+            Process all packages in the workspace
 
 SUBCOMMANDS:
     accept-criteria-change    Accept changes that a foreign audits.toml made to their criteria

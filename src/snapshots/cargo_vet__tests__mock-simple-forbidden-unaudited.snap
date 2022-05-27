@@ -1,12 +1,10 @@
 ---
 source: src/tests.rs
-assertion_line: 694
+assertion_line: 836
 expression: stdout
 ---
-Vetting Failed!
-
-1 forbidden dependencies:
+Violations Found!
   third-party1:10.0.0
-
-nothing to recommend
+    this version is forbidden by own violation against =10
+      criteria: "weak-reviewed"
 
