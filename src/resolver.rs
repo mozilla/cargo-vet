@@ -142,7 +142,7 @@ pub struct PackageNode<'a> {
     pub build_deps: Vec<PackageIdx>,
     pub dev_deps: Vec<PackageIdx>,
     pub all_deps: Vec<PackageIdx>,
-    pub reverse_deps: FastSet<PackageIdx>,
+    pub reverse_deps: SortedSet<PackageIdx>,
     /// Whether this package is a workspace member (can have dev-deps)
     pub is_workspace_member: bool,
     /// Whether this package is third-party (from crates.io)
@@ -472,8 +472,9 @@ impl<'a> DepGraph<'a> {
         let mut interner_by_name_and_ver =
             SortedMap::<&str, SortedMap<&Version, PackageIdx>>::new();
         let mut nodes = vec![];
+
+        // Stub out the initial state of all the nodes
         for resolve_node in resolve_list {
-            let idx = nodes.len();
             let package = &package_list[package_index_by_pkgid[&resolve_node.id]];
             nodes.push(PackageNode {
                 build_type: DependencyKind::Normal,
@@ -486,23 +487,30 @@ impl<'a> DepGraph<'a> {
                 build_deps: vec![],
                 dev_deps: vec![],
                 all_deps: vec![],
-                reverse_deps: FastSet::new(),
+                reverse_deps: SortedSet::new(),
                 is_workspace_member: false,
                 is_root: false,
                 is_dev_only: true,
             });
-            assert!(interner_by_pkgid.insert(&resolve_node.id, idx).is_none());
+        }
+        
+        // Sort the nodes by package_id to make the graph more stable and to make
+        // anything sorted by package_idx to also be approximately sorted by name and version.
+        nodes.sort_by_key(|k| k.package_id);
+
+        // Populate the interners based on the new ordering
+        for (idx, node) in nodes.iter_mut().enumerate() {
+            assert!(interner_by_pkgid.insert(node.package_id, idx).is_none());
             assert!(interner_by_name_and_ver
-                .entry(&package.name)
+                .entry(node.name)
                 .or_default()
-                .insert(&package.version, idx)
+                .insert(node.version, idx)
                 .is_none());
         }
 
         // Do topological sort: just recursively visit all of a node's children, and only add it
         // to the list *after* visiting the children. In this way we have trivially already added
         // all of the dependencies of a node to the list by the time we add itself to the list.
-
         let mut topo_index = vec![];
         {
             let mut visited = FastMap::new();
