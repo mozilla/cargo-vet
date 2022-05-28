@@ -1,0 +1,11 @@
+---
+source: src/tests.rs
+assertion_line: 894
+expression: stdout
+---
+Violations Found!
+  third-party1:10.0.0
+    this version is forbidden by own violation against =10
+      criteria: "weak-reviewed"
+
+

@@ -2255,6 +2255,7 @@ impl FailForViolationConflict {
                         print_entry(out, violation_source, violation)?;
                     }
                 }
+                writeln!(out)?;
             }
         }
 
@@ -2285,7 +2286,6 @@ impl FailForViolationConflict {
             if let Some(notes) = &entry.notes {
                 writeln!(out, "      notes: {notes}")?;
             }
-            // writeln!(out, "violation {}", version)?;
             Ok(())
         }
 

@@ -873,7 +873,7 @@ fn mock_builtin_simple_full_audited() {
 }
 
 #[test]
-fn mock_simple_forbidden_unaudited() {
+fn mock_simple_violation_cur_unaudited() {
     // (Fail) All marked 'unaudited' but a 'violation' entry matches a current version.
 
     let mock = MockMetadata::simple();
@@ -891,7 +891,95 @@ fn mock_simple_forbidden_unaudited() {
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
 
     let stdout = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-simple-forbidden-unaudited", stdout);
+    insta::assert_snapshot!("mock-simple-violation-cur-unaudited", stdout);
+}
+
+#[test]
+fn mock_simple_violation_cur_full_audit() {
+    // (Fail) All full audited but a 'violation' entry matches a current version.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    let violation = VersionReq::parse(&format!("={DEFAULT_VER}")).unwrap();
+    audits.audits["third-party1"] = vec![
+        violation_hard(violation),
+        full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-simple-violation-cur-full-audit", stdout);
+}
+
+#[test]
+fn mock_simple_violation_delta() {
+    // (Fail) A 'violation' matches a delta but not the cur version
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    let violation = VersionReq::parse(&format!("=5.0.0")).unwrap();
+    audits.audits["third-party1"] = vec![
+        violation_hard(violation),
+        full_audit(ver(3), SAFE_TO_DEPLOY),
+        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-simple-violation-delta", stdout);
+}
+
+#[test]
+fn mock_simple_violation_full_audit() {
+    // (Fail) A 'violation' matches a full audit but not the cur version
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    let violation = VersionReq::parse(&format!("=3.0.0")).unwrap();
+    audits.audits["third-party1"] = vec![
+        violation_hard(violation),
+        full_audit(ver(3), SAFE_TO_DEPLOY),
+        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-simple-violation-full-audit", stdout);
+}
+
+#[test]
+fn mock_simple_violation_wildcard() {
+    // (Fail) A 'violation' matches a full audit but not the cur version
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    let violation = VersionReq::parse(&format!("*")).unwrap();
+    audits.audits["third-party1"] = vec![
+        violation_hard(violation),
+        full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-simple-violation-wildcard", stdout);
 }
 
 #[test]
@@ -2220,11 +2308,6 @@ fn builtin_dev_detection_empty_deeper() {
 //   * all of the above but for dep-audited
 //   * dep has no audits
 //
-// * interesting situations for vet-init
-//   * build-deps
-//   * dev-deps
-//   * "cargo resolver 2.0 situations"?
-//
 // * foreign mappings
 //   * only using builtins
 //   * 1:1 explicit mappings
@@ -2244,14 +2327,6 @@ fn builtin_dev_detection_empty_deeper() {
 //     * two versions of the same crate, one needs an unaudited, the other doesn't
 //     * two versions and two unauditeds, each used by one of them
 //     * two unauditeds, one is needed, the other isn't (warn about exactly one!)
-//
-// * violations
-//   * matching the current version
-//   * matching an unaudited entry
-//   * matching a delta audit (from)
-//   * matching a delta audit (to)
-//   * matching a full audit
-//   * violations "masking" out higher criteria but preserving lower criteria?
 //
 // * misc
 //   * git deps are first party but not in workspace
