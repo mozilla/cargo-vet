@@ -2310,6 +2310,97 @@ fn builtin_simple_unaudited_extra() {
 }
 
 #[test]
+fn builtin_simple_unaudited_not_a_real_dep() {
+    // (Warn) there's an extra unused unaudited entry, but the other is needed
+    // BUSTED: this test is broken (doesn't emit warning)
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    config.unaudited.insert(
+        "fake-dep".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-not-a-real-dep", stdout);
+}
+
+#[test]
+fn builtin_simple_deps_unaudited_overbroad() {
+    // (Warn) the unaudited entry is needed but it's overbroad
+    // BUSTED: this test is broken (doesn't emit warning)
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["dev"] = vec![];
+
+    config.unaudited.insert(
+        "dev".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-unaudited-overbroad", stdout);
+}
+
+#[test]
+fn builtin_complex_unaudited_twins() {
+    // (Pass) two versions of a crate exist and both are unaudited and they're needed
+
+    let mock = MockMetadata::complex();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-core"] = vec![];
+
+    config.unaudited.insert(
+        "third-core".to_string(),
+        vec![
+            unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+            unaudited(ver(5), SAFE_TO_DEPLOY),
+        ],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-unaudited-twins", stdout);
+}
+
+#[test]
+fn builtin_complex_unaudited_partial_twins() {
+    // (Pass) two versions of a crate exist and one is unaudited and one is audited
+
+    let mock = MockMetadata::complex();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-core"] = vec![full_audit(ver(5), SAFE_TO_DEPLOY)];
+
+    config.unaudited.insert(
+        "third-core".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-unaudited-partial-twins", stdout);
+}
+
+#[test]
 fn builtin_simple_unaudited_in_delta() {
     // (Warn) An audited entry overlaps a delta and isn't needed
     // BUSTED: this test is broken (doesn't emit warning)
@@ -2475,14 +2566,9 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
 //
 // * detecting unused unaudited entries
 //   * no crate in the project with that name (removed dep)
-//   * completely unreachable unaudited entry
-//   * unaudited entry is reachable but not needed
-//   * there is a full audit for exactly the unaudited entry
-//   * this is a delta chain that passes through the unaudited entry
 //   * situations that shouldn't warn
 //     * two versions of the same crate, one needs an unaudited, the other doesn't
 //     * two versions and two unauditeds, each used by one of them
-//     * two unauditeds, one is needed, the other isn't (warn about exactly one!)
 //
 // * misc
 //   * git deps are first party but not in workspace
