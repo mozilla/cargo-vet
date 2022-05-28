@@ -4,7 +4,9 @@ use cargo_metadata::{Metadata, Version, VersionReq};
 use serde_json::{json, Value};
 
 use crate::{
-    format::{AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, SAFE_TO_DEPLOY},
+    format::{
+        AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+    },
     init_files,
     resolver::ResolveReport,
     AuditEntry, AuditsFile, Cli, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
@@ -420,6 +422,46 @@ impl MockMetadata {
             },
             MockPackage {
                 name: "dev-cycle",
+                deps: vec![dep("root")],
+                ..Default::default()
+            },
+        ])
+    }
+
+    fn dev_detection() -> Self {
+        MockMetadata::new(vec![
+            MockPackage {
+                name: "root",
+                is_root: true,
+                is_first_party: true,
+                deps: vec![dep("normal"), dep("both")],
+                dev_deps: vec![dep("dev-cycle-direct"), dep("both"), dep("simple-dev")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "normal",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "both",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "simple-dev",
+                deps: vec![dep("simple-dev-indirect")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "simple-dev-indirect",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "dev-cycle-direct",
+                deps: vec![dep("dev-cycle-indirect")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "dev-cycle-indirect",
                 deps: vec![dep("root")],
                 ..Default::default()
             },
@@ -2081,6 +2123,76 @@ fn builtin_cycle_minimal_audited() {
 
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-cycle-minimal-audited", stdout);
+}
+
+#[test]
+fn builtin_dev_detection() {
+    // (Pass) Check that we properly identify things that are or aren't only dev-deps,
+    // even when they're indirect or used in both contexts.
+
+    let mock = MockMetadata::dev_detection();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_no_unaudited(&metadata);
+    audits.audits.insert(
+        "normal".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+    audits.audits.insert(
+        "both".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+    audits.audits.insert(
+        "simple-dev".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_RUN)],
+    );
+    audits.audits.insert(
+        "simple-dev-indirect".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_RUN)],
+    );
+    audits.audits.insert(
+        "dev-cycle-direct".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_RUN)],
+    );
+    audits.audits.insert(
+        "dev-cycle-indirect".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_RUN)],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-dev-detection", stdout);
+}
+
+#[test]
+fn builtin_dev_detection_empty() {
+    // (Fail) same as above but without any audits to confirm expectations
+
+    let mock = MockMetadata::dev_detection();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-dev-detection-empty", stdout);
+}
+
+#[test]
+fn builtin_dev_detection_empty_deeper() {
+    // (Fail) same as above but deeper
+
+    let mock = MockMetadata::dev_detection();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, true);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-dev-detection-empty-deeper", stdout);
 }
 
 // TESTING BACKLOG:
