@@ -2530,6 +2530,179 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
     );
 }
 
+#[test]
+fn builtin_simple_delta_cycle() {
+    // (Pass) simple delta cycle
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        full_audit(ver(3), SAFE_TO_DEPLOY),
+        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(5), ver(7), SAFE_TO_DEPLOY),
+        delta_audit(ver(7), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-delta-cycle", stdout);
+}
+
+#[test]
+fn builtin_simple_noop_delta() {
+    // (Warn) completely pointless noop delta
+    // BUSTED: fails to warn about a 5->5 delta
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        full_audit(ver(3), SAFE_TO_DEPLOY),
+        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(5), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(5), ver(7), SAFE_TO_DEPLOY),
+        delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-noop-delta", stdout);
+}
+
+#[test]
+fn builtin_simple_delta_double_cycle() {
+    // (Pass) double delta cycle
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        full_audit(ver(2), SAFE_TO_DEPLOY),
+        delta_audit(ver(2), ver(3), SAFE_TO_DEPLOY),
+        delta_audit(ver(3), ver(4), SAFE_TO_DEPLOY),
+        delta_audit(ver(4), ver(3), SAFE_TO_DEPLOY),
+        delta_audit(ver(4), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(5), ver(6), SAFE_TO_DEPLOY),
+        delta_audit(ver(6), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(6), ver(7), SAFE_TO_DEPLOY),
+        delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-delta-double-cycle", stdout);
+}
+
+#[test]
+fn builtin_simple_delta_broken_double_cycle() {
+    // (Fail) double delta cycle that's broken
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        full_audit(ver(2), SAFE_TO_DEPLOY),
+        delta_audit(ver(2), ver(3), SAFE_TO_DEPLOY),
+        delta_audit(ver(3), ver(4), SAFE_TO_DEPLOY),
+        delta_audit(ver(4), ver(3), SAFE_TO_DEPLOY),
+        // broken: delta_audit(ver(4), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(5), ver(6), SAFE_TO_DEPLOY),
+        delta_audit(ver(6), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(6), ver(7), SAFE_TO_DEPLOY),
+        delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-delta-broken-double-cycle", stdout);
+}
+
+#[test]
+fn builtin_simple_delta_broken_cycle() {
+    // (Fail) simple delta cycle that's broken
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        full_audit(ver(3), SAFE_TO_DEPLOY),
+        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(5), ver(7), SAFE_TO_DEPLOY),
+        delta_audit(ver(7), ver(5), SAFE_TO_DEPLOY),
+        // broken: delta_audit(ver(7), ver(8), SAFE_TO_DEPLOY),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-delta-broken-cycle", stdout);
+}
+
+#[test]
+fn builtin_simple_long_cycle() {
+    // (Pass) long delta cycle
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        full_audit(ver(2), SAFE_TO_DEPLOY),
+        delta_audit(ver(2), ver(7), SAFE_TO_DEPLOY),
+        delta_audit(ver(7), ver(6), SAFE_TO_DEPLOY),
+        delta_audit(ver(6), ver(8), SAFE_TO_DEPLOY),
+        delta_audit(ver(8), ver(7), SAFE_TO_DEPLOY),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-long-cycle", stdout);
+}
+
+#[test]
+fn builtin_simple_useless_long_cycle() {
+    // (Pass) useless long delta cycle
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        full_audit(ver(2), SAFE_TO_DEPLOY),
+        delta_audit(ver(2), ver(7), SAFE_TO_DEPLOY),
+        delta_audit(ver(7), ver(6), SAFE_TO_DEPLOY),
+        delta_audit(ver(6), ver(8), SAFE_TO_DEPLOY),
+        delta_audit(ver(8), ver(7), SAFE_TO_DEPLOY),
+        delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-useless-long-cycle", stdout);
+}
+
 // TESTING BACKLOG:
 //
 // * custom policies
@@ -2542,19 +2715,6 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
 //      * with different policies
 //         * where only the weaker one is satisfied (fail but give good diagnostic)
 //
-// * delta cycles (don't enter infinite loops!)
-//   * no-op delta (x -> x), should diagnostic for this..?
-//   * A -> B -> A
-//   * A -> B -> C -> A
-//   * try both success and failure cases, failure more likely to infinite loop
-//
-// * unaudited entry dependencies
-//   * (fail) dep unaudited but claims too-weak criteria
-//   * (pass) dep unaudited and his exactly the right criteria
-//   * (pass) dep unaudited and has superset of criteria
-//   * all of the above but for dep-audited
-//   * dep has no audits
-//
 // * foreign mappings
 //   * only using builtins
 //   * 1:1 explicit mappings
@@ -2563,12 +2723,6 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
 //   * foreign has criteria with the same name, unmapped (don't accidentally mix it up)
 //   * foreign has criteria with the same name, mapped to that name
 //   * foreign has criteria with the same name, mapped to a different name
-//
-// * detecting unused unaudited entries
-//   * no crate in the project with that name (removed dep)
-//   * situations that shouldn't warn
-//     * two versions of the same crate, one needs an unaudited, the other doesn't
-//     * two versions and two unauditeds, each used by one of them
 //
 // * misc
 //   * git deps are first party but not in workspace
@@ -2590,10 +2744,3 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
 //   * Bad version syntax
 //   * entries in tomls that don't map to anything (at least warn to catch typos?)
 //     * might be running an old version of cargo-vet on a newer repo?
-//
-// * builtin-criteria..?
-//
-// * dev-deps
-//
-// * build-deps
-//
