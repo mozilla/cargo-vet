@@ -1,6 +1,5 @@
 ---
 source: src/tests.rs
-assertion_line: 1994
 expression: stdout
 ---
 Vetting Succeeded (2 unaudited)

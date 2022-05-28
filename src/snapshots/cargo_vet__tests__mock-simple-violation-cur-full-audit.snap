@@ -1,6 +1,5 @@
 ---
 source: src/tests.rs
-assertion_line: 915
 expression: stdout
 ---
 Violations Found!

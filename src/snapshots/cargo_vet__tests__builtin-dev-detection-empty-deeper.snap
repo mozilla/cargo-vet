@@ -1,6 +1,5 @@
 ---
 source: src/tests.rs
-assertion_line: 2254
 expression: stdout
 ---
 Vetting Failed!

@@ -1,6 +1,5 @@
 ---
 source: src/tests.rs
-assertion_line: 1960
 expression: stdout
 ---
 Vetting Succeeded (because you have no third-party dependencies)
