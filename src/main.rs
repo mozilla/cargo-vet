@@ -17,7 +17,7 @@ use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
-use resolver::{DiffRecommendation, DepGraph};
+use resolver::{DepGraph, DiffRecommendation};
 use serde::{de::Deserialize, ser::Serialize};
 use simplelog::{
     ColorChoice, ConfigBuilder, Level, LevelFilter, TermLogger, TerminalMode, WriteLogger,
