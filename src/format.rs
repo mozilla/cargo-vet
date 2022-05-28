@@ -397,7 +397,7 @@ pub struct CriteriaMapping {
 
 /// Semantically identical to a 'full audit' entry, but private to our project
 /// and tracked as less-good than a proper audit, so that you try to get rid of it.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct UnauditedDependency {
     /// The version of the crate that we are currently "fine" with leaving unaudited.
     pub version: Version,

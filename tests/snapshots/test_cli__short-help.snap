@@ -1,6 +1,5 @@
 ---
 source: tests/test-cli.rs
-assertion_line: 87
 expression: stdout
 ---
 cargo-vet 0.1.0
@@ -66,5 +65,7 @@ SUBCOMMANDS:
     help                      Print this message or the help of the given subcommand(s)
     init                      initialize cargo-vet for your project
     inspect                   Fetch the source of `$package $version`
+    regenerate-unaudited      Regenerate the 'unaudited' entries to try to minimize them and
+                                  make the vet pass
     suggest                   Suggest some low-hanging fruit to review
 

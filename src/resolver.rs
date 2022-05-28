@@ -325,7 +325,9 @@ impl CriteriaMapper {
     pub fn set_criteria(&self, set: &mut CriteriaSet, criteria: &str) {
         set.set_criteria(self.index[criteria])
     }
-
+    pub fn clear_criteria(&self, set: &mut CriteriaSet, criteria: &str) {
+        set.clear_criteria(&self.implied_criteria[self.index[criteria]])
+    }
     /// An iterator over every criteria in order, with 'implies' fully applied.
     pub fn criteria_iter(&self) -> impl Iterator<Item = &CriteriaSet> {
         self.implied_criteria.iter()
@@ -381,6 +383,9 @@ impl CriteriaSet {
     }
     pub fn set_criteria(&mut self, idx: usize) {
         self.0 |= 1 << idx;
+    }
+    pub fn clear_criteria(&mut self, other: &CriteriaSet) {
+        self.0 &= !other.0;
     }
     pub fn has_criteria(&self, idx: usize) -> bool {
         (self.0 & (1 << idx)) != 0
@@ -1850,7 +1855,11 @@ impl<'a> ResolveReport<'a> {
         }
     }
 
-    pub fn compute_suggest(&self, cfg: &Config) -> Result<Option<Suggest>, VetError> {
+    pub fn compute_suggest(
+        &self,
+        cfg: &Config,
+        allow_deltas: bool,
+    ) -> Result<Option<Suggest>, VetError> {
         let fail = if let Conclusion::FailForVet(fail) = &self.conclusion {
             fail
         } else {
@@ -1924,30 +1933,41 @@ impl<'a> ResolveReport<'a> {
 
             // Now suggest solutions of those failures
             let mut candidates = SortedSet::new();
-            for &dest in from_target.as_ref().unwrap() {
-                let mut closest_above = None;
-                let mut closest_below = None;
-                for &src in from_root.as_ref().unwrap() {
-                    if src < dest {
-                        if let Some(closest) = closest_below {
-                            if src > closest {
+            if allow_deltas {
+                // If we're allowed deltas than try to find a bridge from src and dest
+                for &dest in from_target.as_ref().unwrap() {
+                    let mut closest_above = None;
+                    let mut closest_below = None;
+                    for &src in from_root.as_ref().unwrap() {
+                        if src < dest {
+                            if let Some(closest) = closest_below {
+                                if src > closest {
+                                    closest_below = Some(src);
+                                }
+                            } else {
                                 closest_below = Some(src);
                             }
+                        } else if let Some(closest) = closest_above {
+                            if src < closest {
+                                closest_above = Some(src);
+                            }
                         } else {
-                            closest_below = Some(src);
-                        }
-                    } else if let Some(closest) = closest_above {
-                        if src < closest {
                             closest_above = Some(src);
                         }
-                    } else {
-                        closest_above = Some(src);
+                    }
+
+                    for closest in closest_below.into_iter().chain(closest_above) {
+                        candidates.insert(Delta {
+                            from: closest.clone(),
+                            to: dest.clone(),
+                        });
                     }
                 }
-
-                for closest in closest_below.into_iter().chain(closest_above) {
+            } else {
+                // If we're not allowing deltas, just try everything reachable from the target
+                for &dest in from_target.as_ref().unwrap() {
                     candidates.insert(Delta {
-                        from: closest.clone(),
+                        from: ROOT_VERSION.clone(),
                         to: dest.clone(),
                     });
                 }
@@ -2005,7 +2025,7 @@ impl<'a> ResolveReport<'a> {
 
     /// Print only the suggest portion of a human-readable report
     pub fn print_suggest_human(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
-        if let Some(suggest) = self.compute_suggest(cfg)? {
+        if let Some(suggest) = self.compute_suggest(cfg, true)? {
             suggest.print_human(out, self)?;
         } else {
             // This API is only used for vet-suggest
@@ -2042,7 +2062,7 @@ impl<'a> ResolveReport<'a> {
                 }).collect::<StableMap<_,_>>(),
             }),
             Conclusion::FailForVet(fail) => {
-                let suggest = self.compute_suggest(cfg)?;
+                let suggest = self.compute_suggest(cfg, true)?;
                 let json_suggest_item = |item: &SuggestItem| {
                     let package = &self.graph.nodes[item.package];
                     json!({
@@ -2231,7 +2251,7 @@ impl FailForVet {
 
         writeln!(out)?;
 
-        if let Some(suggest) = report.compute_suggest(cfg)? {
+        if let Some(suggest) = report.compute_suggest(cfg, true)? {
             suggest.print_human(out, report)?;
         }
 
