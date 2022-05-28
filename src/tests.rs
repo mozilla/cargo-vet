@@ -829,7 +829,7 @@ fn mock_simple_full_audited() {
 }
 
 #[test]
-fn mock_builtin_simple_init() {
+fn builtin_simple_init() {
     // (Pass) Should look the same as a fresh 'vet init'.
 
     let mock = MockMetadata::simple();
@@ -839,11 +839,11 @@ fn mock_builtin_simple_init() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
     let stdout = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-builtin-simple-init", stdout);
+    insta::assert_snapshot!("builtin-simple-init", stdout);
 }
 
 #[test]
-fn mock_builtin_simple_no_unaudited() {
+fn builtin_simple_no_unaudited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
     let mock = MockMetadata::simple();
@@ -854,11 +854,11 @@ fn mock_builtin_simple_no_unaudited() {
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
 
     let stdout = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-builtin-simple-no-unaudited", stdout);
+    insta::assert_snapshot!("builtin-simple-no-unaudited", stdout);
 }
 
 #[test]
-fn mock_builtin_simple_full_audited() {
+fn builtin_simple_full_audited() {
     // (Pass) All entries have direct full audits.
 
     let mock = MockMetadata::simple();
@@ -869,7 +869,7 @@ fn mock_builtin_simple_full_audited() {
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
 
     let stdout = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-builtin-simple-full-audited", stdout);
+    insta::assert_snapshot!("builtin-simple-full-audited", stdout);
 }
 
 #[test]
@@ -1596,7 +1596,7 @@ fn mock_complex_full_audited() {
 }
 
 #[test]
-fn mock_builtin_complex_inited() {
+fn builtin_complex_inited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
     let mock = MockMetadata::complex();
@@ -1605,11 +1605,11 @@ fn mock_builtin_complex_inited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
     let stdout = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-builtin-complex-inited", stdout);
+    insta::assert_snapshot!("builtin-complex-inited", stdout);
 }
 
 #[test]
-fn mock_builtin_complex_no_unaudited() {
+fn builtin_complex_no_unaudited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
     let mock = MockMetadata::complex();
@@ -1618,11 +1618,11 @@ fn mock_builtin_complex_no_unaudited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
     let stdout = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-builtin-complex-no-unaudited", stdout);
+    insta::assert_snapshot!("builtin-complex-no-unaudited", stdout);
 }
 
 #[test]
-fn mock_builtin_complex_full_audited() {
+fn builtin_complex_full_audited() {
     // (Pass) All entries have direct full audits.
 
     let mock = MockMetadata::complex();
@@ -1631,11 +1631,11 @@ fn mock_builtin_complex_full_audited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
     let stdout = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-builtin-complex-full-audited", stdout);
+    insta::assert_snapshot!("builtin-complex-full-audited", stdout);
 }
 
 #[test]
-fn mock_builtin_complex_minimal_audited() {
+fn builtin_complex_minimal_audited() {
     // (Pass) All entries have direct full audits.
 
     let mock = MockMetadata::complex();
@@ -1644,7 +1644,7 @@ fn mock_builtin_complex_minimal_audited() {
 
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
     let stdout = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-builtin-complex-minimal-audited", stdout);
+    insta::assert_snapshot!("builtin-complex-minimal-audited", stdout);
 }
 
 #[test]
