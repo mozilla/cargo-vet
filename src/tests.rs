@@ -1096,7 +1096,7 @@ fn mock_simple_delta_to_unaudited_overshoot() {
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
     direct_audits.push(delta_audit(
-        ver(DEFAULT_VER - 7),
+        ver(DEFAULT_VER - 6),
         ver(DEFAULT_VER),
         DEFAULT_CRIT,
     ));
@@ -1178,7 +1178,7 @@ fn mock_simple_delta_to_full_audit_overshoot() {
     let direct_audits = &mut audits.audits["third-party1"];
     direct_audits.clear();
     direct_audits.push(delta_audit(
-        ver(DEFAULT_VER - 7),
+        ver(DEFAULT_VER - 6),
         ver(DEFAULT_VER),
         DEFAULT_CRIT,
     ));
