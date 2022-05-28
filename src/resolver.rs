@@ -1459,8 +1459,8 @@ fn resolve_first_party<'a>(
 
     // Root nodes adopt this policy if they don't have an explicit one
     let default_root_policy = criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
-    let _default_root_build_and_dev_policy =
-        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA]);
+    let _default_root_dev_policy =
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_DEV_CRITERIA]);
 
     let mut policy_failures = PolicyFailures::new();
 
@@ -1578,8 +1578,8 @@ fn resolve_dev<'a>(
     // Root nodes adopt this policy if they don't have an explicit one
     let _default_root_policy =
         criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
-    let default_root_build_and_dev_policy =
-        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA]);
+    let default_root_dev_policy =
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_DEV_CRITERIA]);
 
     let mut policy_failures = PolicyFailures::new();
 
@@ -1634,9 +1634,9 @@ fn resolve_dev<'a>(
 
         // Now check that we pass our own policy
         let own_policy = if let Some(policy) = config.policy.get(package.name) {
-            criteria_mapper.criteria_from_list(&policy.build_and_dev_criteria)
+            criteria_mapper.criteria_from_list(&policy.dev_criteria)
         } else if is_root {
-            default_root_build_and_dev_policy
+            default_root_dev_policy
         } else {
             unreachable!("dev nodes are always roots!")
         };

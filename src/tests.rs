@@ -198,10 +198,10 @@ fn violation(version: VersionReq, criteria: &str) -> AuditEntry {
 fn default_policy() -> PolicyEntry {
     PolicyEntry {
         criteria: vec![],
-        build_and_dev_criteria: vec![],
+        dev_criteria: vec![],
         dependency_criteria: StableMap::new(),
         targets: None,
-        build_and_dev_targets: None,
+        dev_targets: None,
     }
 }
 
@@ -633,10 +633,10 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                     package.name.clone(),
                     PolicyEntry {
                         criteria: vec![DEFAULT_CRIT.to_string()],
-                        build_and_dev_criteria: vec![DEFAULT_CRIT.to_string()],
+                        dev_criteria: vec![DEFAULT_CRIT.to_string()],
                         dependency_criteria: DependencyCriteria::new(),
                         targets: None,
-                        build_and_dev_targets: None,
+                        dev_targets: None,
                     },
                 );
             }
@@ -703,6 +703,22 @@ fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
                 .entry(package.name.clone())
                 .or_insert(vec![])
                 .push(full_audit(package.version.clone(), SAFE_TO_DEPLOY));
+        }
+    }
+    audits.audits = audited;
+
+    (config, audits, imports)
+}
+fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
+    let (mut config, mut audits, imports) = builtin_files_inited(metadata);
+
+    let mut audited = StableMap::<String, Vec<AuditEntry>>::new();
+    for (name, entries) in std::mem::replace(&mut config.unaudited, StableMap::new()) {
+        for entry in entries {
+            audited
+                .entry(name.clone())
+                .or_insert(vec![])
+                .push(full_audit(entry.version, &entry.criteria));
         }
     }
     audits.audits = audited;
@@ -1489,6 +1505,19 @@ fn mock_builtin_complex_full_audited() {
 }
 
 #[test]
+fn mock_builtin_complex_minimal_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_minimal_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-builtin-complex-minimal-audited", stdout);
+}
+
+#[test]
 fn mock_complex_missing_core5() {
     // (Fail) Missing an audit for the v5 version of third-core
 
@@ -1934,6 +1963,21 @@ fn builtin_simple_deps_full_audited() {
 }
 
 #[test]
+fn builtin_simple_deps_minimal_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_minimal_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-deps-minimal-audited", stdout);
+}
+
+#[test]
 fn builtin_no_deps() {
     // (Pass) No actual deps
     let mock = MockMetadata::new(vec![MockPackage {
@@ -2022,6 +2066,21 @@ fn builtin_cycle_full_audited() {
 
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-cycle-full-audited", stdout);
+}
+
+#[test]
+fn builtin_cycle_minimal_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let mock = MockMetadata::cycle();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_minimal_audited(&metadata);
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-cycle-minimal-audited", stdout);
 }
 
 // TESTING BACKLOG:

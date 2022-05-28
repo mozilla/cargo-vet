@@ -17,7 +17,7 @@ use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
-use resolver::DiffRecommendation;
+use resolver::{DiffRecommendation, DepGraph};
 use serde::{de::Deserialize, ser::Serialize};
 use simplelog::{
     ColorChoice, ConfigBuilder, Level, LevelFilter, TermLogger, TerminalMode, WriteLogger,
@@ -598,17 +598,26 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
     // This is the hard one
     let config = {
         let mut dependencies = StableMap::new();
-        for package in foreign_packages(metadata) {
+        let graph = DepGraph::new(metadata);
+        for package in &graph.nodes {
+            if !package.is_third_party {
+                // Only care about third-party packages
+                continue;
+            }
+            let criteria = if package.is_dev_only {
+                format::DEFAULT_POLICY_DEV_CRITERIA.to_string()
+            } else {
+                format::DEFAULT_POLICY_CRITERIA.to_string()
+            };
             // NOTE: May have multiple copies of a package!
             let item = UnauditedDependency {
                 version: package.version.clone(),
+                criteria,
                 notes: None,
                 suggest: true,
-                // TODO: use whether this is a build_and_dev to make this weaker
-                criteria: format::DEFAULT_CRITERIA.to_string(),
             };
             dependencies
-                .entry(package.name.clone())
+                .entry(package.name.to_string())
                 .or_insert(vec![])
                 .push(item);
         }

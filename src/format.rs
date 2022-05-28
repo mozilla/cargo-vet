@@ -334,12 +334,12 @@ pub struct PolicyEntry {
     pub criteria: Vec<String>,
 
     /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
-    /// used as build-dependencies or dev-dependencies.
-    #[serde(rename = "build-and-dev-criteria")]
-    #[serde(default = "get_default_policy_build_and_dev_criteria")]
-    #[serde(skip_serializing_if = "is_default_policy_build_and_dev_criteria")]
+    /// used as dev-dependencies.
+    #[serde(rename = "dev-criteria")]
+    #[serde(default = "get_default_policy_dev_criteria")]
+    #[serde(skip_serializing_if = "is_default_policy_dev_criteria")]
     #[serde(deserialize_with = "string_or_vec")]
-    pub build_and_dev_criteria: Vec<String>,
+    pub dev_criteria: Vec<String>,
 
     /// Custom criteria for a specific first-party crate's dependencies.
     ///
@@ -352,13 +352,13 @@ pub struct PolicyEntry {
     /// TODO: figure this out
     pub targets: Option<Vec<String>>,
 
-    /// `targets` but build/dev
-    #[serde(rename = "build-and-dev-targets")]
-    pub build_and_dev_targets: Option<Vec<String>>,
+    /// `targets` but for dev-deps
+    #[serde(rename = "dev-targets")]
+    pub dev_targets: Option<Vec<String>>,
 }
 
 pub static DEFAULT_POLICY_CRITERIA: &str = SAFE_TO_DEPLOY;
-pub static DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA: &str = SAFE_TO_RUN;
+pub static DEFAULT_POLICY_DEV_CRITERIA: &str = SAFE_TO_RUN;
 
 pub fn get_default_policy_criteria() -> Vec<String> {
     vec![]
@@ -367,11 +367,11 @@ pub fn get_default_policy_criteria() -> Vec<String> {
 fn is_default_policy_criteria(val: &Vec<String>) -> bool {
     val.is_empty()
 }
-pub fn get_default_policy_build_and_dev_criteria() -> Vec<String> {
+pub fn get_default_policy_dev_criteria() -> Vec<String> {
     vec![]
 }
 #[allow(clippy::ptr_arg)]
-fn is_default_policy_build_and_dev_criteria(val: &Vec<String>) -> bool {
+fn is_default_policy_dev_criteria(val: &Vec<String>) -> bool {
     val.is_empty()
 }
 
