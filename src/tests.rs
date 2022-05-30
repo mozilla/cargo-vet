@@ -2695,6 +2695,203 @@ fn builtin_simple_unaudited_in_direct_full_regnerate() {
 }
 
 #[test]
+fn builtin_simple_unaudited_nested_weaker_req() {
+    // (Pass) A dep that has weaker requirements on its dep
+    // BUSTED: fails because the unaudited entry can't specify it's fine for the dep to be safe-to-run
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        delta_audit_dep(
+            ver(3),
+            ver(6),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+        delta_audit_dep(
+            ver(6),
+            ver(DEFAULT_VER),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+    ];
+    audits.audits["transitive-third-party1"] = vec![
+        delta_audit(ver(4), ver(8), SAFE_TO_RUN),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited(ver(3), SAFE_TO_DEPLOY)],
+    );
+
+    config.unaudited.insert(
+        "transitive-third-party1".to_string(),
+        vec![unaudited(ver(4), SAFE_TO_RUN)],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-unaudited-nested-weaker-req", stdout);
+}
+
+#[test]
+fn builtin_simple_unaudited_nested_weaker_req_regnerate() {
+    // (Pass) A dep that has weaker requirements on its dep
+    // BUSTED: (?) ideally emits safe-to-run for transitive-third-party1..?
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        delta_audit_dep(
+            ver(3),
+            ver(6),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+        delta_audit_dep(
+            ver(6),
+            ver(DEFAULT_VER),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+    ];
+    audits.audits["transitive-third-party1"] = vec![
+        delta_audit(ver(4), ver(8), SAFE_TO_RUN),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited(ver(3), SAFE_TO_DEPLOY)],
+    );
+
+    config.unaudited.insert(
+        "transitive-third-party1".to_string(),
+        vec![unaudited(ver(4), SAFE_TO_RUN)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!(
+        "builtin-simple-unaudited-nested-weaker-req-regenerate",
+        unaudited
+    );
+}
+
+#[test]
+fn builtin_simple_unaudited_nested_stronger_req() {
+    // (Pass) A dep that has stronger requirements on its dep
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        dep_policy([("third-party1", [SAFE_TO_RUN])]),
+    );
+
+    audits.audits["third-party1"] = vec![
+        delta_audit_dep(
+            ver(3),
+            ver(6),
+            SAFE_TO_RUN,
+            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+        ),
+        delta_audit_dep(
+            ver(6),
+            ver(DEFAULT_VER),
+            SAFE_TO_RUN,
+            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+        ),
+    ];
+    audits.audits["transitive-third-party1"] = vec![
+        delta_audit(ver(4), ver(8), SAFE_TO_DEPLOY),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited(ver(3), SAFE_TO_RUN)],
+    );
+
+    config.unaudited.insert(
+        "transitive-third-party1".to_string(),
+        vec![unaudited(ver(4), SAFE_TO_DEPLOY)],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-unaudited-nested-stronger-req", stdout);
+}
+
+#[test]
+fn builtin_simple_unaudited_nested_stronger_req_regnerate() {
+    // (Pass) A dep that has stronger requirements on its dep
+    // BUSTED: should emit safe-to-deploy for transitive-third-party1
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        dep_policy([("third-party1", [SAFE_TO_RUN])]),
+    );
+
+    audits.audits["third-party1"] = vec![
+        delta_audit_dep(
+            ver(3),
+            ver(6),
+            SAFE_TO_RUN,
+            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+        ),
+        delta_audit_dep(
+            ver(6),
+            ver(DEFAULT_VER),
+            SAFE_TO_RUN,
+            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+        ),
+    ];
+    audits.audits["transitive-third-party1"] = vec![
+        delta_audit(ver(4), ver(8), SAFE_TO_DEPLOY),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited(ver(3), SAFE_TO_RUN)],
+    );
+
+    config.unaudited.insert(
+        "transitive-third-party1".to_string(),
+        vec![unaudited(ver(4), SAFE_TO_DEPLOY)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!(
+        "builtin-simple-unaudited-nested-stronger-req-regenerate",
+        unaudited
+    );
+}
+
+#[test]
 fn builtin_simple_deps_unaudited_adds_uneeded_criteria() {
     // (Warn) An audited entry overlaps a full audit which is the cur version and isn't needed
     // BUSTED: this test is broken (doesn't emit warning)
