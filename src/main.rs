@@ -850,12 +850,11 @@ pub fn minimize_unaudited(
     audits: &AuditsFile,
     imports: &ImportsFile,
 ) -> Result<(), VetError> {
-
     // Set the unaudited entries to nothing
     let old_unaudited = mem::replace(&mut config.unaudited, StableMap::new());
 
     // Try to vet
-    let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports, true);
+    let report = resolver::resolve(&cfg.metadata, config, audits, imports, true);
 
     let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, false)? {
         let mut new_unaudited = StableMap::new();
