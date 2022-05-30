@@ -924,7 +924,7 @@ fn mock_simple_violation_delta() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let violation = VersionReq::parse(&format!("=5.0.0")).unwrap();
+    let violation = VersionReq::parse("=5.0.0").unwrap();
     audits.audits["third-party1"] = vec![
         violation_hard(violation),
         full_audit(ver(3), SAFE_TO_DEPLOY),
@@ -947,7 +947,7 @@ fn mock_simple_violation_full_audit() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let violation = VersionReq::parse(&format!("=3.0.0")).unwrap();
+    let violation = VersionReq::parse("=3.0.0").unwrap();
     audits.audits["third-party1"] = vec![
         violation_hard(violation),
         full_audit(ver(3), SAFE_TO_DEPLOY),
@@ -970,7 +970,7 @@ fn mock_simple_violation_wildcard() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let violation = VersionReq::parse(&format!("*")).unwrap();
+    let violation = VersionReq::parse("*").unwrap();
     audits.audits["third-party1"] = vec![
         violation_hard(violation),
         full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),

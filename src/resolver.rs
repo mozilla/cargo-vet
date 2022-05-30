@@ -135,6 +135,7 @@ pub type PackageIdx = usize;
 #[derive(Debug, Clone, Serialize)]
 pub struct PackageNode<'a> {
     pub build_type: DependencyKind,
+    #[serde(skip_serializing_if = "pkgid_unstable")]
     pub package_id: &'a PackageId,
     pub name: &'a str,
     pub version: &'a Version,
@@ -151,6 +152,11 @@ pub struct PackageNode<'a> {
     pub is_root: bool,
     /// Whether this package only shows up in dev (test/bench) builds
     pub is_dev_only: bool,
+}
+
+/// Don't serialize path package ids, not stable across systems
+fn pkgid_unstable(pkgid: &PackageId) -> bool {
+    pkgid.repr.contains("(path+file:/")
 }
 
 /// The dependency graph in a form we can use more easily.
@@ -493,7 +499,7 @@ impl<'a> DepGraph<'a> {
                 is_dev_only: true,
             });
         }
-        
+
         // Sort the nodes by package_id to make the graph more stable and to make
         // anything sorted by package_idx to also be approximately sorted by name and version.
         nodes.sort_by_key(|k| k.package_id);

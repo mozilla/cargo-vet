@@ -1756,7 +1756,6 @@ expression: stdout
   },
   {
     "build_type": "normal",
-    "package_id": "test-project 0.1.0 (path+file:///C:/Users/ninte/dev/cargo-vet/tests/test-project)",
     "name": "test-project",
     "version": "0.1.0",
     "normal_deps": [
