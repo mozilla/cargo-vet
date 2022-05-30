@@ -9,6 +9,9 @@ homepage = "https://bholley.net/cargo-vet"
 description = "Supply-chain security for Rust"
 exclude = [
   "book/*",
+  "src/snapshots/*",
+  "src/tests.rs",
+  "tests/",
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -34,7 +37,3 @@ toml = "0.5.8"
 
 [dev-dependencies]
 insta = "1.13.0" 
-
-[package.metadata.vet]
-audits = []
-

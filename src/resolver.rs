@@ -135,6 +135,7 @@ pub type PackageIdx = usize;
 #[derive(Debug, Clone, Serialize)]
 pub struct PackageNode<'a> {
     pub build_type: DependencyKind,
+    #[serde(skip_serializing_if = "pkgid_unstable")]
     pub package_id: &'a PackageId,
     pub name: &'a str,
     pub version: &'a Version,
@@ -142,7 +143,7 @@ pub struct PackageNode<'a> {
     pub build_deps: Vec<PackageIdx>,
     pub dev_deps: Vec<PackageIdx>,
     pub all_deps: Vec<PackageIdx>,
-    pub reverse_deps: FastSet<PackageIdx>,
+    pub reverse_deps: SortedSet<PackageIdx>,
     /// Whether this package is a workspace member (can have dev-deps)
     pub is_workspace_member: bool,
     /// Whether this package is third-party (from crates.io)
@@ -151,6 +152,11 @@ pub struct PackageNode<'a> {
     pub is_root: bool,
     /// Whether this package only shows up in dev (test/bench) builds
     pub is_dev_only: bool,
+}
+
+/// Don't serialize path package ids, not stable across systems
+fn pkgid_unstable(pkgid: &PackageId) -> bool {
+    pkgid.repr.contains("(path+file:/")
 }
 
 /// The dependency graph in a form we can use more easily.
@@ -472,8 +478,9 @@ impl<'a> DepGraph<'a> {
         let mut interner_by_name_and_ver =
             SortedMap::<&str, SortedMap<&Version, PackageIdx>>::new();
         let mut nodes = vec![];
+
+        // Stub out the initial state of all the nodes
         for resolve_node in resolve_list {
-            let idx = nodes.len();
             let package = &package_list[package_index_by_pkgid[&resolve_node.id]];
             nodes.push(PackageNode {
                 build_type: DependencyKind::Normal,
@@ -486,23 +493,30 @@ impl<'a> DepGraph<'a> {
                 build_deps: vec![],
                 dev_deps: vec![],
                 all_deps: vec![],
-                reverse_deps: FastSet::new(),
+                reverse_deps: SortedSet::new(),
                 is_workspace_member: false,
                 is_root: false,
                 is_dev_only: true,
             });
-            assert!(interner_by_pkgid.insert(&resolve_node.id, idx).is_none());
+        }
+
+        // Sort the nodes by package_id to make the graph more stable and to make
+        // anything sorted by package_idx to also be approximately sorted by name and version.
+        nodes.sort_by_key(|k| k.package_id);
+
+        // Populate the interners based on the new ordering
+        for (idx, node) in nodes.iter_mut().enumerate() {
+            assert!(interner_by_pkgid.insert(node.package_id, idx).is_none());
             assert!(interner_by_name_and_ver
-                .entry(&package.name)
+                .entry(node.name)
                 .or_default()
-                .insert(&package.version, idx)
+                .insert(node.version, idx)
                 .is_none());
         }
 
         // Do topological sort: just recursively visit all of a node's children, and only add it
         // to the list *after* visiting the children. In this way we have trivially already added
         // all of the dependencies of a node to the list by the time we add itself to the list.
-
         let mut topo_index = vec![];
         {
             let mut visited = FastMap::new();
@@ -1459,8 +1473,8 @@ fn resolve_first_party<'a>(
 
     // Root nodes adopt this policy if they don't have an explicit one
     let default_root_policy = criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
-    let _default_root_build_and_dev_policy =
-        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA]);
+    let _default_root_dev_policy =
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_DEV_CRITERIA]);
 
     let mut policy_failures = PolicyFailures::new();
 
@@ -1578,8 +1592,8 @@ fn resolve_dev<'a>(
     // Root nodes adopt this policy if they don't have an explicit one
     let _default_root_policy =
         criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
-    let default_root_build_and_dev_policy =
-        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_BUILD_AND_DEV_CRITERIA]);
+    let default_root_dev_policy =
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_DEV_CRITERIA]);
 
     let mut policy_failures = PolicyFailures::new();
 
@@ -1634,9 +1648,9 @@ fn resolve_dev<'a>(
 
         // Now check that we pass our own policy
         let own_policy = if let Some(policy) = config.policy.get(package.name) {
-            criteria_mapper.criteria_from_list(&policy.build_and_dev_criteria)
+            criteria_mapper.criteria_from_list(&policy.dev_criteria)
         } else if is_root {
-            default_root_build_and_dev_policy
+            default_root_dev_policy
         } else {
             unreachable!("dev nodes are always roots!")
         };
@@ -2255,6 +2269,7 @@ impl FailForViolationConflict {
                         print_entry(out, violation_source, violation)?;
                     }
                 }
+                writeln!(out)?;
             }
         }
 
@@ -2285,7 +2300,6 @@ impl FailForViolationConflict {
             if let Some(notes) = &entry.notes {
                 writeln!(out, "      notes: {notes}")?;
             }
-            // writeln!(out, "violation {}", version)?;
             Ok(())
         }
 

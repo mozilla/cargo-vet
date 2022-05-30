@@ -1,0 +1,8 @@
+---
+source: src/tests.rs
+expression: stdout
+---
+Vetting Succeeded (3 fully audited)
+  warning: some dependencies are listed in unaudited, but didn't need it:
+    third-party1:10.0.0
+
