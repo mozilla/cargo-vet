@@ -820,7 +820,6 @@ fn cmd_regenerate_unaudited(
 ) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("regenerating unaudited...");
-
     let store_path = cfg.metacfg.store_path();
 
     let audits = load_audits(store_path)?;
@@ -835,6 +834,22 @@ fn cmd_regenerate_unaudited(
     } else {
         load_imports(store_path)?
     };
+
+    minimize_unaudited(cfg, &mut config, &audits, &imports)?;
+
+    store_config(store_path, config)?;
+    store_imports(store_path, imports)?;
+    store_audits(store_path, audits)?;
+
+    Ok(())
+}
+
+pub fn minimize_unaudited(
+    cfg: &Config,
+    config: &mut ConfigFile,
+    audits: &AuditsFile,
+    imports: &ImportsFile,
+) -> Result<(), VetError> {
 
     // Set the unaudited entries to nothing
     let old_unaudited = mem::replace(&mut config.unaudited, StableMap::new());
@@ -926,7 +941,6 @@ fn cmd_regenerate_unaudited(
     };
 
     config.unaudited = new_unaudited;
-    store_config(store_path, config)?;
 
     Ok(())
 }
