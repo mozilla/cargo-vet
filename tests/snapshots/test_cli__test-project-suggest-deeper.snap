@@ -9,7 +9,6 @@ recommended audits for safe-to-deploy:
     cargo vet inspect try-lock 0.2.3                      (used by want)                                              (386 lines)
     cargo vet inspect openssl-probe 0.1.5                 (used by native-tls)                                        (456 lines)
     cargo vet inspect tower-service 0.3.1                 (used by hyper)                                             (507 lines)
-    cargo vet inspect atty 0.2.14                         (used by clap)                                              (508 lines)
     cargo vet inspect wasm-bindgen-shared 0.2.80          (used by wasm-bindgen-backend, wasm-bindgen-macro-support)  (516 lines)
     cargo vet inspect pin-utils 0.1.0                     (used by futures-util)                                      (544 lines)
     cargo vet inspect futures-sink 0.3.21                 (used by h2, tokio-util)                                    (551 lines)
@@ -105,7 +104,7 @@ recommended audits for safe-to-deploy:
 recommended audits for safe-to-run:
     cargo vet inspect hermit-abi 0.1.19  (used by atty)  (938 lines)
 
-estimated audit backlog: 1771824 lines
+estimated audit backlog: 1771316 lines
 
 Use |cargo vet certify| to record the audits.
 

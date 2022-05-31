@@ -821,6 +821,22 @@ fn get_unaudited(config: &ConfigFile) -> String {
     toml::ser::to_string_pretty(&config.unaudited).unwrap()
 }
 
+fn _init_trace_logger() {
+    use simplelog::*;
+    let _ = TermLogger::init(
+        LevelFilter::Trace,
+        ConfigBuilder::new()
+            .set_location_level(LevelFilter::Off)
+            .set_time_level(LevelFilter::Off)
+            .set_thread_level(LevelFilter::Off)
+            .set_target_level(LevelFilter::Off)
+            .set_level_color(Level::Trace, None)
+            .build(),
+        TerminalMode::Stderr,
+        ColorChoice::Auto,
+    );
+}
+
 #[test]
 fn mock_simple_init() {
     // (Pass) Should look the same as a fresh 'vet init'.
@@ -3042,7 +3058,7 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+    let (mut config, mut audits, imports) = builtin_files_minimal_audited(&metadata);
 
     audits.audits["simple-dev-indirect"] = vec![
         full_audit(ver(5), SAFE_TO_RUN),
@@ -3063,16 +3079,15 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
     );
 }
 
-#[should_panic]
 #[test]
 fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect_regenerate() {
     // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
-    // BUSTED: complete breaks the blame analysis, this test shouldn't panic!
+    // Should result in an empty unaudited file
 
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+    let (mut config, mut audits, imports) = builtin_files_minimal_audited(&metadata);
 
     audits.audits["simple-dev-indirect"] = vec![
         full_audit(ver(5), SAFE_TO_RUN),
@@ -3093,6 +3108,52 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect_regenerate() {
         "builtin-dev-detection-unaudited-adds-uneeded-criteria-indirect-regenerate",
         unaudited
     );
+}
+
+#[test]
+fn builtin_dev_detection_cursed_full() {
+    // (Fail): dev-indirect has safe-to-run and by policy we only need safe-to-run
+    // but dev (its parent) is audited for safe-to-deploy which requires the child
+    // be safe-to-deploy. If we implement criteria "desugarring" this would pass.
+    //
+    // This test is "cursed" because it caused some crashes in glitched out the blame system.
+
+    let mock = MockMetadata::dev_detection();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["simple-dev-indirect"] = vec![
+        full_audit(ver(5), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-dev-detection-cursed-full", stdout);
+}
+
+#[test]
+fn builtin_dev_detection_cursed_minimal() {
+    // (Pass): the same as the full cursed one, but without the cursed part.
+
+    let mock = MockMetadata::dev_detection();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_minimal_audited(&metadata);
+
+    audits.audits["simple-dev-indirect"] = vec![
+        full_audit(ver(5), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-dev-detection-cursed-minimal", stdout);
 }
 
 #[test]

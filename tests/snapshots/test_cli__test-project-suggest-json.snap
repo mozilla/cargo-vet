@@ -1,18 +1,10 @@
 ---
 source: tests/test-cli.rs
-assertion_line: 214
 expression: stdout
 ---
 {
   "conclusion": "fail (vetting)",
   "failures": [
-    {
-      "missing_criteria": [
-        "safe-to-deploy"
-      ],
-      "name": "atty",
-      "version": "0.2.14"
-    },
     {
       "missing_criteria": [
         "safe-to-run"
@@ -87,21 +79,6 @@ expression: stdout
   "suggest": {
     "suggest_by_criteria": {
       "safe-to-deploy": [
-        {
-          "name": "atty",
-          "notable_parents": "clap",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "diffstat": {
-              "count": 508,
-              "raw": " 12 files changed, 508 insertions(+)\n"
-            },
-            "from": "0.0.0",
-            "to": "0.2.14"
-          }
-        },
         {
           "name": "termcolor",
           "notable_parents": "clap",
@@ -258,21 +235,6 @@ expression: stdout
     },
     "suggestions": [
       {
-        "name": "atty",
-        "notable_parents": "clap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 508,
-            "raw": " 12 files changed, 508 insertions(+)\n"
-          },
-          "from": "0.0.0",
-          "to": "0.2.14"
-        }
-      },
-      {
         "name": "hermit-abi",
         "notable_parents": "atty",
         "suggested_criteria": [
@@ -423,6 +385,6 @@ expression: stdout
         }
       }
     ],
-    "total_lines": 433758
+    "total_lines": 433250
   }
 }

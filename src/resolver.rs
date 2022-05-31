@@ -208,7 +208,7 @@ pub enum SearchResult<'a> {
         /// This is currently overbroad in corner cases where there are two possible
         /// paths blocked by two different dependencies and so only fixing one would
         /// actually be sufficient, but, whatever.
-        failed_deps: SortedSet<PackageIdx>,
+        failed_deps: SortedMap<PackageIdx, CriteriaSet>,
     },
     /// We failed to find any path, criteria not valid.
     Disconnected {
@@ -897,11 +897,22 @@ pub fn resolve<'a>(
     let mut failures = SortedMap::<PackageIdx, AuditFailure>::new();
     visit_failures(
         &graph,
+        &criteria_mapper,
         &results,
         &root_failures,
         guess_deeper,
-        |failure, _depth, own_failure| {
+        |failure, depth, own_failure| {
             if let Some(criteria_failures) = own_failure {
+                trace!(
+                    "blame: {:width$}blaming: {}:{} for {:?}",
+                    "",
+                    graph.nodes[failure].name,
+                    graph.nodes[failure].version,
+                    criteria_mapper
+                        .criteria_names(criteria_failures)
+                        .collect::<Vec<_>>(),
+                    width = depth
+                );
                 failures
                     .entry(failure)
                     .or_default()
@@ -1251,6 +1262,7 @@ fn resolve_third_party<'a>(
             package.version,
             &forward_nodes,
             graph,
+            criteria_mapper,
             package,
             results,
         );
@@ -1280,6 +1292,7 @@ fn resolve_third_party<'a>(
                     &ROOT_VERSION,
                     &backward_nodes,
                     graph,
+                    criteria_mapper,
                     package,
                     results,
                 );
@@ -1311,12 +1324,14 @@ fn resolve_third_party<'a>(
     };
 }
 
+#[allow(clippy::too_many_arguments)]
 fn search_for_path<'a>(
     cur_criteria: &CriteriaSet,
     from_version: &'a Version,
     to_version: &'a Version,
     version_nodes: &SortedMap<&'a Version, Vec<DeltaEdge<'a>>>,
     dep_graph: &DepGraph<'a>,
+    criteria_mapper: &CriteriaMapper,
     package: &PackageNode<'a>,
     results: &mut [ResolveResult],
 ) -> SearchResult<'a> {
@@ -1344,7 +1359,7 @@ fn search_for_path<'a>(
     let mut found_path = false;
     let mut needed_unaudited_entry = false;
     let mut needed_failed_edges = false;
-    let mut failed_deps = SortedSet::new();
+    let mut failed_deps = SortedMap::<PackageIdx, CriteriaSet>::new();
 
     // Search State
     let mut search_stack = vec![from_version];
@@ -1417,7 +1432,10 @@ fn search_for_path<'a>(
                             .unwrap_or(&edge.criteria);
 
                         if !dep_vet_result.contains(dep_req) {
-                            failed_deps.insert(dependency);
+                            failed_deps
+                                .entry(dependency)
+                                .or_insert_with(|| criteria_mapper.no_criteria())
+                                .unioned_with(dep_req);
                             deps_satisfied = false;
                         }
                     }
@@ -1518,7 +1536,7 @@ fn resolve_first_party<'a>(
         let mut validated_criteria = criteria_mapper.no_criteria();
         let mut search_results = vec![];
         for criteria in criteria_mapper.criteria_iter() {
-            let mut failed_deps = SortedSet::new();
+            let mut failed_deps = SortedMap::new();
             // TODO: this isn't quite right. We want to analyze build-deps distinctly but we're
             // just merging them in with normal deps... I need to think about this more.
             // The semantic of policies is unclear for build-deps, I think...
@@ -1528,7 +1546,10 @@ fn resolve_first_party<'a>(
                     continue;
                 }
                 if !results[depidx].contains(criteria) {
-                    failed_deps.insert(depidx);
+                    failed_deps
+                        .entry(depidx)
+                        .or_insert_with(|| criteria_mapper.no_criteria())
+                        .unioned_with(criteria);
                 }
             }
 
@@ -1553,11 +1574,11 @@ fn resolve_first_party<'a>(
 
         for criteria_idx in own_policy.indices() {
             if let SearchResult::PossiblyConnected { failed_deps } = &search_results[criteria_idx] {
-                for &dep in failed_deps {
+                for (&dep, failed_criteria) in failed_deps {
                     policy_failures
                         .entry(dep)
                         .or_insert_with(|| criteria_mapper.no_criteria())
-                        .set_criteria(criteria_idx);
+                        .unioned_with(failed_criteria);
                 }
             }
         }
@@ -1637,14 +1658,17 @@ fn resolve_dev<'a>(
         let mut validated_criteria = criteria_mapper.no_criteria();
         let mut search_results = vec![];
         for criteria in criteria_mapper.criteria_iter() {
-            let mut failed_deps = SortedSet::new();
+            let mut failed_deps = SortedMap::new();
             for &depidx in &package.dev_deps {
                 if passed_dependencies.contains(&depidx) {
                     // This dep is already fine, ignore it (implicitly all_criteria now)
                     continue;
                 }
                 if !results[depidx].contains(criteria) {
-                    failed_deps.insert(depidx);
+                    failed_deps
+                        .entry(depidx)
+                        .or_insert_with(|| criteria_mapper.no_criteria())
+                        .unioned_with(criteria);
                 }
             }
 
@@ -1671,11 +1695,11 @@ fn resolve_dev<'a>(
         // depend on it..?
         for criteria_idx in own_policy.indices() {
             if let SearchResult::PossiblyConnected { failed_deps } = &search_results[criteria_idx] {
-                for &dep in failed_deps {
+                for (&dep, failed_criteria) in failed_deps {
                     policy_failures
                         .entry(dep)
                         .or_insert_with(|| criteria_mapper.no_criteria())
-                        .set_criteria(criteria_idx);
+                        .unioned_with(failed_criteria);
                 }
             }
         }
@@ -1705,6 +1729,7 @@ fn resolve_dev<'a>(
 /// Traverse the build graph from the root failures to the leaf failures.
 fn visit_failures<'a, T>(
     graph: &DepGraph<'a>,
+    criteria_mapper: &CriteriaMapper,
     results: &[ResolveResult<'a>],
     root_failures: &FastSet<PackageIdx>,
     guess_deeper: bool,
@@ -1747,7 +1772,7 @@ fn visit_failures<'a, T>(
         .map(|f| (*f, 0, None))
         .collect::<Vec<_>>();
     let mut visited = FastMap::<PackageIdx, CriteriaSet>::new();
-    let no_criteria = CriteriaSet::default();
+    let no_criteria = criteria_mapper.no_criteria();
 
     while let Some((failure_idx, depth, cur_criteria)) = search_stack.pop() {
         match visited.entry(failure_idx) {
@@ -1767,10 +1792,13 @@ fn visit_failures<'a, T>(
         let result = &results[failure_idx];
         let package = &graph.nodes[failure_idx];
         trace!(
-            "blame: {:width$}visiting {}:{}",
+            "blame: {:width$}visiting {}:{} for {:?}",
             "",
             package.name,
             package.version,
+            cur_criteria
+                .as_ref()
+                .map(|c| criteria_mapper.criteria_names(c).collect::<Vec<_>>()),
             width = depth
         );
 
@@ -1781,7 +1809,7 @@ fn visit_failures<'a, T>(
                 search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
             }
         } else if let Some(failed_criteria) = cur_criteria {
-            let mut own_fault = CriteriaSet::default();
+            let mut own_fault = criteria_mapper.no_criteria();
             let mut dep_faults = FastMap::<PackageIdx, CriteriaSet>::new();
             let mut deeper_faults = FastMap::<PackageIdx, CriteriaSet>::new();
 
@@ -1793,11 +1821,11 @@ fn visit_failures<'a, T>(
                     }
                     SearchResult::PossiblyConnected { failed_deps } => {
                         // We're not to blame, it's our children who failed!
-                        for &failed_dep in failed_deps {
+                        for (&failed_dep, failed_criteria) in failed_deps {
                             dep_faults
                                 .entry(failed_dep)
-                                .or_default()
-                                .set_criteria(criteria_idx);
+                                .or_insert_with(|| no_criteria.clone())
+                                .unioned_with(failed_criteria);
                         }
                     }
                     SearchResult::Disconnected { .. } => {

@@ -1,18 +1,10 @@
 ---
 source: tests/test-cli.rs
-assertion_line: 271
 expression: stdout
 ---
 {
   "conclusion": "fail (vetting)",
   "failures": [
-    {
-      "missing_criteria": [
-        "safe-to-deploy"
-      ],
-      "name": "atty",
-      "version": "0.2.14"
-    },
     {
       "missing_criteria": [
         "safe-to-deploy"
@@ -791,21 +783,6 @@ expression: stdout
             },
             "from": "0.0.0",
             "to": "0.3.1"
-          }
-        },
-        {
-          "name": "atty",
-          "notable_parents": "clap",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "diffstat": {
-              "count": 508,
-              "raw": " 12 files changed, 508 insertions(+)\n"
-            },
-            "from": "0.0.0",
-            "to": "0.2.14"
           }
         },
         {
@@ -2284,21 +2261,6 @@ expression: stdout
         }
       },
       {
-        "name": "atty",
-        "notable_parents": "clap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 508,
-            "raw": " 12 files changed, 508 insertions(+)\n"
-          },
-          "from": "0.0.0",
-          "to": "0.2.14"
-        }
-      },
-      {
         "name": "wasm-bindgen-shared",
         "notable_parents": "wasm-bindgen-backend, wasm-bindgen-macro-support",
         "suggested_criteria": [
@@ -3679,6 +3641,6 @@ expression: stdout
         }
       }
     ],
-    "total_lines": 1771824
+    "total_lines": 1771316
   }
 }
