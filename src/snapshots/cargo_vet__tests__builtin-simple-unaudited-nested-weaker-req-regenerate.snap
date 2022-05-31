@@ -1,0 +1,15 @@
+---
+source: src/tests.rs
+expression: unaudited
+---
+[[third-party1]]
+version = '3.0.0'
+criteria = 'safe-to-deploy'
+
+[third-party1.dependency-criteria]
+transitive-third-party1 = ['safe-to-run']
+
+[[transitive-third-party1]]
+version = '10.0.0'
+criteria = 'safe-to-deploy'
+

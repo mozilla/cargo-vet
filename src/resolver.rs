@@ -208,7 +208,7 @@ pub enum SearchResult<'a> {
         /// This is currently overbroad in corner cases where there are two possible
         /// paths blocked by two different dependencies and so only fixing one would
         /// actually be sufficient, but, whatever.
-        failed_deps: SortedSet<PackageIdx>,
+        failed_deps: SortedMap<PackageIdx, CriteriaSet>,
     },
     /// We failed to find any path, criteria not valid.
     Disconnected {
@@ -325,7 +325,9 @@ impl CriteriaMapper {
     pub fn set_criteria(&self, set: &mut CriteriaSet, criteria: &str) {
         set.set_criteria(self.index[criteria])
     }
-
+    pub fn clear_criteria(&self, set: &mut CriteriaSet, criteria: &str) {
+        set.clear_criteria(&self.implied_criteria[self.index[criteria]])
+    }
     /// An iterator over every criteria in order, with 'implies' fully applied.
     pub fn criteria_iter(&self) -> impl Iterator<Item = &CriteriaSet> {
         self.implied_criteria.iter()
@@ -381,6 +383,9 @@ impl CriteriaSet {
     }
     pub fn set_criteria(&mut self, idx: usize) {
         self.0 |= 1 << idx;
+    }
+    pub fn clear_criteria(&mut self, other: &CriteriaSet) {
+        self.0 &= !other.0;
     }
     pub fn has_criteria(&self, idx: usize) -> bool {
         (self.0 & (1 << idx)) != 0
@@ -892,11 +897,22 @@ pub fn resolve<'a>(
     let mut failures = SortedMap::<PackageIdx, AuditFailure>::new();
     visit_failures(
         &graph,
+        &criteria_mapper,
         &results,
         &root_failures,
         guess_deeper,
-        |failure, _depth, own_failure| {
+        |failure, depth, own_failure| {
             if let Some(criteria_failures) = own_failure {
+                trace!(
+                    "blame: {:width$}blaming: {}:{} for {:?}",
+                    "",
+                    graph.nodes[failure].name,
+                    graph.nodes[failure].version,
+                    criteria_mapper
+                        .criteria_names(criteria_failures)
+                        .collect::<Vec<_>>(),
+                    width = depth
+                );
                 failures
                     .entry(failure)
                     .or_default()
@@ -1212,18 +1228,25 @@ fn resolve_third_party<'a>(
             let from_ver = &ROOT_VERSION;
             let to_ver = &allowed.version;
             let criteria = criteria_mapper.criteria_from_list([&allowed.criteria]);
+            let dependency_criteria: FastMap<_, _> = allowed
+                .dependency_criteria
+                .iter()
+                .map(|(pkg_name, criteria)| {
+                    (&**pkg_name, criteria_mapper.criteria_from_list(criteria))
+                })
+                .collect();
 
             // For simplicity, turn 'unaudited' entries into deltas from 0.0.0
             forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
                 version: to_ver,
                 criteria: criteria.clone(),
-                dependency_criteria: Default::default(),
+                dependency_criteria: dependency_criteria.clone(),
                 is_unaudited_entry: true,
             });
             backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
                 version: from_ver,
                 criteria,
-                dependency_criteria: Default::default(),
+                dependency_criteria,
                 is_unaudited_entry: true,
             });
         }
@@ -1239,6 +1262,7 @@ fn resolve_third_party<'a>(
             package.version,
             &forward_nodes,
             graph,
+            criteria_mapper,
             package,
             results,
         );
@@ -1268,6 +1292,7 @@ fn resolve_third_party<'a>(
                     &ROOT_VERSION,
                     &backward_nodes,
                     graph,
+                    criteria_mapper,
                     package,
                     results,
                 );
@@ -1299,12 +1324,14 @@ fn resolve_third_party<'a>(
     };
 }
 
+#[allow(clippy::too_many_arguments)]
 fn search_for_path<'a>(
     cur_criteria: &CriteriaSet,
     from_version: &'a Version,
     to_version: &'a Version,
     version_nodes: &SortedMap<&'a Version, Vec<DeltaEdge<'a>>>,
     dep_graph: &DepGraph<'a>,
+    criteria_mapper: &CriteriaMapper,
     package: &PackageNode<'a>,
     results: &mut [ResolveResult],
 ) -> SearchResult<'a> {
@@ -1332,7 +1359,7 @@ fn search_for_path<'a>(
     let mut found_path = false;
     let mut needed_unaudited_entry = false;
     let mut needed_failed_edges = false;
-    let mut failed_deps = SortedSet::new();
+    let mut failed_deps = SortedMap::<PackageIdx, CriteriaSet>::new();
 
     // Search State
     let mut search_stack = vec![from_version];
@@ -1405,7 +1432,10 @@ fn search_for_path<'a>(
                             .unwrap_or(&edge.criteria);
 
                         if !dep_vet_result.contains(dep_req) {
-                            failed_deps.insert(dependency);
+                            failed_deps
+                                .entry(dependency)
+                                .or_insert_with(|| criteria_mapper.no_criteria())
+                                .unioned_with(dep_req);
                             deps_satisfied = false;
                         }
                     }
@@ -1506,7 +1536,7 @@ fn resolve_first_party<'a>(
         let mut validated_criteria = criteria_mapper.no_criteria();
         let mut search_results = vec![];
         for criteria in criteria_mapper.criteria_iter() {
-            let mut failed_deps = SortedSet::new();
+            let mut failed_deps = SortedMap::new();
             // TODO: this isn't quite right. We want to analyze build-deps distinctly but we're
             // just merging them in with normal deps... I need to think about this more.
             // The semantic of policies is unclear for build-deps, I think...
@@ -1516,7 +1546,10 @@ fn resolve_first_party<'a>(
                     continue;
                 }
                 if !results[depidx].contains(criteria) {
-                    failed_deps.insert(depidx);
+                    failed_deps
+                        .entry(depidx)
+                        .or_insert_with(|| criteria_mapper.no_criteria())
+                        .unioned_with(criteria);
                 }
             }
 
@@ -1541,11 +1574,11 @@ fn resolve_first_party<'a>(
 
         for criteria_idx in own_policy.indices() {
             if let SearchResult::PossiblyConnected { failed_deps } = &search_results[criteria_idx] {
-                for &dep in failed_deps {
+                for (&dep, failed_criteria) in failed_deps {
                     policy_failures
                         .entry(dep)
                         .or_insert_with(|| criteria_mapper.no_criteria())
-                        .set_criteria(criteria_idx);
+                        .unioned_with(failed_criteria);
                 }
             }
         }
@@ -1625,14 +1658,17 @@ fn resolve_dev<'a>(
         let mut validated_criteria = criteria_mapper.no_criteria();
         let mut search_results = vec![];
         for criteria in criteria_mapper.criteria_iter() {
-            let mut failed_deps = SortedSet::new();
+            let mut failed_deps = SortedMap::new();
             for &depidx in &package.dev_deps {
                 if passed_dependencies.contains(&depidx) {
                     // This dep is already fine, ignore it (implicitly all_criteria now)
                     continue;
                 }
                 if !results[depidx].contains(criteria) {
-                    failed_deps.insert(depidx);
+                    failed_deps
+                        .entry(depidx)
+                        .or_insert_with(|| criteria_mapper.no_criteria())
+                        .unioned_with(criteria);
                 }
             }
 
@@ -1659,11 +1695,11 @@ fn resolve_dev<'a>(
         // depend on it..?
         for criteria_idx in own_policy.indices() {
             if let SearchResult::PossiblyConnected { failed_deps } = &search_results[criteria_idx] {
-                for &dep in failed_deps {
+                for (&dep, failed_criteria) in failed_deps {
                     policy_failures
                         .entry(dep)
                         .or_insert_with(|| criteria_mapper.no_criteria())
-                        .set_criteria(criteria_idx);
+                        .unioned_with(failed_criteria);
                 }
             }
         }
@@ -1693,6 +1729,7 @@ fn resolve_dev<'a>(
 /// Traverse the build graph from the root failures to the leaf failures.
 fn visit_failures<'a, T>(
     graph: &DepGraph<'a>,
+    criteria_mapper: &CriteriaMapper,
     results: &[ResolveResult<'a>],
     root_failures: &FastSet<PackageIdx>,
     guess_deeper: bool,
@@ -1735,7 +1772,7 @@ fn visit_failures<'a, T>(
         .map(|f| (*f, 0, None))
         .collect::<Vec<_>>();
     let mut visited = FastMap::<PackageIdx, CriteriaSet>::new();
-    let no_criteria = CriteriaSet::default();
+    let no_criteria = criteria_mapper.no_criteria();
 
     while let Some((failure_idx, depth, cur_criteria)) = search_stack.pop() {
         match visited.entry(failure_idx) {
@@ -1755,10 +1792,13 @@ fn visit_failures<'a, T>(
         let result = &results[failure_idx];
         let package = &graph.nodes[failure_idx];
         trace!(
-            "blame: {:width$}visiting {}:{}",
+            "blame: {:width$}visiting {}:{} for {:?}",
             "",
             package.name,
             package.version,
+            cur_criteria
+                .as_ref()
+                .map(|c| criteria_mapper.criteria_names(c).collect::<Vec<_>>()),
             width = depth
         );
 
@@ -1769,7 +1809,7 @@ fn visit_failures<'a, T>(
                 search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
             }
         } else if let Some(failed_criteria) = cur_criteria {
-            let mut own_fault = CriteriaSet::default();
+            let mut own_fault = criteria_mapper.no_criteria();
             let mut dep_faults = FastMap::<PackageIdx, CriteriaSet>::new();
             let mut deeper_faults = FastMap::<PackageIdx, CriteriaSet>::new();
 
@@ -1781,11 +1821,11 @@ fn visit_failures<'a, T>(
                     }
                     SearchResult::PossiblyConnected { failed_deps } => {
                         // We're not to blame, it's our children who failed!
-                        for &failed_dep in failed_deps {
+                        for (&failed_dep, failed_criteria) in failed_deps {
                             dep_faults
                                 .entry(failed_dep)
-                                .or_default()
-                                .set_criteria(criteria_idx);
+                                .or_insert_with(|| no_criteria.clone())
+                                .unioned_with(failed_criteria);
                         }
                     }
                     SearchResult::Disconnected { .. } => {
@@ -1850,7 +1890,11 @@ impl<'a> ResolveReport<'a> {
         }
     }
 
-    pub fn compute_suggest(&self, cfg: &Config) -> Result<Option<Suggest>, VetError> {
+    pub fn compute_suggest(
+        &self,
+        cfg: &Config,
+        allow_deltas: bool,
+    ) -> Result<Option<Suggest>, VetError> {
         let fail = if let Conclusion::FailForVet(fail) = &self.conclusion {
             fail
         } else {
@@ -1924,30 +1968,41 @@ impl<'a> ResolveReport<'a> {
 
             // Now suggest solutions of those failures
             let mut candidates = SortedSet::new();
-            for &dest in from_target.as_ref().unwrap() {
-                let mut closest_above = None;
-                let mut closest_below = None;
-                for &src in from_root.as_ref().unwrap() {
-                    if src < dest {
-                        if let Some(closest) = closest_below {
-                            if src > closest {
+            if allow_deltas {
+                // If we're allowed deltas than try to find a bridge from src and dest
+                for &dest in from_target.as_ref().unwrap() {
+                    let mut closest_above = None;
+                    let mut closest_below = None;
+                    for &src in from_root.as_ref().unwrap() {
+                        if src < dest {
+                            if let Some(closest) = closest_below {
+                                if src > closest {
+                                    closest_below = Some(src);
+                                }
+                            } else {
                                 closest_below = Some(src);
                             }
+                        } else if let Some(closest) = closest_above {
+                            if src < closest {
+                                closest_above = Some(src);
+                            }
                         } else {
-                            closest_below = Some(src);
-                        }
-                    } else if let Some(closest) = closest_above {
-                        if src < closest {
                             closest_above = Some(src);
                         }
-                    } else {
-                        closest_above = Some(src);
+                    }
+
+                    for closest in closest_below.into_iter().chain(closest_above) {
+                        candidates.insert(Delta {
+                            from: closest.clone(),
+                            to: dest.clone(),
+                        });
                     }
                 }
-
-                for closest in closest_below.into_iter().chain(closest_above) {
+            } else {
+                // If we're not allowing deltas, just try everything reachable from the target
+                for &dest in from_target.as_ref().unwrap() {
                     candidates.insert(Delta {
-                        from: closest.clone(),
+                        from: ROOT_VERSION.clone(),
                         to: dest.clone(),
                     });
                 }
@@ -2005,7 +2060,7 @@ impl<'a> ResolveReport<'a> {
 
     /// Print only the suggest portion of a human-readable report
     pub fn print_suggest_human(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
-        if let Some(suggest) = self.compute_suggest(cfg)? {
+        if let Some(suggest) = self.compute_suggest(cfg, true)? {
             suggest.print_human(out, self)?;
         } else {
             // This API is only used for vet-suggest
@@ -2042,7 +2097,7 @@ impl<'a> ResolveReport<'a> {
                 }).collect::<StableMap<_,_>>(),
             }),
             Conclusion::FailForVet(fail) => {
-                let suggest = self.compute_suggest(cfg)?;
+                let suggest = self.compute_suggest(cfg, true)?;
                 let json_suggest_item = |item: &SuggestItem| {
                     let package = &self.graph.nodes[item.package];
                     json!({
@@ -2231,7 +2286,7 @@ impl FailForVet {
 
         writeln!(out)?;
 
-        if let Some(suggest) = report.compute_suggest(cfg)? {
+        if let Some(suggest) = report.compute_suggest(cfg, true)? {
             suggest.print_human(out, report)?;
         }
 

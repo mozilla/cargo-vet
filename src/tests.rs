@@ -80,6 +80,7 @@ fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependen
     UnauditedDependency {
         version,
         criteria: config.default_criteria.clone(),
+        dependency_criteria: DependencyCriteria::new(),
         notes: None,
         suggest: true,
     }
@@ -88,8 +89,36 @@ fn unaudited(version: Version, criteria: &str) -> UnauditedDependency {
     UnauditedDependency {
         version,
         criteria: criteria.to_string(),
+        dependency_criteria: DependencyCriteria::new(),
         notes: None,
         suggest: true,
+    }
+}
+
+fn unaudited_dep(
+    version: Version,
+    criteria: &str,
+    dependency_criteria: impl IntoIterator<
+        Item = (
+            impl Into<String>,
+            impl IntoIterator<Item = impl Into<String>>,
+        ),
+    >,
+) -> UnauditedDependency {
+    UnauditedDependency {
+        version,
+        criteria: criteria.to_string(),
+        notes: None,
+        suggest: true,
+        dependency_criteria: dependency_criteria
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k.into(),
+                    v.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                )
+            })
+            .collect(),
     }
 }
 
@@ -768,8 +797,8 @@ fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile
     (config, audits, imports)
 }
 
-fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
-    let cfg = Config {
+fn mock_cfg(metadata: &Metadata) -> Config {
+    Config {
         metacfg: MetaConfig(vec![]),
         metadata: metadata.clone(),
         _rest: PartialConfig {
@@ -778,10 +807,34 @@ fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
             tmp: PathBuf::new(),
             cargo_home: None,
         },
-    };
+    }
+}
+
+fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
+    let cfg = mock_cfg(metadata);
     let mut stdout = Vec::new();
     report.print_human(&mut stdout, &cfg).unwrap();
     String::from_utf8(stdout).unwrap()
+}
+
+fn get_unaudited(config: &ConfigFile) -> String {
+    toml::ser::to_string_pretty(&config.unaudited).unwrap()
+}
+
+fn _init_trace_logger() {
+    use simplelog::*;
+    let _ = TermLogger::init(
+        LevelFilter::Trace,
+        ConfigBuilder::new()
+            .set_location_level(LevelFilter::Off)
+            .set_time_level(LevelFilter::Off)
+            .set_thread_level(LevelFilter::Off)
+            .set_target_level(LevelFilter::Off)
+            .set_level_color(Level::Trace, None)
+            .build(),
+        TerminalMode::Stderr,
+        ColorChoice::Auto,
+    );
 }
 
 #[test]
@@ -2310,8 +2363,35 @@ fn builtin_simple_unaudited_extra() {
 }
 
 #[test]
+fn builtin_simple_unaudited_extra_regenerate() {
+    // (Pass) there's an extra unused unaudited entry, but the other is needed.
+    // Should result in only the v10 unaudited entry remaining.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![
+            unaudited(ver(5), SAFE_TO_DEPLOY),
+            unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!("builtin-simple-unaudited-extra-regenerate", unaudited);
+}
+
+#[test]
 fn builtin_simple_unaudited_not_a_real_dep() {
-    // (Warn) there's an extra unused unaudited entry, but the other is needed
+    // (Warn) there's an unaudited entry for a package that isn't in our tree at all.
     // BUSTED: this test is broken (doesn't emit warning)
 
     let mock = MockMetadata::simple();
@@ -2328,6 +2408,28 @@ fn builtin_simple_unaudited_not_a_real_dep() {
 
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-not-a-real-dep", stdout);
+}
+
+#[test]
+fn builtin_simple_unaudited_not_a_real_dep_regenerate() {
+    // (Pass) there's an unaudited entry for a package that isn't in our tree at all.
+    // Should strip the result and produce an empty unaudited file.
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    config.unaudited.insert(
+        "fake-dep".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!("builtin-simple-not-a-real-dep-regenerate", unaudited);
 }
 
 #[test]
@@ -2351,6 +2453,30 @@ fn builtin_simple_deps_unaudited_overbroad() {
 
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-overbroad", stdout);
+}
+
+#[test]
+fn builtin_simple_deps_unaudited_overbroad_regenerate() {
+    // (Pass) the unaudited entry is needed but it's overbroad
+    // Should downgrade from safe-to-deploy to safe-to-run
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["dev"] = vec![];
+
+    config.unaudited.insert(
+        "dev".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!("builtin-simple-unaudited-overbroad-regenerate", unaudited);
 }
 
 #[test]
@@ -2379,6 +2505,33 @@ fn builtin_complex_unaudited_twins() {
 }
 
 #[test]
+fn builtin_complex_unaudited_twins_regenerate() {
+    // (Pass) two versions of a crate exist and both are unaudited and they're needed
+    // Should be a no-op and both entries should remain
+
+    let mock = MockMetadata::complex();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-core"] = vec![];
+
+    config.unaudited.insert(
+        "third-core".to_string(),
+        vec![
+            unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+            unaudited(ver(5), SAFE_TO_DEPLOY),
+        ],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!("builtin-simple-unaudited-twins-regenerate", unaudited);
+}
+
+#[test]
 fn builtin_complex_unaudited_partial_twins() {
     // (Pass) two versions of a crate exist and one is unaudited and one is audited
 
@@ -2398,6 +2551,33 @@ fn builtin_complex_unaudited_partial_twins() {
 
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-partial-twins", stdout);
+}
+
+#[test]
+fn builtin_complex_unaudited_partial_twins_regenerate() {
+    // (Pass) two versions of a crate exist and one is unaudited and one is audited
+    // Should be a no-op and both entries should remain
+
+    let mock = MockMetadata::complex();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-core"] = vec![full_audit(ver(5), SAFE_TO_DEPLOY)];
+
+    config.unaudited.insert(
+        "third-core".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!(
+        "builtin-simple-unaudited-partial-twins-regenerate",
+        unaudited
+    );
 }
 
 #[test]
@@ -2428,6 +2608,34 @@ fn builtin_simple_unaudited_in_delta() {
 }
 
 #[test]
+fn builtin_simple_unaudited_in_delta_regenerate() {
+    // (Pass) An audited entry overlaps a delta and isn't needed
+    // Should emit an empty unaudited file
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        full_audit(ver(3), SAFE_TO_DEPLOY),
+        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited(ver(5), SAFE_TO_DEPLOY)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!("builtin-simple-unaudited-in-delta-regenerate", unaudited);
+}
+
+#[test]
 fn builtin_simple_unaudited_in_full() {
     // (Warn) An audited entry overlaps a full audit and isn't needed
     // BUSTED: this test is broken (doesn't emit warning)
@@ -2455,6 +2663,34 @@ fn builtin_simple_unaudited_in_full() {
 }
 
 #[test]
+fn builtin_simple_unaudited_in_full_regenerate() {
+    // (Pass) An audited entry overlaps a full audit and isn't needed
+    // Should emit an empty unaudited file
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        full_audit(ver(3), SAFE_TO_DEPLOY),
+        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited(ver(3), SAFE_TO_DEPLOY)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!("builtin-simple-unaudited-in-full-regenerate", unaudited);
+}
+
+#[test]
 fn builtin_simple_unaudited_in_direct_full() {
     // (Warn) An audited entry overlaps a full audit which is the cur version and isn't needed
 
@@ -2474,6 +2710,286 @@ fn builtin_simple_unaudited_in_direct_full() {
 
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-in-direct-full", stdout);
+}
+
+#[test]
+fn builtin_simple_unaudited_in_direct_full_regnerate() {
+    // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
+    // Should produce an empty unaudited
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!(
+        "builtin-simple-unaudited-in-direct-full-regenerate",
+        unaudited
+    );
+}
+
+#[test]
+fn builtin_simple_unaudited_nested_weaker_req() {
+    // (Pass) A dep that has weaker requirements on its dep
+    // including dependency_criteria on an unaudited entry
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        delta_audit_dep(
+            ver(3),
+            ver(6),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+        delta_audit_dep(
+            ver(6),
+            ver(DEFAULT_VER),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+    ];
+    audits.audits["transitive-third-party1"] = vec![
+        delta_audit(ver(4), ver(8), SAFE_TO_RUN),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited_dep(
+            ver(3),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        )],
+    );
+
+    config.unaudited.insert(
+        "transitive-third-party1".to_string(),
+        vec![unaudited(ver(4), SAFE_TO_RUN)],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-unaudited-nested-weaker-req", stdout);
+}
+
+#[test]
+fn builtin_simple_unaudited_nested_weaker_req_needs_dep_criteria() {
+    // (Fail) A dep that has weaker requirements on its dep
+    // but the unaudited entry is missing that so the whole thing fails
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        delta_audit_dep(
+            ver(3),
+            ver(6),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+        delta_audit_dep(
+            ver(6),
+            ver(DEFAULT_VER),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+    ];
+    audits.audits["transitive-third-party1"] = vec![
+        delta_audit(ver(4), ver(8), SAFE_TO_RUN),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited(ver(3), SAFE_TO_DEPLOY)],
+    );
+
+    config.unaudited.insert(
+        "transitive-third-party1".to_string(),
+        vec![unaudited(ver(4), SAFE_TO_RUN)],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!(
+        "builtin-simple-unaudited-nested-weaker-req-needs-dep-criteria",
+        stdout
+    );
+}
+
+#[test]
+fn builtin_simple_unaudited_nested_weaker_req_regnerate() {
+    // (Pass) A dep that has weaker requirements on its dep
+    // BUSTED: doesn't emit dependency-criteria for third-party1's 'unaudited'
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        delta_audit_dep(
+            ver(3),
+            ver(6),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+        delta_audit_dep(
+            ver(6),
+            ver(DEFAULT_VER),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+    ];
+    audits.audits["transitive-third-party1"] = vec![
+        delta_audit(ver(4), ver(8), SAFE_TO_RUN),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited_dep(
+            ver(3),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        )],
+    );
+
+    config.unaudited.insert(
+        "transitive-third-party1".to_string(),
+        vec![unaudited(ver(4), SAFE_TO_RUN)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!(
+        "builtin-simple-unaudited-nested-weaker-req-regenerate",
+        unaudited
+    );
+}
+
+#[test]
+fn builtin_simple_unaudited_nested_stronger_req() {
+    // (Pass) A dep that has stronger requirements on its dep
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        dep_policy([("third-party1", [SAFE_TO_RUN])]),
+    );
+
+    audits.audits["third-party1"] = vec![
+        delta_audit_dep(
+            ver(3),
+            ver(6),
+            SAFE_TO_RUN,
+            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+        ),
+        delta_audit_dep(
+            ver(6),
+            ver(DEFAULT_VER),
+            SAFE_TO_RUN,
+            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+        ),
+    ];
+    audits.audits["transitive-third-party1"] = vec![
+        delta_audit(ver(4), ver(8), SAFE_TO_DEPLOY),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited(ver(3), SAFE_TO_RUN)],
+    );
+
+    config.unaudited.insert(
+        "transitive-third-party1".to_string(),
+        vec![unaudited(ver(4), SAFE_TO_DEPLOY)],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-unaudited-nested-stronger-req", stdout);
+}
+
+#[test]
+fn builtin_simple_unaudited_nested_stronger_req_regnerate() {
+    // (Pass) A dep that has stronger requirements on its dep
+    // BUSTED: should emit safe-to-deploy for transitive-third-party1
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    config.policy.insert(
+        "first-party".to_string(),
+        dep_policy([("third-party1", [SAFE_TO_RUN])]),
+    );
+
+    audits.audits["third-party1"] = vec![
+        delta_audit_dep(
+            ver(3),
+            ver(6),
+            SAFE_TO_RUN,
+            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+        ),
+        delta_audit_dep(
+            ver(6),
+            ver(DEFAULT_VER),
+            SAFE_TO_RUN,
+            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+        ),
+    ];
+    audits.audits["transitive-third-party1"] = vec![
+        delta_audit(ver(4), ver(8), SAFE_TO_DEPLOY),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited(ver(3), SAFE_TO_RUN)],
+    );
+
+    config.unaudited.insert(
+        "transitive-third-party1".to_string(),
+        vec![unaudited(ver(4), SAFE_TO_DEPLOY)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!(
+        "builtin-simple-unaudited-nested-stronger-req-regenerate",
+        unaudited
+    );
 }
 
 #[test]
@@ -2498,18 +3014,51 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria() {
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
 
     let stdout = get_report(&metadata, report);
-    insta::assert_snapshot!("builtin-simple-unaudited-adds-unneeded-criteria", stdout);
+    insta::assert_snapshot!(
+        "builtin-simple-deps-unaudited-adds-uneeded-criteria",
+        stdout
+    );
+}
+
+#[test]
+fn builtin_simple_deps_unaudited_adds_uneeded_criteria_regenerate() {
+    // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
+    // Should produce an empty unaudited
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["dev"] = vec![
+        full_audit(ver(5), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    config
+        .unaudited
+        .insert("dev".to_string(), vec![unaudited(ver(5), SAFE_TO_DEPLOY)]);
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!(
+        "builtin-simple-deps-unaudited-adds-uneeded-criteria-regenerate",
+        unaudited
+    );
 }
 
 #[test]
 fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
     // (Warn) An audited entry overlaps a full audit which is the cur version and isn't needed
     // BUSTED: this test is broken (doesn't emit warning)
+    // TODO: or is this test wrong? should the delta apply?
 
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+    let (mut config, mut audits, imports) = builtin_files_minimal_audited(&metadata);
 
     audits.audits["simple-dev-indirect"] = vec![
         full_audit(ver(5), SAFE_TO_RUN),
@@ -2525,9 +3074,86 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
 
     let stdout = get_report(&metadata, report);
     insta::assert_snapshot!(
-        "builtin-simple-unaudited-adds-uneeded-criteria-indirect",
+        "builtin-dev-detection-unaudited-adds-uneeded-criteria-indirect",
         stdout
     );
+}
+
+#[test]
+fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect_regenerate() {
+    // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
+    // Should result in an empty unaudited file
+
+    let mock = MockMetadata::dev_detection();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_minimal_audited(&metadata);
+
+    audits.audits["simple-dev-indirect"] = vec![
+        full_audit(ver(5), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    config.unaudited.insert(
+        "simple-dev-indirect".to_string(),
+        vec![unaudited(ver(5), SAFE_TO_DEPLOY)],
+    );
+
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut config, &audits, &imports).unwrap();
+
+    let unaudited = get_unaudited(&config);
+    insta::assert_snapshot!(
+        "builtin-dev-detection-unaudited-adds-uneeded-criteria-indirect-regenerate",
+        unaudited
+    );
+}
+
+#[test]
+fn builtin_dev_detection_cursed_full() {
+    // (Fail): dev-indirect has safe-to-run and by policy we only need safe-to-run
+    // but dev (its parent) is audited for safe-to-deploy which requires the child
+    // be safe-to-deploy. If we implement criteria "desugarring" this would pass.
+    //
+    // This test is "cursed" because it caused some crashes in glitched out the blame system.
+
+    let mock = MockMetadata::dev_detection();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["simple-dev-indirect"] = vec![
+        full_audit(ver(5), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-dev-detection-cursed-full", stdout);
+}
+
+#[test]
+fn builtin_dev_detection_cursed_minimal() {
+    // (Pass): the same as the full cursed one, but without the cursed part.
+
+    let mock = MockMetadata::dev_detection();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_minimal_audited(&metadata);
+
+    audits.audits["simple-dev-indirect"] = vec![
+        full_audit(ver(5), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
+        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+    ];
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-dev-detection-cursed-minimal", stdout);
 }
 
 #[test]

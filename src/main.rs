@@ -28,6 +28,7 @@ use crate::format::{
     AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
     StableMap, Store, UnauditedDependency,
 };
+use crate::resolver::{Conclusion, SortedMap, SuggestItem};
 
 pub mod format;
 mod resolver;
@@ -125,6 +126,10 @@ enum Commands {
     #[clap(disable_version_flag = true)]
     Fmt(FmtArgs),
 
+    /// Regenerate the 'unaudited' entries to try to minimize them and make the vet pass
+    #[clap(disable_version_flag = true)]
+    RegenerateUnaudited(RegenerateUnauditedArgs),
+
     /// Print a mermaid-js visualization of the cargo build graph as understood by cargo-vet
     #[clap(disable_version_flag = true)]
     DumpGraph(DumpGraphArgs),
@@ -175,6 +180,9 @@ struct SuggestArgs {
 
 #[derive(clap::Args)]
 struct FmtArgs {}
+
+#[derive(clap::Args)]
+struct RegenerateUnauditedArgs {}
 
 #[derive(clap::Args)]
 struct AcceptCriteriaChangeArgs {}
@@ -553,6 +561,7 @@ fn main() -> Result<(), VetError> {
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
+        Some(RegenerateUnaudited(sub_args)) => cmd_regenerate_unaudited(out, &cfg, sub_args),
         Some(DumpGraph(sub_args)) => cmd_dump_graph(out, &cfg, sub_args),
         // Need to be non-exhaustive because freestanding commands were handled earlier
         _ => unreachable!("did you add a new command and forget to implement it?"),
@@ -613,6 +622,7 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
             let item = UnauditedDependency {
                 version: package.version.clone(),
                 criteria,
+                dependency_criteria: DependencyCriteria::new(),
                 notes: None,
                 suggest: true,
             };
@@ -803,6 +813,139 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
 
     Ok(())
 }
+
+fn cmd_regenerate_unaudited(
+    out: &mut dyn Write,
+    cfg: &Config,
+    _sub_args: &RegenerateUnauditedArgs,
+) -> Result<(), VetError> {
+    // Run the checker to validate that the current set of deps is covered by the current cargo vet store
+    trace!("regenerating unaudited...");
+    let store_path = cfg.metacfg.store_path();
+
+    let audits = load_audits(store_path)?;
+    let mut config = load_config(store_path)?;
+
+    // FIXME: We should probably check in --locked vets if the config has changed its
+    // imports and warn if the imports.lock is inconsistent with that..?
+    //
+    // TODO: error out if the foreign audits changed their criteria (compare to imports.lock)
+    let imports = if !cfg.cli.locked {
+        fetch_foreign_audits(out, cfg, &config)?
+    } else {
+        load_imports(store_path)?
+    };
+
+    minimize_unaudited(cfg, &mut config, &audits, &imports)?;
+
+    store_config(store_path, config)?;
+    store_imports(store_path, imports)?;
+    store_audits(store_path, audits)?;
+
+    Ok(())
+}
+
+pub fn minimize_unaudited(
+    cfg: &Config,
+    config: &mut ConfigFile,
+    audits: &AuditsFile,
+    imports: &ImportsFile,
+) -> Result<(), VetError> {
+    // Set the unaudited entries to nothing
+    let old_unaudited = mem::replace(&mut config.unaudited, StableMap::new());
+
+    // Try to vet
+    let report = resolver::resolve(&cfg.metadata, config, audits, imports, true);
+
+    let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, false)? {
+        let mut new_unaudited = StableMap::new();
+        let mut suggest_by_package_name = SortedMap::<&str, Vec<SuggestItem>>::new();
+        for item in suggest.suggestions {
+            let package = &report.graph.nodes[item.package];
+            suggest_by_package_name
+                .entry(package.name)
+                .or_default()
+                .push(item);
+        }
+
+        // First try to preserve as many old entries as possible
+        for (package_name, old_entries) in &old_unaudited {
+            let mut no_suggestions = Vec::new();
+            let suggestions = suggest_by_package_name
+                .get_mut(&**package_name)
+                .unwrap_or(&mut no_suggestions);
+            for old_entry in old_entries {
+                for item_idx in (0..suggestions.len()).rev() {
+                    // If there's an existing entry for these criteria, preserve it
+                    let new_item = &mut suggestions[item_idx];
+                    {
+                        let mut new_criteria = report
+                            .criteria_mapper
+                            .criteria_names(&new_item.suggested_criteria);
+                        if new_item.suggested_diff.to == old_entry.version
+                            && new_criteria.any(|s| s == &*old_entry.criteria)
+                        {
+                            std::mem::drop(new_criteria);
+                            report.criteria_mapper.clear_criteria(
+                                &mut new_item.suggested_criteria,
+                                &old_entry.criteria,
+                            );
+                            new_unaudited
+                                .entry(package_name.clone())
+                                .or_insert(Vec::new())
+                                .push(old_entry.clone());
+                        }
+                    }
+                    // If we've exhausted all the criteria for this suggestion, remove it
+                    if new_item.suggested_criteria.is_empty() {
+                        suggestions.swap_remove(item_idx);
+                    }
+                }
+                // If we haven't cleared out all the suggestions for this package, make sure its entry is inserted
+                // to try to preserve the original order of it.
+                if !suggestions.is_empty() {
+                    new_unaudited
+                        .entry(package_name.clone())
+                        .or_insert(Vec::new());
+                }
+            }
+        }
+
+        // Now insert any remaining suggestions
+        for (package_name, new_items) in suggest_by_package_name {
+            for item in new_items {
+                for criteria in report
+                    .criteria_mapper
+                    .criteria_names(&item.suggested_criteria)
+                {
+                    new_unaudited
+                        .entry(package_name.to_string())
+                        .or_insert(Vec::new())
+                        .push(UnauditedDependency {
+                            version: item.suggested_diff.to.clone(),
+                            criteria: criteria.to_string(),
+                            dependency_criteria: DependencyCriteria::new(),
+                            notes: None,
+                            suggest: true,
+                        })
+                }
+            }
+        }
+
+        new_unaudited
+    } else if let Conclusion::Success(_) = report.conclusion {
+        StableMap::new()
+    } else {
+        return Err(eyre::eyre!(
+            "error: regenerate-unaudited failed for unknown reason"
+        ));
+    };
+
+    config.unaudited = new_unaudited;
+
+    Ok(())
+}
+
 fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Result<(), VetError> {
     let mut cache = Cache::acquire(cfg)?;
 

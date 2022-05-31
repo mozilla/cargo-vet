@@ -1,0 +1,12 @@
+---
+source: src/tests.rs
+expression: unaudited
+---
+[[third-core]]
+version = '10.0.0'
+criteria = 'safe-to-deploy'
+
+[[third-core]]
+version = '5.0.0'
+criteria = 'safe-to-deploy'
+
