@@ -1217,18 +1217,25 @@ fn resolve_third_party<'a>(
             let from_ver = &ROOT_VERSION;
             let to_ver = &allowed.version;
             let criteria = criteria_mapper.criteria_from_list([&allowed.criteria]);
+            let dependency_criteria: FastMap<_, _> = allowed
+                .dependency_criteria
+                .iter()
+                .map(|(pkg_name, criteria)| {
+                    (&**pkg_name, criteria_mapper.criteria_from_list(criteria))
+                })
+                .collect();
 
             // For simplicity, turn 'unaudited' entries into deltas from 0.0.0
             forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
                 version: to_ver,
                 criteria: criteria.clone(),
-                dependency_criteria: Default::default(),
+                dependency_criteria: dependency_criteria.clone(),
                 is_unaudited_entry: true,
             });
             backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
                 version: from_ver,
                 criteria,
-                dependency_criteria: Default::default(),
+                dependency_criteria,
                 is_unaudited_entry: true,
             });
         }

@@ -622,6 +622,7 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
             let item = UnauditedDependency {
                 version: package.version.clone(),
                 criteria,
+                dependency_criteria: DependencyCriteria::new(),
                 notes: None,
                 suggest: true,
             };
@@ -923,6 +924,7 @@ pub fn minimize_unaudited(
                         .push(UnauditedDependency {
                             version: item.suggested_diff.to.clone(),
                             criteria: criteria.to_string(),
+                            dependency_criteria: DependencyCriteria::new(),
                             notes: None,
                             suggest: true,
                         })

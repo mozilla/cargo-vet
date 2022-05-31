@@ -80,6 +80,7 @@ fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependen
     UnauditedDependency {
         version,
         criteria: config.default_criteria.clone(),
+        dependency_criteria: DependencyCriteria::new(),
         notes: None,
         suggest: true,
     }
@@ -88,8 +89,36 @@ fn unaudited(version: Version, criteria: &str) -> UnauditedDependency {
     UnauditedDependency {
         version,
         criteria: criteria.to_string(),
+        dependency_criteria: DependencyCriteria::new(),
         notes: None,
         suggest: true,
+    }
+}
+
+fn unaudited_dep(
+    version: Version,
+    criteria: &str,
+    dependency_criteria: impl IntoIterator<
+        Item = (
+            impl Into<String>,
+            impl IntoIterator<Item = impl Into<String>>,
+        ),
+    >,
+) -> UnauditedDependency {
+    UnauditedDependency {
+        version,
+        criteria: criteria.to_string(),
+        notes: None,
+        suggest: true,
+        dependency_criteria: dependency_criteria
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k.into(),
+                    v.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                )
+            })
+            .collect(),
     }
 }
 
@@ -2697,7 +2726,56 @@ fn builtin_simple_unaudited_in_direct_full_regnerate() {
 #[test]
 fn builtin_simple_unaudited_nested_weaker_req() {
     // (Pass) A dep that has weaker requirements on its dep
-    // BUSTED: fails because the unaudited entry can't specify it's fine for the dep to be safe-to-run
+    // including dependency_criteria on an unaudited entry
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits["third-party1"] = vec![
+        delta_audit_dep(
+            ver(3),
+            ver(6),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+        delta_audit_dep(
+            ver(6),
+            ver(DEFAULT_VER),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        ),
+    ];
+    audits.audits["transitive-third-party1"] = vec![
+        delta_audit(ver(4), ver(8), SAFE_TO_RUN),
+        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
+    ];
+
+    config.unaudited.insert(
+        "third-party1".to_string(),
+        vec![unaudited_dep(
+            ver(3),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        )],
+    );
+
+    config.unaudited.insert(
+        "transitive-third-party1".to_string(),
+        vec![unaudited(ver(4), SAFE_TO_RUN)],
+    );
+
+    let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
+
+    let stdout = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-unaudited-nested-weaker-req", stdout);
+}
+
+#[test]
+fn builtin_simple_unaudited_nested_weaker_req_needs_dep_criteria() {
+    // (Fail) A dep that has weaker requirements on its dep
+    // but the unaudited entry is missing that so the whole thing fails
 
     let mock = MockMetadata::simple();
 
@@ -2736,13 +2814,16 @@ fn builtin_simple_unaudited_nested_weaker_req() {
     let report = crate::resolver::resolve(&metadata, &config, &audits, &imports, false);
 
     let stdout = get_report(&metadata, report);
-    insta::assert_snapshot!("builtin-simple-unaudited-nested-weaker-req", stdout);
+    insta::assert_snapshot!(
+        "builtin-simple-unaudited-nested-weaker-req-needs-dep-criteria",
+        stdout
+    );
 }
 
 #[test]
 fn builtin_simple_unaudited_nested_weaker_req_regnerate() {
     // (Pass) A dep that has weaker requirements on its dep
-    // BUSTED: (?) ideally emits safe-to-run for transitive-third-party1..?
+    // BUSTED: doesn't emit dependency-criteria for third-party1's 'unaudited'
 
     let mock = MockMetadata::simple();
 
@@ -2770,7 +2851,11 @@ fn builtin_simple_unaudited_nested_weaker_req_regnerate() {
 
     config.unaudited.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(3), SAFE_TO_DEPLOY)],
+        vec![unaudited_dep(
+            ver(3),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", [SAFE_TO_RUN])],
+        )],
     );
 
     config.unaudited.insert(

@@ -405,6 +405,13 @@ pub struct UnauditedDependency {
     /// satisfy this criteria). This isn't defaulted, 'vet init' and similar commands will
     /// pick a "good" initial value.
     pub criteria: String,
+    /// Custom criteria for an unaudited crate's dependencies.
+    ///
+    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
+    #[serde(rename = "dependency-criteria")]
+    #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
+    #[serde(default)]
+    pub dependency_criteria: DependencyCriteria,
     /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
     pub notes: Option<String>,
     /// Whether 'suggest' should bother mentioning this (defaults true).
