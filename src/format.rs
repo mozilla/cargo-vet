@@ -129,10 +129,10 @@ pub struct CriteriaEntry {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct AuditEntry {
     pub who: Option<String>,
-    pub notes: Option<String>,
     pub criteria: String,
     #[serde(flatten)]
     pub kind: AuditKind,
+    pub notes: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -412,12 +412,12 @@ pub struct UnauditedDependency {
     #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
     #[serde(default)]
     pub dependency_criteria: DependencyCriteria,
-    /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
-    pub notes: Option<String>,
     /// Whether 'suggest' should bother mentioning this (defaults true).
     #[serde(default = "get_default_unaudited_suggest")]
     #[serde(skip_serializing_if = "is_default_unaudited_suggest")]
     pub suggest: bool,
+    /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
+    pub notes: Option<String>,
 }
 
 static DEFAULT_UNAUDITED_SUGGEST: bool = true;
