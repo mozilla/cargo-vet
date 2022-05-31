@@ -7,7 +7,7 @@ to spend that attention as efficiently as possibly.
 
 When you run `cargo update`, you generally pull in new crates or new versions of
 existing crates, which may cause `cargo vet` to fail. In this situation,
-`cargo vet` identifies the relevant crates and recommends how to audit them[^1]:
+`cargo vet` identifies the relevant crates and recommends how to audit them:
 
 ```
 $ cargo update
@@ -17,14 +17,16 @@ $ cargo vet
   Vetting Failed!
 
   3 unvetted depedencies:
-    bar:1.5
-    baz:1.3
-    foo:1.2.1
+      bar:1.5 missing ["safe-to-deploy"]
+      baz:1.3 missing ["safe-to-deploy"]
+      foo:1.2.1 missing ["safe-to-deploy"]
 
-  recommended audits:
-    foo:1.2->1.2.1 (10 lines)
-    bar:2.1.1->1.5 (253 lines)
-    baz:1.3 (2033 lines)
+  recommended audits for safe-to-deploy:
+      cargo vet diff foo 1.2 1.2.1  (10 lines)
+      cargo vet diff bar 2.1.1 1.5  (253 lines)
+      cargo vet inspect baz 1.3     (2033 lines)
+
+  estimated audit backlog: 2296 lines
 
   Use |cargo vet certify| to record the audits.
 ```
@@ -106,23 +108,27 @@ advantage of this, `cargo vet suggest` can estimate the lowest-effort audits
 you can perform to reduce the number of entries in `unaudited`, and
 consequently, your attack surface.
 
-More precisely, `cargo vet suggest` computes the number of lines that would
-need to be reviewed for each not-yet-audited dependency, and displays them
-in order. This is the same information you'd get if you emptied out `unaudited`
-and re-ran `cargo vet`[^1]:
+More precisely, `cargo vet suggest` computes the number of lines that would need
+to be reviewed for each unaudited dependency, and displays them in order. This
+is the same information you'd get if you emptied out `unaudited` and re-ran
+`cargo vet`.
+
+## Suggestions from the Registry
+
+When `cargo vet` suggests audits — either after a failed vet or during `cargo
+vet suggest` — it also fetches the contents of the
+[registry](importing-audits.md#the-registry) and checks whether any of the
+available sets contain audits which would fill some or all of the gap. If so, it
+enumerates them so that the developer can consider importing them in lieu of
+performing the entire audit themselves:
+
 ```
 $ cargo vet suggest
-  3 audits to perform:
-    foo:1.2->1.2.1 (10 lines)
-    bar:1.3 (253 lines)
-    baz:1.5 (5033 lines)
+  recommended audits for safe-to-deploy:
+      cargo vet inspect baz 1.3  (2033 lines)
+        Note: "firefox" contains an audit for baz 1.2, consider importing it.
+
+  estimated audit backlog: 2033 lines
+
+  Use |cargo vet certify| to record the audits.
 ```
-
-From there, you can use the `inspect`, `diff`, and `certify` subcommands to tackle
-items on the list.
-
-[^1]: The textual representation of audit recommendations is still being refined. At
-minimum, we'd like to surface the necessary criteria for the missing audits,
-and display the dependencies in tree form (to give a clearer sense of how a
-dependency is used). We are experimenting with different display formats in the
-prototype.
