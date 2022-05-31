@@ -239,17 +239,17 @@ pub struct ConfigFile {
     #[serde(default)]
     pub imports: StableMap<String, RemoteImport>,
 
+    /// A table of policies for first-party crates.
+    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(default)]
+    pub policy: StableMap<String, PolicyEntry>,
+
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
     #[serde(skip_serializing_if = "StableMap::is_empty")]
     #[serde(default)]
     pub unaudited: StableMap<String, Vec<UnauditedDependency>>,
-
-    /// A table of policies for first-party crates.
-    #[serde(skip_serializing_if = "StableMap::is_empty")]
-    #[serde(default)]
-    pub policy: StableMap<String, PolicyEntry>,
 }
 
 impl ConfigFile {
