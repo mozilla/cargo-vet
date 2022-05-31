@@ -1,83 +1,76 @@
+
 # cargo-vet audits file
 
 [criteria.audited]
-implies = ["safe-to-deploy"]
 description = "super audited"
+implies = ["safe-to-deploy"]
 
 [criteria.fuzzed]
 description = "fuzzed"
-
-
-
 [[audits.base64]]
-version = "0.1.0"
-criteria = "safe-to-deploy"
 notes = "test for basic resolution"
+criteria = "safe-to-deploy"
+version = "0.1.0"
 
 [[audits.base64]]
+notes = "basic resolution"
+criteria = "safe-to-deploy"
 delta = "0.2.0 -> 0.14.0"
-criteria = "safe-to-deploy"
 
 [[audits.base64]]
+criteria = "safe-to-deploy"
 delta = "0.1.0 -> 0.4.0"
-criteria = "safe-to-deploy"
 
 [[audits.base64]]
+criteria = "safe-to-deploy"
 version = "0.5.0"
-criteria = "safe-to-deploy"
-message = "basic resolution"
 
 [[audits.base64]]
+criteria = "safe-to-deploy"
 delta = "0.9.0 -> 0.13.0"
-criteria = "safe-to-deploy"
 
 [[audits.base64]]
+criteria = "safe-to-deploy"
 delta = "0.8.1 -> 0.9.0"
-criteria = "safe-to-deploy"
 
 [[audits.base64]]
-delta = "0.4.0 -> 0.8.1"
 criteria = "safe-to-deploy"
-
-
+delta = "0.4.0 -> 0.8.1"
 
 [[audits.autocfg]]
-version = "1.1.0"
-criteria = "safe-to-deploy"
 notes = "test for simple absolute version with non-defaults"
+criteria = "safe-to-deploy"
+version = "1.1.0"
 
 [[audits.clap]]
-version = "3.1.8"
 notes = "test for custom criteria (low-grade and high-grade)"
 criteria = "safe-to-deploy"
-dependency-criteria = { "atty" = ["safe-to-run"], "bitflags" = ["audited", "fuzzed"] }
+version = "3.1.8"
+dependency-criteria = { atty = ["safe-to-run"], bitflags = ["audited", "fuzzed"] }
 
 [[audits.atty]]
-version = "0.2.14"
 criteria = "safe-to-run"
-
-
+version = "0.2.14"
 
 [[audits.bitflags]]
-version = "0.1.0"
 notes = "test for unioning criteria from two chains"
 criteria = "audited"
+version = "0.1.0"
 
 [[audits.bitflags]]
-delta = "0.1.0 -> 1.3.2"
 criteria = "audited"
+delta = "0.1.0 -> 1.3.2"
 
 [[audits.bitflags]]
+criteria = "fuzzed"
 version = "0.2.0"
-criteria = "fuzzed"
 
 [[audits.bitflags]]
-delta = "0.2.0 -> 1.3.2"
 criteria = "fuzzed"
-
-
+delta = "0.2.0 -> 1.3.2"
 
 [[audits.unicode-bidi]]
-delta = "0.2.0 -> 0.3.7"
 notes = "test for delta to unaudited"
 criteria = "safe-to-deploy"
+delta = "0.2.0 -> 0.3.7"
+
