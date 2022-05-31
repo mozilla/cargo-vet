@@ -12,7 +12,7 @@ description = "fuzzed"
 [[audits.base64]]
 version = "0.1.0"
 criteria = "safe-to-deploy"
-message = "test for basic resolution"
+notes = "test for basic resolution"
 
 [[audits.base64]]
 delta = "0.2.0 -> 0.14.0"
@@ -44,11 +44,11 @@ criteria = "safe-to-deploy"
 [[audits.autocfg]]
 version = "1.1.0"
 criteria = "safe-to-deploy"
-message = "test for simple absolute version with non-defaults"
+notes = "test for simple absolute version with non-defaults"
 
 [[audits.clap]]
 version = "3.1.8"
-message = "test for custom criteria (low-grade and high-grade)"
+notes = "test for custom criteria (low-grade and high-grade)"
 criteria = "safe-to-deploy"
 dependency-criteria = { "atty" = ["safe-to-run"], "bitflags" = ["audited", "fuzzed"] }
 
@@ -60,7 +60,7 @@ criteria = "safe-to-run"
 
 [[audits.bitflags]]
 version = "0.1.0"
-message = "test for unioning criteria from two chains"
+notes = "test for unioning criteria from two chains"
 criteria = "audited"
 
 [[audits.bitflags]]
@@ -79,5 +79,5 @@ criteria = "fuzzed"
 
 [[audits.unicode-bidi]]
 delta = "0.2.0 -> 0.3.7"
-message = "test for delta to unaudited"
+notes = "test for delta to unaudited"
 criteria = "safe-to-deploy"
