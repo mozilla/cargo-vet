@@ -233,6 +233,7 @@ fn default_policy() -> PolicyEntry {
         dependency_criteria: StableMap::new(),
         targets: None,
         dev_targets: None,
+        notes: None,
     }
 }
 
@@ -708,6 +709,7 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                         dependency_criteria: DependencyCriteria::new(),
                         targets: None,
                         dev_targets: None,
+                        notes: None,
                     },
                 );
             }
