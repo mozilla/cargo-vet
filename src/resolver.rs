@@ -2243,7 +2243,13 @@ impl<'a> ResolveReport<'a> {
                 }).collect::<StableMap<_,_>>(),
             }),
             Conclusion::FailForVet(fail) => {
-                let suggest = self.compute_suggest(cfg, true)?;
+                // Don't print suggest output if we're --locked because we don't want to
+                // touch the network in that configuration and we're probably in CI.
+                let suggest = if cfg.cli.locked {
+                    None
+                } else {
+                    self.compute_suggest(cfg, true)?
+                };
                 let json_suggest_item = |item: &SuggestItem| {
                     let package = &self.graph.nodes[item.package];
                     json!({
@@ -2430,10 +2436,13 @@ impl FailForVet {
             )?;
         }
 
-        writeln!(out)?;
-
-        if let Some(suggest) = report.compute_suggest(cfg, true)? {
-            suggest.print_human(out, report)?;
+        // Don't print suggest output if we're --locked because we don't want to
+        // touch the network in that configuration and we're probably in CI.
+        if !cfg.cli.locked {
+            if let Some(suggest) = report.compute_suggest(cfg, true)? {
+                writeln!(out)?;
+                suggest.print_human(out, report)?;
+            }
         }
 
         Ok(())
