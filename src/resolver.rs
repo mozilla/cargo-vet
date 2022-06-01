@@ -8,8 +8,8 @@ use std::io::Write;
 
 use crate::format::{self, AuditKind, Delta, DiffStat};
 use crate::{
-    AuditEntry, AuditsFile, Cache, Config, ConfigFile, CriteriaEntry, DumpGraphArgs, ImportsFile,
-    PackageExt, StableMap, VetError,
+    AuditEntry, AuditsFile, Cache, Config, ConfigFile, CriteriaEntry, DumpGraphArgs, GraphFilter,
+    GraphFilterProperty, GraphFilterQuery, ImportsFile, PackageExt, StableMap, VetError,
 };
 
 // Collections based on how we're using, so it's easier to swap them out.
@@ -177,15 +177,14 @@ pub struct ResolveResult<'a> {
     pub fully_audited_criteria: CriteriaSet,
     /// Individual search results for each criteria.
     pub search_results: Vec<SearchResult<'a>>,
-    /// Explicit policy checks for this node that failed.
-    pub policy_failures: PolicyFailures<'a>,
     /// Whether there was an 'unaudited' entry for this exact version.
     pub directly_unaudited: bool,
     /// Whether we ever needed the not-fully_audited_criteria for our reverse-deps.
     pub needed_unaudited: bool,
 }
 
-pub type PolicyFailures<'a> = FastMap<PackageIdx, CriteriaSet>;
+pub type PolicyFailures = SortedMap<PackageIdx, CriteriaSet>;
+pub type RootFailures = Vec<(PackageIdx, PolicyFailures)>;
 
 #[derive(Default, Debug, Clone)]
 pub struct AuditFailure {
@@ -339,7 +338,7 @@ impl CriteriaMapper {
     pub fn no_criteria(&self) -> CriteriaSet {
         CriteriaSet::none(self.len())
     }
-    pub fn _all_criteria(&self) -> CriteriaSet {
+    pub fn all_criteria(&self) -> CriteriaSet {
         CriteriaSet::_all(self.len())
     }
 
@@ -431,7 +430,6 @@ impl ResolveResult<'_> {
             search_results: vec![],
             directly_unaudited: false,
             needed_unaudited: false,
-            policy_failures: PolicyFailures::new(),
         }
     }
 
@@ -446,7 +444,7 @@ impl ResolveResult<'_> {
         }
     }
 
-    fn has_criteria(&mut self, criteria_idx: usize) -> bool {
+    fn _has_criteria(&mut self, criteria_idx: usize) -> bool {
         if self.fully_audited_criteria.has_criteria(criteria_idx) {
             true
         } else if self.validated_criteria.has_criteria(criteria_idx) {
@@ -459,7 +457,7 @@ impl ResolveResult<'_> {
 }
 
 impl<'a> DepGraph<'a> {
-    pub fn new(metadata: &'a Metadata) -> Self {
+    pub fn new(metadata: &'a Metadata, filter_graph: Option<&Vec<GraphFilter>>) -> Self {
         let package_list = &*metadata.packages;
         let resolve_list = &*metadata
             .resolve
@@ -668,10 +666,162 @@ impl<'a> DepGraph<'a> {
             }
         }
 
-        Self {
+        let result = Self {
             interner_by_pkgid,
             interner_by_name_and_ver,
             nodes,
+            topo_index,
+        };
+
+        // Now apply filters, if any
+        if let Some(filters) = filter_graph {
+            result.filter(filters)
+        } else {
+            result
+        }
+    }
+
+    pub fn filter(self, filters: &[GraphFilter]) -> Self {
+        use GraphFilter::*;
+        use GraphFilterProperty::*;
+        use GraphFilterQuery::*;
+
+        fn matches_query(package: &PackageNode, query: &GraphFilterQuery) -> bool {
+            match query {
+                All(queries) => queries.iter().all(|q| matches_query(package, q)),
+                Any(queries) => queries.iter().any(|q| matches_query(package, q)),
+                Eq(property) => matches_property(package, property),
+                Neq(property) => !matches_property(package, property),
+            }
+        }
+        fn matches_property(package: &PackageNode, property: &GraphFilterProperty) -> bool {
+            match property {
+                Name(val) => package.name == val,
+                Version(val) => package.version == val,
+                IsRoot(val) => &package.is_root == val,
+                IsWorkspaceMember(val) => &package.is_workspace_member == val,
+                IsThirdParty(val) => &package.is_third_party == val,
+                IsDevOnly(val) => &package.is_dev_only == val,
+            }
+        }
+
+        let mut passed_filters = FastSet::new();
+        'nodes: for (idx, package) in self.nodes.iter().enumerate() {
+            for filter in filters {
+                match filter {
+                    Include(query) => {
+                        if !matches_query(package, query) {
+                            continue 'nodes;
+                        }
+                    }
+
+                    Exclude(query) => {
+                        if matches_query(package, query) {
+                            continue 'nodes;
+                        }
+                    }
+                }
+            }
+            // If we pass all the filters, then we get to be included
+            passed_filters.insert(idx);
+        }
+
+        let mut reachable = FastMap::new();
+        for (idx, package) in self.nodes.iter().enumerate() {
+            if package.is_workspace_member {
+                visit(&mut reachable, &self, &passed_filters, idx);
+            }
+            fn visit(
+                visited: &mut FastMap<PackageIdx, ()>,
+                graph: &DepGraph,
+                passed_filters: &FastSet<PackageIdx>,
+                node_idx: PackageIdx,
+            ) {
+                if !passed_filters.contains(&node_idx) {
+                    return;
+                }
+                let query = visited.entry(node_idx);
+                if matches!(query, std::collections::hash_map::Entry::Vacant(..)) {
+                    query.or_insert(());
+                    for &child in &graph.nodes[node_idx].all_deps {
+                        visit(visited, graph, passed_filters, child);
+                    }
+                }
+            }
+        }
+
+        let mut old_to_new = FastMap::new();
+        let mut nodes = Vec::new();
+        let mut interner_by_pkgid = SortedMap::new();
+        let mut interner_by_name_and_ver = SortedMap::<_, SortedMap<_, _>>::new();
+        let mut topo_index = Vec::new();
+        for (old_idx, package) in self.nodes.iter().enumerate() {
+            if !reachable.contains_key(&old_idx) {
+                continue;
+            }
+            let new_idx = nodes.len();
+            old_to_new.insert(old_idx, new_idx);
+            nodes.push(PackageNode {
+                build_type: package.build_type,
+                package_id: package.package_id,
+                name: package.name,
+                version: package.version,
+                normal_deps: vec![],
+                build_deps: vec![],
+                dev_deps: vec![],
+                all_deps: vec![],
+                reverse_deps: SortedSet::new(),
+                is_workspace_member: package.is_workspace_member,
+                is_third_party: package.is_third_party,
+                is_root: package.is_root,
+                is_dev_only: package.is_dev_only,
+            });
+            interner_by_pkgid.insert(package.package_id, new_idx);
+            interner_by_name_and_ver
+                .entry(package.name)
+                .or_default()
+                .insert(package.version, new_idx);
+        }
+        for old_idx in &self.topo_index {
+            if let Some(&new_idx) = old_to_new.get(old_idx) {
+                topo_index.push(new_idx);
+            }
+        }
+        for (old_idx, old_package) in self.nodes.iter().enumerate() {
+            if let Some(&new_idx) = old_to_new.get(&old_idx) {
+                let new_package = &mut nodes[new_idx];
+                for old_dep in &old_package.all_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.all_deps.push(new_dep);
+                    }
+                }
+                for old_dep in &old_package.normal_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.normal_deps.push(new_dep);
+                    }
+                }
+                for old_dep in &old_package.build_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.build_deps.push(new_dep);
+                    }
+                }
+                for old_dep in &old_package.dev_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.dev_deps.push(new_dep);
+                    }
+                }
+                for old_dep in &old_package.reverse_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.reverse_deps.insert(new_dep);
+                    }
+                }
+            }
+        }
+
+        Self {
+            nodes,
+            interner_by_pkgid,
+            interner_by_name_and_ver,
             topo_index,
         }
     }
@@ -778,6 +928,7 @@ static NO_AUDITS: Vec<AuditEntry> = Vec::new();
 
 pub fn resolve<'a>(
     metadata: &'a Metadata,
+    filter_graph: Option<&Vec<GraphFilter>>,
     config: &'a ConfigFile,
     audits: &'a AuditsFile,
     imports: &'a ImportsFile,
@@ -785,7 +936,7 @@ pub fn resolve<'a>(
 ) -> ResolveReport<'a> {
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
-    let graph = DepGraph::new(metadata);
+    let graph = DepGraph::new(metadata, filter_graph);
     // trace!("built DepGraph: {:#?}", graph);
     trace!("built DepGraph!");
 
@@ -794,7 +945,7 @@ pub fn resolve<'a>(
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
     let mut results =
         vec![ResolveResult::with_no_criteria(criteria_mapper.no_criteria()); graph.nodes.len()];
-    let mut root_failures = FastSet::new();
+    let mut root_failures = RootFailures::new();
     let mut violations = SortedMap::new();
 
     // Actually vet the build graph
@@ -993,7 +1144,7 @@ fn resolve_third_party<'a>(
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
     violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
-    _root_failures: &mut FastSet<PackageIdx>,
+    _root_failures: &mut RootFailures,
     pkgidx: PackageIdx,
 ) {
     let package = &graph.nodes[pkgidx];
@@ -1320,7 +1471,6 @@ fn resolve_third_party<'a>(
         search_results,
         // Only gets found out later, for now, assume not.
         needed_unaudited: false,
-        policy_failures: PolicyFailures::new(),
     };
 }
 
@@ -1493,111 +1643,113 @@ fn resolve_first_party<'a>(
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
     _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
-    root_failures: &mut FastSet<PackageIdx>,
+    root_failures: &mut RootFailures,
     pkgidx: PackageIdx,
 ) {
     // Check the build-deps and normal-deps of this package. dev-deps are checking in `resolve_dep`
     // In this pass we properly use package.is_root, but in the next pass all nodes are "roots"
     let package = &graph.nodes[pkgidx];
-    let is_root = package.is_root;
 
-    // Root nodes adopt this policy if they don't have an explicit one
-    let default_root_policy = criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
-    let _default_root_dev_policy =
-        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_DEV_CRITERIA]);
+    // Get custom policies for our dependencies
+    let dep_criteria = config
+        .policy
+        .get(package.name)
+        .map(|policy| {
+            policy
+                .dependency_criteria
+                .iter()
+                .map(|(dep_name, criteria)| {
+                    (&**dep_name, criteria_mapper.criteria_from_list(criteria))
+                })
+                .collect::<FastMap<_, _>>()
+        })
+        .unwrap_or_default();
+
+    // Compute whether we have each criteria based on our dependencies
+    let mut validated_criteria = criteria_mapper.no_criteria();
+    let mut search_results = vec![];
+    for criteria in criteria_mapper.criteria_iter() {
+        // Find any build/normal dependencies that don't satisfy this criteria
+        let mut failed_deps = SortedMap::new();
+        for &depidx in package.normal_deps.iter().chain(&package.build_deps) {
+            // If we have an explicit policy for dependency, that's all that matters.
+            // Otherwise just use the current criteria to "inherit" the results of our deps.
+            let dep_name = graph.nodes[depidx].name;
+            let required_criteria = dep_criteria.get(dep_name).unwrap_or(criteria);
+            if !results[depidx].contains(required_criteria) {
+                failed_deps
+                    .entry(depidx)
+                    .or_insert_with(|| criteria_mapper.no_criteria())
+                    .unioned_with(required_criteria);
+            }
+        }
+
+        if failed_deps.is_empty() {
+            // All our deps passed the test, so we have this criteria
+            search_results.push(SearchResult::Connected {
+                fully_audited: true,
+            });
+            validated_criteria.unioned_with(criteria);
+        } else {
+            // Some of our deps failed to satisfy this criteria, record this
+            search_results.push(SearchResult::PossiblyConnected { failed_deps })
+        }
+    }
+    trace!(
+        "resolve: first-party {}:{} initial validation: {:?}",
+        package.name,
+        package.version,
+        criteria_mapper
+            .criteria_names(&validated_criteria)
+            .collect::<Vec<_>>()
+    );
+    // Save the results
+    results[pkgidx].search_results = search_results;
+    results[pkgidx].validated_criteria = validated_criteria;
+
+    // Now check that we pass our own policy
+    let own_policy = if let Some(policy) = config.policy.get(package.name) {
+        criteria_mapper.criteria_from_list(&policy.criteria)
+    } else {
+        criteria_mapper.no_criteria()
+    };
+    let own_policy = if own_policy.is_empty() {
+        if package.is_root {
+            criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA])
+        } else {
+            trace!("resolve:   has no policy, done");
+            // We have no policy, we're done
+            return;
+        }
+    } else {
+        own_policy
+    };
 
     let mut policy_failures = PolicyFailures::new();
-
-    // Any dependencies that have explicit policies are checked first
-    let mut passed_dependencies = SortedSet::new();
-    if let Some(policy) = config.policy.get(package.name) {
-        for &depidx in package.normal_deps.iter().chain(&package.build_deps) {
-            let dep_package = &graph.nodes[depidx];
-            let dep_policy = policy
-                .dependency_criteria
-                .get(dep_package.name)
-                .map(|p| criteria_mapper.criteria_from_list(p))
-                .unwrap_or_else(|| criteria_mapper.no_criteria());
-
-            for criteria_idx in dep_policy.indices() {
-                if results[depidx].has_criteria(criteria_idx) {
-                    passed_dependencies.insert(depidx);
-                } else {
-                    policy_failures
-                        .entry(depidx)
-                        .or_insert_with(|| criteria_mapper.no_criteria())
-                        .set_criteria(criteria_idx);
-                }
+    for criteria_idx in own_policy.indices() {
+        if let SearchResult::PossiblyConnected { failed_deps } =
+            &results[pkgidx].search_results[criteria_idx]
+        {
+            for (&dep, failed_criteria) in failed_deps {
+                policy_failures
+                    .entry(dep)
+                    .or_insert_with(|| criteria_mapper.no_criteria())
+                    .unioned_with(failed_criteria);
             }
         }
     }
 
     if policy_failures.is_empty() {
-        let mut validated_criteria = criteria_mapper.no_criteria();
-        let mut search_results = vec![];
-        for criteria in criteria_mapper.criteria_iter() {
-            let mut failed_deps = SortedMap::new();
-            // TODO: this isn't quite right. We want to analyze build-deps distinctly but we're
-            // just merging them in with normal deps... I need to think about this more.
-            // The semantic of policies is unclear for build-deps, I think...
-            for &depidx in package.normal_deps.iter().chain(&package.build_deps) {
-                if passed_dependencies.contains(&depidx) {
-                    // This dep is already fine, ignore it (implicitly all_criteria now)
-                    continue;
-                }
-                if !results[depidx].contains(criteria) {
-                    failed_deps
-                        .entry(depidx)
-                        .or_insert_with(|| criteria_mapper.no_criteria())
-                        .unioned_with(criteria);
-                }
-            }
-
-            if failed_deps.is_empty() {
-                search_results.push(SearchResult::Connected {
-                    fully_audited: true,
-                });
-                validated_criteria.unioned_with(criteria);
-            } else {
-                search_results.push(SearchResult::PossiblyConnected { failed_deps })
-            }
-        }
-
-        // Now check that we pass our own policy
-        let own_policy = if let Some(policy) = config.policy.get(package.name) {
-            criteria_mapper.criteria_from_list(&policy.criteria)
-        } else if is_root {
-            default_root_policy
-        } else {
-            criteria_mapper.no_criteria()
-        };
-
-        for criteria_idx in own_policy.indices() {
-            if let SearchResult::PossiblyConnected { failed_deps } = &search_results[criteria_idx] {
-                for (&dep, failed_criteria) in failed_deps {
-                    policy_failures
-                        .entry(dep)
-                        .or_insert_with(|| criteria_mapper.no_criteria())
-                        .unioned_with(failed_criteria);
-                }
-            }
-        }
-
-        if policy_failures.is_empty() {
-            results[pkgidx].search_results = search_results;
-            results[pkgidx].validated_criteria = validated_criteria;
-        }
-    }
-
-    if !policy_failures.is_empty() && is_root {
-        root_failures.insert(pkgidx);
-    }
-    for (dep, failure) in policy_failures {
-        results[pkgidx]
-            .policy_failures
-            .entry(dep)
-            .or_insert_with(|| criteria_mapper.no_criteria())
-            .unioned_with(&failure);
+        // We had a policy and it passed, so now we're validated for all criteria
+        // because our parents can never require anything else of us. No need
+        // to update search_results, they'll be masked out by validated_criteria(?)
+        trace!("resolve:   passed policy");
+        results[pkgidx].validated_criteria = criteria_mapper.all_criteria();
+    } else {
+        // We had a policy and it failed, so now we're invalid for all criteria(?)
+        trace!("resolve:   failed policy");
+        results[pkgidx].validated_criteria = criteria_mapper.no_criteria();
+        root_failures.push((pkgidx, policy_failures));
     }
 }
 
@@ -1611,118 +1763,100 @@ fn resolve_dev<'a>(
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
     _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
-    root_failures: &mut FastSet<PackageIdx>,
+    root_failures: &mut RootFailures,
     pkgidx: PackageIdx,
 ) {
-    // This is a copy of resolve_first_party but tweaked to handle dev-deps specifically.
-    // In this version we are logically processing a "dev" (test/bench) node which depends
-    // on the normal build. It is always a root, and so we don't need to record any details
-    // if this passes. The only thing that needs to be recorded are explicitly policy failures
-    // which can be folded in with the rest of the normal analysis.
+    // Check the dev-deps of this package. It is assumed to be a root in this context,
+    // so the default root dev policy will always be applicable.
     let package = &graph.nodes[pkgidx];
-    let is_root = true;
 
-    // Root nodes adopt this policy if they don't have an explicit one
-    let _default_root_policy =
-        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]);
-    let default_root_dev_policy =
-        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_DEV_CRITERIA]);
+    // Get custom policies for our dependencies
+    let dep_criteria = config
+        .policy
+        .get(package.name)
+        .map(|policy| {
+            policy
+                .dependency_criteria
+                .iter()
+                .map(|(dep_name, criteria)| {
+                    (&**dep_name, criteria_mapper.criteria_from_list(criteria))
+                })
+                .collect::<FastMap<_, _>>()
+        })
+        .unwrap_or_default();
+
+    // Compute whether we have each criteria based on our dependencies
+    let mut validated_criteria = criteria_mapper.no_criteria();
+    let mut search_results = vec![];
+    for criteria in criteria_mapper.criteria_iter() {
+        // Find any build/normal dependencies that don't satisfy this criteria
+        let mut failed_deps = SortedMap::new();
+        for &depidx in &package.dev_deps {
+            // If we have an explicit policy for dependency, that's all that matters.
+            // Otherwise just use the current criteria to "inherit" the results of our deps.
+            let dep_name = graph.nodes[depidx].name;
+            let required_criteria = dep_criteria.get(dep_name).unwrap_or(criteria);
+            if !results[depidx].contains(required_criteria) {
+                failed_deps
+                    .entry(depidx)
+                    .or_insert_with(|| criteria_mapper.no_criteria())
+                    .unioned_with(required_criteria);
+            }
+        }
+
+        if failed_deps.is_empty() {
+            // All our deps passed the test, so we have this criteria
+            search_results.push(SearchResult::Connected {
+                fully_audited: true,
+            });
+            validated_criteria.unioned_with(criteria);
+        } else {
+            // Some of our deps failed to satisfy this criteria, record this
+            search_results.push(SearchResult::PossiblyConnected { failed_deps })
+        }
+    }
+    trace!(
+        "resolve: first-party dev {}:{} initial validation: {:?}",
+        package.name,
+        package.version,
+        criteria_mapper
+            .criteria_names(&validated_criteria)
+            .collect::<Vec<_>>()
+    );
+    // DON'T save the results, because we're analyzing this as a dev-node and anything that
+    // depends on us only cares about the "normal" results.
+    // results[pkgidx].search_results = search_results;
+    // results[pkgidx].validated_criteria = validated_criteria;
+
+    // Now check that we pass our own policy
+    let own_policy = if let Some(policy) = config.policy.get(package.name) {
+        criteria_mapper.criteria_from_list(&policy.dev_criteria)
+    } else {
+        criteria_mapper.no_criteria()
+    };
+    let own_policy = if own_policy.is_empty() {
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_DEV_CRITERIA])
+    } else {
+        own_policy
+    };
 
     let mut policy_failures = PolicyFailures::new();
-
-    // Any dependencies that have explicit policies are checked first
-    let mut passed_dependencies = SortedSet::new();
-    if let Some(policy) = config.policy.get(package.name) {
-        for &depidx in &package.dev_deps {
-            let dep_package = &graph.nodes[depidx];
-            let dep_policy = policy
-                .dependency_criteria
-                .get(dep_package.name)
-                .map(|p| criteria_mapper.criteria_from_list(p))
-                .unwrap_or_else(|| criteria_mapper.no_criteria());
-
-            for criteria_idx in dep_policy.indices() {
-                if results[depidx].has_criteria(criteria_idx) {
-                    passed_dependencies.insert(depidx);
-                } else {
-                    policy_failures
-                        .entry(depidx)
-                        .or_insert_with(|| criteria_mapper.no_criteria())
-                        .set_criteria(criteria_idx);
-                }
+    for criteria_idx in own_policy.indices() {
+        if let SearchResult::PossiblyConnected { failed_deps } = &search_results[criteria_idx] {
+            for (&dep, failed_criteria) in failed_deps {
+                policy_failures
+                    .entry(dep)
+                    .or_insert_with(|| criteria_mapper.no_criteria())
+                    .unioned_with(failed_criteria);
             }
         }
     }
 
     if policy_failures.is_empty() {
-        let mut validated_criteria = criteria_mapper.no_criteria();
-        let mut search_results = vec![];
-        for criteria in criteria_mapper.criteria_iter() {
-            let mut failed_deps = SortedMap::new();
-            for &depidx in &package.dev_deps {
-                if passed_dependencies.contains(&depidx) {
-                    // This dep is already fine, ignore it (implicitly all_criteria now)
-                    continue;
-                }
-                if !results[depidx].contains(criteria) {
-                    failed_deps
-                        .entry(depidx)
-                        .or_insert_with(|| criteria_mapper.no_criteria())
-                        .unioned_with(criteria);
-                }
-            }
-
-            if failed_deps.is_empty() {
-                search_results.push(SearchResult::Connected {
-                    fully_audited: true,
-                });
-                validated_criteria.unioned_with(criteria);
-            } else {
-                search_results.push(SearchResult::PossiblyConnected { failed_deps })
-            }
-        }
-
-        // Now check that we pass our own policy
-        let own_policy = if let Some(policy) = config.policy.get(package.name) {
-            criteria_mapper.criteria_from_list(&policy.dev_criteria)
-        } else if is_root {
-            default_root_dev_policy
-        } else {
-            unreachable!("dev nodes are always roots!")
-        };
-
-        // TODO: arguably we should also include our normal self's results because we
-        // depend on it..?
-        for criteria_idx in own_policy.indices() {
-            if let SearchResult::PossiblyConnected { failed_deps } = &search_results[criteria_idx] {
-                for (&dep, failed_criteria) in failed_deps {
-                    policy_failures
-                        .entry(dep)
-                        .or_insert_with(|| criteria_mapper.no_criteria())
-                        .unioned_with(failed_criteria);
-                }
-            }
-        }
-
-        // Don't commit successes, this is the fake "dev" node which doesn't effect others,
-        // so if there's no failures then we don't care about this node at all!
-        /*
-        if policy_failures.is_empty() {
-            results[pkgidx].search_results = search_results;
-            results[pkgidx].validated_criteria = validated_criteria;
-        }
-        */
-    }
-
-    if !policy_failures.is_empty() && is_root {
-        root_failures.insert(pkgidx);
-    }
-    for (dep, failure) in policy_failures {
-        results[pkgidx]
-            .policy_failures
-            .entry(dep)
-            .or_insert_with(|| criteria_mapper.no_criteria())
-            .unioned_with(&failure);
+        trace!("resolve:   passed dev policy");
+    } else {
+        trace!("resolve:   failed dev policy");
+        root_failures.push((pkgidx, policy_failures));
     }
 }
 
@@ -1731,7 +1865,7 @@ fn visit_failures<'a, T>(
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     results: &[ResolveResult<'a>],
-    root_failures: &FastSet<PackageIdx>,
+    root_failures: &RootFailures,
     guess_deeper: bool,
     mut callback: impl FnMut(PackageIdx, usize, Option<&CriteriaSet>) -> Result<(), T>,
 ) -> Result<(), T> {
@@ -1767,10 +1901,28 @@ fn visit_failures<'a, T>(
     // handle those. I *think* we only *really* need to split up "dev" from "everything else"
     // but I want to think about this more. For now we just rely on the solution to problem 2
     // to avoid infinite loops and just don't worry about the semantics.
-    let mut search_stack = root_failures
-        .iter()
-        .map(|f| (*f, 0, None))
-        .collect::<Vec<_>>();
+    let mut search_stack = Vec::new();
+
+    for (failed_idx, policy_failures) in root_failures {
+        let failed_package = &graph.nodes[*failed_idx];
+        trace!(
+            "blame: policy failure for {}:{}",
+            failed_package.name,
+            failed_package.version
+        );
+        for (&failed_dep_idx, failed_criteria) in policy_failures {
+            let failed_dep = &graph.nodes[failed_dep_idx];
+            trace!(
+                "blame:   {}:{} needed {:?}",
+                failed_dep.name,
+                failed_dep.version,
+                criteria_mapper
+                    .criteria_names(failed_criteria)
+                    .collect::<Vec<_>>()
+            );
+            search_stack.push((failed_dep_idx, 0, Some(failed_criteria.clone())));
+        }
+    }
     let mut visited = FastMap::<PackageIdx, CriteriaSet>::new();
     let no_criteria = criteria_mapper.no_criteria();
 
@@ -1802,13 +1954,7 @@ fn visit_failures<'a, T>(
             width = depth
         );
 
-        if !result.policy_failures.is_empty() {
-            // We're not to blame, it's our children who failed our policies!
-            callback(failure_idx, depth, None)?;
-            for (&failed_dep, failed_criteria) in &result.policy_failures {
-                search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
-            }
-        } else if let Some(failed_criteria) = cur_criteria {
+        if let Some(failed_criteria) = cur_criteria {
             let mut own_fault = criteria_mapper.no_criteria();
             let mut dep_faults = FastMap::<PackageIdx, CriteriaSet>::new();
             let mut deeper_faults = FastMap::<PackageIdx, CriteriaSet>::new();

@@ -21,6 +21,9 @@ OPTIONS:
         --features <FEATURES>
             Space-separated list of features to activate
 
+        --filter-graph <FILTER_GRAPH>
+            Filter out different parts of the build graph and pretend that's the true graph
+
     -h, --help
             Print help information
 
