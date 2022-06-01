@@ -297,7 +297,7 @@ impl Cli {
             manifest: Manifest::default(),
             workspace: Workspace::default(),
             features: Features::default(),
-            locked: true,
+            locked: false,
             verbose: Verbose::Off,
             output_file: None,
             output_format: OutputFormat::Human,
@@ -515,6 +515,14 @@ fn main() -> Result<(), VetError> {
     for package in &cli.workspace.exclude {
         other_options.push("--exclude".to_string());
         other_options.push(package.to_string());
+    }
+    // We never want cargo-vet to update the Cargo.lock.
+    // For locked runs we don't want to touch the network so use --frozen
+    // For unlocked runs we want to error out if the lock is out of date, so use --locked
+    if cli.locked {
+        other_options.push("--frozen".to_string());
+    } else {
+        other_options.push("--locked".to_string());
     }
     cmd.other_options(other_options);
 
