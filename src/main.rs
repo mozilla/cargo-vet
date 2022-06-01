@@ -1108,7 +1108,10 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     }
 
     // Only save imports if we succeeded, to avoid any modifications on error.
-    if !report.has_errors() {
+    if report.has_errors() {
+        // Want a non-0 error code in this situation
+        std::process::exit(-1);
+    } else {
         trace!("Saving imports.lock...");
         store_imports(store_path, imports)?;
     }
