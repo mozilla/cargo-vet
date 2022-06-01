@@ -94,6 +94,69 @@ struct Cli {
     /// This mostly exists for testing vet itself.
     #[clap(long)]
     diff_cache: Option<PathBuf>,
+
+    /// Filter out different parts of the build graph and pretend that's the true graph.
+    ///
+    /// Example: `--filter-graph="exclude(any(eq(is_dev_only(true)),eq(name(serde_derive))))"`
+    ///
+    /// This mostly exists to debug or reduce projects that cargo-vet is mishandling.
+    /// Combining this with `cargo vet --output-format=json dump-graph` can produce an
+    /// input that can be added to vet's test suite.
+    ///
+    /// 
+    /// 
+    /// The resulting graph is computed as follows:
+    ///
+    /// 1. First compute the original graph
+    /// 
+    /// 2. Then apply the filters to find the new set of nodes
+    ///
+    /// 3. Create a new empty graph
+    ///
+    /// 4. For each workspace member that still exists, recursively add it and its dependencies
+    ///
+    /// This means that any non-workspace package that becomes "orphaned" by the filters will
+    /// be implicitly discarded even if it passes the filters.
+    ///
+    /// 
+    /// Syntax: a comma-separated list of filters to apply. 
+    /// 
+    /// 
+    /// Possible filters:
+    ///
+    /// * `include($query)`: only include packages that match this filter
+    ///
+    /// * `exclude($query)`: exclude packages that match this filter
+    ///
+    /// 
+    /// 
+    /// Possible queries:
+    ///
+    /// * `any($query1, $query2, ...)`: true if any of the listed queries are true
+    ///
+    /// * `all($query1, $query2, ...)`: true if all of the listed queries are true
+    ///
+    /// * `eq($property)`: true if the package has this property
+    ///
+    /// * `neq($property)`: true if the package doesn't have this property
+    ///
+    /// 
+    /// 
+    /// Possible properties:
+    ///
+    /// * `name($string)`: the package's name (i.e. `serde`)
+    ///
+    /// * `version($version)`: the package's version (i.e. `1.2.0`)
+    ///
+    /// * `is_root($bool)`: whether it's a root in the original graph (ignoring dev-deps)
+    ///
+    /// * `is_workspace_member($bool)`: whether the package is a workspace-member (can be tested)
+    ///
+    /// * `is_third_party($bool)`: whether the package is considered third-party by vet
+    ///
+    /// * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original graph
+    #[clap(long)]
+    filter_graph: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -240,6 +303,7 @@ impl Cli {
             output_format: OutputFormat::Human,
             log_file: None,
             diff_cache: None,
+            filter_graph: None,
         }
     }
 }
@@ -604,10 +668,11 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
         audits: StableMap::new(),
     };
 
+    // TODO: pipe in cfg and filter_graph
     // This is the hard one
     let config = {
         let mut dependencies = StableMap::new();
-        let graph = DepGraph::new(metadata);
+        let graph = DepGraph::new(metadata, None);
         for package in &graph.nodes {
             if !package.is_third_party {
                 // Only care about third-party packages
@@ -799,8 +864,14 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
     }
 
     // DO THE THING!!!!
+    let filter_graph = if let Some(filters) = cfg.cli.filter_graph.as_ref() {
+        Some(parse_filter(filters)?)
+    } else {
+        None
+    };
     let report = resolver::resolve(
         &cfg.metadata,
+        filter_graph.as_ref(),
         &config,
         &audits,
         &imports,
@@ -855,7 +926,19 @@ pub fn minimize_unaudited(
     let old_unaudited = mem::replace(&mut config.unaudited, StableMap::new());
 
     // Try to vet
-    let report = resolver::resolve(&cfg.metadata, config, audits, imports, true);
+    let filter_graph = if let Some(filters) = cfg.cli.filter_graph.as_ref() {
+        Some(parse_filter(filters)?)
+    } else {
+        None
+    };
+    let report = resolver::resolve(
+        &cfg.metadata,
+        filter_graph.as_ref(),
+        config,
+        audits,
+        imports,
+        true,
+    );
 
     let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, false)? {
         let mut new_unaudited = StableMap::new();
@@ -997,7 +1080,20 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     };
 
     // DO THE THING!!!!
-    let report = resolver::resolve(&cfg.metadata, &config, &audits, &imports, false);
+    let filter_graph = if let Some(filters) = cfg.cli.filter_graph.as_ref() {
+        Some(parse_filter(filters)?)
+    } else {
+        None
+    };
+
+    let report = resolver::resolve(
+        &cfg.metadata,
+        filter_graph.as_ref(),
+        &config,
+        &audits,
+        &imports,
+        false,
+    );
     match cfg.cli.output_format {
         OutputFormat::Human => report.print_human(out, cfg)?,
         OutputFormat::Json => report.print_json(out, cfg)?,
@@ -1020,7 +1116,12 @@ fn cmd_dump_graph(
     // Dump a mermaid-js graph
     trace!("dumping...");
 
-    let graph = resolver::DepGraph::new(&cfg.metadata);
+    let filter_graph = if let Some(filters) = cfg.cli.filter_graph.as_ref() {
+        Some(parse_filter(filters)?)
+    } else {
+        None
+    };
+    let graph = resolver::DepGraph::new(&cfg.metadata, filter_graph.as_ref());
     match cfg.cli.output_format {
         OutputFormat::Human => graph.print_mermaid(out, sub_args)?,
         OutputFormat::Json => serde_json::to_writer_pretty(out, &graph.nodes)?,
@@ -1169,6 +1270,141 @@ fn cmd_help_md(
 }
 
 // Utils
+#[derive(Clone, Debug)]
+pub enum GraphFilter {
+    Include(GraphFilterQuery),
+    Exclude(GraphFilterQuery),
+}
+
+#[derive(Clone, Debug)]
+pub enum GraphFilterQuery {
+    Any(Vec<GraphFilterQuery>),
+    All(Vec<GraphFilterQuery>),
+    Eq(GraphFilterProperty),
+    Neq(GraphFilterProperty),
+}
+
+#[derive(Clone, Debug)]
+pub enum GraphFilterProperty {
+    Name(String),
+    Version(Version),
+    IsRoot(bool),
+    IsWorkspaceMember(bool),
+    IsThirdParty(bool),
+    IsDevOnly(bool),
+}
+
+fn parse_filter(input: &str) -> Result<Vec<GraphFilter>, VetError> {
+    use nom::{
+        branch::alt,
+        bytes::complete::{is_not, tag},
+        multi::separated_list1,
+        sequence::delimited,
+        IResult,
+    };
+
+    fn graph_filter(input: &str) -> IResult<&str, GraphFilter> {
+        alt((include_filter, exclude_filter))(input)
+    }
+    fn include_filter(input: &str) -> IResult<&str, GraphFilter> {
+        let (rest, val) = delimited(tag("include("), filter_query, tag(")"))(input)?;
+        Ok((rest, GraphFilter::Include(val)))
+    }
+    fn exclude_filter(input: &str) -> IResult<&str, GraphFilter> {
+        let (rest, val) = delimited(tag("exclude("), filter_query, tag(")"))(input)?;
+        Ok((rest, GraphFilter::Exclude(val)))
+    }
+    fn filter_query(input: &str) -> IResult<&str, GraphFilterQuery> {
+        alt((any_query, all_query, eq_query, neq_query))(input)
+    }
+    fn any_query(input: &str) -> IResult<&str, GraphFilterQuery> {
+        let (rest, val) = delimited(
+            tag("any("),
+            separated_list1(tag(","), filter_query),
+            tag(")"),
+        )(input)?;
+        Ok((rest, GraphFilterQuery::Any(val)))
+    }
+    fn all_query(input: &str) -> IResult<&str, GraphFilterQuery> {
+        let (rest, val) = delimited(
+            tag("all("),
+            separated_list1(tag(","), filter_query),
+            tag(")"),
+        )(input)?;
+        Ok((rest, GraphFilterQuery::All(val)))
+    }
+    fn eq_query(input: &str) -> IResult<&str, GraphFilterQuery> {
+        let (rest, val) = delimited(tag("eq("), filter_property, tag(")"))(input)?;
+        Ok((rest, GraphFilterQuery::Eq(val)))
+    }
+    fn neq_query(input: &str) -> IResult<&str, GraphFilterQuery> {
+        let (rest, val) = delimited(tag("neq("), filter_property, tag(")"))(input)?;
+        Ok((rest, GraphFilterQuery::Neq(val)))
+    }
+    fn filter_property(input: &str) -> IResult<&str, GraphFilterProperty> {
+        alt((
+            prop_name,
+            prop_version,
+            prop_is_root,
+            prop_is_workspace_member,
+            prop_is_third_party,
+            prop_is_dev_only,
+        ))(input)
+    }
+    fn prop_name(input: &str) -> IResult<&str, GraphFilterProperty> {
+        let (rest, val) = delimited(tag("name("), val_package_name, tag(")"))(input)?;
+        Ok((rest, GraphFilterProperty::Name(val.to_string())))
+    }
+    fn prop_version(input: &str) -> IResult<&str, GraphFilterProperty> {
+        let (rest, val) = delimited(tag("version("), val_version, tag(")"))(input)?;
+        Ok((rest, GraphFilterProperty::Version(val)))
+    }
+    fn prop_is_root(input: &str) -> IResult<&str, GraphFilterProperty> {
+        let (rest, val) = delimited(tag("is_root("), val_bool, tag(")"))(input)?;
+        Ok((rest, GraphFilterProperty::IsRoot(val)))
+    }
+    fn prop_is_workspace_member(input: &str) -> IResult<&str, GraphFilterProperty> {
+        let (rest, val) = delimited(tag("is_workspace_member("), val_bool, tag(")"))(input)?;
+        Ok((rest, GraphFilterProperty::IsWorkspaceMember(val)))
+    }
+    fn prop_is_third_party(input: &str) -> IResult<&str, GraphFilterProperty> {
+        let (rest, val) = delimited(tag("is_third_party("), val_bool, tag(")"))(input)?;
+        Ok((rest, GraphFilterProperty::IsThirdParty(val)))
+    }
+    fn prop_is_dev_only(input: &str) -> IResult<&str, GraphFilterProperty> {
+        let (rest, val) = delimited(tag("is_dev_only("), val_bool, tag(")"))(input)?;
+        Ok((rest, GraphFilterProperty::IsDevOnly(val)))
+    }
+    fn val_bool(input: &str) -> IResult<&str, bool> {
+        alt((val_true, val_false))(input)
+    }
+    fn val_true(input: &str) -> IResult<&str, bool> {
+        let (rest, _val) = tag("true")(input)?;
+        Ok((rest, true))
+    }
+    fn val_false(input: &str) -> IResult<&str, bool> {
+        let (rest, _val) = tag("false")(input)?;
+        Ok((rest, false))
+    }
+    fn val_package_name(input: &str) -> IResult<&str, &str> {
+        is_not(")")(input)
+    }
+    fn val_version(input: &str) -> IResult<&str, Version> {
+        let (rest, val) = is_not(")")(input)?;
+        let val = Version::from_str(val).map_err(|_e| {
+            nom::Err::Failure(nom::error::Error {
+                input: rest,
+                code: nom::error::ErrorKind::Fail,
+            })
+        })?;
+        Ok((rest, val))
+    }
+
+    let (rest, val) = separated_list1(tag(","), graph_filter)(input).map_err(|e| e.to_owned())?;
+    // TODO: don't assert
+    assert!(rest.is_empty());
+    Ok(val)
+}
 
 fn is_init(metacfg: &MetaConfig) -> bool {
     // Probably want to do more here later...

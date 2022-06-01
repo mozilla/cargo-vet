@@ -8,8 +8,8 @@ use std::io::Write;
 
 use crate::format::{self, AuditKind, Delta, DiffStat};
 use crate::{
-    AuditEntry, AuditsFile, Cache, Config, ConfigFile, CriteriaEntry, DumpGraphArgs, ImportsFile,
-    PackageExt, StableMap, VetError,
+    AuditEntry, AuditsFile, Cache, Config, ConfigFile, CriteriaEntry, DumpGraphArgs, GraphFilter,
+    GraphFilterProperty, GraphFilterQuery, ImportsFile, PackageExt, StableMap, VetError,
 };
 
 // Collections based on how we're using, so it's easier to swap them out.
@@ -459,7 +459,7 @@ impl ResolveResult<'_> {
 }
 
 impl<'a> DepGraph<'a> {
-    pub fn new(metadata: &'a Metadata) -> Self {
+    pub fn new(metadata: &'a Metadata, filter_graph: Option<&Vec<GraphFilter>>) -> Self {
         let package_list = &*metadata.packages;
         let resolve_list = &*metadata
             .resolve
@@ -668,10 +668,162 @@ impl<'a> DepGraph<'a> {
             }
         }
 
-        Self {
+        let result = Self {
             interner_by_pkgid,
             interner_by_name_and_ver,
             nodes,
+            topo_index,
+        };
+
+        // Now apply filters, if any
+        if let Some(filters) = filter_graph {
+            result.filter(filters)
+        } else {
+            result
+        }
+    }
+
+    pub fn filter(self, filters: &[GraphFilter]) -> Self {
+        use GraphFilter::*;
+        use GraphFilterProperty::*;
+        use GraphFilterQuery::*;
+
+        fn matches_query(package: &PackageNode, query: &GraphFilterQuery) -> bool {
+            match query {
+                All(queries) => queries.iter().all(|q| matches_query(package, q)),
+                Any(queries) => queries.iter().any(|q| matches_query(package, q)),
+                Eq(property) => matches_property(package, property),
+                Neq(property) => !matches_property(package, property),
+            }
+        }
+        fn matches_property(package: &PackageNode, property: &GraphFilterProperty) -> bool {
+            match property {
+                Name(val) => package.name == val,
+                Version(val) => package.version == val,
+                IsRoot(val) => &package.is_root == val,
+                IsWorkspaceMember(val) => &package.is_workspace_member == val,
+                IsThirdParty(val) => &package.is_third_party == val,
+                IsDevOnly(val) => &package.is_dev_only == val,
+            }
+        }
+
+        let mut passed_filters = FastSet::new();
+        'nodes: for (idx, package) in self.nodes.iter().enumerate() {
+            for filter in filters {
+                match filter {
+                    Include(query) => {
+                        if !matches_query(package, query) {
+                            continue 'nodes;
+                        }
+                    }
+
+                    Exclude(query) => {
+                        if matches_query(package, query) {
+                            continue 'nodes;
+                        }
+                    }
+                }
+            }
+            // If we pass all the filters, then we get to be included
+            passed_filters.insert(idx);
+        }
+
+        let mut reachable = FastMap::new();
+        for (idx, package) in self.nodes.iter().enumerate() {
+            if package.is_workspace_member {
+                visit(&mut reachable, &self, &passed_filters, idx);
+            }
+            fn visit(
+                visited: &mut FastMap<PackageIdx, ()>,
+                graph: &DepGraph,
+                passed_filters: &FastSet<PackageIdx>,
+                node_idx: PackageIdx,
+            ) {
+                if !passed_filters.contains(&node_idx) {
+                    return;
+                }
+                let query = visited.entry(node_idx);
+                if matches!(query, std::collections::hash_map::Entry::Vacant(..)) {
+                    query.or_insert(());
+                    for &child in &graph.nodes[node_idx].all_deps {
+                        visit(visited, graph, passed_filters, child);
+                    }
+                }
+            }
+        }
+
+        let mut old_to_new = FastMap::new();
+        let mut nodes = Vec::new();
+        let mut interner_by_pkgid = SortedMap::new();
+        let mut interner_by_name_and_ver = SortedMap::<_, SortedMap<_, _>>::new();
+        let mut topo_index = Vec::new();
+        for (old_idx, package) in self.nodes.iter().enumerate() {
+            if !reachable.contains_key(&old_idx) {
+                continue;
+            }
+            let new_idx = nodes.len();
+            old_to_new.insert(old_idx, new_idx);
+            nodes.push(PackageNode {
+                build_type: package.build_type,
+                package_id: package.package_id,
+                name: package.name,
+                version: package.version,
+                normal_deps: vec![],
+                build_deps: vec![],
+                dev_deps: vec![],
+                all_deps: vec![],
+                reverse_deps: SortedSet::new(),
+                is_workspace_member: package.is_workspace_member,
+                is_third_party: package.is_third_party,
+                is_root: package.is_root,
+                is_dev_only: package.is_dev_only,
+            });
+            interner_by_pkgid.insert(package.package_id, new_idx);
+            interner_by_name_and_ver
+                .entry(package.name)
+                .or_default()
+                .insert(package.version, new_idx);
+        }
+        for old_idx in &self.topo_index {
+            if let Some(&new_idx) = old_to_new.get(old_idx) {
+                topo_index.push(new_idx);
+            }
+        }
+        for (old_idx, old_package) in self.nodes.iter().enumerate() {
+            if let Some(&new_idx) = old_to_new.get(&old_idx) {
+                let new_package = &mut nodes[new_idx];
+                for old_dep in &old_package.all_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.all_deps.push(new_dep);
+                    }
+                }
+                for old_dep in &old_package.normal_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.normal_deps.push(new_dep);
+                    }
+                }
+                for old_dep in &old_package.build_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.build_deps.push(new_dep);
+                    }
+                }
+                for old_dep in &old_package.dev_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.dev_deps.push(new_dep);
+                    }
+                }
+                for old_dep in &old_package.reverse_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.reverse_deps.insert(new_dep);
+                    }
+                }
+            }
+        }
+
+        Self {
+            nodes,
+            interner_by_pkgid,
+            interner_by_name_and_ver,
             topo_index,
         }
     }
@@ -778,6 +930,7 @@ static NO_AUDITS: Vec<AuditEntry> = Vec::new();
 
 pub fn resolve<'a>(
     metadata: &'a Metadata,
+    filter_graph: Option<&Vec<GraphFilter>>,
     config: &'a ConfigFile,
     audits: &'a AuditsFile,
     imports: &'a ImportsFile,
@@ -785,7 +938,7 @@ pub fn resolve<'a>(
 ) -> ResolveReport<'a> {
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
-    let graph = DepGraph::new(metadata);
+    let graph = DepGraph::new(metadata, filter_graph);
     // trace!("built DepGraph: {:#?}", graph);
     trace!("built DepGraph!");
 
