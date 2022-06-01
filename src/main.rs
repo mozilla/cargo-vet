@@ -1489,7 +1489,12 @@ fn store_audits(store_path: &Path, audits: AuditsFile) -> Result<(), VetError> {
     store_toml(&path, heading, audits)?;
     Ok(())
 }
-fn store_config(store_path: &Path, config: ConfigFile) -> Result<(), VetError> {
+fn store_config(store_path: &Path, mut config: ConfigFile) -> Result<(), VetError> {
+    // Sort the unaudited entries by version to make them more stable
+    for (_package_name, entries) in &mut config.unaudited {
+        entries.sort_by(|a, b| a.version.cmp(&b.version));
+    }
+
     let heading = r###"
 # cargo-vet config file
 "###;
