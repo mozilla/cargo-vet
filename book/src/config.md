@@ -121,6 +121,10 @@ should enforce on their dependencies. When unspecified, non-top-level
 first-party crates inherit policy attributes from their parents, whereas
 top-level first-party crates get the defaults described below.
 
+In this context, "top-level" generally refers to crates with no
+reverse-dependencies — except when evaluating dev-dependencies, in which case
+every workspace member is considered a root.
+
 #### `criteria`
 
 A string or array of strings specifying the criteria that should be enforced for
