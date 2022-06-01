@@ -103,12 +103,12 @@ struct Cli {
     /// Combining this with `cargo vet --output-format=json dump-graph` can produce an
     /// input that can be added to vet's test suite.
     ///
-    /// 
-    /// 
+    ///
+    ///
     /// The resulting graph is computed as follows:
     ///
     /// 1. First compute the original graph
-    /// 
+    ///
     /// 2. Then apply the filters to find the new set of nodes
     ///
     /// 3. Create a new empty graph
@@ -118,18 +118,18 @@ struct Cli {
     /// This means that any non-workspace package that becomes "orphaned" by the filters will
     /// be implicitly discarded even if it passes the filters.
     ///
-    /// 
-    /// Syntax: a comma-separated list of filters to apply. 
-    /// 
-    /// 
+    ///
+    /// Syntax: a comma-separated list of filters to apply.
+    ///
+    ///
     /// Possible filters:
     ///
     /// * `include($query)`: only include packages that match this filter
     ///
     /// * `exclude($query)`: exclude packages that match this filter
     ///
-    /// 
-    /// 
+    ///
+    ///
     /// Possible queries:
     ///
     /// * `any($query1, $query2, ...)`: true if any of the listed queries are true
@@ -140,8 +140,8 @@ struct Cli {
     ///
     /// * `neq($property)`: true if the package doesn't have this property
     ///
-    /// 
-    /// 
+    ///
+    ///
     /// Possible properties:
     ///
     /// * `name($string)`: the package's name (i.e. `serde`)

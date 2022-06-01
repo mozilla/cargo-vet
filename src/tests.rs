@@ -3418,7 +3418,7 @@ fn builtin_haunted_full_audited() {
 
 #[test]
 fn builtin_haunted_minimal_audited() {
-    // (Pass) All entries have direct full audits.
+    // (Pass) All entries have direct minimal audits.
 
     let mock = MockMetadata::haunted_tree();
 
