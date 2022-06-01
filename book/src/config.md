@@ -128,9 +128,9 @@ this crate and its dependency tree.
 
 For top-level crates, defaults to `safe-to-deploy`.
 
-#### `dev-and-build-criteria`
+#### `dev-criteria`
 
-Same as the above, but applied to dev-dependencies and build-dependencies.
+Same as the above, but applied to dev-dependencies.
 
 For top-level crates, defaults to `safe-to-run`.
 
@@ -151,9 +151,9 @@ validity](audit-entries.md#targets) to a set of targets).
 
 For top-level crates, defaults to all platforms.
 
-#### `dev-and-build-targets`
+#### `dev-targets`
 
-Same as the above, but applied to dev-dependencies and build-dependencies.
+Same as the above, but applied to dev-dependencies.
 
 For top-level crates, defaults to all platforms.
 
