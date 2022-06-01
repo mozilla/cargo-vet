@@ -121,7 +121,8 @@ pub struct CriteriaEntry {
     /// Criteria that this one implies
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
-    #[serde(deserialize_with = "string_or_vec")]
+    #[serde(deserialize_with = "deserialize_string_or_vec")]
+    #[serde(serialize_with = "serialize_string_or_vec")]
     pub implies: Vec<String>,
 }
 
@@ -129,10 +130,10 @@ pub struct CriteriaEntry {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct AuditEntry {
     pub who: Option<String>,
-    pub notes: Option<String>,
     pub criteria: String,
     #[serde(flatten)]
     pub kind: AuditKind,
+    pub notes: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -239,17 +240,17 @@ pub struct ConfigFile {
     #[serde(default)]
     pub imports: StableMap<String, RemoteImport>,
 
+    /// A table of policies for first-party crates.
+    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(default)]
+    pub policy: StableMap<String, PolicyEntry>,
+
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
     #[serde(skip_serializing_if = "StableMap::is_empty")]
     #[serde(default)]
     pub unaudited: StableMap<String, Vec<UnauditedDependency>>,
-
-    /// A table of policies for first-party crates.
-    #[serde(skip_serializing_if = "StableMap::is_empty")]
-    #[serde(default)]
-    pub policy: StableMap<String, PolicyEntry>,
 }
 
 impl ConfigFile {
@@ -276,7 +277,7 @@ fn is_default_criteria(val: &String) -> bool {
 
 /// Serde handler to allow specifying any of [], "foo",
 /// ["foo"], or ["foo", "bar"].
-fn string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -307,6 +308,18 @@ where
     deserializer.deserialize_any(StringOrVec)
 }
 
+/// Similar to the above, but for serialization.
+fn serialize_string_or_vec<S>(v: &Vec<String>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    if v.len() == 1 {
+        s.serialize_str(&v[0])
+    } else {
+        v.serialize(s)
+    }
+}
+
 /// Policies that first-party (non-foreign) crates must pass.
 ///
 /// This is basically the first-party equivalent of audits.toml, which is separated out
@@ -330,7 +343,8 @@ pub struct PolicyEntry {
     /// If not present, this defaults to the default criteria in the audits table.
     #[serde(default = "get_default_policy_criteria")]
     #[serde(skip_serializing_if = "is_default_policy_criteria")]
-    #[serde(deserialize_with = "string_or_vec")]
+    #[serde(deserialize_with = "deserialize_string_or_vec")]
+    #[serde(serialize_with = "serialize_string_or_vec")]
     pub criteria: Vec<String>,
 
     /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
@@ -338,7 +352,8 @@ pub struct PolicyEntry {
     #[serde(rename = "dev-criteria")]
     #[serde(default = "get_default_policy_dev_criteria")]
     #[serde(skip_serializing_if = "is_default_policy_dev_criteria")]
-    #[serde(deserialize_with = "string_or_vec")]
+    #[serde(deserialize_with = "deserialize_string_or_vec")]
+    #[serde(serialize_with = "serialize_string_or_vec")]
     pub dev_criteria: Vec<String>,
 
     /// Custom criteria for a specific first-party crate's dependencies.
@@ -391,7 +406,8 @@ pub struct CriteriaMapping {
     /// This local criteria is implied...
     pub ours: String,
     /// If all of these foreign criteria apply
-    #[serde(deserialize_with = "string_or_vec")]
+    #[serde(deserialize_with = "deserialize_string_or_vec")]
+    #[serde(serialize_with = "serialize_string_or_vec")]
     pub theirs: Vec<String>,
 }
 
@@ -412,12 +428,12 @@ pub struct UnauditedDependency {
     #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
     #[serde(default)]
     pub dependency_criteria: DependencyCriteria,
-    /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
-    pub notes: Option<String>,
     /// Whether 'suggest' should bother mentioning this (defaults true).
     #[serde(default = "get_default_unaudited_suggest")]
     #[serde(skip_serializing_if = "is_default_unaudited_suggest")]
     pub suggest: bool,
+    /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
+    pub notes: Option<String>,
 }
 
 static DEFAULT_UNAUDITED_SUGGEST: bool = true;
