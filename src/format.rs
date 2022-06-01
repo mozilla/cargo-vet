@@ -370,6 +370,9 @@ pub struct PolicyEntry {
     /// `targets` but for dev-deps
     #[serde(rename = "dev-targets")]
     pub dev_targets: Option<Vec<String>>,
+
+    /// Freeform notes
+    pub notes: Option<String>,
 }
 
 pub static DEFAULT_POLICY_CRITERIA: &str = SAFE_TO_DEPLOY;

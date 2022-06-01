@@ -157,6 +157,9 @@ Same as the above, but applied to dev-dependencies and build-dependencies.
 
 For top-level crates, defaults to all platforms.
 
+#### `notes`
+
+Free-form string for recording rationale or other relevant information.
 
 ### The `unaudited` Table
 
