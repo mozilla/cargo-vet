@@ -64,8 +64,8 @@ Possible queries:
 
 * `any($query1, $query2, ...)`: true if any of the listed queries are true
 * `all($query1, $query2, ...)`: true if all of the listed queries are true
-* `eq($property)`: true if the package has this property
-* `neq($property)`: true if the package doesn't have this property
+* `not($query)`: true if the query is false
+* `$property`: true if the package has this property
 
 
 Possible properties:

@@ -124,8 +124,8 @@ struct Cli {
     ///
     /// * `any($query1, $query2, ...)`: true if any of the listed queries are true
     /// * `all($query1, $query2, ...)`: true if all of the listed queries are true
-    /// * `eq($property)`: true if the package has this property
-    /// * `neq($property)`: true if the package doesn't have this property
+    /// * `not($query)`: true if the query is false
+    /// * `$property`: true if the package has this property
     ///
     ///
     /// Possible properties:
@@ -1518,8 +1518,8 @@ pub enum GraphFilter {
 pub enum GraphFilterQuery {
     Any(Vec<GraphFilterQuery>),
     All(Vec<GraphFilterQuery>),
-    Eq(GraphFilterProperty),
-    Neq(GraphFilterProperty),
+    Not(Box<GraphFilterQuery>),
+    Prop(GraphFilterProperty),
 }
 
 #[derive(Clone, Debug)]
@@ -1538,6 +1538,8 @@ impl FromStr for GraphFilter {
         use nom::{
             branch::alt,
             bytes::complete::{is_not, tag},
+            character::complete::multispace0,
+            error::ParseError,
             multi::separated_list1,
             sequence::delimited,
             IResult,
@@ -1547,39 +1549,39 @@ impl FromStr for GraphFilter {
             alt((include_filter, exclude_filter))(input)
         }
         fn include_filter(input: &str) -> IResult<&str, GraphFilter> {
-            let (rest, val) = delimited(tag("include("), filter_query, tag(")"))(input)?;
+            let (rest, val) = delimited(ws(tag("include(")), filter_query, ws(tag(")")))(input)?;
             Ok((rest, GraphFilter::Include(val)))
         }
         fn exclude_filter(input: &str) -> IResult<&str, GraphFilter> {
-            let (rest, val) = delimited(tag("exclude("), filter_query, tag(")"))(input)?;
+            let (rest, val) = delimited(ws(tag("exclude(")), filter_query, ws(tag(")")))(input)?;
             Ok((rest, GraphFilter::Exclude(val)))
         }
         fn filter_query(input: &str) -> IResult<&str, GraphFilterQuery> {
-            alt((any_query, all_query, eq_query, neq_query))(input)
+            alt((any_query, all_query, not_query, prop_query))(input)
         }
         fn any_query(input: &str) -> IResult<&str, GraphFilterQuery> {
             let (rest, val) = delimited(
-                tag("any("),
+                ws(tag("any(")),
                 separated_list1(tag(","), filter_query),
-                tag(")"),
+                ws(tag(")")),
             )(input)?;
             Ok((rest, GraphFilterQuery::Any(val)))
         }
         fn all_query(input: &str) -> IResult<&str, GraphFilterQuery> {
             let (rest, val) = delimited(
-                tag("all("),
+                ws(tag("all(")),
                 separated_list1(tag(","), filter_query),
-                tag(")"),
+                ws(tag(")")),
             )(input)?;
             Ok((rest, GraphFilterQuery::All(val)))
         }
-        fn eq_query(input: &str) -> IResult<&str, GraphFilterQuery> {
-            let (rest, val) = delimited(tag("eq("), filter_property, tag(")"))(input)?;
-            Ok((rest, GraphFilterQuery::Eq(val)))
+        fn not_query(input: &str) -> IResult<&str, GraphFilterQuery> {
+            let (rest, val) = delimited(ws(tag("not(")), filter_query, ws(tag(")")))(input)?;
+            Ok((rest, GraphFilterQuery::Not(Box::new(val))))
         }
-        fn neq_query(input: &str) -> IResult<&str, GraphFilterQuery> {
-            let (rest, val) = delimited(tag("neq("), filter_property, tag(")"))(input)?;
-            Ok((rest, GraphFilterQuery::Neq(val)))
+        fn prop_query(input: &str) -> IResult<&str, GraphFilterQuery> {
+            let (rest, val) = filter_property(input)?;
+            Ok((rest, GraphFilterQuery::Prop(val)))
         }
         fn filter_property(input: &str) -> IResult<&str, GraphFilterProperty> {
             alt((
@@ -1592,45 +1594,46 @@ impl FromStr for GraphFilter {
             ))(input)
         }
         fn prop_name(input: &str) -> IResult<&str, GraphFilterProperty> {
-            let (rest, val) = delimited(tag("name("), val_package_name, tag(")"))(input)?;
+            let (rest, val) = delimited(ws(tag("name(")), val_package_name, ws(tag(")")))(input)?;
             Ok((rest, GraphFilterProperty::Name(val.to_string())))
         }
         fn prop_version(input: &str) -> IResult<&str, GraphFilterProperty> {
-            let (rest, val) = delimited(tag("version("), val_version, tag(")"))(input)?;
+            let (rest, val) = delimited(ws(tag("version(")), val_version, ws(tag(")")))(input)?;
             Ok((rest, GraphFilterProperty::Version(val)))
         }
         fn prop_is_root(input: &str) -> IResult<&str, GraphFilterProperty> {
-            let (rest, val) = delimited(tag("is_root("), val_bool, tag(")"))(input)?;
+            let (rest, val) = delimited(ws(tag("is_root(")), val_bool, ws(tag(")")))(input)?;
             Ok((rest, GraphFilterProperty::IsRoot(val)))
         }
         fn prop_is_workspace_member(input: &str) -> IResult<&str, GraphFilterProperty> {
-            let (rest, val) = delimited(tag("is_workspace_member("), val_bool, tag(")"))(input)?;
+            let (rest, val) =
+                delimited(ws(tag("is_workspace_member(")), val_bool, ws(tag(")")))(input)?;
             Ok((rest, GraphFilterProperty::IsWorkspaceMember(val)))
         }
         fn prop_is_third_party(input: &str) -> IResult<&str, GraphFilterProperty> {
-            let (rest, val) = delimited(tag("is_third_party("), val_bool, tag(")"))(input)?;
+            let (rest, val) = delimited(ws(tag("is_third_party(")), val_bool, ws(tag(")")))(input)?;
             Ok((rest, GraphFilterProperty::IsThirdParty(val)))
         }
         fn prop_is_dev_only(input: &str) -> IResult<&str, GraphFilterProperty> {
-            let (rest, val) = delimited(tag("is_dev_only("), val_bool, tag(")"))(input)?;
+            let (rest, val) = delimited(ws(tag("is_dev_only(")), val_bool, ws(tag(")")))(input)?;
             Ok((rest, GraphFilterProperty::IsDevOnly(val)))
         }
         fn val_bool(input: &str) -> IResult<&str, bool> {
             alt((val_true, val_false))(input)
         }
         fn val_true(input: &str) -> IResult<&str, bool> {
-            let (rest, _val) = tag("true")(input)?;
+            let (rest, _val) = ws(tag("true"))(input)?;
             Ok((rest, true))
         }
         fn val_false(input: &str) -> IResult<&str, bool> {
-            let (rest, _val) = tag("false")(input)?;
+            let (rest, _val) = ws(tag("false"))(input)?;
             Ok((rest, false))
         }
         fn val_package_name(input: &str) -> IResult<&str, &str> {
-            is_not(")")(input)
+            is_not(") ")(input)
         }
         fn val_version(input: &str) -> IResult<&str, Version> {
-            let (rest, val) = is_not(")")(input)?;
+            let (rest, val) = is_not(") ")(input)?;
             let val = Version::from_str(val).map_err(|_e| {
                 nom::Err::Failure(nom::error::Error {
                     input: rest,
@@ -1638,6 +1641,14 @@ impl FromStr for GraphFilter {
                 })
             })?;
             Ok((rest, val))
+        }
+        fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(
+            inner: F,
+        ) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+        where
+            F: Fn(&'a str) -> IResult<&'a str, O, E>,
+        {
+            delimited(multispace0, inner, multispace0)
         }
 
         let (rest, val) = graph_filter(input).map_err(|e| e.to_owned())?;
