@@ -923,6 +923,8 @@ fn main() -> Result<(), VetError> {
 fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<(), VetError> {
     // Initialize vet
 
+    // TODO: use Store::create or something else to make this transactional?
+
     // Create store_path
     // - audits.toml (empty, sample criteria)
     // - imports.lock (empty)
@@ -1034,9 +1036,7 @@ fn cmd_inspect(
 
 fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
     // Certify that you have reviewed a crate's source for some version / delta
-    let store_path = cfg.metacfg.store_path();
-    let mut audits = load_audits(store_path)?;
-    let config = load_config(store_path)?;
+    let mut store = Store::acquire(cfg)?;
 
     let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
         // TODO: look at the current audits to infer this? prompt?
@@ -1080,7 +1080,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
 
     let mut criteria = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
-        vec![config.default_criteria]
+        vec![store.config.default_criteria.clone()]
     } else {
         sub_args.criteria.clone()
     };
@@ -1091,7 +1091,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     }
     let criteria = criteria.swap_remove(0);
 
-    let eula = if let Some(eula) = eula_for_criteria(&audits, &criteria) {
+    let eula = if let Some(eula) = eula_for_criteria(&store.audits, &criteria) {
         eula
     } else {
         error!("couldn't get description of criteria");
@@ -1143,12 +1143,13 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         notes,
     };
 
-    audits
+    store
+        .audits
         .audits
         .entry(sub_args.package.clone())
         .or_insert(vec![])
         .push(new_entry);
-    store_audits(store_path, audits)?;
+    store.commit()?;
 
     Ok(())
 }
@@ -1158,10 +1159,8 @@ fn cmd_add_violation(
     cfg: &Config,
     sub_args: &AddViolationArgs,
 ) -> Result<(), VetError> {
-    // Certify that you have reviewed a crate's source for some version / delta
-    let store_path = cfg.metacfg.store_path();
-    let mut audits = load_audits(store_path)?;
-    let config = load_config(store_path)?;
+    // Mark a package as a violation
+    let mut store = Store::acquire(cfg)?;
 
     let kind = AuditKind::Violation {
         violation: sub_args.versions.clone(),
@@ -1179,7 +1178,7 @@ fn cmd_add_violation(
 
     let mut criteria = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
-        vec![config.default_criteria]
+        vec![store.config.default_criteria.clone()]
     } else {
         sub_args.criteria.clone()
     };
@@ -1204,12 +1203,14 @@ fn cmd_add_violation(
         notes,
     };
 
-    audits
+    store
+        .audits
         .audits
         .entry(sub_args.package.clone())
         .or_insert(vec![])
         .push(new_entry);
-    store_audits(store_path, audits)?;
+
+    store.commit()?;
 
     Ok(())
 }
@@ -1219,9 +1220,8 @@ fn cmd_add_unaudited(
     cfg: &Config,
     sub_args: &AddUnauditedArgs,
 ) -> Result<(), VetError> {
-    // Certify that you have reviewed a crate's source for some version / delta
-    let store_path = cfg.metacfg.store_path();
-    let mut config = load_config(store_path)?;
+    // Add an unaudited entry
+    let mut store = Store::acquire(cfg)?;
 
     let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
         // TODO: look at the current audits to infer this? prompt?
@@ -1241,7 +1241,7 @@ fn cmd_add_unaudited(
 
     let mut criteria = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
-        vec![config.default_criteria.clone()]
+        vec![store.config.default_criteria.clone()]
     } else {
         sub_args.criteria.clone()
     };
@@ -1269,12 +1269,14 @@ fn cmd_add_unaudited(
         suggest,
     };
 
-    config
+    store
+        .config
         .unaudited
         .entry(sub_args.package.clone())
         .or_insert(vec![])
         .push(new_entry);
-    store_config(store_path, config)?;
+
+    store.commit()?;
 
     Ok(())
 }
