@@ -38,7 +38,7 @@ fn test_version() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
 
     let (name, ver) = stdout.split_once(' ').unwrap();
@@ -64,7 +64,7 @@ fn test_long_help() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     insta::assert_snapshot!("long-help", stdout);
     assert_eq!(stderr, "");
 }
@@ -83,7 +83,7 @@ fn test_short_help() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     insta::assert_snapshot!("short-help", stdout);
     assert_eq!(stderr, "");
 }
@@ -102,7 +102,7 @@ fn test_markdown_help() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     insta::assert_snapshot!("markdown-help", stdout);
     assert_eq!(stderr, "");
 }
@@ -129,7 +129,7 @@ fn test_project() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     insta::assert_snapshot!("test-project", stdout);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
 }
 
@@ -156,7 +156,7 @@ fn test_project_json() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     insta::assert_snapshot!("test-project-json", stdout);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
 }
 
@@ -183,7 +183,7 @@ fn test_project_suggest() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     insta::assert_snapshot!("test-project-suggest", stdout);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
 }
 
@@ -211,7 +211,7 @@ fn test_project_suggest_json() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     insta::assert_snapshot!("test-project-suggest-json", stdout);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
 }
 
@@ -239,7 +239,7 @@ fn test_project_suggest_deeper() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     insta::assert_snapshot!("test-project-suggest-deeper", stdout);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
 }
 
@@ -268,7 +268,7 @@ fn test_project_suggest_deeper_json() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     insta::assert_snapshot!("test-project-suggest-deeper-json", stdout);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
 }
 
@@ -297,7 +297,7 @@ fn test_project_dump_graph_full_json() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     insta::assert_snapshot!("test-project-dump-graph-full-json", stdout);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
 }
 
@@ -325,6 +325,6 @@ fn test_project_dump_graph_full() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     insta::assert_snapshot!("test-project-dump-graph-full", stdout);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
 }

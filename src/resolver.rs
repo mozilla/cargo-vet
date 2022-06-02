@@ -8,8 +8,8 @@ use std::io::Write;
 
 use crate::format::{self, AuditKind, Delta, DiffStat};
 use crate::{
-    AuditEntry, AuditsFile, Cache, Config, ConfigFile, CriteriaEntry, DumpGraphArgs, GraphFilter,
-    GraphFilterProperty, GraphFilterQuery, ImportsFile, PackageExt, StableMap, VetError,
+    AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
+    GraphFilterQuery, PackageExt, StableMap, Store, VetError,
 };
 
 // Collections based on how we're using, so it's easier to swap them out.
@@ -929,9 +929,7 @@ static NO_AUDITS: Vec<AuditEntry> = Vec::new();
 pub fn resolve<'a>(
     metadata: &'a Metadata,
     filter_graph: Option<&Vec<GraphFilter>>,
-    config: &'a ConfigFile,
-    audits: &'a AuditsFile,
-    imports: &'a ImportsFile,
+    store: &'a Store,
     guess_deeper: bool,
 ) -> ResolveReport<'a> {
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
@@ -940,7 +938,7 @@ pub fn resolve<'a>(
     // trace!("built DepGraph: {:#?}", graph);
     trace!("built DepGraph!");
 
-    let criteria_mapper = CriteriaMapper::new(&audits.criteria);
+    let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
 
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
     let mut results =
@@ -955,9 +953,7 @@ pub fn resolve<'a>(
         if package.is_third_party {
             resolve_third_party(
                 metadata,
-                config,
-                audits,
-                imports,
+                store,
                 &graph,
                 &criteria_mapper,
                 &mut results,
@@ -968,9 +964,7 @@ pub fn resolve<'a>(
         } else {
             resolve_first_party(
                 metadata,
-                config,
-                audits,
-                imports,
+                store,
                 &graph,
                 &criteria_mapper,
                 &mut results,
@@ -1011,9 +1005,7 @@ pub fn resolve<'a>(
         if package.is_workspace_member {
             resolve_dev(
                 metadata,
-                config,
-                audits,
-                imports,
+                store,
                 &graph,
                 &criteria_mapper,
                 &mut results,
@@ -1137,9 +1129,7 @@ pub fn resolve<'a>(
 #[allow(clippy::too_many_arguments, clippy::ptr_arg)]
 fn resolve_third_party<'a>(
     _metadata: &'a Metadata,
-    config: &'a ConfigFile,
-    audits: &'a AuditsFile,
-    imports: &'a ImportsFile,
+    store: &'a Store,
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
@@ -1152,9 +1142,9 @@ fn resolve_third_party<'a>(
         package.dev_deps.is_empty(),
         "third-party packages shouldn't have dev-deps!"
     );
-    let unaudited = config.unaudited.get(package.name);
+    let unaudited = store.config.unaudited.get(package.name);
 
-    let own_audits = audits.audits.get(package.name).unwrap_or(&NO_AUDITS);
+    let own_audits = store.audits.audits.get(package.name).unwrap_or(&NO_AUDITS);
 
     // Deltas are flipped so that we have a map of 'to: [froms]'. This lets
     // us start at the current version and look up all the deltas that *end* at that
@@ -1204,10 +1194,11 @@ fn resolve_third_party<'a>(
     }
 
     // Try to map foreign audits into our worldview
-    for (foreign_name, foreign_audits) in &imports.audits {
+    for (foreign_name, foreign_audits) in &store.imports.audits {
         // Prep CriteriaSet machinery for comparing requirements
         let foreign_criteria_mapper = CriteriaMapper::new(&foreign_audits.criteria);
-        let criteria_map = &config
+        let criteria_map = &store
+            .config
             .imports
             .get(foreign_name)
             .expect("Foreign Import isn't in config file (imports.lock outdated?)")
@@ -1313,7 +1304,7 @@ fn resolve_third_party<'a>(
                 }
             }
         }
-        for (foreign_name, foreign_audits) in &imports.audits {
+        for (foreign_name, foreign_audits) in &store.imports.audits {
             for audit in foreign_audits
                 .audits
                 .get(package.name)
@@ -1636,9 +1627,7 @@ fn search_for_path<'a>(
 #[allow(clippy::too_many_arguments, clippy::ptr_arg)]
 fn resolve_first_party<'a>(
     _metadata: &'a Metadata,
-    config: &'a ConfigFile,
-    _audits: &'a AuditsFile,
-    _imports: &'a ImportsFile,
+    store: &'a Store,
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
@@ -1651,7 +1640,8 @@ fn resolve_first_party<'a>(
     let package = &graph.nodes[pkgidx];
 
     // Get custom policies for our dependencies
-    let dep_criteria = config
+    let dep_criteria = store
+        .config
         .policy
         .get(package.name)
         .map(|policy| {
@@ -1708,7 +1698,7 @@ fn resolve_first_party<'a>(
     results[pkgidx].validated_criteria = validated_criteria;
 
     // Now check that we pass our own policy
-    let own_policy = if let Some(policy) = config.policy.get(package.name) {
+    let own_policy = if let Some(policy) = store.config.policy.get(package.name) {
         criteria_mapper.criteria_from_list(&policy.criteria)
     } else {
         criteria_mapper.no_criteria()
@@ -1756,9 +1746,7 @@ fn resolve_first_party<'a>(
 #[allow(clippy::too_many_arguments, clippy::ptr_arg)]
 fn resolve_dev<'a>(
     _metadata: &'a Metadata,
-    config: &'a ConfigFile,
-    _audits: &'a AuditsFile,
-    _imports: &'a ImportsFile,
+    store: &'a Store,
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
@@ -1771,7 +1759,8 @@ fn resolve_dev<'a>(
     let package = &graph.nodes[pkgidx];
 
     // Get custom policies for our dependencies
-    let dep_criteria = config
+    let dep_criteria = store
+        .config
         .policy
         .get(package.name)
         .map(|policy| {
@@ -1829,7 +1818,7 @@ fn resolve_dev<'a>(
     // results[pkgidx].validated_criteria = validated_criteria;
 
     // Now check that we pass our own policy
-    let own_policy = if let Some(policy) = config.policy.get(package.name) {
+    let own_policy = if let Some(policy) = store.config.policy.get(package.name) {
         criteria_mapper.criteria_from_list(&policy.dev_criteria)
     } else {
         criteria_mapper.no_criteria()
