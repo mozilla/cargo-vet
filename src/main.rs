@@ -177,9 +177,17 @@ enum Commands {
     #[clap(disable_version_flag = true)]
     Diff(DiffArgs),
 
-    /// Mark `$package $version` as reviewed with `$message`
+    /// Mark `$package $version` as reviewed.
     #[clap(disable_version_flag = true)]
     Certify(CertifyArgs),
+
+    /// Mark `$package $version` as unaudited.
+    #[clap(disable_version_flag = true)]
+    AddUnaudited(AddUnauditedArgs),
+
+    /// Mark `$package $version` as forbidden.
+    #[clap(disable_version_flag = true)]
+    AddForbidden(AddForbiddenArgs),
 
     /// Suggest some low-hanging fruit to review
     #[clap(disable_version_flag = true)]
@@ -209,24 +217,100 @@ struct InitArgs {}
 /// Fetches the crate to a temp location and pushd's to it
 #[derive(clap::Args)]
 struct InspectArgs {
+    /// The package to inspect
     package: String,
+    /// The version to inspect
     version: String,
 }
 
 /// Emits a diff of the two versions
 #[derive(clap::Args)]
 struct DiffArgs {
+    /// The package to diff
     package: String,
+    /// The base version to diff
     version1: String,
+    /// The target version to diff
     version2: String,
+}
+
+/// Certifies a package as audited
+#[derive(clap::Args)]
+struct CertifyArgs {
+    /// The package to certify as audited
+    package: String,
+    /// The version to certify as audited
+    version1: String,
+    /// If present, instead certify a diff from version1->version2
+    version2: Option<String>,
+    /// The criteria to certify for this audit
+    ///
+    /// If not provided, we will prompt you for this information.
+    #[clap(long)]
+    criteria: Vec<String>,
+    /// The dependency-criteria to require for this audit to be valid
+    ///
+    /// If not provided, we will still implicitly require dependencies to satisfy `criteria`.
+    #[clap(long)]
+    dependency_criteria: Vec<String>,
+    /// Who to name as the auditor
+    ///
+    /// If not provided, we will collect this information from the local git.
+    #[clap(long)]
+    who: Option<String>,
+    /// A free-form string to include with the new audit entry
+    ///
+    /// If not provided, there will be no notes.
+    #[clap(long)]
+    notes: Option<String>,
+}
+
+/// Forbids the given version
+#[derive(clap::Args)]
+struct AddForbiddenArgs {
+    /// The package to forbid
+    package: String,
+    /// The versions to forbid
+    version1: String,
+    /// (???) The criteria to be forbidden (???)
+    ///
+    /// If not provided, we will prompt you for this information(?)
+    #[clap(long)]
+    criteria: Vec<String>,
+    /// Who to name as the auditor
+    ///
+    /// If not provided, we will collect this information from the local git.
+    #[clap(long)]
+    who: Option<String>,
+    /// A free-form string to include with the new forbid entry
+    ///
+    /// If not provided, there will be no notes.
+    #[clap(long)]
+    notes: Option<String>,
 }
 
 /// Cerifies the given version
 #[derive(clap::Args)]
-struct CertifyArgs {
+struct AddUnauditedArgs {
+    /// The package to mark as unaudited (trusted)
     package: String,
+    /// The version to mark as unaudited
     version1: String,
-    version2: Option<String>,
+    /// The criteria to assume (trust)
+    ///
+    /// If not provided, we will prompt you for this information.
+    #[clap(long)]
+    criteria: Vec<String>,
+    /// Who to name as the auditor
+    ///
+    /// If not provided, we will collect this information from the local git.
+    #[clap(long)]
+    who: Option<String>,
+    /// A free-form string to include with the new forbid entry
+    ///
+    /// If not provided, there will be no notes.
+    #[clap(long)]
+    notes: Option<String>,
 }
 
 #[derive(clap::Args)]
