@@ -67,6 +67,12 @@ struct Cli {
     #[clap(long)]
     locked: bool,
 
+    /// Do not modify or lock the store (supply-chain) directory
+    ///
+    /// This is primarily intended for testing and should not be used without good reason.
+    #[clap(long)]
+    readonly_lockless: bool,
+
     /// How verbose logging should be (log level)
     #[clap(long, arg_enum)]
     #[clap(default_value_t = Verbose::Warn)]
@@ -409,6 +415,7 @@ impl Cli {
             workspace: Workspace::default(),
             features: Features::default(),
             locked: false,
+            readonly_lockless: true,
             verbose: Verbose::Off,
             output_file: None,
             output_format: OutputFormat::Human,
@@ -1776,15 +1783,25 @@ impl Store {
     pub fn acquire(cfg: &Config) -> Result<Self, VetError> {
         let root = cfg.metacfg.store_path().to_owned();
         // Before we do anything, acquire the lockfile to get exclusive access
-        let lock = FileLock::acquire(root.join(STORE_LOCKFILE))?;
+        let lock = if cfg.cli.readonly_lockless {
+            None
+        } else {
+            Some(FileLock::acquire(root.join(STORE_LOCKFILE))?)
+        };
 
         let config = load_config(&root)?;
         let audits = load_audits(&root)?;
         let imports = load_imports(&root)?;
 
+        let root = if cfg.cli.readonly_lockless {
+            None
+        } else {
+            Some(root)
+        };
+
         let mut store = Self {
-            _lock: Some(lock),
-            root: Some(root),
+            _lock: lock,
+            root,
 
             config,
             audits,

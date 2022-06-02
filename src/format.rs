@@ -112,10 +112,10 @@ pub struct CriteriaEntry {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct AuditEntry {
     pub who: Option<String>,
+    pub notes: Option<String>,
     pub criteria: String,
     #[serde(flatten)]
     pub kind: AuditKind,
-    pub notes: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

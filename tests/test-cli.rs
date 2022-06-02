@@ -65,8 +65,8 @@ fn test_long_help() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     assert!(output.status.success(), "{}", stderr);
-    insta::assert_snapshot!("long-help", stdout);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("long-help", stdout);
 }
 
 #[test]
@@ -84,8 +84,8 @@ fn test_short_help() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     assert!(output.status.success(), "{}", stderr);
-    insta::assert_snapshot!("short-help", stdout);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("short-help", stdout);
 }
 
 #[test]
@@ -103,8 +103,8 @@ fn test_markdown_help() {
     let stderr = String::from_utf8(output.stderr).unwrap();
 
     assert!(output.status.success(), "{}", stderr);
-    insta::assert_snapshot!("markdown-help", stdout);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("markdown-help", stdout);
 }
 
 #[test]
@@ -116,6 +116,7 @@ fn test_project() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
+        .arg("--readonly-lockless")
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--diff-cache")
@@ -128,9 +129,9 @@ fn test_project() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    insta::assert_snapshot!("test-project", stdout);
     assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("test-project", stdout);
 }
 
 #[test]
@@ -142,6 +143,7 @@ fn test_project_json() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
+        .arg("--readonly-lockless")
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--diff-cache")
@@ -155,9 +157,9 @@ fn test_project_json() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    insta::assert_snapshot!("test-project-json", stdout);
     assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("test-project-json", stdout);
 }
 
 #[test]
@@ -169,6 +171,7 @@ fn test_project_suggest() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
+        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -182,9 +185,9 @@ fn test_project_suggest() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    insta::assert_snapshot!("test-project-suggest", stdout);
     assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("test-project-suggest", stdout);
 }
 
 #[test]
@@ -196,6 +199,7 @@ fn test_project_suggest_json() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
+        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -210,9 +214,9 @@ fn test_project_suggest_json() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    insta::assert_snapshot!("test-project-suggest-json", stdout);
     assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("test-project-suggest-json", stdout);
 }
 
 #[test]
@@ -224,6 +228,7 @@ fn test_project_suggest_deeper() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
+        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -238,9 +243,9 @@ fn test_project_suggest_deeper() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    insta::assert_snapshot!("test-project-suggest-deeper", stdout);
     assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("test-project-suggest-deeper", stdout);
 }
 
 #[test]
@@ -252,6 +257,7 @@ fn test_project_suggest_deeper_json() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
+        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -267,9 +273,9 @@ fn test_project_suggest_deeper_json() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    insta::assert_snapshot!("test-project-suggest-deeper-json", stdout);
     assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("test-project-suggest-deeper-json", stdout);
 }
 
 #[test]
@@ -281,6 +287,7 @@ fn test_project_dump_graph_full_json() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
+        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -296,9 +303,9 @@ fn test_project_dump_graph_full_json() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    insta::assert_snapshot!("test-project-dump-graph-full-json", stdout);
     assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("test-project-dump-graph-full-json", stdout);
 }
 
 #[test]
@@ -310,6 +317,7 @@ fn test_project_dump_graph_full() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
+        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -324,7 +332,7 @@ fn test_project_dump_graph_full() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
 
-    insta::assert_snapshot!("test-project-dump-graph-full", stdout);
     assert!(output.status.success(), "{}", stderr);
     assert_eq!(stderr, "");
+    insta::assert_snapshot!("test-project-dump-graph-full", stdout);
 }
