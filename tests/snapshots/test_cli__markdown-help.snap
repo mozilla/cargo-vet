@@ -54,8 +54,6 @@ The resulting graph is computed as follows:
 This means that any non-workspace package that becomes "orphaned" by the filters will be
 implicitly discarded even if it passes the filters.
 
-Syntax: a comma-separated list of filters to apply.
-
 Possible filters:
 
 * `include($query)`: only include packages that match this filter
@@ -129,8 +127,8 @@ Process all packages in the workspace
 
 ### SUBCOMMANDS
 * [accept-criteria-change](#cargo-vet-accept-criteria-change): Accept changes that a foreign audits.toml made to their criteria
-* [add-forbidden](#cargo-vet-add-forbidden): Mark `$package $version` as forbidden
 * [add-unaudited](#cargo-vet-add-unaudited): Mark `$package $version` as unaudited
+* [add-violation](#cargo-vet-add-violation): Mark `$package $version` as a violation of policy
 * [certify](#cargo-vet-certify): Mark `$package $version` as reviewed
 * [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
 * [dump-graph](#cargo-vet-dump-graph): Print a mermaid-js visualization of the cargo build graph as understood by cargo-vet
@@ -234,22 +232,22 @@ that by making us assume the dependencies all need the same criteria as the pare
 Print help information
 
 <br><br><br>
-## cargo vet add-forbidden 
-Mark `$package $version` as forbidden
+## cargo vet add-violation 
+Mark `$package $version` as a violation of policy
 
-### cargo vet add-forbidden USAGE
+### cargo vet add-violation USAGE
 ```
-cargo vet add-forbidden [OPTIONS] <PACKAGE> <VERSION1>
+cargo vet add-violation [OPTIONS] <PACKAGE> <VERSIONS>
 ```
 
-### cargo vet add-forbidden ARGS
+### cargo vet add-violation ARGS
 #### `<PACKAGE>`
 The package to forbid
 
-#### `<VERSION1>`
+#### `<VERSIONS>`
 The versions to forbid
 
-### cargo vet add-forbidden OPTIONS
+### cargo vet add-violation OPTIONS
 #### `--criteria <CRITERIA>`
 (???) The criteria to be forbidden (???)
 
@@ -274,14 +272,14 @@ Mark `$package $version` as unaudited
 
 ### cargo vet add-unaudited USAGE
 ```
-cargo vet add-unaudited [OPTIONS] <PACKAGE> <VERSION1>
+cargo vet add-unaudited [OPTIONS] <PACKAGE> <VERSION>
 ```
 
 ### cargo vet add-unaudited ARGS
 #### `<PACKAGE>`
 The package to mark as unaudited (trusted)
 
-#### `<VERSION1>`
+#### `<VERSION>`
 The version to mark as unaudited
 
 ### cargo vet add-unaudited OPTIONS
@@ -290,18 +288,21 @@ The criteria to assume (trust)
 
 If not provided, we will prompt you for this information.
 
+#### `--dependency-criteria <DEPENDENCY_CRITERIA>`
+The dependency-criteria to require for this unaudited entry to be valid
+
+If not provided, we will still implicitly require dependencies to satisfy `criteria`.
+
 #### `-h, --help`
 Print help information
+
+#### `--no-suggest`
+Suppress suggesting this unaudited entry
 
 #### `--notes <NOTES>`
 A free-form string to include with the new forbid entry
 
 If not provided, there will be no notes.
-
-#### `--who <WHO>`
-Who to name as the auditor
-
-If not provided, we will collect this information from the local git.
 
 <br><br><br>
 ## cargo vet certify 
@@ -323,6 +324,9 @@ The version to certify as audited
 If present, instead certify a diff from version1->version2
 
 ### cargo vet certify OPTIONS
+#### `--accept-all`
+Accept all criteria without an interactive prompt
+
 #### `--criteria <CRITERIA>`
 The criteria to certify for this audit
 
