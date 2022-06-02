@@ -9,8 +9,6 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use crate::VetError;
-
 pub type StableMap<K, V> = linked_hash_map::LinkedHashMap<K, V>;
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -30,10 +28,10 @@ pub struct MetaConfigInstance {
     // (not sure whether this versions the format, or semantics, or...
     // for now assuming this species global semantics of some kind.
     pub version: Option<u64>,
-    pub store: Option<Store>,
+    pub store: Option<StoreInfo>,
 }
 #[derive(serde::Deserialize)]
-pub struct Store {
+pub struct StoreInfo {
     pub path: Option<PathBuf>,
 }
 
@@ -93,22 +91,6 @@ pub struct AuditsFile {
     pub audits: AuditedDependencies,
 }
 
-impl AuditsFile {
-    pub fn validate(&self) -> Result<(), VetError> {
-        // TODO
-        // * check that each CriteriaEntry has 'description' or 'description_url'
-        // * check that all criteria are valid in:
-        //   * CriteriaEntry::implies
-        //   * AuditEntry::criteria
-        //   * DependencyCriteria
-        // * check that all 'audits' entries are well-formed
-        // * check that all package names are valid (with crates.io...?)
-        // * check that all reviews have a 'who' (currently an Option to stub it out)
-        // * catch no-op deltas?
-        Ok(())
-    }
-}
-
 /// Information on a Criteria
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct CriteriaEntry {
@@ -130,10 +112,10 @@ pub struct CriteriaEntry {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct AuditEntry {
     pub who: Option<String>,
+    pub notes: Option<String>,
     pub criteria: String,
     #[serde(flatten)]
     pub kind: AuditKind,
-    pub notes: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -251,17 +233,6 @@ pub struct ConfigFile {
     #[serde(skip_serializing_if = "StableMap::is_empty")]
     #[serde(default)]
     pub unaudited: StableMap<String, Vec<UnauditedDependency>>,
-}
-
-impl ConfigFile {
-    pub fn validate(&self) -> Result<(), VetError> {
-        // TODO
-        //
-        // * check that policy entries are only first-party
-        // * check that unaudited entries are for things that exist?
-        // * check that lockfile and imports aren't desync'd (catch new/removed import urls)
-        Ok(())
-    }
 }
 
 pub static SAFE_TO_DEPLOY: &str = "safe-to-deploy";
@@ -461,13 +432,6 @@ fn is_default_unaudited_suggest(val: &bool) -> bool {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ImportsFile {
     pub audits: StableMap<String, AuditsFile>,
-}
-
-impl ImportsFile {
-    pub fn validate(&self) -> Result<(), VetError> {
-        // TODO
-        Ok(())
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

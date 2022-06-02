@@ -48,6 +48,9 @@ OPTIONS:
     -p, --package <SPEC>
             Package to process (see `cargo help pkgid`)
 
+        --readonly-lockless
+            Do not modify or lock the store (supply-chain) directory
+
     -V, --version
             Print version information
 

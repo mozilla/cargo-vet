@@ -26,7 +26,7 @@ use tar::Archive;
 
 use crate::format::{
     AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
-    StableMap, Store, UnauditedDependency,
+    StableMap, StoreInfo, UnauditedDependency,
 };
 use crate::resolver::{Conclusion, SortedMap, SuggestItem};
 
@@ -66,6 +66,12 @@ struct Cli {
     /// Do not pull in new "audits" and try to avoid the network
     #[clap(long)]
     locked: bool,
+
+    /// Do not modify or lock the store (supply-chain) directory
+    ///
+    /// This is primarily intended for testing and should not be used without good reason.
+    #[clap(long)]
+    readonly_lockless: bool,
 
     /// How verbose logging should be (log level)
     #[clap(long, arg_enum)]
@@ -409,6 +415,7 @@ impl Cli {
             workspace: Workspace::default(),
             features: Features::default(),
             locked: false,
+            readonly_lockless: true,
             verbose: Verbose::Off,
             output_file: None,
             output_format: OutputFormat::Human,
@@ -613,6 +620,7 @@ static TEMP_DIR_SUFFIX: &str = "cargo-vet-checkout";
 static TEMP_DIFF_CACHE: &str = "diff-cache.toml";
 static TEMP_EMPTY_PACKAGE: &str = "empty";
 static TEMP_REGISTRY_SRC: &str = "packages";
+static TEMP_LOCKFILE: &str = "lockfile";
 
 // Various cargo values
 static CARGO_ENV: &str = "CARGO";
@@ -631,6 +639,7 @@ static WORKSPACE_VET_CONFIG: &str = "vet";
 static AUDITS_TOML: &str = "audits.toml";
 static CONFIG_TOML: &str = "config.toml";
 static IMPORTS_LOCK: &str = "imports.lock";
+static STORE_LOCKFILE: &str = "lockfile";
 
 pub trait PackageExt {
     fn is_third_party(&self) -> bool;
@@ -814,7 +823,7 @@ fn main() -> Result<(), VetError> {
 
     let default_config = MetaConfigInstance {
         version: Some(1),
-        store: Some(Store {
+        store: Some(StoreInfo {
             path: Some(
                 metadata
                     .workspace_root
@@ -913,6 +922,8 @@ fn main() -> Result<(), VetError> {
 
 fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<(), VetError> {
     // Initialize vet
+
+    // TODO: use Store::create or something else to make this transactional?
 
     // Create store_path
     // - audits.toml (empty, sample criteria)
@@ -1025,9 +1036,7 @@ fn cmd_inspect(
 
 fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
     // Certify that you have reviewed a crate's source for some version / delta
-    let store_path = cfg.metacfg.store_path();
-    let mut audits = load_audits(store_path)?;
-    let config = load_config(store_path)?;
+    let mut store = Store::acquire(cfg)?;
 
     let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
         // TODO: look at the current audits to infer this? prompt?
@@ -1071,7 +1080,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
 
     let mut criteria = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
-        vec![config.default_criteria]
+        vec![store.config.default_criteria.clone()]
     } else {
         sub_args.criteria.clone()
     };
@@ -1082,7 +1091,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     }
     let criteria = criteria.swap_remove(0);
 
-    let eula = if let Some(eula) = eula_for_criteria(&audits, &criteria) {
+    let eula = if let Some(eula) = eula_for_criteria(&store.audits, &criteria) {
         eula
     } else {
         error!("couldn't get description of criteria");
@@ -1134,12 +1143,13 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         notes,
     };
 
-    audits
+    store
+        .audits
         .audits
         .entry(sub_args.package.clone())
         .or_insert(vec![])
         .push(new_entry);
-    store_audits(store_path, audits)?;
+    store.commit()?;
 
     Ok(())
 }
@@ -1149,10 +1159,8 @@ fn cmd_add_violation(
     cfg: &Config,
     sub_args: &AddViolationArgs,
 ) -> Result<(), VetError> {
-    // Certify that you have reviewed a crate's source for some version / delta
-    let store_path = cfg.metacfg.store_path();
-    let mut audits = load_audits(store_path)?;
-    let config = load_config(store_path)?;
+    // Mark a package as a violation
+    let mut store = Store::acquire(cfg)?;
 
     let kind = AuditKind::Violation {
         violation: sub_args.versions.clone(),
@@ -1170,7 +1178,7 @@ fn cmd_add_violation(
 
     let mut criteria = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
-        vec![config.default_criteria]
+        vec![store.config.default_criteria.clone()]
     } else {
         sub_args.criteria.clone()
     };
@@ -1195,12 +1203,14 @@ fn cmd_add_violation(
         notes,
     };
 
-    audits
+    store
+        .audits
         .audits
         .entry(sub_args.package.clone())
         .or_insert(vec![])
         .push(new_entry);
-    store_audits(store_path, audits)?;
+
+    store.commit()?;
 
     Ok(())
 }
@@ -1210,9 +1220,8 @@ fn cmd_add_unaudited(
     cfg: &Config,
     sub_args: &AddUnauditedArgs,
 ) -> Result<(), VetError> {
-    // Certify that you have reviewed a crate's source for some version / delta
-    let store_path = cfg.metacfg.store_path();
-    let mut config = load_config(store_path)?;
+    // Add an unaudited entry
+    let mut store = Store::acquire(cfg)?;
 
     let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
         // TODO: look at the current audits to infer this? prompt?
@@ -1232,7 +1241,7 @@ fn cmd_add_unaudited(
 
     let mut criteria = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
-        vec![config.default_criteria.clone()]
+        vec![store.config.default_criteria.clone()]
     } else {
         sub_args.criteria.clone()
     };
@@ -1260,12 +1269,14 @@ fn cmd_add_unaudited(
         suggest,
     };
 
-    config
+    store
+        .config
         .unaudited
         .entry(sub_args.package.clone())
         .or_insert(vec![])
         .push(new_entry);
-    store_config(store_path, config)?;
+
+    store.commit()?;
 
     Ok(())
 }
@@ -1273,24 +1284,10 @@ fn cmd_add_unaudited(
 fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
-
-    let store_path = cfg.metacfg.store_path();
-
-    let audits = load_audits(store_path)?;
-    let mut config = load_config(store_path)?;
-
-    // FIXME: We should probably check in --locked vets if the config has changed its
-    // imports and warn if the imports.lock is inconsistent with that..?
-    //
-    // TODO: error out if the foreign audits changed their criteria (compare to imports.lock)
-    let imports = if !cfg.cli.locked {
-        fetch_foreign_audits(out, cfg, &config)?
-    } else {
-        load_imports(store_path)?
-    };
+    let mut store = Store::acquire(cfg)?;
 
     // Delete all unaudited entries except those that are suggest=false
-    for (_package, versions) in &mut config.unaudited {
+    for (_package, versions) in &mut store.config.unaudited {
         versions.retain(|e| !e.suggest);
     }
 
@@ -1298,9 +1295,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
     let report = resolver::resolve(
         &cfg.metadata,
         cfg.cli.filter_graph.as_ref(),
-        &config,
-        &audits,
-        &imports,
+        &store,
         sub_args.guess_deeper,
     );
     match cfg.cli.output_format {
@@ -1308,58 +1303,35 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
         OutputFormat::Json => report.print_json(out, cfg)?,
     }
 
+    // We were successful, commit the store
+    store.commit()?;
+
     Ok(())
 }
 
 fn cmd_regenerate_unaudited(
-    out: &mut dyn Write,
+    _out: &mut dyn Write,
     cfg: &Config,
     _sub_args: &RegenerateUnauditedArgs,
 ) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("regenerating unaudited...");
-    let store_path = cfg.metacfg.store_path();
+    let mut store = Store::acquire(cfg)?;
 
-    let audits = load_audits(store_path)?;
-    let mut config = load_config(store_path)?;
+    minimize_unaudited(cfg, &mut store)?;
 
-    // FIXME: We should probably check in --locked vets if the config has changed its
-    // imports and warn if the imports.lock is inconsistent with that..?
-    //
-    // TODO: error out if the foreign audits changed their criteria (compare to imports.lock)
-    let imports = if !cfg.cli.locked {
-        fetch_foreign_audits(out, cfg, &config)?
-    } else {
-        load_imports(store_path)?
-    };
-
-    minimize_unaudited(cfg, &mut config, &audits, &imports)?;
-
-    store_config(store_path, config)?;
-    store_imports(store_path, imports)?;
-    store_audits(store_path, audits)?;
+    // We were successful, commit the store
+    store.commit()?;
 
     Ok(())
 }
 
-pub fn minimize_unaudited(
-    cfg: &Config,
-    config: &mut ConfigFile,
-    audits: &AuditsFile,
-    imports: &ImportsFile,
-) -> Result<(), VetError> {
+pub fn minimize_unaudited(cfg: &Config, store: &mut Store) -> Result<(), VetError> {
     // Set the unaudited entries to nothing
-    let old_unaudited = mem::replace(&mut config.unaudited, StableMap::new());
+    let old_unaudited = mem::replace(&mut store.config.unaudited, StableMap::new());
 
     // Try to vet
-    let report = resolver::resolve(
-        &cfg.metadata,
-        cfg.cli.filter_graph.as_ref(),
-        config,
-        audits,
-        imports,
-        true,
-    );
+    let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), store, true);
 
     let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, false)? {
         let mut new_unaudited = StableMap::new();
@@ -1445,7 +1417,8 @@ pub fn minimize_unaudited(
         ));
     };
 
-    config.unaudited = new_unaudited;
+    // Alright there's the new unaudited
+    store.config.unaudited = new_unaudited;
 
     Ok(())
 }
@@ -1477,30 +1450,10 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
-    let store_path = cfg.metacfg.store_path();
-
-    let audits = load_audits(store_path)?;
-    let config = load_config(store_path)?;
-
-    // FIXME: We should probably check in --locked vets if the config has changed its
-    // imports and warn if the imports.lock is inconsistent with that..?
-    //
-    // TODO: error out if the foreign audits changed their criteria (compare to imports.lock)
-    let imports = if !cfg.cli.locked {
-        fetch_foreign_audits(out, cfg, &config)?
-    } else {
-        load_imports(store_path)?
-    };
+    let store = Store::acquire(cfg)?;
 
     // DO THE THING!!!!
-    let report = resolver::resolve(
-        &cfg.metadata,
-        cfg.cli.filter_graph.as_ref(),
-        &config,
-        &audits,
-        &imports,
-        false,
-    );
+    let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store, false);
     match cfg.cli.output_format {
         OutputFormat::Human => report.print_human(out, cfg)?,
         OutputFormat::Json => report.print_json(out, cfg)?,
@@ -1511,8 +1464,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         // Want a non-0 error code in this situation
         std::process::exit(-1);
     } else {
-        trace!("Saving imports.lock...");
-        store_imports(store_path, imports)?;
+        store.commit()?;
     }
 
     Ok(())
@@ -1538,13 +1490,8 @@ fn cmd_dump_graph(
 fn cmd_fmt(_out: &mut dyn Write, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), VetError> {
     // Reformat all the files (just load and store them, formatting is implict).
     trace!("formatting...");
-
-    let store_path = cfg.metacfg.store_path();
-
-    store_audits(store_path, load_audits(store_path)?)?;
-    store_config(store_path, load_config(store_path)?)?;
-    store_imports(store_path, load_imports(store_path)?)?;
-
+    let store = Store::acquire(cfg)?;
+    store.commit()?;
     Ok(())
 }
 
@@ -1556,7 +1503,7 @@ fn cmd_accept_criteria_change(
     // Accept changes that a foreign audits.toml made to their criteria.
     trace!("accepting...");
 
-    error!("TODO: unimplemented feature!");
+    error!("TODO(#68): unimplemented feature!");
 
     Ok(())
 }
@@ -1710,7 +1657,6 @@ fn load_audits(store_path: &Path) -> Result<AuditsFile, VetError> {
     // TODO: do integrity checks? (for things like criteria keys being valid)
     let path = store_path.join(AUDITS_TOML);
     let file: AuditsFile = load_toml(&path)?;
-    file.validate()?;
     Ok(file)
 }
 
@@ -1718,7 +1664,6 @@ fn load_config(store_path: &Path) -> Result<ConfigFile, VetError> {
     // TODO: do integrity checks?
     let path = store_path.join(CONFIG_TOML);
     let file: ConfigFile = load_toml(&path)?;
-    file.validate()?;
     Ok(file)
 }
 
@@ -1726,7 +1671,6 @@ fn load_imports(store_path: &Path) -> Result<ImportsFile, VetError> {
     // TODO: do integrity checks?
     let path = store_path.join(IMPORTS_LOCK);
     let file: ImportsFile = load_toml(&path)?;
-    file.validate()?;
     Ok(file)
 }
 
@@ -1774,36 +1718,222 @@ fn store_diff_cache(diff_cache_path: &Path, diff_cache: DiffCache) -> Result<(),
     Ok(())
 }
 
-pub struct Cache {
-    // FIXME: stubbed out
-    _lock: Option<()>,
+pub struct FileLock {
+    path: PathBuf,
+}
+
+impl FileLock {
+    pub fn acquire(path: impl Into<PathBuf>) -> Result<Self, VetError> {
+        // TODO: learn how to do this more robustly
+        // TODO: should we hold onto the file to avoid anyone deleting it?
+        // Or drop it right away to make it easier to cleanup if something goes wrong?
+        let path = path.into();
+        let _lock = File::options()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .with_context(|| format!("Could not acquire lockfile at {}", path.display()))?;
+
+        Ok(Self { path })
+    }
+}
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        // Try to clean up the lock
+        std::fs::remove_file(&self.path)
+            .unwrap_or_else(|_| panic!("Couldn't delete file lock!? {}", self.path.display()));
+    }
+}
+
+/// The store (typically `supply-chain/`)
+///
+/// All access to this directory should be managed by this type to avoid races.
+/// By default, modifications to this type will not be written back to the store
+/// because we don't generally want to write back any results unless everything
+/// goes perfectly.
+///
+/// To write back this value, use [`Store::commit`][].
+pub struct Store {
+    /// Repo-global lock over the store, will be None if we're mocking.
+    _lock: Option<FileLock>,
+    /// Path to the root of the store
     root: Option<PathBuf>,
+
+    // Contents of the store, eagerly loaded and already validated.
+    pub config: ConfigFile,
+    pub imports: ImportsFile,
+    pub audits: AuditsFile,
+}
+
+impl Store {
+    /// Create a brand-new store
+    pub fn create(cfg: &Config) -> Result<Self, VetError> {
+        let root = cfg.metacfg.store_path();
+        std::fs::create_dir(&root).with_context(|| {
+            format!(
+                "Couldn't create cargo-vet Store because it already exists at {}",
+                root.display()
+            )
+        })?;
+
+        // TODO: cargo vet init?
+        unimplemented!()
+    }
+
+    /// Acquire an existing store
+    pub fn acquire(cfg: &Config) -> Result<Self, VetError> {
+        let root = cfg.metacfg.store_path().to_owned();
+        // Before we do anything, acquire the lockfile to get exclusive access
+        let lock = if cfg.cli.readonly_lockless {
+            None
+        } else {
+            Some(FileLock::acquire(root.join(STORE_LOCKFILE))?)
+        };
+
+        let config = load_config(&root)?;
+        let audits = load_audits(&root)?;
+        let imports = load_imports(&root)?;
+
+        let root = if cfg.cli.readonly_lockless {
+            None
+        } else {
+            Some(root)
+        };
+
+        let mut store = Self {
+            _lock: lock,
+            root,
+
+            config,
+            audits,
+            imports,
+        };
+
+        // Check that the store isn't corrupt, and try to update it
+        store.validate()?;
+        if !cfg.cli.locked {
+            store.fetch_foreign_audits()?;
+        }
+
+        Ok(store)
+    }
+
+    /// Create a mock store
+    #[cfg(test)]
+    pub fn mock(config: ConfigFile, audits: AuditsFile, imports: ImportsFile) -> Self {
+        Self {
+            _lock: None,
+            root: None,
+
+            config,
+            imports,
+            audits,
+        }
+    }
+
+    /// Commit the store's contents back to disk
+    pub fn commit(self) -> Result<(), VetError> {
+        // TODO: make this truly transactional?
+        // (With a dir rename? Does that work with the _lock? Fine because it's already closed?)
+        if let Some(root) = self.root {
+            store_audits(&root, self.audits)?;
+            store_config(&root, self.config)?;
+            store_imports(&root, self.imports)?;
+        }
+        Ok(())
+    }
+
+    /// Validate the store's integrity
+    pub fn validate(&self) -> Result<(), VetError> {
+        // TODO(#66): implement validation
+        //
+        // * check that policy entries are only first-party
+        // * check that unaudited entries are for things that exist?
+        // * check that lockfile and imports aren't desync'd (catch new/removed import urls)
+        //
+        // * check that each CriteriaEntry has 'description' or 'description_url'
+        // * check that no one is trying to shadow builtin criteria (safe-to-run, safe-to-deploy)
+        // * check that all criteria are valid in:
+        //   * CriteriaEntry::implies
+        //   * AuditEntry::criteria
+        //   * DependencyCriteria
+        // * check that all 'audits' entries are well-formed
+        // * check that all package names are valid (with crates.io...?)
+        // * check that all reviews have a 'who' (currently an Option to stub it out)
+        // * catch no-op deltas?
+        Ok(())
+    }
+
+    /// Fetch foreign audits, only call this is we're not --locked
+    pub fn fetch_foreign_audits(&mut self) -> Result<(), VetError> {
+        let mut audits = StableMap::new();
+        for (name, import) in &self.config.imports {
+            let url = &import.url;
+            // FIXME: this should probably be async but that's a Whole Thing and these files are small.
+            let audit_txt = req::get(url).and_then(|r| r.text());
+            if let Err(e) = audit_txt {
+                return Err(eyre::eyre!("Could not load {name} @ {url} - {e}"));
+            }
+            let audit_file: Result<AuditsFile, _> = toml::from_str(&audit_txt.unwrap());
+            if let Err(e) = audit_file {
+                return Err(eyre::eyre!("Could not parse {name} @ {url} - {e}"));
+            }
+            audits.insert(name.clone(), audit_file.unwrap());
+        }
+
+        let new_imports = ImportsFile { audits };
+        // TODO(#68): error out if the criteria changed
+
+        // Accept the new imports. These will only be committed if the current command succeeds.
+        self.imports = new_imports;
+
+        // Now do one last validation to catch corrupt imports
+        self.validate()?;
+        Ok(())
+    }
+}
+
+/// The cache where we store globally shared artifacts like fetched packages and diffstats
+///
+/// All access to this directory should be managed by this type to avoid races.
+pub struct Cache {
+    /// System-global lock over the cache, will be None if we're mocking.
+    _lock: Option<FileLock>,
+    /// Path to the root of the cache
+    root: Option<PathBuf>,
+    /// Cargo's crates.io package registry (in CARGO_HOME) for us to query opportunistically
     cargo_registry: Option<CargoRegistry>,
+    /// Path to the DiffCache (for when we want to save it back)
     diff_cache_path: Option<PathBuf>,
+    /// The loaded DiffCache, will be written back on Drop
     diff_cache: DiffCache,
 }
 
+/// A Registry in CARGO_HOME (usually the crates.io one)
 pub struct CargoRegistry {
+    /// The base path all registries share
     base_dir: PathBuf,
+    /// The name of the registry
     registry: OsString,
 }
 
 impl CargoRegistry {
+    /// Get the src dir of this registry (unpacked fetches)
     pub fn src(&self) -> PathBuf {
         self.base_dir.join(CARGO_REGISTRY_SRC).join(&self.registry)
     }
+    /// Get the cache dir of the registry (.crate packed fetches)
     pub fn cache(&self) -> PathBuf {
         self.base_dir
             .join(CARGO_REGISTRY_CACHE)
             .join(&self.registry)
     }
+    // Could also include the index, not reason to do that yet
 }
 
 impl Drop for Cache {
     fn drop(&mut self) {
-        if let Some(_lock) = self._lock {
-            // FIXME: Release the lock
-        }
         if let Some(diff_cache_path) = &self.diff_cache_path {
             // Write back the diff_cache
             store_diff_cache(
@@ -1812,10 +1942,12 @@ impl Drop for Cache {
             )
             .unwrap();
         }
+        // `_lock: FileLock` implicitly released here
     }
 }
 
 impl Cache {
+    /// Acquire the cache
     pub fn acquire(cfg: &PartialConfig) -> Result<Self, VetError> {
         if cfg.cargo_home.is_none() {
             // If the registry_src isn't set, then assume we're running in tests and mocked.
@@ -1838,9 +1970,7 @@ impl Cache {
             fs::create_dir_all(&root)?;
         }
         // Now acquire the lockfile
-        let lock: () = {
-            // FIXME: implement some kind of lockfile mechanism to avoid concurrent modification
-        };
+        let lock = FileLock::acquire(root.join(TEMP_LOCKFILE))?;
 
         // Make sure everything else exists
         if !empty.exists() {
@@ -2066,9 +2196,9 @@ impl Cache {
             if !entry_path.starts_with(prefix) {
                 return Err(eyre::eyre!(
                     "invalid tarball downloaded, contains \
-                        a file at {:?} which isn't under {:?}",
-                    entry_path,
-                    prefix
+                        a file at {} which isn't under {}",
+                    entry_path.display(),
+                    prefix.to_string_lossy()
                 ));
             }
             // Unpacking failed
@@ -2236,33 +2366,6 @@ fn diffstat_crate(version1: &Path, version2: &Path) -> Result<DiffStat, VetError
         raw: diffstat,
         count,
     })
-}
-
-fn fetch_foreign_audits(
-    _out: &mut dyn Write,
-    _cfg: &Config,
-    config: &ConfigFile,
-) -> Result<ImportsFile, VetError> {
-    // Download all the foreign audits.toml files that we trust
-    let mut audits = StableMap::new();
-    for (name, import) in &config.imports {
-        let url = &import.url;
-        // FIXME: this should probably be async but that's a Whole Thing and these files are small.
-        let audit_txt = req::get(url).and_then(|r| r.text());
-        if let Err(e) = audit_txt {
-            return Err(eyre::eyre!("Could not load {name} @ {url} - {e}"));
-        }
-        let audit_file: Result<AuditsFile, _> = toml::from_str(&audit_txt.unwrap());
-        if let Err(e) = audit_file {
-            return Err(eyre::eyre!("Could not parse {name} @ {url} - {e}"));
-        }
-
-        // TODO: do integrity checks? (share code with load_audits/load_imports here...)
-
-        audits.insert(name.clone(), audit_file.unwrap());
-    }
-
-    Ok(ImportsFile { audits })
 }
 
 struct UserInfo {

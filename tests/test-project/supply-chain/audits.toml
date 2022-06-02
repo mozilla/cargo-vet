@@ -3,7 +3,7 @@
 
 [criteria.audited]
 description = "super audited"
-implies = ["safe-to-deploy"]
+implies = "safe-to-deploy"
 
 [criteria.fuzzed]
 description = "fuzzed"
@@ -46,7 +46,10 @@ version = "1.1.0"
 notes = "test for custom criteria (low-grade and high-grade)"
 criteria = "safe-to-deploy"
 version = "3.1.8"
-dependency-criteria = { atty = ["safe-to-run"], bitflags = ["audited", "fuzzed"] }
+
+[audits.clap.dependency-criteria]
+atty = ["safe-to-run"]
+bitflags = ["audited", "fuzzed"]
 
 [[audits.atty]]
 criteria = "safe-to-run"
