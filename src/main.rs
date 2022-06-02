@@ -63,29 +63,29 @@ struct Cli {
     features: clap_cargo::Features,
 
     // Top-level flags
-    /// Do not pull in new "audits".
+    /// Do not pull in new "audits" and try to avoid the network
     #[clap(long)]
     locked: bool,
 
-    /// How verbose logging should be (log level).
+    /// How verbose logging should be (log level)
     #[clap(long, arg_enum)]
     #[clap(default_value_t = Verbose::Warn)]
     verbose: Verbose,
 
-    /// Instead of stdout, write output to this file.
+    /// Instead of stdout, write output to this file
     #[clap(long)]
     output_file: Option<PathBuf>,
 
-    /// Instead of stderr, write logs to this file (only used after successful CLI parsing).
+    /// Instead of stderr, write logs to this file (only used after successful CLI parsing)
     #[clap(long)]
     log_file: Option<PathBuf>,
 
-    /// The format of the output.
+    /// The format of the output
     #[clap(long, arg_enum)]
     #[clap(default_value_t = OutputFormat::Human)]
     output_format: OutputFormat,
 
-    /// Use the following path as the diff-cache.
+    /// Use the following path as the diff-cache
     ///
     /// The diff-cache stores the summary results used by vet's suggestion machinery.
     /// This is automatically managed in vet's tempdir, but if you want to manually store
@@ -95,7 +95,7 @@ struct Cli {
     #[clap(long)]
     diff_cache: Option<PathBuf>,
 
-    /// Filter out different parts of the build graph and pretend that's the true graph.
+    /// Filter out different parts of the build graph and pretend that's the true graph
     ///
     /// Example: `--filter-graph="exclude(any(eq(is_dev_only(true)),eq(name(serde_derive))))"`
     ///
@@ -104,15 +104,11 @@ struct Cli {
     /// input that can be added to vet's test suite.
     ///
     ///
-    ///
     /// The resulting graph is computed as follows:
     ///
     /// 1. First compute the original graph
-    ///
     /// 2. Then apply the filters to find the new set of nodes
-    ///
     /// 3. Create a new empty graph
-    ///
     /// 4. For each workspace member that still exists, recursively add it and its dependencies
     ///
     /// This means that any non-workspace package that becomes "orphaned" by the filters will
@@ -121,37 +117,27 @@ struct Cli {
     /// Possible filters:
     ///
     /// * `include($query)`: only include packages that match this filter
-    ///
     /// * `exclude($query)`: exclude packages that match this filter
-    ///
     ///
     ///
     /// Possible queries:
     ///
     /// * `any($query1, $query2, ...)`: true if any of the listed queries are true
-    ///
     /// * `all($query1, $query2, ...)`: true if all of the listed queries are true
-    ///
     /// * `eq($property)`: true if the package has this property
-    ///
     /// * `neq($property)`: true if the package doesn't have this property
-    ///
     ///
     ///
     /// Possible properties:
     ///
     /// * `name($string)`: the package's name (i.e. `serde`)
-    ///
     /// * `version($version)`: the package's version (i.e. `1.2.0`)
-    ///
     /// * `is_root($bool)`: whether it's a root in the original graph (ignoring dev-deps)
-    ///
     /// * `is_workspace_member($bool)`: whether the package is a workspace-member (can be tested)
-    ///
     /// * `is_third_party($bool)`: whether the package is considered third-party by vet
-    ///
     /// * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original graph
     #[clap(long)]
+    #[clap(verbatim_doc_comment)]
     filter_graph: Option<Vec<GraphFilter>>,
 }
 
@@ -1432,6 +1418,7 @@ fn cmd_help_md(
 
     let mut fake_cli = FakeCli::command();
     let full_command = fake_cli.get_subcommands_mut().next().unwrap();
+    full_command.build();
     let mut todo = vec![full_command];
     let mut is_full_command = true;
 
@@ -1489,14 +1476,9 @@ fn cmd_help_md(
             let line = line.trim();
 
             // Usage strings get wrapped in full code blocks
-            if in_usage && line.starts_with(&subcommand_name) {
+            if in_usage && line.starts_with(pretty_app_name) {
                 writeln!(out, "```")?;
-                if is_full_command {
-                    writeln!(out, "{line}")?;
-                } else {
-                    writeln!(out, "{pretty_app_name} {line}")?;
-                }
-
+                writeln!(out, "{line}")?;
                 writeln!(out, "```")?;
                 continue;
             }
