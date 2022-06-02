@@ -690,8 +690,8 @@ impl<'a> DepGraph<'a> {
             match query {
                 All(queries) => queries.iter().all(|q| matches_query(package, q)),
                 Any(queries) => queries.iter().any(|q| matches_query(package, q)),
-                Eq(property) => matches_property(package, property),
-                Neq(property) => !matches_property(package, property),
+                Not(query) => !matches_query(package, query),
+                Prop(property) => matches_property(package, property),
             }
         }
         fn matches_property(package: &PackageNode, property: &GraphFilterProperty) -> bool {

@@ -9,7 +9,7 @@ use std::str::FromStr;
 use std::{fs, mem};
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
-use cargo_metadata::{Metadata, Package, Version};
+use cargo_metadata::{Metadata, Package, Version, VersionReq};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
 use console::{style, Term};
 use eyre::Context;
@@ -63,29 +63,29 @@ struct Cli {
     features: clap_cargo::Features,
 
     // Top-level flags
-    /// Do not pull in new "audits".
+    /// Do not pull in new "audits" and try to avoid the network
     #[clap(long)]
     locked: bool,
 
-    /// How verbose logging should be (log level).
+    /// How verbose logging should be (log level)
     #[clap(long, arg_enum)]
     #[clap(default_value_t = Verbose::Warn)]
     verbose: Verbose,
 
-    /// Instead of stdout, write output to this file.
+    /// Instead of stdout, write output to this file
     #[clap(long)]
     output_file: Option<PathBuf>,
 
-    /// Instead of stderr, write logs to this file (only used after successful CLI parsing).
+    /// Instead of stderr, write logs to this file (only used after successful CLI parsing)
     #[clap(long)]
     log_file: Option<PathBuf>,
 
-    /// The format of the output.
+    /// The format of the output
     #[clap(long, arg_enum)]
     #[clap(default_value_t = OutputFormat::Human)]
     output_format: OutputFormat,
 
-    /// Use the following path as the diff-cache.
+    /// Use the following path as the diff-cache
     ///
     /// The diff-cache stores the summary results used by vet's suggestion machinery.
     /// This is automatically managed in vet's tempdir, but if you want to manually store
@@ -95,7 +95,7 @@ struct Cli {
     #[clap(long)]
     diff_cache: Option<PathBuf>,
 
-    /// Filter out different parts of the build graph and pretend that's the true graph.
+    /// Filter out different parts of the build graph and pretend that's the true graph
     ///
     /// Example: `--filter-graph="exclude(any(eq(is_dev_only(true)),eq(name(serde_derive))))"`
     ///
@@ -104,59 +104,41 @@ struct Cli {
     /// input that can be added to vet's test suite.
     ///
     ///
-    ///
     /// The resulting graph is computed as follows:
     ///
     /// 1. First compute the original graph
-    ///
     /// 2. Then apply the filters to find the new set of nodes
-    ///
     /// 3. Create a new empty graph
-    ///
     /// 4. For each workspace member that still exists, recursively add it and its dependencies
     ///
     /// This means that any non-workspace package that becomes "orphaned" by the filters will
     /// be implicitly discarded even if it passes the filters.
     ///
-    ///
-    /// Syntax: a comma-separated list of filters to apply.
-    ///
-    ///
     /// Possible filters:
     ///
     /// * `include($query)`: only include packages that match this filter
-    ///
     /// * `exclude($query)`: exclude packages that match this filter
-    ///
     ///
     ///
     /// Possible queries:
     ///
     /// * `any($query1, $query2, ...)`: true if any of the listed queries are true
-    ///
     /// * `all($query1, $query2, ...)`: true if all of the listed queries are true
-    ///
-    /// * `eq($property)`: true if the package has this property
-    ///
-    /// * `neq($property)`: true if the package doesn't have this property
-    ///
+    /// * `not($query)`: true if the query is false
+    /// * `$property`: true if the package has this property
     ///
     ///
     /// Possible properties:
     ///
     /// * `name($string)`: the package's name (i.e. `serde`)
-    ///
     /// * `version($version)`: the package's version (i.e. `1.2.0`)
-    ///
     /// * `is_root($bool)`: whether it's a root in the original graph (ignoring dev-deps)
-    ///
     /// * `is_workspace_member($bool)`: whether the package is a workspace-member (can be tested)
-    ///
     /// * `is_third_party($bool)`: whether the package is considered third-party by vet
-    ///
     /// * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original graph
     #[clap(long)]
-    filter_graph: Option<String>,
+    #[clap(verbatim_doc_comment)]
+    filter_graph: Option<Vec<GraphFilter>>,
 }
 
 #[derive(Subcommand)]
@@ -177,9 +159,17 @@ enum Commands {
     #[clap(disable_version_flag = true)]
     Diff(DiffArgs),
 
-    /// Mark `$package $version` as reviewed with `$message`
+    /// Mark `$package $version` as reviewed.
     #[clap(disable_version_flag = true)]
     Certify(CertifyArgs),
+
+    /// Mark `$package $version` as unaudited.
+    #[clap(disable_version_flag = true)]
+    AddUnaudited(AddUnauditedArgs),
+
+    /// Mark `$package $version` as a violation of policy.
+    #[clap(disable_version_flag = true)]
+    AddViolation(AddViolationArgs),
 
     /// Suggest some low-hanging fruit to review
     #[clap(disable_version_flag = true)]
@@ -209,24 +199,106 @@ struct InitArgs {}
 /// Fetches the crate to a temp location and pushd's to it
 #[derive(clap::Args)]
 struct InspectArgs {
+    /// The package to inspect
     package: String,
-    version: String,
+    /// The version to inspect
+    version: Version,
 }
 
 /// Emits a diff of the two versions
 #[derive(clap::Args)]
 struct DiffArgs {
+    /// The package to diff
     package: String,
-    version1: String,
-    version2: String,
+    /// The base version to diff
+    version1: Version,
+    /// The target version to diff
+    version2: Version,
+}
+
+/// Certifies a package as audited
+#[derive(clap::Args)]
+struct CertifyArgs {
+    /// The package to certify as audited
+    package: String,
+    /// The version to certify as audited
+    version1: Version,
+    /// If present, instead certify a diff from version1->version2
+    version2: Option<Version>,
+    /// The criteria to certify for this audit
+    ///
+    /// If not provided, we will prompt you for this information.
+    #[clap(long)]
+    criteria: Vec<String>,
+    /// The dependency-criteria to require for this audit to be valid
+    ///
+    /// If not provided, we will still implicitly require dependencies to satisfy `criteria`.
+    #[clap(long)]
+    dependency_criteria: Vec<DependencyCriteriaArg>,
+    /// Who to name as the auditor
+    ///
+    /// If not provided, we will collect this information from the local git.
+    #[clap(long)]
+    who: Option<String>,
+    /// A free-form string to include with the new audit entry
+    ///
+    /// If not provided, there will be no notes.
+    #[clap(long)]
+    notes: Option<String>,
+    /// Accept all criteria without an interactive prompt
+    #[clap(long)]
+    accept_all: bool,
+}
+
+/// Forbids the given version
+#[derive(clap::Args)]
+struct AddViolationArgs {
+    /// The package to forbid
+    package: String,
+    /// The versions to forbid
+    versions: VersionReq,
+    /// (???) The criteria to be forbidden (???)
+    ///
+    /// If not provided, we will prompt you for this information(?)
+    #[clap(long)]
+    criteria: Vec<String>,
+    /// Who to name as the auditor
+    ///
+    /// If not provided, we will collect this information from the local git.
+    #[clap(long)]
+    who: Option<String>,
+    /// A free-form string to include with the new forbid entry
+    ///
+    /// If not provided, there will be no notes.
+    #[clap(long)]
+    notes: Option<String>,
 }
 
 /// Cerifies the given version
 #[derive(clap::Args)]
-struct CertifyArgs {
+struct AddUnauditedArgs {
+    /// The package to mark as unaudited (trusted)
     package: String,
-    version1: String,
-    version2: Option<String>,
+    /// The version to mark as unaudited
+    version: Version,
+    /// The criteria to assume (trust)
+    ///
+    /// If not provided, we will prompt you for this information.
+    #[clap(long)]
+    criteria: Vec<String>,
+    /// The dependency-criteria to require for this unaudited entry to be valid
+    ///
+    /// If not provided, we will still implicitly require dependencies to satisfy `criteria`.
+    #[clap(long)]
+    dependency_criteria: Vec<DependencyCriteriaArg>,
+    /// A free-form string to include with the new forbid entry
+    ///
+    /// If not provided, there will be no notes.
+    #[clap(long)]
+    notes: Option<String>,
+    /// Suppress suggesting this unaudited entry
+    #[clap(long)]
+    no_suggest: bool,
 }
 
 #[derive(clap::Args)]
@@ -258,7 +330,7 @@ pub struct DumpGraphArgs {
     /// The depth of the graph to print (for a large project, the full graph is a HUGE MESS).
     #[clap(long, arg_enum)]
     #[clap(default_value_t = DumpGraphDepth::FirstParty)]
-    depth: DumpGraphDepth,
+    pub depth: DumpGraphDepth,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -272,13 +344,52 @@ pub enum DumpGraphDepth {
 
 /// Logging verbosity levels
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
-enum Verbose {
+pub enum Verbose {
     Off,
     Error,
     Warn,
     Info,
     Debug,
     Trace,
+}
+
+#[derive(Clone, Debug)]
+pub struct DependencyCriteriaArg {
+    pub dependency: String,
+    pub criteria: String,
+}
+
+impl FromStr for DependencyCriteriaArg {
+    // the error must be owned as well
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use nom::{
+            bytes::complete::{is_not, tag},
+            combinator::all_consuming,
+            error::{convert_error, VerboseError},
+            sequence::tuple,
+            Finish, IResult,
+        };
+        type ParseResult<I, O> = IResult<I, O, VerboseError<I>>;
+
+        fn parse(input: &str) -> ParseResult<&str, DependencyCriteriaArg> {
+            let (rest, (dependency, _, criteria)) =
+                all_consuming(tuple((is_not(":"), tag(":"), is_not(":"))))(input)?;
+            Ok((
+                rest,
+                DependencyCriteriaArg {
+                    dependency: dependency.to_string(),
+                    criteria: criteria.to_string(),
+                },
+            ))
+        }
+
+        match parse(s).finish() {
+            Ok((_remaining, val)) => Ok(val),
+            Err(e) => Err(convert_error(s, e)),
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -336,6 +447,164 @@ impl Deref for Config {
     type Target = PartialConfig;
     fn deref(&self) -> &Self::Target {
         &self._rest
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum GraphFilter {
+    Include(GraphFilterQuery),
+    Exclude(GraphFilterQuery),
+}
+
+#[derive(Clone, Debug)]
+pub enum GraphFilterQuery {
+    Any(Vec<GraphFilterQuery>),
+    All(Vec<GraphFilterQuery>),
+    Not(Box<GraphFilterQuery>),
+    Prop(GraphFilterProperty),
+}
+
+#[derive(Clone, Debug)]
+pub enum GraphFilterProperty {
+    Name(String),
+    Version(Version),
+    IsRoot(bool),
+    IsWorkspaceMember(bool),
+    IsThirdParty(bool),
+    IsDevOnly(bool),
+}
+
+impl FromStr for GraphFilter {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use nom::{
+            branch::alt,
+            bytes::complete::{is_not, tag},
+            character::complete::multispace0,
+            combinator::{all_consuming, cut},
+            error::{convert_error, ParseError, VerboseError, VerboseErrorKind},
+            multi::separated_list1,
+            sequence::delimited,
+            Finish, IResult,
+        };
+        type ParseResult<I, O> = IResult<I, O, VerboseError<I>>;
+
+        fn parse(input: &str) -> ParseResult<&str, GraphFilter> {
+            all_consuming(alt((include_filter, exclude_filter)))(input)
+        }
+        fn include_filter(input: &str) -> ParseResult<&str, GraphFilter> {
+            let (rest, val) =
+                delimited(ws(tag("include(")), cut(filter_query), ws(tag(")")))(input)?;
+            Ok((rest, GraphFilter::Include(val)))
+        }
+        fn exclude_filter(input: &str) -> ParseResult<&str, GraphFilter> {
+            let (rest, val) =
+                delimited(ws(tag("exclude(")), cut(filter_query), ws(tag(")")))(input)?;
+            Ok((rest, GraphFilter::Exclude(val)))
+        }
+        fn filter_query(input: &str) -> ParseResult<&str, GraphFilterQuery> {
+            alt((any_query, all_query, not_query, prop_query))(input)
+        }
+        fn any_query(input: &str) -> ParseResult<&str, GraphFilterQuery> {
+            let (rest, val) = delimited(
+                ws(tag("any(")),
+                cut(separated_list1(tag(","), cut(filter_query))),
+                ws(tag(")")),
+            )(input)?;
+            Ok((rest, GraphFilterQuery::Any(val)))
+        }
+        fn all_query(input: &str) -> ParseResult<&str, GraphFilterQuery> {
+            let (rest, val) = delimited(
+                ws(tag("all(")),
+                cut(separated_list1(tag(","), cut(filter_query))),
+                ws(tag(")")),
+            )(input)?;
+            Ok((rest, GraphFilterQuery::All(val)))
+        }
+        fn not_query(input: &str) -> ParseResult<&str, GraphFilterQuery> {
+            let (rest, val) = delimited(ws(tag("not(")), cut(filter_query), ws(tag(")")))(input)?;
+            Ok((rest, GraphFilterQuery::Not(Box::new(val))))
+        }
+        fn prop_query(input: &str) -> ParseResult<&str, GraphFilterQuery> {
+            let (rest, val) = filter_property(input)?;
+            Ok((rest, GraphFilterQuery::Prop(val)))
+        }
+        fn filter_property(input: &str) -> ParseResult<&str, GraphFilterProperty> {
+            alt((
+                prop_name,
+                prop_version,
+                prop_is_root,
+                prop_is_workspace_member,
+                prop_is_third_party,
+                prop_is_dev_only,
+            ))(input)
+        }
+        fn prop_name(input: &str) -> ParseResult<&str, GraphFilterProperty> {
+            let (rest, val) =
+                delimited(ws(tag("name(")), cut(val_package_name), ws(tag(")")))(input)?;
+            Ok((rest, GraphFilterProperty::Name(val.to_string())))
+        }
+        fn prop_version(input: &str) -> ParseResult<&str, GraphFilterProperty> {
+            let (rest, val) =
+                delimited(ws(tag("version(")), cut(val_version), ws(tag(")")))(input)?;
+            Ok((rest, GraphFilterProperty::Version(val)))
+        }
+        fn prop_is_root(input: &str) -> ParseResult<&str, GraphFilterProperty> {
+            let (rest, val) = delimited(ws(tag("is_root(")), cut(val_bool), ws(tag(")")))(input)?;
+            Ok((rest, GraphFilterProperty::IsRoot(val)))
+        }
+        fn prop_is_workspace_member(input: &str) -> ParseResult<&str, GraphFilterProperty> {
+            let (rest, val) =
+                delimited(ws(tag("is_workspace_member(")), cut(val_bool), ws(tag(")")))(input)?;
+            Ok((rest, GraphFilterProperty::IsWorkspaceMember(val)))
+        }
+        fn prop_is_third_party(input: &str) -> ParseResult<&str, GraphFilterProperty> {
+            let (rest, val) =
+                delimited(ws(tag("is_third_party(")), cut(val_bool), ws(tag(")")))(input)?;
+            Ok((rest, GraphFilterProperty::IsThirdParty(val)))
+        }
+        fn prop_is_dev_only(input: &str) -> ParseResult<&str, GraphFilterProperty> {
+            let (rest, val) =
+                delimited(ws(tag("is_dev_only(")), cut(val_bool), ws(tag(")")))(input)?;
+            Ok((rest, GraphFilterProperty::IsDevOnly(val)))
+        }
+        fn val_bool(input: &str) -> ParseResult<&str, bool> {
+            alt((val_true, val_false))(input)
+        }
+        fn val_true(input: &str) -> ParseResult<&str, bool> {
+            let (rest, _val) = ws(tag("true"))(input)?;
+            Ok((rest, true))
+        }
+        fn val_false(input: &str) -> ParseResult<&str, bool> {
+            let (rest, _val) = ws(tag("false"))(input)?;
+            Ok((rest, false))
+        }
+        fn val_package_name(input: &str) -> ParseResult<&str, &str> {
+            is_not(") ")(input)
+        }
+        fn val_version(input: &str) -> ParseResult<&str, Version> {
+            let (rest, val) = is_not(") ")(input)?;
+            let val = Version::from_str(val).map_err(|_e| {
+                nom::Err::Failure(VerboseError {
+                    errors: vec![(val, VerboseErrorKind::Context("version parse error"))],
+                })
+            })?;
+            Ok((rest, val))
+        }
+        fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(
+            inner: F,
+        ) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+        where
+            F: Fn(&'a str) -> IResult<&'a str, O, E>,
+        {
+            delimited(multispace0, inner, multispace0)
+        }
+
+        match parse(s).finish() {
+            Ok((_remaining, val)) => Ok(val),
+            Err(e) => Err(convert_error(s, e)),
+        }
     }
 }
 
@@ -631,6 +900,8 @@ fn main() -> Result<(), VetError> {
         Some(Init(sub_args)) => cmd_init(out, &cfg, sub_args),
         Some(AcceptCriteriaChange(sub_args)) => cmd_accept_criteria_change(out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
+        Some(AddUnaudited(sub_args)) => cmd_add_unaudited(out, &cfg, sub_args),
+        Some(AddViolation(sub_args)) => cmd_add_violation(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
         Some(RegenerateUnaudited(sub_args)) => cmd_regenerate_unaudited(out, &cfg, sub_args),
@@ -651,7 +922,7 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
 
     let store_path = cfg.metacfg.store_path();
 
-    let (config, audits, imports) = init_files(&cfg.metadata)?;
+    let (config, audits, imports) = init_files(&cfg.metadata, cfg.cli.filter_graph.as_ref())?;
 
     // In theory we don't need `all` here, but this allows them to specify
     // the store as some arbitrarily nested subdir for whatever reason
@@ -664,7 +935,10 @@ fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<
     Ok(())
 }
 
-pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, ImportsFile), VetError> {
+pub fn init_files(
+    metadata: &Metadata,
+    filter_graph: Option<&Vec<GraphFilter>>,
+) -> Result<(ConfigFile, AuditsFile, ImportsFile), VetError> {
     // Default audits file is empty
     let audits = AuditsFile {
         criteria: StableMap::new(),
@@ -680,7 +954,7 @@ pub fn init_files(metadata: &Metadata) -> Result<(ConfigFile, AuditsFile, Import
     // This is the hard one
     let config = {
         let mut dependencies = StableMap::new();
-        let graph = DepGraph::new(metadata, None);
+        let graph = DepGraph::new(metadata, filter_graph);
         for package in &graph.nodes {
             if !package.is_third_party {
                 // Only care about third-party packages
@@ -724,11 +998,10 @@ fn cmd_inspect(
     let mut cache = Cache::acquire(cfg)?;
 
     let package = &*sub_args.package;
-    let version = Version::from_str(&sub_args.version).expect("could not parse version");
 
-    let to_fetch = &[(package, &version)];
+    let to_fetch = &[(package, &sub_args.version)];
     let fetched_paths = cache.fetch_packages(to_fetch)?;
-    let fetched = &fetched_paths[package][&version];
+    let fetched = &fetched_paths[package][&sub_args.version];
 
     #[cfg(target_family = "unix")]
     {
@@ -756,41 +1029,65 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     let mut audits = load_audits(store_path)?;
     let config = load_config(store_path)?;
 
-    let dependency_criteria = DependencyCriteria::new();
+    let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
+        // TODO: look at the current audits to infer this? prompt?
+        DependencyCriteria::new()
+    } else {
+        let mut dep_criteria = DependencyCriteria::new();
+        for arg in &sub_args.dependency_criteria {
+            dep_criteria
+                .entry(arg.dependency.clone())
+                .or_insert_with(Vec::new)
+                .push(arg.criteria.clone());
+        }
+        dep_criteria
+    };
 
-    // FIXME: better error when this goes bad
-    let version1 = Version::parse(&sub_args.version1).expect("version1 wasn't a valid Version");
-    let version2 = sub_args
-        .version2
-        .as_ref()
-        .map(|v| Version::parse(v).expect("version2 wasn't a valid Version"));
-
-    let kind = if let Some(version2) = version2 {
+    let kind = if let Some(version2) = &sub_args.version2 {
         // This is a delta audit
         AuditKind::Delta {
             delta: Delta {
-                from: version1,
-                to: version2,
+                from: sub_args.version1.clone(),
+                to: version2.clone(),
             },
             dependency_criteria,
         }
     } else {
         AuditKind::Full {
-            version: version1,
+            version: sub_args.version1.clone(),
             dependency_criteria,
         }
     };
-    // TODO: define some way to select this
-    let criteria = config.default_criteria;
-    let user_info = get_user_info()?;
+
+    let (username, who) = if let Some(who) = &sub_args.who {
+        (who.clone(), Some(who.clone()))
+    } else {
+        let user_info = get_user_info()?;
+        let who = format!("{} <{}>", user_info.username, user_info.email);
+        (user_info.username, Some(who))
+    };
+
+    let notes = sub_args.notes.clone();
+
+    let mut criteria = if sub_args.criteria.is_empty() {
+        // TODO: provide an interactive prompt for this
+        vec![config.default_criteria]
+    } else {
+        sub_args.criteria.clone()
+    };
+
+    // TODO: implement multi-criteria
+    if criteria.len() != 1 {
+        unimplemented!("multiple criteria not yet implemented");
+    }
+    let criteria = criteria.swap_remove(0);
+
     let eula = if let Some(eula) = eula_for_criteria(&audits, &criteria) {
         eula
     } else {
         error!("couldn't get description of criteria");
         std::process::exit(-1);
     };
-    let who = Some(format!("{} <{}>", user_info.username, user_info.email,));
-    let notes = None;
 
     // FIXME: can we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
@@ -810,7 +1107,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     };
     let statement = format!(
         "I, {}, certify that I have audited {} of {} in accordance with the following criteria:",
-        user_info.username, what_version, sub_args.package,
+        username, what_version, sub_args.package,
     );
 
     write!(
@@ -847,6 +1144,132 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     Ok(())
 }
 
+fn cmd_add_violation(
+    _out: &mut dyn Write,
+    cfg: &Config,
+    sub_args: &AddViolationArgs,
+) -> Result<(), VetError> {
+    // Certify that you have reviewed a crate's source for some version / delta
+    let store_path = cfg.metacfg.store_path();
+    let mut audits = load_audits(store_path)?;
+    let config = load_config(store_path)?;
+
+    let kind = AuditKind::Violation {
+        violation: sub_args.versions.clone(),
+    };
+
+    let (_username, who) = if let Some(who) = &sub_args.who {
+        (who.clone(), Some(who.clone()))
+    } else {
+        let user_info = get_user_info()?;
+        let who = format!("{} <{}>", user_info.username, user_info.email);
+        (user_info.username, Some(who))
+    };
+
+    let notes = sub_args.notes.clone();
+
+    let mut criteria = if sub_args.criteria.is_empty() {
+        // TODO: provide an interactive prompt for this
+        vec![config.default_criteria]
+    } else {
+        sub_args.criteria.clone()
+    };
+
+    // TODO: implement multi-criteria
+    if criteria.len() != 1 {
+        unimplemented!("multiple criteria not yet implemented");
+    }
+    let criteria = criteria.swap_remove(0);
+
+    // FIXME: can we check if the version makes sense..?
+    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+        error!("'{}' isn't one of your foreign packages", sub_args.package);
+        std::process::exit(-1);
+    }
+
+    // Ok! Ready to commit the audit!
+    let new_entry = AuditEntry {
+        kind,
+        criteria,
+        who,
+        notes,
+    };
+
+    audits
+        .audits
+        .entry(sub_args.package.clone())
+        .or_insert(vec![])
+        .push(new_entry);
+    store_audits(store_path, audits)?;
+
+    Ok(())
+}
+
+fn cmd_add_unaudited(
+    _out: &mut dyn Write,
+    cfg: &Config,
+    sub_args: &AddUnauditedArgs,
+) -> Result<(), VetError> {
+    // Certify that you have reviewed a crate's source for some version / delta
+    let store_path = cfg.metacfg.store_path();
+    let mut config = load_config(store_path)?;
+
+    let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
+        // TODO: look at the current audits to infer this? prompt?
+        DependencyCriteria::new()
+    } else {
+        let mut dep_criteria = DependencyCriteria::new();
+        for arg in &sub_args.dependency_criteria {
+            dep_criteria
+                .entry(arg.dependency.clone())
+                .or_insert_with(Vec::new)
+                .push(arg.criteria.clone());
+        }
+        dep_criteria
+    };
+
+    let notes = sub_args.notes.clone();
+
+    let mut criteria = if sub_args.criteria.is_empty() {
+        // TODO: provide an interactive prompt for this
+        vec![config.default_criteria.clone()]
+    } else {
+        sub_args.criteria.clone()
+    };
+
+    let suggest = !sub_args.no_suggest;
+
+    // TODO: implement multi-criteria
+    if criteria.len() != 1 {
+        unimplemented!("multiple criteria not yet implemented");
+    }
+    let criteria = criteria.swap_remove(0);
+
+    // FIXME: can we check if the version makes sense..?
+    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+        error!("'{}' isn't one of your foreign packages", sub_args.package);
+        std::process::exit(-1);
+    }
+
+    // Ok! Ready to commit the audit!
+    let new_entry = UnauditedDependency {
+        criteria,
+        notes,
+        version: sub_args.version.clone(),
+        dependency_criteria,
+        suggest,
+    };
+
+    config
+        .unaudited
+        .entry(sub_args.package.clone())
+        .or_insert(vec![])
+        .push(new_entry);
+    store_config(store_path, config)?;
+
+    Ok(())
+}
+
 fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
@@ -872,14 +1295,9 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
     }
 
     // DO THE THING!!!!
-    let filter_graph = if let Some(filters) = cfg.cli.filter_graph.as_ref() {
-        Some(parse_filter(filters)?)
-    } else {
-        None
-    };
     let report = resolver::resolve(
         &cfg.metadata,
-        filter_graph.as_ref(),
+        cfg.cli.filter_graph.as_ref(),
         &config,
         &audits,
         &imports,
@@ -934,14 +1352,9 @@ pub fn minimize_unaudited(
     let old_unaudited = mem::replace(&mut config.unaudited, StableMap::new());
 
     // Try to vet
-    let filter_graph = if let Some(filters) = cfg.cli.filter_graph.as_ref() {
-        Some(parse_filter(filters)?)
-    } else {
-        None
-    };
     let report = resolver::resolve(
         &cfg.metadata,
-        filter_graph.as_ref(),
+        cfg.cli.filter_graph.as_ref(),
         config,
         audits,
         imports,
@@ -1041,25 +1454,17 @@ fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Re
     let mut cache = Cache::acquire(cfg)?;
 
     let package = &*sub_args.package;
-    let version1 = sub_args
-        .version1
-        .parse()
-        .expect("Failed to parse first version");
-    let version2 = sub_args
-        .version2
-        .parse()
-        .expect("Failed to parse second version");
 
     writeln!(
         out,
         "fetching {} {} and {} ...",
-        sub_args.package, version1, version2,
+        sub_args.package, sub_args.version1, sub_args.version2,
     )?;
 
-    let to_fetch = &[(package, &version1), (package, &version2)];
+    let to_fetch = &[(package, &sub_args.version1), (package, &sub_args.version2)];
     let fetched_paths = cache.fetch_packages(to_fetch)?;
-    let fetched1 = &fetched_paths[package][&version1];
-    let fetched2 = &fetched_paths[package][&version2];
+    let fetched1 = &fetched_paths[package][&sub_args.version1];
+    let fetched2 = &fetched_paths[package][&sub_args.version2];
 
     writeln!(out)?;
 
@@ -1088,15 +1493,9 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     };
 
     // DO THE THING!!!!
-    let filter_graph = if let Some(filters) = cfg.cli.filter_graph.as_ref() {
-        Some(parse_filter(filters)?)
-    } else {
-        None
-    };
-
     let report = resolver::resolve(
         &cfg.metadata,
-        filter_graph.as_ref(),
+        cfg.cli.filter_graph.as_ref(),
         &config,
         &audits,
         &imports,
@@ -1127,12 +1526,7 @@ fn cmd_dump_graph(
     // Dump a mermaid-js graph
     trace!("dumping...");
 
-    let filter_graph = if let Some(filters) = cfg.cli.filter_graph.as_ref() {
-        Some(parse_filter(filters)?)
-    } else {
-        None
-    };
-    let graph = resolver::DepGraph::new(&cfg.metadata, filter_graph.as_ref());
+    let graph = resolver::DepGraph::new(&cfg.metadata, cfg.cli.filter_graph.as_ref());
     match cfg.cli.output_format {
         OutputFormat::Human => graph.print_mermaid(out, sub_args)?,
         OutputFormat::Json => serde_json::to_writer_pretty(out, &graph.nodes)?,
@@ -1187,6 +1581,7 @@ fn cmd_help_md(
 
     let mut fake_cli = FakeCli::command();
     let full_command = fake_cli.get_subcommands_mut().next().unwrap();
+    full_command.build();
     let mut todo = vec![full_command];
     let mut is_full_command = true;
 
@@ -1244,14 +1639,9 @@ fn cmd_help_md(
             let line = line.trim();
 
             // Usage strings get wrapped in full code blocks
-            if in_usage && line.starts_with(&subcommand_name) {
+            if in_usage && line.starts_with(pretty_app_name) {
                 writeln!(out, "```")?;
-                if is_full_command {
-                    writeln!(out, "{line}")?;
-                } else {
-                    writeln!(out, "{pretty_app_name} {line}")?;
-                }
-
+                writeln!(out, "{line}")?;
                 writeln!(out, "```")?;
                 continue;
             }
@@ -1281,141 +1671,6 @@ fn cmd_help_md(
 }
 
 // Utils
-#[derive(Clone, Debug)]
-pub enum GraphFilter {
-    Include(GraphFilterQuery),
-    Exclude(GraphFilterQuery),
-}
-
-#[derive(Clone, Debug)]
-pub enum GraphFilterQuery {
-    Any(Vec<GraphFilterQuery>),
-    All(Vec<GraphFilterQuery>),
-    Eq(GraphFilterProperty),
-    Neq(GraphFilterProperty),
-}
-
-#[derive(Clone, Debug)]
-pub enum GraphFilterProperty {
-    Name(String),
-    Version(Version),
-    IsRoot(bool),
-    IsWorkspaceMember(bool),
-    IsThirdParty(bool),
-    IsDevOnly(bool),
-}
-
-fn parse_filter(input: &str) -> Result<Vec<GraphFilter>, VetError> {
-    use nom::{
-        branch::alt,
-        bytes::complete::{is_not, tag},
-        multi::separated_list1,
-        sequence::delimited,
-        IResult,
-    };
-
-    fn graph_filter(input: &str) -> IResult<&str, GraphFilter> {
-        alt((include_filter, exclude_filter))(input)
-    }
-    fn include_filter(input: &str) -> IResult<&str, GraphFilter> {
-        let (rest, val) = delimited(tag("include("), filter_query, tag(")"))(input)?;
-        Ok((rest, GraphFilter::Include(val)))
-    }
-    fn exclude_filter(input: &str) -> IResult<&str, GraphFilter> {
-        let (rest, val) = delimited(tag("exclude("), filter_query, tag(")"))(input)?;
-        Ok((rest, GraphFilter::Exclude(val)))
-    }
-    fn filter_query(input: &str) -> IResult<&str, GraphFilterQuery> {
-        alt((any_query, all_query, eq_query, neq_query))(input)
-    }
-    fn any_query(input: &str) -> IResult<&str, GraphFilterQuery> {
-        let (rest, val) = delimited(
-            tag("any("),
-            separated_list1(tag(","), filter_query),
-            tag(")"),
-        )(input)?;
-        Ok((rest, GraphFilterQuery::Any(val)))
-    }
-    fn all_query(input: &str) -> IResult<&str, GraphFilterQuery> {
-        let (rest, val) = delimited(
-            tag("all("),
-            separated_list1(tag(","), filter_query),
-            tag(")"),
-        )(input)?;
-        Ok((rest, GraphFilterQuery::All(val)))
-    }
-    fn eq_query(input: &str) -> IResult<&str, GraphFilterQuery> {
-        let (rest, val) = delimited(tag("eq("), filter_property, tag(")"))(input)?;
-        Ok((rest, GraphFilterQuery::Eq(val)))
-    }
-    fn neq_query(input: &str) -> IResult<&str, GraphFilterQuery> {
-        let (rest, val) = delimited(tag("neq("), filter_property, tag(")"))(input)?;
-        Ok((rest, GraphFilterQuery::Neq(val)))
-    }
-    fn filter_property(input: &str) -> IResult<&str, GraphFilterProperty> {
-        alt((
-            prop_name,
-            prop_version,
-            prop_is_root,
-            prop_is_workspace_member,
-            prop_is_third_party,
-            prop_is_dev_only,
-        ))(input)
-    }
-    fn prop_name(input: &str) -> IResult<&str, GraphFilterProperty> {
-        let (rest, val) = delimited(tag("name("), val_package_name, tag(")"))(input)?;
-        Ok((rest, GraphFilterProperty::Name(val.to_string())))
-    }
-    fn prop_version(input: &str) -> IResult<&str, GraphFilterProperty> {
-        let (rest, val) = delimited(tag("version("), val_version, tag(")"))(input)?;
-        Ok((rest, GraphFilterProperty::Version(val)))
-    }
-    fn prop_is_root(input: &str) -> IResult<&str, GraphFilterProperty> {
-        let (rest, val) = delimited(tag("is_root("), val_bool, tag(")"))(input)?;
-        Ok((rest, GraphFilterProperty::IsRoot(val)))
-    }
-    fn prop_is_workspace_member(input: &str) -> IResult<&str, GraphFilterProperty> {
-        let (rest, val) = delimited(tag("is_workspace_member("), val_bool, tag(")"))(input)?;
-        Ok((rest, GraphFilterProperty::IsWorkspaceMember(val)))
-    }
-    fn prop_is_third_party(input: &str) -> IResult<&str, GraphFilterProperty> {
-        let (rest, val) = delimited(tag("is_third_party("), val_bool, tag(")"))(input)?;
-        Ok((rest, GraphFilterProperty::IsThirdParty(val)))
-    }
-    fn prop_is_dev_only(input: &str) -> IResult<&str, GraphFilterProperty> {
-        let (rest, val) = delimited(tag("is_dev_only("), val_bool, tag(")"))(input)?;
-        Ok((rest, GraphFilterProperty::IsDevOnly(val)))
-    }
-    fn val_bool(input: &str) -> IResult<&str, bool> {
-        alt((val_true, val_false))(input)
-    }
-    fn val_true(input: &str) -> IResult<&str, bool> {
-        let (rest, _val) = tag("true")(input)?;
-        Ok((rest, true))
-    }
-    fn val_false(input: &str) -> IResult<&str, bool> {
-        let (rest, _val) = tag("false")(input)?;
-        Ok((rest, false))
-    }
-    fn val_package_name(input: &str) -> IResult<&str, &str> {
-        is_not(")")(input)
-    }
-    fn val_version(input: &str) -> IResult<&str, Version> {
-        let (rest, val) = is_not(")")(input)?;
-        let val = Version::from_str(val).map_err(|_e| {
-            nom::Err::Failure(nom::error::Error {
-                input: rest,
-                code: nom::error::ErrorKind::Fail,
-            })
-        })?;
-        Ok((rest, val))
-    }
-
-    let (rest, val) = separated_list1(tag(","), graph_filter)(input).map_err(|e| e.to_owned())?;
-    // TODO: don't assert
-    assert!(rest.is_empty());
-    Ok(val)
-}
 
 fn is_init(metacfg: &MetaConfig) -> bool {
     // Probably want to do more here later...

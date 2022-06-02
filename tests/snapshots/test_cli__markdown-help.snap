@@ -11,14 +11,16 @@ Version: `cargo-vet 0.1.0`
 Supply-chain security for Rust
 
 ### USAGE
+```
 cargo vet [OPTIONS] [SUBCOMMAND]
+```
 
 ### OPTIONS
 #### `--all-features`
 Activate all available features
 
 #### `--diff-cache <DIFF_CACHE>`
-Use the following path as the diff-cache.
+Use the following path as the diff-cache
 
 The diff-cache stores the summary results used by vet's suggestion machinery. This is
 automatically managed in vet's tempdir, but if you want to manually store it somewhere
@@ -33,58 +35,47 @@ Exclude packages from being processed
 Space-separated list of features to activate
 
 #### `--filter-graph <FILTER_GRAPH>`
-Filter out different parts of the build graph and pretend that's the true graph.
+Filter out different parts of the build graph and pretend that's the true graph
 
 Example: `--filter-graph="exclude(any(eq(is_dev_only(true)),eq(name(serde_derive))))"`
 
-This mostly exists to debug or reduce projects that cargo-vet is mishandling. Combining
-this with `cargo vet --output-format=json dump-graph` can produce an input that can be
-added to vet's test suite.
+This mostly exists to debug or reduce projects that cargo-vet is mishandling.
+Combining this with `cargo vet --output-format=json dump-graph` can produce an
+input that can be added to vet's test suite.
+
 
 The resulting graph is computed as follows:
 
 1. First compute the original graph
-
 2. Then apply the filters to find the new set of nodes
-
 3. Create a new empty graph
-
 4. For each workspace member that still exists, recursively add it and its dependencies
 
-This means that any non-workspace package that becomes "orphaned" by the filters will be
-implicitly discarded even if it passes the filters.
-
-Syntax: a comma-separated list of filters to apply.
+This means that any non-workspace package that becomes "orphaned" by the filters will
+be implicitly discarded even if it passes the filters.
 
 Possible filters:
 
 * `include($query)`: only include packages that match this filter
-
 * `exclude($query)`: exclude packages that match this filter
+
 
 Possible queries:
 
 * `any($query1, $query2, ...)`: true if any of the listed queries are true
-
 * `all($query1, $query2, ...)`: true if all of the listed queries are true
+* `not($query)`: true if the query is false
+* `$property`: true if the package has this property
 
-* `eq($property)`: true if the package has this property
-
-* `neq($property)`: true if the package doesn't have this property
 
 Possible properties:
 
 * `name($string)`: the package's name (i.e. `serde`)
-
 * `version($version)`: the package's version (i.e. `1.2.0`)
-
 * `is_root($bool)`: whether it's a root in the original graph (ignoring dev-deps)
-
 * `is_workspace_member($bool)`: whether the package is a workspace-member (can be
 tested)
-
 * `is_third_party($bool)`: whether the package is considered third-party by vet
-
 * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original
 graph
 
@@ -92,7 +83,7 @@ graph
 Print help information
 
 #### `--locked`
-Do not pull in new "audits"
+Do not pull in new "audits" and try to avoid the network
 
 #### `--log-file <LOG_FILE>`
 Instead of stderr, write logs to this file (only used after successful CLI parsing)
@@ -129,7 +120,9 @@ Process all packages in the workspace
 
 ### SUBCOMMANDS
 * [accept-criteria-change](#cargo-vet-accept-criteria-change): Accept changes that a foreign audits.toml made to their criteria
-* [certify](#cargo-vet-certify): Mark `$package $version` as reviewed with `$message`
+* [add-unaudited](#cargo-vet-add-unaudited): Mark `$package $version` as unaudited
+* [add-violation](#cargo-vet-add-violation): Mark `$package $version` as a violation of policy
+* [certify](#cargo-vet-certify): Mark `$package $version` as reviewed
 * [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
 * [dump-graph](#cargo-vet-dump-graph): Print a mermaid-js visualization of the cargo build graph as understood by cargo-vet
 * [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
@@ -232,27 +225,123 @@ that by making us assume the dependencies all need the same criteria as the pare
 Print help information
 
 <br><br><br>
+## cargo vet add-violation 
+Mark `$package $version` as a violation of policy
+
+### cargo vet add-violation USAGE
+```
+cargo vet add-violation [OPTIONS] <PACKAGE> <VERSIONS>
+```
+
+### cargo vet add-violation ARGS
+#### `<PACKAGE>`
+The package to forbid
+
+#### `<VERSIONS>`
+The versions to forbid
+
+### cargo vet add-violation OPTIONS
+#### `--criteria <CRITERIA>`
+(???) The criteria to be forbidden (???)
+
+If not provided, we will prompt you for this information(?)
+
+#### `-h, --help`
+Print help information
+
+#### `--notes <NOTES>`
+A free-form string to include with the new forbid entry
+
+If not provided, there will be no notes.
+
+#### `--who <WHO>`
+Who to name as the auditor
+
+If not provided, we will collect this information from the local git.
+
+<br><br><br>
+## cargo vet add-unaudited 
+Mark `$package $version` as unaudited
+
+### cargo vet add-unaudited USAGE
+```
+cargo vet add-unaudited [OPTIONS] <PACKAGE> <VERSION>
+```
+
+### cargo vet add-unaudited ARGS
+#### `<PACKAGE>`
+The package to mark as unaudited (trusted)
+
+#### `<VERSION>`
+The version to mark as unaudited
+
+### cargo vet add-unaudited OPTIONS
+#### `--criteria <CRITERIA>`
+The criteria to assume (trust)
+
+If not provided, we will prompt you for this information.
+
+#### `--dependency-criteria <DEPENDENCY_CRITERIA>`
+The dependency-criteria to require for this unaudited entry to be valid
+
+If not provided, we will still implicitly require dependencies to satisfy `criteria`.
+
+#### `-h, --help`
+Print help information
+
+#### `--no-suggest`
+Suppress suggesting this unaudited entry
+
+#### `--notes <NOTES>`
+A free-form string to include with the new forbid entry
+
+If not provided, there will be no notes.
+
+<br><br><br>
 ## cargo vet certify 
-Mark `$package $version` as reviewed with `$message`
+Mark `$package $version` as reviewed
 
 ### cargo vet certify USAGE
 ```
-cargo vet certify <PACKAGE> <VERSION1> [VERSION2]
+cargo vet certify [OPTIONS] <PACKAGE> <VERSION1> [VERSION2]
 ```
 
 ### cargo vet certify ARGS
 #### `<PACKAGE>`
-
+The package to certify as audited
 
 #### `<VERSION1>`
-
+The version to certify as audited
 
 #### `<VERSION2>`
-
+If present, instead certify a diff from version1->version2
 
 ### cargo vet certify OPTIONS
+#### `--accept-all`
+Accept all criteria without an interactive prompt
+
+#### `--criteria <CRITERIA>`
+The criteria to certify for this audit
+
+If not provided, we will prompt you for this information.
+
+#### `--dependency-criteria <DEPENDENCY_CRITERIA>`
+The dependency-criteria to require for this audit to be valid
+
+If not provided, we will still implicitly require dependencies to satisfy `criteria`.
+
 #### `-h, --help`
 Print help information
+
+#### `--notes <NOTES>`
+A free-form string to include with the new audit entry
+
+If not provided, there will be no notes.
+
+#### `--who <WHO>`
+Who to name as the auditor
+
+If not provided, we will collect this information from the local git.
 
 <br><br><br>
 ## cargo vet diff 
@@ -265,13 +354,13 @@ cargo vet diff <PACKAGE> <VERSION1> <VERSION2>
 
 ### cargo vet diff ARGS
 #### `<PACKAGE>`
-
+The package to diff
 
 #### `<VERSION1>`
-
+The base version to diff
 
 #### `<VERSION2>`
-
+The target version to diff
 
 ### cargo vet diff OPTIONS
 #### `-h, --help`
@@ -288,10 +377,10 @@ cargo vet inspect <PACKAGE> <VERSION>
 
 ### cargo vet inspect ARGS
 #### `<PACKAGE>`
-
+The package to inspect
 
 #### `<VERSION>`
-
+The version to inspect
 
 ### cargo vet inspect OPTIONS
 #### `-h, --help`

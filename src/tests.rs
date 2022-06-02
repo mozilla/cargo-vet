@@ -678,7 +678,7 @@ impl MockMetadata {
 }
 
 fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
-    let (mut config, mut audits, imports) = init_files(metadata).unwrap();
+    let (mut config, mut audits, imports) = init_files(metadata, None).unwrap();
 
     // Criteria hierarchy:
     //
@@ -783,7 +783,7 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
 }
 
 fn builtin_files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
-    init_files(metadata).unwrap()
+    init_files(metadata, None).unwrap()
 }
 
 fn builtin_files_no_unaudited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {

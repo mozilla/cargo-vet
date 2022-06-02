@@ -13,7 +13,7 @@ OPTIONS:
             Activate all available features
 
         --diff-cache <DIFF_CACHE>
-            Use the following path as the diff-cache.
+            Use the following path as the diff-cache
             
             The diff-cache stores the summary results used by vet's suggestion machinery. This is
             automatically managed in vet's tempdir, but if you want to manually store it somewhere
@@ -28,58 +28,47 @@ OPTIONS:
             Space-separated list of features to activate
 
         --filter-graph <FILTER_GRAPH>
-            Filter out different parts of the build graph and pretend that's the true graph.
+            Filter out different parts of the build graph and pretend that's the true graph
             
             Example: `--filter-graph="exclude(any(eq(is_dev_only(true)),eq(name(serde_derive))))"`
             
-            This mostly exists to debug or reduce projects that cargo-vet is mishandling. Combining
-            this with `cargo vet --output-format=json dump-graph` can produce an input that can be
-            added to vet's test suite.
+            This mostly exists to debug or reduce projects that cargo-vet is mishandling.
+            Combining this with `cargo vet --output-format=json dump-graph` can produce an
+            input that can be added to vet's test suite.
+            
             
             The resulting graph is computed as follows:
             
             1. First compute the original graph
-            
             2. Then apply the filters to find the new set of nodes
-            
             3. Create a new empty graph
-            
             4. For each workspace member that still exists, recursively add it and its dependencies
             
-            This means that any non-workspace package that becomes "orphaned" by the filters will be
-            implicitly discarded even if it passes the filters.
-            
-            Syntax: a comma-separated list of filters to apply.
+            This means that any non-workspace package that becomes "orphaned" by the filters will
+            be implicitly discarded even if it passes the filters.
             
             Possible filters:
             
             * `include($query)`: only include packages that match this filter
-            
             * `exclude($query)`: exclude packages that match this filter
+            
             
             Possible queries:
             
             * `any($query1, $query2, ...)`: true if any of the listed queries are true
-            
             * `all($query1, $query2, ...)`: true if all of the listed queries are true
+            * `not($query)`: true if the query is false
+            * `$property`: true if the package has this property
             
-            * `eq($property)`: true if the package has this property
-            
-            * `neq($property)`: true if the package doesn't have this property
             
             Possible properties:
             
             * `name($string)`: the package's name (i.e. `serde`)
-            
             * `version($version)`: the package's version (i.e. `1.2.0`)
-            
             * `is_root($bool)`: whether it's a root in the original graph (ignoring dev-deps)
-            
             * `is_workspace_member($bool)`: whether the package is a workspace-member (can be
             tested)
-            
             * `is_third_party($bool)`: whether the package is considered third-party by vet
-            
             * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original
             graph
 
@@ -87,7 +76,7 @@ OPTIONS:
             Print help information
 
         --locked
-            Do not pull in new "audits"
+            Do not pull in new "audits" and try to avoid the network
 
         --log-file <LOG_FILE>
             Instead of stderr, write logs to this file (only used after successful CLI parsing)
@@ -125,8 +114,12 @@ OPTIONS:
 SUBCOMMANDS:
     accept-criteria-change
             Accept changes that a foreign audits.toml made to their criteria
+    add-unaudited
+            Mark `$package $version` as unaudited
+    add-violation
+            Mark `$package $version` as a violation of policy
     certify
-            Mark `$package $version` as reviewed with `$message`
+            Mark `$package $version` as reviewed
     diff
             Yield a diff against the last reviewed version
     dump-graph

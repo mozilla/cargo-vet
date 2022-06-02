@@ -28,7 +28,7 @@ OPTIONS:
             Print help information
 
         --locked
-            Do not pull in new "audits"
+            Do not pull in new "audits" and try to avoid the network
 
         --log-file <LOG_FILE>
             Instead of stderr, write logs to this file (only used after successful CLI parsing)
@@ -60,7 +60,9 @@ OPTIONS:
 
 SUBCOMMANDS:
     accept-criteria-change    Accept changes that a foreign audits.toml made to their criteria
-    certify                   Mark `$package $version` as reviewed with `$message`
+    add-unaudited             Mark `$package $version` as unaudited
+    add-violation             Mark `$package $version` as a violation of policy
+    certify                   Mark `$package $version` as reviewed
     diff                      Yield a diff against the last reviewed version
     dump-graph                Print a mermaid-js visualization of the cargo build graph as
                                   understood by cargo-vet
