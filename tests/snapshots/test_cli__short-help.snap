@@ -9,9 +9,6 @@ USAGE:
     cargo vet [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
-        --all-features
-            Activate all available features
-
         --diff-cache <DIFF_CACHE>
             Use the following path as the diff-cache
 
@@ -35,6 +32,9 @@ OPTIONS:
 
         --manifest-path <PATH>
             Path to Cargo.toml
+
+        --no-all-features
+            Don't use --all-features
 
         --no-default-features
             Do not activate the `default` feature

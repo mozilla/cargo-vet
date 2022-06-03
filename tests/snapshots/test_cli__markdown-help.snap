@@ -16,9 +16,6 @@ cargo vet [OPTIONS] [SUBCOMMAND]
 ```
 
 ### OPTIONS
-#### `--all-features`
-Activate all available features
-
 #### `--diff-cache <DIFF_CACHE>`
 Use the following path as the diff-cache
 
@@ -90,6 +87,12 @@ Instead of stderr, write logs to this file (only used after successful CLI parsi
 
 #### `--manifest-path <PATH>`
 Path to Cargo.toml
+
+#### `--no-all-features`
+Don't use --all-features
+
+We default to passing --all-features to `cargo metadata` because we want to analyze your
+full dependency tree
 
 #### `--no-default-features`
 Do not activate the `default` feature
