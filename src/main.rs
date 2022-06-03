@@ -26,9 +26,9 @@ use tar::Archive;
 
 use crate::format::{
     AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
-    StableMap, StoreInfo, UnauditedDependency,
+    SortedMap, StableMap, StoreInfo, UnauditedDependency,
 };
-use crate::resolver::{Conclusion, SortedMap, SuggestItem};
+use crate::resolver::{Conclusion, SuggestItem};
 
 pub mod format;
 mod resolver;
@@ -964,7 +964,7 @@ pub fn init_files(
     // TODO: pipe in cfg and filter_graph
     // This is the hard one
     let config = {
-        let mut dependencies = StableMap::new();
+        let mut dependencies = SortedMap::new();
         let graph = DepGraph::new(metadata, filter_graph);
         for package in &graph.nodes {
             if !package.is_third_party {
@@ -1287,7 +1287,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
     let mut store = Store::acquire(cfg)?;
 
     // Delete all unaudited entries except those that are suggest=false
-    for (_package, versions) in &mut store.config.unaudited {
+    for versions in &mut store.config.unaudited.values_mut() {
         versions.retain(|e| !e.suggest);
     }
 
@@ -1328,13 +1328,13 @@ fn cmd_regenerate_unaudited(
 
 pub fn minimize_unaudited(cfg: &Config, store: &mut Store) -> Result<(), VetError> {
     // Set the unaudited entries to nothing
-    let old_unaudited = mem::replace(&mut store.config.unaudited, StableMap::new());
+    let old_unaudited = mem::take(&mut store.config.unaudited);
 
     // Try to vet
     let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), store, true);
 
     let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, false)? {
-        let mut new_unaudited = StableMap::new();
+        let mut new_unaudited = SortedMap::new();
         let mut suggest_by_package_name = SortedMap::<&str, Vec<SuggestItem>>::new();
         for item in suggest.suggestions {
             let package = &report.graph.nodes[item.package];
@@ -1410,7 +1410,7 @@ pub fn minimize_unaudited(cfg: &Config, store: &mut Store) -> Result<(), VetErro
 
         new_unaudited
     } else if let Conclusion::Success(_) = report.conclusion {
-        StableMap::new()
+        SortedMap::new()
     } else {
         return Err(eyre::eyre!(
             "error: regenerate-unaudited failed for unknown reason"
@@ -1690,7 +1690,7 @@ fn store_audits(store_path: &Path, audits: AuditsFile) -> Result<(), VetError> {
 }
 fn store_config(store_path: &Path, mut config: ConfigFile) -> Result<(), VetError> {
     // Sort the unaudited entries by version to make them more stable
-    for (_package_name, entries) in &mut config.unaudited {
+    for entries in &mut config.unaudited.values_mut() {
         entries.sort_by(|a, b| a.version.cmp(&b.version));
     }
 

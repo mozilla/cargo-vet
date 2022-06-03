@@ -3,20 +3,14 @@ use core::fmt;
 use log::{error, trace, warn};
 use serde::Serialize;
 use serde_json::json;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::Write;
 
 use crate::format::{self, AuditKind, Delta, DiffStat};
+use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::{
     AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
     GraphFilterQuery, PackageExt, StableMap, Store, VetError,
 };
-
-// Collections based on how we're using, so it's easier to swap them out.
-pub type FastMap<K, V> = HashMap<K, V>;
-pub type FastSet<T> = HashSet<T>;
-pub type SortedMap<K, V> = BTreeMap<K, V>;
-pub type SortedSet<T> = BTreeSet<T>;
 
 /// A report of the results of running `resolve`.
 #[derive(Debug, Clone)]
