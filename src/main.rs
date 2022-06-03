@@ -26,7 +26,7 @@ use tar::Archive;
 
 use crate::format::{
     AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
-    SortedMap, StableMap, StoreInfo, UnauditedDependency,
+    SortedMap, StoreInfo, UnauditedDependency,
 };
 use crate::resolver::{Conclusion, SuggestItem};
 
@@ -980,13 +980,13 @@ pub fn init_files(
 ) -> Result<(ConfigFile, AuditsFile, ImportsFile), VetError> {
     // Default audits file is empty
     let audits = AuditsFile {
-        criteria: StableMap::new(),
-        audits: StableMap::new(),
+        criteria: SortedMap::new(),
+        audits: SortedMap::new(),
     };
 
     // Default imports file is empty
     let imports = ImportsFile {
-        audits: StableMap::new(),
+        audits: SortedMap::new(),
     };
 
     // TODO: pipe in cfg and filter_graph
@@ -1019,9 +1019,9 @@ pub fn init_files(
         }
         ConfigFile {
             default_criteria: format::get_default_criteria(),
-            imports: StableMap::new(),
+            imports: SortedMap::new(),
             unaudited: dependencies,
-            policy: StableMap::new(),
+            policy: SortedMap::new(),
         }
     };
 
@@ -1929,7 +1929,7 @@ impl Store {
 
     /// Fetch foreign audits, only call this is we're not --locked
     pub fn fetch_foreign_audits(&mut self) -> Result<(), VetError> {
-        let mut audits = StableMap::new();
+        let mut audits = SortedMap::new();
         for (name, import) in &self.config.imports {
             let url = &import.url;
             // FIXME: this should probably be async but that's a Whole Thing and these files are small.
@@ -1998,11 +1998,7 @@ impl Drop for Cache {
     fn drop(&mut self) {
         if let Some(diff_cache_path) = &self.diff_cache_path {
             // Write back the diff_cache
-            store_diff_cache(
-                diff_cache_path,
-                mem::replace(&mut self.diff_cache, DiffCache::new()),
-            )
-            .unwrap();
+            store_diff_cache(diff_cache_path, mem::take(&mut self.diff_cache)).unwrap();
         }
         // `_lock: FileLock` implicitly released here
     }
@@ -2173,7 +2169,7 @@ impl Cache {
                     let diffstat = diffstat_crate(from, to)?;
                     self.diff_cache
                         .entry(package.to_string())
-                        .or_insert(StableMap::new())
+                        .or_insert(SortedMap::new())
                         .insert(delta.clone(), diffstat.clone());
                     diffstat
                 } else {

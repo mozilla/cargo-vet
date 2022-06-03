@@ -11,7 +11,6 @@ use serde::{
 };
 
 // Collections based on how we're using, so it's easier to swap them out.
-pub type StableMap<K, V> = linked_hash_map::LinkedHashMap<K, V>;
 pub type FastMap<K, V> = HashMap<K, V>;
 pub type FastSet<T> = HashSet<T>;
 pub type SortedMap<K, V> = BTreeMap<K, V>;
@@ -84,15 +83,15 @@ impl MetaConfig {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-pub type AuditedDependencies = StableMap<String, Vec<AuditEntry>>;
+pub type AuditedDependencies = SortedMap<String, Vec<AuditEntry>>;
 
 /// audits.toml
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct AuditsFile {
     /// A map of criteria_name to details on that criteria.
-    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub criteria: StableMap<String, CriteriaEntry>,
+    pub criteria: SortedMap<String, CriteriaEntry>,
     /// Actual audits.
     pub audits: AuditedDependencies,
 }
@@ -154,7 +153,7 @@ pub enum AuditKind {
 /// ```toml
 /// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
 /// ```
-pub type DependencyCriteria = StableMap<String, Vec<String>>;
+pub type DependencyCriteria = SortedMap<String, Vec<String>>;
 
 /// A "VERSION -> VERSION"
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -224,14 +223,14 @@ pub struct ConfigFile {
     pub default_criteria: String,
 
     /// Remote audits.toml's that we trust and want to import.
-    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub imports: StableMap<String, RemoteImport>,
+    pub imports: SortedMap<String, RemoteImport>,
 
     /// A table of policies for first-party crates.
-    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub policy: StableMap<String, PolicyEntry>,
+    pub policy: SortedMap<String, PolicyEntry>,
 
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
@@ -437,7 +436,7 @@ fn is_default_unaudited_suggest(val: &bool) -> bool {
 /// imports.lock, not sure what I want to put in here yet.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ImportsFile {
-    pub audits: StableMap<String, AuditsFile>,
+    pub audits: SortedMap<String, AuditsFile>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -450,7 +449,7 @@ pub struct ImportsFile {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-pub type DiffCache = StableMap<String, StableMap<Delta, DiffStat>>;
+pub type DiffCache = SortedMap<String, SortedMap<Delta, DiffStat>>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DiffStat {
