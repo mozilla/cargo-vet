@@ -69,6 +69,7 @@ SUBCOMMANDS:
     diff                      Yield a diff against the last reviewed version
     dump-graph                Print a mermaid-js visualization of the cargo build graph as
                                   understood by cargo-vet
+    fetch-imports             Explicitly fetch the imports (foreign audit files)
     fmt                       Reformat all of vet's files (in case you hand-edited them)
     help                      Print this message or the help of the given subcommand(s)
     init                      initialize cargo-vet for your project

@@ -161,19 +161,19 @@ enum Commands {
     #[clap(disable_version_flag = true)]
     Inspect(InspectArgs),
 
-    /// Yield a diff against the last reviewed version.
+    /// Yield a diff against the last reviewed version
     #[clap(disable_version_flag = true)]
     Diff(DiffArgs),
 
-    /// Mark `$package $version` as reviewed.
+    /// Mark `$package $version` as reviewed
     #[clap(disable_version_flag = true)]
     Certify(CertifyArgs),
 
-    /// Mark `$package $version` as unaudited.
+    /// Mark `$package $version` as unaudited
     #[clap(disable_version_flag = true)]
     AddUnaudited(AddUnauditedArgs),
 
-    /// Mark `$package $version` as a violation of policy.
+    /// Mark `$package $version` as a violation of policy
     #[clap(disable_version_flag = true)]
     AddViolation(AddViolationArgs),
 
@@ -182,8 +182,16 @@ enum Commands {
     Suggest(SuggestArgs),
 
     /// Reformat all of vet's files (in case you hand-edited them)
+    ///
+    /// All commands that access the store (supply-chain) will implicitly do this.
     #[clap(disable_version_flag = true)]
     Fmt(FmtArgs),
+
+    /// Explicitly fetch the imports (foreign audit files)
+    ///
+    /// Bare `cargo vet` will implicitly do this.
+    #[clap(disable_version_flag = true)]
+    FetchImports(FetchImportsArgs),
 
     /// Regenerate the 'unaudited' entries to try to minimize them and make the vet pass
     #[clap(disable_version_flag = true)]
@@ -321,6 +329,9 @@ struct SuggestArgs {
 
 #[derive(clap::Args)]
 struct FmtArgs {}
+
+#[derive(clap::Args)]
+struct FetchImportsArgs {}
 
 #[derive(clap::Args)]
 struct RegenerateUnauditedArgs {}
@@ -913,6 +924,7 @@ fn main() -> Result<(), VetError> {
         Some(AddViolation(sub_args)) => cmd_add_violation(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
+        Some(FetchImports(sub_args)) => cmd_fetch_imports(out, &cfg, sub_args),
         Some(RegenerateUnaudited(sub_args)) => cmd_regenerate_unaudited(out, &cfg, sub_args),
         Some(DumpGraph(sub_args)) => cmd_dump_graph(out, &cfg, sub_args),
         // Need to be non-exhaustive because freestanding commands were handled earlier
@@ -1450,7 +1462,10 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
-    let store = Store::acquire(cfg)?;
+    let mut store = Store::acquire(cfg)?;
+    if !cfg.cli.locked {
+        store.fetch_foreign_audits()?;
+    }
 
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store, false);
@@ -1466,6 +1481,27 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     } else {
         store.commit()?;
     }
+
+    Ok(())
+}
+
+fn cmd_fetch_imports(
+    out: &mut dyn Write,
+    cfg: &Config,
+    _sub_args: &FetchImportsArgs,
+) -> Result<(), VetError> {
+    trace!("fetching imports...");
+
+    let mut store = Store::acquire(cfg)?;
+    if !cfg.cli.locked {
+        store.fetch_foreign_audits()?;
+    } else {
+        writeln!(
+            out,
+            "warning: ran fetch-imports with --locked, this won't fetch!"
+        )?;
+    }
+    store.commit()?;
 
     Ok(())
 }
@@ -1801,7 +1837,7 @@ impl Store {
             Some(root)
         };
 
-        let mut store = Self {
+        let store = Self {
             _lock: lock,
             root,
 
@@ -1810,11 +1846,8 @@ impl Store {
             imports,
         };
 
-        // Check that the store isn't corrupt, and try to update it
+        // Check that the store isn't corrupt
         store.validate()?;
-        if !cfg.cli.locked {
-            store.fetch_foreign_audits()?;
-        }
 
         Ok(store)
     }

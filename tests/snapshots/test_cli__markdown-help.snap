@@ -130,6 +130,7 @@ Process all packages in the workspace
 * [certify](#cargo-vet-certify): Mark `$package $version` as reviewed
 * [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
 * [dump-graph](#cargo-vet-dump-graph): Print a mermaid-js visualization of the cargo build graph as understood by cargo-vet
+* [fetch-imports](#cargo-vet-fetch-imports): Explicitly fetch the imports (foreign audit files)
 * [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
 * [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 * [init](#cargo-vet-init): initialize cargo-vet for your project
@@ -196,8 +197,25 @@ cargo vet regenerate-unaudited
 Print help information
 
 <br><br><br>
+## cargo vet fetch-imports 
+Explicitly fetch the imports (foreign audit files)
+
+Bare `cargo vet` will implicitly do this.
+
+### cargo vet fetch-imports USAGE
+```
+cargo vet fetch-imports
+```
+
+### cargo vet fetch-imports OPTIONS
+#### `-h, --help`
+Print help information
+
+<br><br><br>
 ## cargo vet fmt 
 Reformat all of vet's files (in case you hand-edited them)
+
+All commands that access the store (supply-chain) will implicitly do this.
 
 ### cargo vet fmt USAGE
 ```
