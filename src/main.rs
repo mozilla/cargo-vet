@@ -9,12 +9,12 @@ use std::str::FromStr;
 use std::{fs, mem};
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
-use cargo_metadata::{Metadata, Package, Version, VersionReq};
+use cargo_metadata::{Metadata, Package, Version};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
 use console::{style, Term};
 use eyre::Context;
 use flate2::read::GzDecoder;
-use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig};
+use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig, VersionReq};
 use log::{error, info, trace, warn};
 use reqwest::blocking as req;
 use resolver::{DepGraph, DiffRecommendation};
@@ -1744,20 +1744,24 @@ fn load_diff_cache(diff_cache_path: &Path) -> Result<DiffCache, VetError> {
     Ok(file)
 }
 
-fn store_audits(store_path: &Path, audits: AuditsFile) -> Result<(), VetError> {
+fn store_audits(store_path: &Path, mut audits: AuditsFile) -> Result<(), VetError> {
     let heading = r###"
 # cargo-vet audits file
 "###;
+    audits
+        .audits
+        .values_mut()
+        .for_each(|entries| entries.sort());
 
     let path = store_path.join(AUDITS_TOML);
     store_toml(&path, heading, audits)?;
     Ok(())
 }
 fn store_config(store_path: &Path, mut config: ConfigFile) -> Result<(), VetError> {
-    // Sort the unaudited entries by version to make them more stable
-    for entries in &mut config.unaudited.values_mut() {
-        entries.sort_by(|a, b| a.version.cmp(&b.version));
-    }
+    config
+        .unaudited
+        .values_mut()
+        .for_each(|entries| entries.sort());
 
     let heading = r###"
 # cargo-vet config file

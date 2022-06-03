@@ -1,10 +1,11 @@
 //! Details of the file formats used by cargo vet
 
-use core::fmt;
+use core::{cmp, fmt};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
-use cargo_metadata::{Version, VersionReq};
+use cargo_metadata::Version;
 use serde::{
     de::{self, value, SeqAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -15,6 +16,37 @@ pub type FastMap<K, V> = HashMap<K, V>;
 pub type FastSet<T> = HashSet<T>;
 pub type SortedMap<K, V> = BTreeMap<K, V>;
 pub type SortedSet<T> = BTreeSet<T>;
+
+// newtype VersionReq so that we can implement PartialOrd on it.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VersionReq(pub cargo_metadata::VersionReq);
+impl fmt::Display for VersionReq {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl FromStr for VersionReq {
+    type Err = <cargo_metadata::VersionReq as FromStr>::Err;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        cargo_metadata::VersionReq::from_str(s).map(VersionReq)
+    }
+}
+impl core::ops::Deref for VersionReq {
+    type Target = cargo_metadata::VersionReq;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl cmp::PartialOrd for VersionReq {
+    fn partial_cmp(&self, other: &VersionReq) -> Option<cmp::Ordering> {
+        format!("{}", self).partial_cmp(&format!("{}", other))
+    }
+}
+impl VersionReq {
+    pub fn parse(text: &str) -> Result<Self, <Self as FromStr>::Err> {
+        cargo_metadata::VersionReq::parse(text).map(VersionReq)
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////
 //                                                                                //
@@ -114,7 +146,7 @@ pub struct CriteriaEntry {
 }
 
 /// This is conceptually an enum
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct AuditEntry {
     pub who: Option<String>,
     pub notes: Option<String>,
@@ -123,7 +155,22 @@ pub struct AuditEntry {
     pub kind: AuditKind,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+/// Implement PartialOrd manually because the order we want for sorting is
+/// different than the order we want for serialization.
+impl cmp::PartialOrd for AuditEntry {
+    fn partial_cmp<'a>(&'a self, other: &'a AuditEntry) -> Option<cmp::Ordering> {
+        let tuple = |x: &'a AuditEntry| (&x.kind, &x.criteria, &x.who, &x.notes);
+        tuple(self).partial_cmp(&tuple(other))
+    }
+}
+
+impl cmp::Ord for AuditEntry {
+    fn cmp(&self, other: &AuditEntry) -> cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd)]
 #[serde(untagged)]
 pub enum AuditKind {
     Full {
@@ -392,7 +439,7 @@ pub struct CriteriaMapping {
 
 /// Semantically identical to a 'full audit' entry, but private to our project
 /// and tracked as less-good than a proper audit, so that you try to get rid of it.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UnauditedDependency {
     /// The version of the crate that we are currently "fine" with leaving unaudited.
     pub version: Version,

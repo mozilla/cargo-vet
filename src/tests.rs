@@ -1,11 +1,12 @@
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 
-use cargo_metadata::{Metadata, Version, VersionReq};
+use cargo_metadata::{Metadata, Version};
 use serde_json::{json, Value};
 
 use crate::{
     format::{
-        AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, VersionReq, SAFE_TO_DEPLOY,
+        SAFE_TO_RUN,
     },
     init_files,
     resolver::ResolveReport,
