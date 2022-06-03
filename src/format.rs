@@ -1,6 +1,7 @@
 //! Details of the file formats used by cargo vet
 
 use core::fmt;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use cargo_metadata::{Version, VersionReq};
@@ -9,7 +10,12 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
+// Collections based on how we're using, so it's easier to swap them out.
 pub type StableMap<K, V> = linked_hash_map::LinkedHashMap<K, V>;
+pub type FastMap<K, V> = HashMap<K, V>;
+pub type FastSet<T> = HashSet<T>;
+pub type SortedMap<K, V> = BTreeMap<K, V>;
+pub type SortedSet<T> = BTreeSet<T>;
 
 ////////////////////////////////////////////////////////////////////////////////////
 //                                                                                //
@@ -230,9 +236,9 @@ pub struct ConfigFile {
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
-    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub unaudited: StableMap<String, Vec<UnauditedDependency>>,
+    pub unaudited: SortedMap<String, Vec<UnauditedDependency>>,
 }
 
 pub static SAFE_TO_DEPLOY: &str = "safe-to-deploy";
