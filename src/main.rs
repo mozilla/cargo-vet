@@ -60,7 +60,7 @@ struct Cli {
     #[clap(flatten)]
     workspace: clap_cargo::Workspace,
     #[clap(flatten)]
-    features: clap_cargo::Features,
+    features: Features,
 
     // Top-level flags
     /// Do not pull in new "audits" and try to avoid the network
@@ -342,6 +342,24 @@ struct AcceptCriteriaChangeArgs {}
 #[derive(clap::Args)]
 struct HelpMarkdownArgs {}
 
+/// Cargo feature flags, copied from clap_cargo to change defaults.
+#[derive(Default, Clone, Debug, PartialEq, Eq, clap::Args)]
+#[non_exhaustive]
+pub struct Features {
+    #[clap(long)]
+    /// Don't use --all-features
+    ///
+    /// We default to passing --all-features to `cargo metadata`
+    /// because we want to analyze your full dependency tree
+    pub no_all_features: bool,
+    #[clap(long)]
+    /// Do not activate the `default` feature
+    pub no_default_features: bool,
+    #[clap(long, require_value_delimiter = true, value_delimiter = ' ')]
+    /// Space-separated list of features to activate
+    pub features: Vec<String>,
+}
+
 #[derive(clap::Args)]
 pub struct DumpGraphArgs {
     /// The depth of the graph to print (for a large project, the full graph is a HUGE MESS).
@@ -418,12 +436,10 @@ pub enum OutputFormat {
 impl Cli {
     #[cfg(test)]
     pub fn mock() -> Self {
-        use clap_cargo::{Features, Manifest, Workspace};
-
         Self {
             command: None,
-            manifest: Manifest::default(),
-            workspace: Workspace::default(),
+            manifest: clap_cargo::Manifest::default(),
+            workspace: clap_cargo::Workspace::default(),
             features: Features::default(),
             locked: false,
             readonly_lockless: true,
@@ -782,7 +798,7 @@ fn main() -> Result<(), VetError> {
     if let Some(manifest_path) = &cli.manifest.manifest_path {
         cmd.manifest_path(manifest_path);
     }
-    if cli.features.all_features {
+    if !cli.features.no_all_features {
         cmd.features(cargo_metadata::CargoOpt::AllFeatures);
     }
     if cli.features.no_default_features {

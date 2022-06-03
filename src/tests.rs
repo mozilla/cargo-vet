@@ -5,8 +5,7 @@ use serde_json::{json, Value};
 
 use crate::{
     format::{
-        AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, SortedMap, SAFE_TO_DEPLOY,
-        SAFE_TO_RUN,
+        AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     init_files,
     resolver::ResolveReport,
@@ -815,7 +814,7 @@ fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile
     let (mut config, mut audits, imports) = builtin_files_inited(metadata);
 
     let mut audited = StableMap::<String, Vec<AuditEntry>>::new();
-    for (name, entries) in std::mem::replace(&mut config.unaudited, SortedMap::new()) {
+    for (name, entries) in std::mem::take(&mut config.unaudited) {
         for entry in entries {
             audited
                 .entry(name.clone())
