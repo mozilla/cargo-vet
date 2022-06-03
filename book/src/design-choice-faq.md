@@ -59,9 +59,10 @@ the source of the original crate and making some (potentially-minimal)
 modifications. The latter case is quite common, and in practice rarely entails a
 full audit of the original crate despite formally transforming it into
 first-party code.  Since `cargo vet` has no way to distinguish this case from a
-from-scratch rewrite, it conservatively assumes the former. The latter case can
-be handled by adding an entry to the `unaudited` table with `suggest = false`
-and a note explaining the situation.
+from-scratch rewrite, it conservatively assumes the override is a derivative
+work, and requires the original version to be audited. The from-scratch can be
+handled by adding an entry to the `unaudited` table with `suggest = false` and a
+note explaining the situation.
 
 ## How does this relate to `cargo crev`?
 
