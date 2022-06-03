@@ -1,16 +1,17 @@
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 
-use cargo_metadata::{Metadata, Version, VersionReq};
+use cargo_metadata::{Metadata, Version};
 use serde_json::{json, Value};
 
 use crate::{
     format::{
-        AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, VersionReq, SAFE_TO_DEPLOY,
+        SAFE_TO_RUN,
     },
     init_files,
     resolver::ResolveReport,
     AuditEntry, AuditsFile, Cli, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
-    PartialConfig, StableMap, Store, UnauditedDependency,
+    PartialConfig, SortedMap, Store, UnauditedDependency,
 };
 
 // Some room above and below
@@ -230,7 +231,7 @@ fn default_policy() -> PolicyEntry {
     PolicyEntry {
         criteria: vec![],
         dev_criteria: vec![],
-        dependency_criteria: StableMap::new(),
+        dependency_criteria: SortedMap::new(),
         targets: None,
         dev_targets: None,
         notes: None,
@@ -690,7 +691,7 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     // This lets use mess around with "strong reqs", "weaker reqs", and "unrelated reqs"
     // with "reviewed" as the implicit default everything cares about.
 
-    audits.criteria = StableMap::from_iter(vec![
+    audits.criteria = SortedMap::from_iter(vec![
         (
             "strong-reviewed".to_string(),
             CriteriaEntry {
@@ -768,7 +769,7 @@ fn files_no_unaudited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
 fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     let (config, mut audits, imports) = files_no_unaudited(metadata);
 
-    let mut audited = StableMap::<String, Vec<AuditEntry>>::new();
+    let mut audited = SortedMap::<String, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
         if package.is_third_party() {
             audited
@@ -797,7 +798,7 @@ fn builtin_files_no_unaudited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
 fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     let (config, mut audits, imports) = builtin_files_no_unaudited(metadata);
 
-    let mut audited = StableMap::<String, Vec<AuditEntry>>::new();
+    let mut audited = SortedMap::<String, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
         if package.is_third_party() {
             audited
@@ -813,7 +814,7 @@ fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
 fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     let (mut config, mut audits, imports) = builtin_files_inited(metadata);
 
-    let mut audited = StableMap::<String, Vec<AuditEntry>>::new();
+    let mut audited = SortedMap::<String, Vec<AuditEntry>>::new();
     for (name, entries) in std::mem::take(&mut config.unaudited) {
         for entry in entries {
             audited
@@ -994,10 +995,13 @@ fn mock_simple_violation_cur_full_audit() {
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let violation = VersionReq::parse(&format!("={DEFAULT_VER}")).unwrap();
-    audits.audits["third-party1"] = vec![
-        violation_hard(violation),
-        full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            violation_hard(violation),
+            full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1016,12 +1020,15 @@ fn mock_simple_violation_delta() {
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let violation = VersionReq::parse("=5.0.0").unwrap();
-    audits.audits["third-party1"] = vec![
-        violation_hard(violation),
-        full_audit(ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            violation_hard(violation),
+            full_audit(ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1040,12 +1047,15 @@ fn mock_simple_violation_full_audit() {
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let violation = VersionReq::parse("=3.0.0").unwrap();
-    audits.audits["third-party1"] = vec![
-        violation_hard(violation),
-        full_audit(ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            violation_hard(violation),
+            full_audit(ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1064,10 +1074,13 @@ fn mock_simple_violation_wildcard() {
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
     let violation = VersionReq::parse("*").unwrap();
-    audits.audits["third-party1"] = vec![
-        violation_hard(violation),
-        full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            violation_hard(violation),
+            full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1085,7 +1098,11 @@ fn mock_simple_missing_transitive() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    audits.audits["transitive-third-party1"].clear();
+    audits
+        .audits
+        .get_mut("transitive-third-party1")
+        .unwrap()
+        .clear();
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1103,7 +1120,7 @@ fn mock_simple_missing_direct_internal() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    audits.audits["third-party1"].clear();
+    audits.audits.get_mut("third-party1").unwrap().clear();
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1121,7 +1138,7 @@ fn mock_simple_missing_direct_leaf() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    audits.audits["third-party2"].clear();
+    audits.audits.get_mut("third-party2").unwrap().clear();
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1139,8 +1156,12 @@ fn mock_simple_missing_leaves() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    audits.audits["third-party2"].clear();
-    audits.audits["transitive-third-party1"].clear();
+    audits.audits.get_mut("third-party2").unwrap().clear();
+    audits
+        .audits
+        .get_mut("transitive-third-party1")
+        .unwrap()
+        .clear();
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1158,11 +1179,11 @@ fn mock_simple_weaker_transitive_req() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let trans_audits = &mut audits.audits["transitive-third-party1"];
+    let trans_audits = &mut audits.audits.get_mut("transitive-third-party1").unwrap();
     trans_audits.clear();
     trans_audits.push(full_audit(ver(DEFAULT_VER), "weak-reviewed"));
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(full_audit_dep(
         ver(DEFAULT_VER),
@@ -1187,11 +1208,11 @@ fn mock_simple_weaker_transitive_req_using_implies() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let trans_audits = &mut audits.audits["transitive-third-party1"];
+    let trans_audits = &mut audits.audits.get_mut("transitive-third-party1").unwrap();
     trans_audits.clear();
     trans_audits.push(full_audit(ver(DEFAULT_VER), "strong-reviewed"));
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(full_audit_dep(
         ver(DEFAULT_VER),
@@ -1215,7 +1236,7 @@ fn mock_simple_lower_version_review() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(full_audit(ver(DEFAULT_VER - 1), DEFAULT_CRIT));
 
@@ -1235,7 +1256,7 @@ fn mock_simple_higher_version_review() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(full_audit(ver(DEFAULT_VER + 1), DEFAULT_CRIT));
 
@@ -1257,7 +1278,7 @@ fn mock_simple_higher_and_lower_version_review() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(full_audit(ver(DEFAULT_VER - 1), DEFAULT_CRIT));
     direct_audits.push(full_audit(ver(DEFAULT_VER + 1), DEFAULT_CRIT));
@@ -1278,7 +1299,7 @@ fn mock_simple_reviewed_too_weakly() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let trans_audits = &mut audits.audits["transitive-third-party1"];
+    let trans_audits = &mut audits.audits.get_mut("transitive-third-party1").unwrap();
     trans_audits.clear();
     trans_audits.push(full_audit(ver(DEFAULT_VER), "weak-reviewed"));
 
@@ -1298,7 +1319,7 @@ fn mock_simple_delta_to_unaudited() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 5),
@@ -1328,7 +1349,7 @@ fn mock_simple_delta_to_unaudited_overshoot() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 6),
@@ -1358,7 +1379,7 @@ fn mock_simple_delta_to_unaudited_undershoot() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 3),
@@ -1388,7 +1409,7 @@ fn mock_simple_delta_to_full_audit() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 5),
@@ -1413,7 +1434,7 @@ fn mock_simple_delta_to_full_audit_overshoot() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 6),
@@ -1438,7 +1459,7 @@ fn mock_simple_delta_to_full_audit_undershoot() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 3),
@@ -1463,7 +1484,7 @@ fn mock_simple_reverse_delta_to_full_audit() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER + 5),
@@ -1488,7 +1509,7 @@ fn mock_simple_reverse_delta_to_unaudited() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER + 5),
@@ -1518,7 +1539,7 @@ fn mock_simple_wrongly_reversed_delta_to_unaudited() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER),
@@ -1548,7 +1569,7 @@ fn mock_simple_wrongly_reversed_delta_to_full_audit() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER),
@@ -1573,7 +1594,7 @@ fn mock_simple_needed_reversed_delta_to_unaudited() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER),
@@ -1603,7 +1624,7 @@ fn mock_simple_delta_to_unaudited_too_weak() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 5),
@@ -1633,7 +1654,7 @@ fn mock_simple_delta_to_full_audit_too_weak() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 5),
@@ -1658,7 +1679,7 @@ fn mock_simple_delta_to_too_weak_full_audit() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    let direct_audits = &mut audits.audits["third-party1"];
+    let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
     direct_audits.push(delta_audit(
         ver(DEFAULT_VER - 5),
@@ -1780,7 +1801,10 @@ fn mock_complex_missing_core5() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    audits.audits["third-core"] = vec![full_audit(ver(DEFAULT_VER), "reviewed")];
+    audits.audits.insert(
+        "third-core".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), "reviewed")],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1796,7 +1820,10 @@ fn mock_complex_missing_core10() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    audits.audits["third-core"] = vec![full_audit(ver(5), "reviewed")];
+    audits.audits.insert(
+        "third-core".to_string(),
+        vec![full_audit(ver(5), "reviewed")],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1812,10 +1839,13 @@ fn mock_complex_core10_too_weak() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    audits.audits["third-core"] = vec![
-        full_audit(ver(DEFAULT_VER), "weak-reviewed"),
-        full_audit(ver(5), "reviewed"),
-    ];
+    audits.audits.insert(
+        "third-core".to_string(),
+        vec![
+            full_audit(ver(DEFAULT_VER), "weak-reviewed"),
+            full_audit(ver(5), "reviewed"),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1831,18 +1861,25 @@ fn mock_complex_core10_partially_too_weak() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    audits.audits["third-core"] = vec![
-        full_audit(ver(DEFAULT_VER), "weak-reviewed"),
-        full_audit(ver(5), "reviewed"),
-    ];
+    audits.audits.insert(
+        "third-core".to_string(),
+        vec![
+            full_audit(ver(DEFAULT_VER), "weak-reviewed"),
+            full_audit(ver(5), "reviewed"),
+        ],
+    );
 
     let audit_with_weaker_req = full_audit_dep(
         ver(DEFAULT_VER),
         "reviewed",
         [("third-core", ["weak-reviewed"])],
     );
-    audits.audits["thirdA"] = vec![audit_with_weaker_req.clone()];
-    audits.audits["thirdAB"] = vec![audit_with_weaker_req];
+    audits
+        .audits
+        .insert("thirdA".to_string(), vec![audit_with_weaker_req.clone()]);
+    audits
+        .audits
+        .insert("thirdAB".to_string(), vec![audit_with_weaker_req]);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1858,18 +1895,25 @@ fn mock_complex_core10_partially_too_weak_via_weak_delta() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
 
-    audits.audits["third-core"] = vec![
-        delta_audit(ver(5), ver(DEFAULT_VER), "weak-reviewed"),
-        full_audit(ver(5), "reviewed"),
-    ];
+    audits.audits.insert(
+        "third-core".to_string(),
+        vec![
+            delta_audit(ver(5), ver(DEFAULT_VER), "weak-reviewed"),
+            full_audit(ver(5), "reviewed"),
+        ],
+    );
 
     let audit_with_weaker_req = full_audit_dep(
         ver(DEFAULT_VER),
         "reviewed",
         [("third-core", ["weak-reviewed"])],
     );
-    audits.audits["thirdA"] = vec![audit_with_weaker_req.clone()];
-    audits.audits["thirdAB"] = vec![audit_with_weaker_req];
+    audits
+        .audits
+        .insert("thirdA".to_string(), vec![audit_with_weaker_req.clone()]);
+    audits
+        .audits
+        .insert("thirdAB".to_string(), vec![audit_with_weaker_req]);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -1889,18 +1933,25 @@ fn mock_complex_core10_partially_too_weak_via_strong_delta() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
-    audits.audits["third-core"] = vec![
-        delta_audit(ver(5), ver(DEFAULT_VER), "reviewed"),
-        full_audit(ver(5), "weak-reviewed"),
-    ];
+    audits.audits.insert(
+        "third-core".to_string(),
+        vec![
+            delta_audit(ver(5), ver(DEFAULT_VER), "reviewed"),
+            full_audit(ver(5), "weak-reviewed"),
+        ],
+    );
 
     let audit_with_weaker_req = full_audit_dep(
         ver(DEFAULT_VER),
         "reviewed",
         [("third-core", ["weak-reviewed"])],
     );
-    audits.audits["thirdA"] = vec![audit_with_weaker_req.clone()];
-    audits.audits["thirdAB"] = vec![audit_with_weaker_req];
+    audits
+        .audits
+        .insert("thirdA".to_string(), vec![audit_with_weaker_req.clone()]);
+    audits
+        .audits
+        .insert("thirdAB".to_string(), vec![audit_with_weaker_req]);
 
     config.policy.insert(
         "firstA".to_string(),
@@ -2077,7 +2128,10 @@ fn mock_simple_policy_first_dep_stronger() {
         dep_policy([("third-party2", ["strong-reviewed"])]),
     );
 
-    audits.audits["third-party2"] = vec![full_audit(ver(DEFAULT_VER), "strong-reviewed")];
+    audits.audits.insert(
+        "third-party2".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), "strong-reviewed")],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -2098,7 +2152,10 @@ fn mock_simple_policy_first_dep_weaker_needed() {
         dep_policy([("third-party1", ["weak-reviewed"])]),
     );
 
-    audits.audits["third-party1"] = vec![full_audit(ver(DEFAULT_VER), "weak-reviewed")];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), "weak-reviewed")],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -2119,10 +2176,13 @@ fn mock_simple_policy_first_dep_extra() {
         dep_policy([("third-party2", ["reviewed", "fuzzed"])]),
     );
 
-    audits.audits["third-party2"] = vec![
-        full_audit(ver(DEFAULT_VER), "reviewed"),
-        full_audit(ver(DEFAULT_VER), "fuzzed"),
-    ];
+    audits.audits.insert(
+        "third-party2".to_string(),
+        vec![
+            full_audit(ver(DEFAULT_VER), "reviewed"),
+            full_audit(ver(DEFAULT_VER), "fuzzed"),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -2143,7 +2203,10 @@ fn mock_simple_policy_first_dep_extra_missing() {
         dep_policy([("third-party2", ["reviewed", "fuzzed"])]),
     );
 
-    audits.audits["third-party2"] = vec![full_audit(ver(DEFAULT_VER), "reviewed")];
+    audits.audits.insert(
+        "third-party2".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), "reviewed")],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -2164,10 +2227,13 @@ fn mock_simple_policy_first_extra_partially_missing() {
         self_policy(["reviewed", "fuzzed"]),
     );
 
-    audits.audits["third-party2"] = vec![
-        full_audit(ver(DEFAULT_VER), "reviewed"),
-        full_audit(ver(DEFAULT_VER), "fuzzed"),
-    ];
+    audits.audits.insert(
+        "third-party2".to_string(),
+        vec![
+            full_audit(ver(DEFAULT_VER), "reviewed"),
+            full_audit(ver(DEFAULT_VER), "fuzzed"),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -2451,7 +2517,7 @@ fn builtin_simple_unaudited_extra() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![];
+    audits.audits.insert("third-party1".to_string(), vec![]);
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -2478,7 +2544,7 @@ fn builtin_simple_unaudited_extra_regenerate() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![];
+    audits.audits.insert("third-party1".to_string(), vec![]);
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -2551,7 +2617,7 @@ fn builtin_simple_deps_unaudited_overbroad() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["dev"] = vec![];
+    audits.audits.insert("dev".to_string(), vec![]);
 
     config.unaudited.insert(
         "dev".to_string(),
@@ -2575,7 +2641,7 @@ fn builtin_simple_deps_unaudited_overbroad_regenerate() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["dev"] = vec![];
+    audits.audits.insert("dev".to_string(), vec![]);
 
     config.unaudited.insert(
         "dev".to_string(),
@@ -2599,7 +2665,7 @@ fn builtin_complex_unaudited_twins() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-core"] = vec![];
+    audits.audits.insert("third-core".to_string(), vec![]);
 
     config.unaudited.insert(
         "third-core".to_string(),
@@ -2626,7 +2692,7 @@ fn builtin_complex_unaudited_twins_regenerate() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-core"] = vec![];
+    audits.audits.insert("third-core".to_string(), vec![]);
 
     config.unaudited.insert(
         "third-core".to_string(),
@@ -2653,7 +2719,10 @@ fn builtin_complex_unaudited_partial_twins() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-core"] = vec![full_audit(ver(5), SAFE_TO_DEPLOY)];
+    audits.audits.insert(
+        "third-core".to_string(),
+        vec![full_audit(ver(5), SAFE_TO_DEPLOY)],
+    );
 
     config.unaudited.insert(
         "third-core".to_string(),
@@ -2677,7 +2746,10 @@ fn builtin_complex_unaudited_partial_twins_regenerate() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-core"] = vec![full_audit(ver(5), SAFE_TO_DEPLOY)];
+    audits.audits.insert(
+        "third-core".to_string(),
+        vec![full_audit(ver(5), SAFE_TO_DEPLOY)],
+    );
 
     config.unaudited.insert(
         "third-core".to_string(),
@@ -2705,11 +2777,14 @@ fn builtin_simple_unaudited_in_delta() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -2733,11 +2808,14 @@ fn builtin_simple_unaudited_in_delta_regenerate() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -2762,11 +2840,14 @@ fn builtin_simple_unaudited_in_full() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -2790,11 +2871,14 @@ fn builtin_simple_unaudited_in_full_regenerate() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -2818,7 +2902,10 @@ fn builtin_simple_unaudited_in_direct_full() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -2842,7 +2929,10 @@ fn builtin_simple_unaudited_in_direct_full_regnerate() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -2870,24 +2960,30 @@ fn builtin_simple_unaudited_nested_weaker_req() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        delta_audit_dep(
-            ver(3),
-            ver(6),
-            SAFE_TO_DEPLOY,
-            [("transitive-third-party1", [SAFE_TO_RUN])],
-        ),
-        delta_audit_dep(
-            ver(6),
-            ver(DEFAULT_VER),
-            SAFE_TO_DEPLOY,
-            [("transitive-third-party1", [SAFE_TO_RUN])],
-        ),
-    ];
-    audits.audits["transitive-third-party1"] = vec![
-        delta_audit(ver(4), ver(8), SAFE_TO_RUN),
-        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            delta_audit_dep(
+                ver(3),
+                ver(6),
+                SAFE_TO_DEPLOY,
+                [("transitive-third-party1", [SAFE_TO_RUN])],
+            ),
+            delta_audit_dep(
+                ver(6),
+                ver(DEFAULT_VER),
+                SAFE_TO_DEPLOY,
+                [("transitive-third-party1", [SAFE_TO_RUN])],
+            ),
+        ],
+    );
+    audits.audits.insert(
+        "transitive-third-party1".to_string(),
+        vec![
+            delta_audit(ver(4), ver(8), SAFE_TO_RUN),
+            delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
+        ],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -2920,24 +3016,30 @@ fn builtin_simple_unaudited_nested_weaker_req_needs_dep_criteria() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        delta_audit_dep(
-            ver(3),
-            ver(6),
-            SAFE_TO_DEPLOY,
-            [("transitive-third-party1", [SAFE_TO_RUN])],
-        ),
-        delta_audit_dep(
-            ver(6),
-            ver(DEFAULT_VER),
-            SAFE_TO_DEPLOY,
-            [("transitive-third-party1", [SAFE_TO_RUN])],
-        ),
-    ];
-    audits.audits["transitive-third-party1"] = vec![
-        delta_audit(ver(4), ver(8), SAFE_TO_RUN),
-        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            delta_audit_dep(
+                ver(3),
+                ver(6),
+                SAFE_TO_DEPLOY,
+                [("transitive-third-party1", [SAFE_TO_RUN])],
+            ),
+            delta_audit_dep(
+                ver(6),
+                ver(DEFAULT_VER),
+                SAFE_TO_DEPLOY,
+                [("transitive-third-party1", [SAFE_TO_RUN])],
+            ),
+        ],
+    );
+    audits.audits.insert(
+        "transitive-third-party1".to_string(),
+        vec![
+            delta_audit(ver(4), ver(8), SAFE_TO_RUN),
+            delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
+        ],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -2969,24 +3071,30 @@ fn builtin_simple_unaudited_nested_weaker_req_regnerate() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        delta_audit_dep(
-            ver(3),
-            ver(6),
-            SAFE_TO_DEPLOY,
-            [("transitive-third-party1", [SAFE_TO_RUN])],
-        ),
-        delta_audit_dep(
-            ver(6),
-            ver(DEFAULT_VER),
-            SAFE_TO_DEPLOY,
-            [("transitive-third-party1", [SAFE_TO_RUN])],
-        ),
-    ];
-    audits.audits["transitive-third-party1"] = vec![
-        delta_audit(ver(4), ver(8), SAFE_TO_RUN),
-        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            delta_audit_dep(
+                ver(3),
+                ver(6),
+                SAFE_TO_DEPLOY,
+                [("transitive-third-party1", [SAFE_TO_RUN])],
+            ),
+            delta_audit_dep(
+                ver(6),
+                ver(DEFAULT_VER),
+                SAFE_TO_DEPLOY,
+                [("transitive-third-party1", [SAFE_TO_RUN])],
+            ),
+        ],
+    );
+    audits.audits.insert(
+        "transitive-third-party1".to_string(),
+        vec![
+            delta_audit(ver(4), ver(8), SAFE_TO_RUN),
+            delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
+        ],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -3027,24 +3135,30 @@ fn builtin_simple_unaudited_nested_stronger_req() {
         dep_policy([("third-party1", [SAFE_TO_RUN])]),
     );
 
-    audits.audits["third-party1"] = vec![
-        delta_audit_dep(
-            ver(3),
-            ver(6),
-            SAFE_TO_RUN,
-            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
-        ),
-        delta_audit_dep(
-            ver(6),
-            ver(DEFAULT_VER),
-            SAFE_TO_RUN,
-            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
-        ),
-    ];
-    audits.audits["transitive-third-party1"] = vec![
-        delta_audit(ver(4), ver(8), SAFE_TO_DEPLOY),
-        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            delta_audit_dep(
+                ver(3),
+                ver(6),
+                SAFE_TO_RUN,
+                [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+            ),
+            delta_audit_dep(
+                ver(6),
+                ver(DEFAULT_VER),
+                SAFE_TO_RUN,
+                [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+            ),
+        ],
+    );
+    audits.audits.insert(
+        "transitive-third-party1".to_string(),
+        vec![
+            delta_audit(ver(4), ver(8), SAFE_TO_DEPLOY),
+            delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -3078,24 +3192,30 @@ fn builtin_simple_unaudited_nested_stronger_req_regnerate() {
         dep_policy([("third-party1", [SAFE_TO_RUN])]),
     );
 
-    audits.audits["third-party1"] = vec![
-        delta_audit_dep(
-            ver(3),
-            ver(6),
-            SAFE_TO_RUN,
-            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
-        ),
-        delta_audit_dep(
-            ver(6),
-            ver(DEFAULT_VER),
-            SAFE_TO_RUN,
-            [("transitive-third-party1", [SAFE_TO_DEPLOY])],
-        ),
-    ];
-    audits.audits["transitive-third-party1"] = vec![
-        delta_audit(ver(4), ver(8), SAFE_TO_DEPLOY),
-        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            delta_audit_dep(
+                ver(3),
+                ver(6),
+                SAFE_TO_RUN,
+                [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+            ),
+            delta_audit_dep(
+                ver(6),
+                ver(DEFAULT_VER),
+                SAFE_TO_RUN,
+                [("transitive-third-party1", [SAFE_TO_DEPLOY])],
+            ),
+        ],
+    );
+    audits.audits.insert(
+        "transitive-third-party1".to_string(),
+        vec![
+            delta_audit(ver(4), ver(8), SAFE_TO_DEPLOY),
+            delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     config.unaudited.insert(
         "third-party1".to_string(),
@@ -3128,10 +3248,13 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["dev"] = vec![
-        full_audit(ver(5), SAFE_TO_RUN),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "dev".to_string(),
+        vec![
+            full_audit(ver(5), SAFE_TO_RUN),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     config
         .unaudited
@@ -3157,10 +3280,13 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria_regenerate() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["dev"] = vec![
-        full_audit(ver(5), SAFE_TO_RUN),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "dev".to_string(),
+        vec![
+            full_audit(ver(5), SAFE_TO_RUN),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     config
         .unaudited
@@ -3188,10 +3314,13 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_minimal_audited(&metadata);
 
-    audits.audits["simple-dev-indirect"] = vec![
-        full_audit(ver(5), SAFE_TO_RUN),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "simple-dev-indirect".to_string(),
+        vec![
+            full_audit(ver(5), SAFE_TO_RUN),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     config.unaudited.insert(
         "simple-dev-indirect".to_string(),
@@ -3218,11 +3347,14 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect_regenerate() {
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = builtin_files_minimal_audited(&metadata);
 
-    audits.audits["simple-dev-indirect"] = vec![
-        full_audit(ver(5), SAFE_TO_RUN),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "simple-dev-indirect".to_string(),
+        vec![
+            full_audit(ver(5), SAFE_TO_RUN),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     config.unaudited.insert(
         "simple-dev-indirect".to_string(),
@@ -3253,11 +3385,14 @@ fn builtin_dev_detection_cursed_full() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["simple-dev-indirect"] = vec![
-        full_audit(ver(5), SAFE_TO_RUN),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "simple-dev-indirect".to_string(),
+        vec![
+            full_audit(ver(5), SAFE_TO_RUN),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -3275,11 +3410,14 @@ fn builtin_dev_detection_cursed_minimal() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = builtin_files_minimal_audited(&metadata);
 
-    audits.audits["simple-dev-indirect"] = vec![
-        full_audit(ver(5), SAFE_TO_RUN),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
-        delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "simple-dev-indirect".to_string(),
+        vec![
+            full_audit(ver(5), SAFE_TO_RUN),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_RUN),
+            delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -3297,13 +3435,16 @@ fn builtin_simple_delta_cycle() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(7), SAFE_TO_DEPLOY),
-        delta_audit(ver(7), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(7), SAFE_TO_DEPLOY),
+            delta_audit(ver(7), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -3322,13 +3463,16 @@ fn builtin_simple_noop_delta() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(7), SAFE_TO_DEPLOY),
-        delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(7), SAFE_TO_DEPLOY),
+            delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -3346,17 +3490,20 @@ fn builtin_simple_delta_double_cycle() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(2), SAFE_TO_DEPLOY),
-        delta_audit(ver(2), ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(4), SAFE_TO_DEPLOY),
-        delta_audit(ver(4), ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(4), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(6), SAFE_TO_DEPLOY),
-        delta_audit(ver(6), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(6), ver(7), SAFE_TO_DEPLOY),
-        delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(2), SAFE_TO_DEPLOY),
+            delta_audit(ver(2), ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(4), SAFE_TO_DEPLOY),
+            delta_audit(ver(4), ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(4), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(6), SAFE_TO_DEPLOY),
+            delta_audit(ver(6), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(6), ver(7), SAFE_TO_DEPLOY),
+            delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -3374,17 +3521,20 @@ fn builtin_simple_delta_broken_double_cycle() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(2), SAFE_TO_DEPLOY),
-        delta_audit(ver(2), ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(4), SAFE_TO_DEPLOY),
-        delta_audit(ver(4), ver(3), SAFE_TO_DEPLOY),
-        // broken: delta_audit(ver(4), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(6), SAFE_TO_DEPLOY),
-        delta_audit(ver(6), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(6), ver(7), SAFE_TO_DEPLOY),
-        delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(2), SAFE_TO_DEPLOY),
+            delta_audit(ver(2), ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(4), SAFE_TO_DEPLOY),
+            delta_audit(ver(4), ver(3), SAFE_TO_DEPLOY),
+            // broken: delta_audit(ver(4), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(6), SAFE_TO_DEPLOY),
+            delta_audit(ver(6), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(6), ver(7), SAFE_TO_DEPLOY),
+            delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -3402,14 +3552,17 @@ fn builtin_simple_delta_broken_cycle() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(3), SAFE_TO_DEPLOY),
-        delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
-        delta_audit(ver(5), ver(7), SAFE_TO_DEPLOY),
-        delta_audit(ver(7), ver(5), SAFE_TO_DEPLOY),
-        // broken: delta_audit(ver(7), ver(8), SAFE_TO_DEPLOY),
-        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(3), SAFE_TO_DEPLOY),
+            delta_audit(ver(3), ver(5), SAFE_TO_DEPLOY),
+            delta_audit(ver(5), ver(7), SAFE_TO_DEPLOY),
+            delta_audit(ver(7), ver(5), SAFE_TO_DEPLOY),
+            // broken: delta_audit(ver(7), ver(8), SAFE_TO_DEPLOY),
+            delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -3427,14 +3580,17 @@ fn builtin_simple_long_cycle() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(2), SAFE_TO_DEPLOY),
-        delta_audit(ver(2), ver(7), SAFE_TO_DEPLOY),
-        delta_audit(ver(7), ver(6), SAFE_TO_DEPLOY),
-        delta_audit(ver(6), ver(8), SAFE_TO_DEPLOY),
-        delta_audit(ver(8), ver(7), SAFE_TO_DEPLOY),
-        delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(2), SAFE_TO_DEPLOY),
+            delta_audit(ver(2), ver(7), SAFE_TO_DEPLOY),
+            delta_audit(ver(7), ver(6), SAFE_TO_DEPLOY),
+            delta_audit(ver(6), ver(8), SAFE_TO_DEPLOY),
+            delta_audit(ver(8), ver(7), SAFE_TO_DEPLOY),
+            delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -3452,14 +3608,17 @@ fn builtin_simple_useless_long_cycle() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
 
-    audits.audits["third-party1"] = vec![
-        full_audit(ver(2), SAFE_TO_DEPLOY),
-        delta_audit(ver(2), ver(7), SAFE_TO_DEPLOY),
-        delta_audit(ver(7), ver(6), SAFE_TO_DEPLOY),
-        delta_audit(ver(6), ver(8), SAFE_TO_DEPLOY),
-        delta_audit(ver(8), ver(7), SAFE_TO_DEPLOY),
-        delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-    ];
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            full_audit(ver(2), SAFE_TO_DEPLOY),
+            delta_audit(ver(2), ver(7), SAFE_TO_DEPLOY),
+            delta_audit(ver(7), ver(6), SAFE_TO_DEPLOY),
+            delta_audit(ver(6), ver(8), SAFE_TO_DEPLOY),
+            delta_audit(ver(8), ver(7), SAFE_TO_DEPLOY),
+            delta_audit(ver(7), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);

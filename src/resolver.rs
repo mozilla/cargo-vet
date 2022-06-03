@@ -9,7 +9,7 @@ use crate::format::{self, AuditKind, Delta, DiffStat};
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::{
     AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
-    GraphFilterQuery, PackageExt, StableMap, Store, VetError,
+    GraphFilterQuery, PackageExt, Store, VetError,
 };
 
 /// A report of the results of running `resolve`.
@@ -232,7 +232,7 @@ pub struct DeltaEdge<'a> {
     is_unaudited_entry: bool,
 }
 
-fn builtin_criteria() -> StableMap<String, CriteriaEntry> {
+fn builtin_criteria() -> SortedMap<String, CriteriaEntry> {
     [
         (
             "safe-to-run".to_string(),
@@ -256,7 +256,7 @@ fn builtin_criteria() -> StableMap<String, CriteriaEntry> {
 }
 
 impl CriteriaMapper {
-    pub fn new(criteria: &StableMap<String, CriteriaEntry>) -> CriteriaMapper {
+    pub fn new(criteria: &SortedMap<String, CriteriaEntry>) -> CriteriaMapper {
         let builtins = builtin_criteria();
         let list = criteria
             .iter()
@@ -2223,7 +2223,7 @@ impl<'a> ResolveReport<'a> {
                     let package = &self.graph.nodes[*pkgidx];
                     let key = format!("{}:{}", package.name, package.version);
                     (key, violations)
-                }).collect::<StableMap<_,_>>(),
+                }).collect::<SortedMap<_,_>>(),
             }),
             Conclusion::FailForVet(fail) => {
                 // Don't print suggest output if we're --locked because we don't want to

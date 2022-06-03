@@ -1,21 +1,52 @@
 //! Details of the file formats used by cargo vet
 
-use core::fmt;
+use core::{cmp, fmt};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
-use cargo_metadata::{Version, VersionReq};
+use cargo_metadata::Version;
 use serde::{
     de::{self, value, SeqAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
 // Collections based on how we're using, so it's easier to swap them out.
-pub type StableMap<K, V> = linked_hash_map::LinkedHashMap<K, V>;
 pub type FastMap<K, V> = HashMap<K, V>;
 pub type FastSet<T> = HashSet<T>;
 pub type SortedMap<K, V> = BTreeMap<K, V>;
 pub type SortedSet<T> = BTreeSet<T>;
+
+// newtype VersionReq so that we can implement PartialOrd on it.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VersionReq(pub cargo_metadata::VersionReq);
+impl fmt::Display for VersionReq {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl FromStr for VersionReq {
+    type Err = <cargo_metadata::VersionReq as FromStr>::Err;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        cargo_metadata::VersionReq::from_str(s).map(VersionReq)
+    }
+}
+impl core::ops::Deref for VersionReq {
+    type Target = cargo_metadata::VersionReq;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl cmp::PartialOrd for VersionReq {
+    fn partial_cmp(&self, other: &VersionReq) -> Option<cmp::Ordering> {
+        format!("{}", self).partial_cmp(&format!("{}", other))
+    }
+}
+impl VersionReq {
+    pub fn parse(text: &str) -> Result<Self, <Self as FromStr>::Err> {
+        cargo_metadata::VersionReq::parse(text).map(VersionReq)
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////
 //                                                                                //
@@ -84,15 +115,15 @@ impl MetaConfig {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-pub type AuditedDependencies = StableMap<String, Vec<AuditEntry>>;
+pub type AuditedDependencies = SortedMap<String, Vec<AuditEntry>>;
 
 /// audits.toml
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct AuditsFile {
     /// A map of criteria_name to details on that criteria.
-    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub criteria: StableMap<String, CriteriaEntry>,
+    pub criteria: SortedMap<String, CriteriaEntry>,
     /// Actual audits.
     pub audits: AuditedDependencies,
 }
@@ -115,7 +146,7 @@ pub struct CriteriaEntry {
 }
 
 /// This is conceptually an enum
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct AuditEntry {
     pub who: Option<String>,
     pub notes: Option<String>,
@@ -124,7 +155,22 @@ pub struct AuditEntry {
     pub kind: AuditKind,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+/// Implement PartialOrd manually because the order we want for sorting is
+/// different than the order we want for serialization.
+impl cmp::PartialOrd for AuditEntry {
+    fn partial_cmp<'a>(&'a self, other: &'a AuditEntry) -> Option<cmp::Ordering> {
+        let tuple = |x: &'a AuditEntry| (&x.kind, &x.criteria, &x.who, &x.notes);
+        tuple(self).partial_cmp(&tuple(other))
+    }
+}
+
+impl cmp::Ord for AuditEntry {
+    fn cmp(&self, other: &AuditEntry) -> cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd)]
 #[serde(untagged)]
 pub enum AuditKind {
     Full {
@@ -154,7 +200,7 @@ pub enum AuditKind {
 /// ```toml
 /// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
 /// ```
-pub type DependencyCriteria = StableMap<String, Vec<String>>;
+pub type DependencyCriteria = SortedMap<String, Vec<String>>;
 
 /// A "VERSION -> VERSION"
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -224,14 +270,14 @@ pub struct ConfigFile {
     pub default_criteria: String,
 
     /// Remote audits.toml's that we trust and want to import.
-    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub imports: StableMap<String, RemoteImport>,
+    pub imports: SortedMap<String, RemoteImport>,
 
     /// A table of policies for first-party crates.
-    #[serde(skip_serializing_if = "StableMap::is_empty")]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub policy: StableMap<String, PolicyEntry>,
+    pub policy: SortedMap<String, PolicyEntry>,
 
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
@@ -393,7 +439,7 @@ pub struct CriteriaMapping {
 
 /// Semantically identical to a 'full audit' entry, but private to our project
 /// and tracked as less-good than a proper audit, so that you try to get rid of it.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UnauditedDependency {
     /// The version of the crate that we are currently "fine" with leaving unaudited.
     pub version: Version,
@@ -437,7 +483,7 @@ fn is_default_unaudited_suggest(val: &bool) -> bool {
 /// imports.lock, not sure what I want to put in here yet.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ImportsFile {
-    pub audits: StableMap<String, AuditsFile>,
+    pub audits: SortedMap<String, AuditsFile>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -450,7 +496,7 @@ pub struct ImportsFile {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-pub type DiffCache = StableMap<String, StableMap<Delta, DiffStat>>;
+pub type DiffCache = SortedMap<String, SortedMap<Delta, DiffStat>>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DiffStat {
