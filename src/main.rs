@@ -1478,24 +1478,37 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
-    let mut store = Store::acquire(cfg)?;
-    if !cfg.cli.locked {
-        store.fetch_foreign_audits()?;
-    }
+    // Scope acquiring the store so that we release the lockfile before potentially calling
+    // std::process::exit.
+    let has_errors = {
+        let mut store = Store::acquire(cfg)?;
+        if !cfg.cli.locked {
+            store.fetch_foreign_audits()?;
+        }
 
-    // DO THE THING!!!!
-    let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store, false);
-    match cfg.cli.output_format {
-        OutputFormat::Human => report.print_human(out, cfg)?,
-        OutputFormat::Json => report.print_json(out, cfg)?,
-    }
+        // DO THE THING!!!!
+        let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store, false);
+        match cfg.cli.output_format {
+            OutputFormat::Human => report.print_human(out, cfg)?,
+            OutputFormat::Json => report.print_json(out, cfg)?,
+        }
 
-    // Only save imports if we succeeded, to avoid any modifications on error.
-    if report.has_errors() {
-        // Want a non-0 error code in this situation
+        // Only save imports if we succeeded, to avoid any modifications on error.
+        if !report.has_errors() {
+            store.commit()?;
+            false
+        } else {
+            true
+        }
+    };
+
+    if has_errors {
+        // Want a non-zero error code in this situation. Note that we invoke exit
+        // here rather than unwinding to main to avoid printing a stack trace
+        // and whatnot on vetting failures. If there's a way to return a VetError
+        // that just silently causes the process to resolve with a non-zero exit
+        // code we could simplify this.
         std::process::exit(-1);
-    } else {
-        store.commit()?;
     }
 
     Ok(())
