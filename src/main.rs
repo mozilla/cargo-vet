@@ -2032,7 +2032,11 @@ impl Cache {
             fs::create_dir_all(&root)?;
         }
         // Now acquire the lockfile
-        let lock = FileLock::acquire(root.join(TEMP_LOCKFILE))?;
+        let lock = if cfg.cli.readonly_lockless {
+            None
+        } else {
+            Some(FileLock::acquire(root.join(TEMP_LOCKFILE))?)
+        };
 
         // Make sure everything else exists
         if !empty.exists() {
@@ -2062,7 +2066,7 @@ impl Cache {
         }
 
         Ok(Self {
-            _lock: Some(lock),
+            _lock: lock,
             root: Some(root),
             diff_cache_path: Some(diff_cache_path),
             diff_cache,
