@@ -337,7 +337,7 @@ struct HelpMarkdownArgs {}
 pub struct Features {
     #[clap(long)]
     /// Don't use --all-features
-    /// 
+    ///
     /// We default to passing --all-features to `cargo metadata`
     /// because we want to analyze your full dependency tree
     pub no_all_features: bool,
