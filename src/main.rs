@@ -15,14 +15,12 @@ use console::{style, Term};
 use eyre::Context;
 use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig, VersionReq};
-use log::{error, info, trace, warn};
 use reqwest::blocking as req;
 use resolver::{DepGraph, DiffRecommendation};
 use serde::{de::Deserialize, ser::Serialize};
-use simplelog::{
-    ColorChoice, ConfigBuilder, Level, LevelFilter, TermLogger, TerminalMode, WriteLogger,
-};
 use tar::Archive;
+use tracing::level_filters::LevelFilter;
+use tracing::{error, info, trace, trace_span, warn};
 
 use crate::format::{
     AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
@@ -74,9 +72,10 @@ struct Cli {
     readonly_lockless: bool,
 
     /// How verbose logging should be (log level)
-    #[clap(long, arg_enum)]
-    #[clap(default_value_t = Verbose::Warn)]
-    verbose: Verbose,
+    #[clap(long)]
+    #[clap(default_value_t = LevelFilter::WARN)]
+    #[clap(possible_values = ["off", "error", "warn", "info", "debug", "trace"])]
+    verbose: LevelFilter,
 
     /// Instead of stdout, write output to this file
     #[clap(long)]
@@ -443,7 +442,7 @@ impl Cli {
             features: Features::default(),
             locked: false,
             readonly_lockless: true,
-            verbose: Verbose::Off,
+            verbose: LevelFilter::OFF,
             output_file: None,
             output_format: OutputFormat::Human,
             log_file: None,
@@ -691,43 +690,23 @@ fn main() -> Result<(), VetError> {
     // Setup logging / output
     //////////////////////////////////////////////////////
 
-    // Configure our output formats / logging
-    let verbosity = match cli.verbose {
-        Verbose::Off => LevelFilter::Off,
-        Verbose::Warn => LevelFilter::Warn,
-        Verbose::Info => LevelFilter::Info,
-        Verbose::Debug => LevelFilter::Debug,
-        Verbose::Trace => LevelFilter::Trace,
-        Verbose::Error => LevelFilter::Error,
-    };
-
     // Init the logger (and make trace logging less noisy)
     if let Some(log_path) = &cli.log_file {
         let log_file = File::create(log_path).unwrap();
-        let _ = WriteLogger::init(
-            verbosity,
-            ConfigBuilder::new()
-                .set_location_level(LevelFilter::Off)
-                .set_time_level(LevelFilter::Off)
-                .set_thread_level(LevelFilter::Off)
-                .set_target_level(LevelFilter::Off)
-                .build(),
-            log_file,
-        )
-        .unwrap();
+        tracing_subscriber::fmt::fmt()
+            .with_max_level(cli.verbose)
+            .with_target(false)
+            .without_time()
+            .with_ansi(false)
+            .with_writer(log_file)
+            .init();
     } else {
-        let _ = TermLogger::init(
-            verbosity,
-            ConfigBuilder::new()
-                .set_location_level(LevelFilter::Off)
-                .set_time_level(LevelFilter::Off)
-                .set_thread_level(LevelFilter::Off)
-                .set_target_level(LevelFilter::Off)
-                .set_level_color(Level::Trace, None)
-                .build(),
-            TerminalMode::Stderr,
-            ColorChoice::Auto,
-        );
+        tracing_subscriber::fmt::fmt()
+            .with_max_level(cli.verbose)
+            .with_target(false)
+            .without_time()
+            .with_writer(std::io::stderr)
+            .init();
     }
 
     // Set a panic hook to redirect to the logger
@@ -1361,6 +1340,7 @@ pub fn minimize_unaudited(cfg: &Config, store: &mut Store) -> Result<(), VetErro
     // Try to vet
     let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), store, true);
 
+    trace!("minimizing unaudited...");
     let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, false)? {
         let mut new_unaudited = SortedMap::new();
         let mut suggest_by_package_name = SortedMap::<&str, Vec<SuggestItem>>::new();
@@ -2078,6 +2058,7 @@ impl Cache {
         &mut self,
         packages: &[(&'a str, &'a Version)],
     ) -> Result<BTreeMap<&'a str, BTreeMap<&'a Version, PathBuf>>, VetError> {
+        let _span = trace_span!("fetch-packages").entered();
         // Don't do anything if we're mocked, or there is no work to do
         if self.root.is_none() || packages.is_empty() {
             return Ok(BTreeMap::new());
@@ -2136,6 +2117,7 @@ impl Cache {
         package: &str,
         diffs: &BTreeSet<Delta>,
     ) -> Result<DiffRecommendation, VetError> {
+        let _span = trace_span!("diffstat-all").entered();
         // If there's no registry path setup, assume we're in tests and mocking.
         let mut all_versions = BTreeSet::new();
 

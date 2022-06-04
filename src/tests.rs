@@ -853,19 +853,11 @@ fn get_unaudited(store: &Store) -> String {
 }
 
 fn _init_trace_logger() {
-    use simplelog::*;
-    let _ = TermLogger::init(
-        LevelFilter::Trace,
-        ConfigBuilder::new()
-            .set_location_level(LevelFilter::Off)
-            .set_time_level(LevelFilter::Off)
-            .set_thread_level(LevelFilter::Off)
-            .set_target_level(LevelFilter::Off)
-            .set_level_color(Level::Trace, None)
-            .build(),
-        TerminalMode::Stderr,
-        ColorChoice::Auto,
-    );
+    tracing_subscriber::fmt::fmt()
+        .with_target(false)
+        .without_time()
+        .with_writer(std::io::stderr)
+        .init();
 }
 
 #[test]
