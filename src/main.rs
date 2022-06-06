@@ -31,6 +31,7 @@ use crate::resolver::{Conclusion, SuggestItem};
 
 pub mod format;
 mod resolver;
+mod serialization;
 #[cfg(test)]
 mod tests;
 

@@ -1,5 +1,6 @@
 //! Details of the file formats used by cargo vet
 
+use crate::serialization;
 use core::{cmp, fmt};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -7,7 +8,7 @@ use std::str::FromStr;
 
 use cargo_metadata::Version;
 use serde::{
-    de::{self, value, SeqAccess, Visitor},
+    de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
@@ -140,8 +141,7 @@ pub struct CriteriaEntry {
     /// Criteria that this one implies
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
-    #[serde(deserialize_with = "deserialize_string_or_vec")]
-    #[serde(serialize_with = "serialize_string_or_vec")]
+    #[serde(with = "serialization::string_or_vec")]
     pub implies: Vec<String>,
 }
 
@@ -298,51 +298,6 @@ fn is_default_criteria(val: &String) -> bool {
     val == DEFAULT_CRITERIA
 }
 
-/// Serde handler to allow specifying any of [], "foo",
-/// ["foo"], or ["foo", "bar"].
-fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct StringOrVec;
-
-    impl<'de> Visitor<'de> for StringOrVec {
-        type Value = Vec<String>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("string or list of strings")
-        }
-
-        fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(vec![s.to_owned()])
-        }
-
-        fn visit_seq<S>(self, seq: S) -> Result<Self::Value, S::Error>
-        where
-            S: SeqAccess<'de>,
-        {
-            Deserialize::deserialize(value::SeqAccessDeserializer::new(seq))
-        }
-    }
-
-    deserializer.deserialize_any(StringOrVec)
-}
-
-/// Similar to the above, but for serialization.
-fn serialize_string_or_vec<S>(v: &Vec<String>, s: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    if v.len() == 1 {
-        s.serialize_str(&v[0])
-    } else {
-        v.serialize(s)
-    }
-}
-
 /// Policies that first-party (non-foreign) crates must pass.
 ///
 /// This is basically the first-party equivalent of audits.toml, which is separated out
@@ -366,8 +321,7 @@ pub struct PolicyEntry {
     /// If not present, this defaults to the default criteria in the audits table.
     #[serde(default = "get_default_policy_criteria")]
     #[serde(skip_serializing_if = "is_default_policy_criteria")]
-    #[serde(deserialize_with = "deserialize_string_or_vec")]
-    #[serde(serialize_with = "serialize_string_or_vec")]
+    #[serde(with = "serialization::string_or_vec")]
     pub criteria: Vec<String>,
 
     /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
@@ -375,8 +329,7 @@ pub struct PolicyEntry {
     #[serde(rename = "dev-criteria")]
     #[serde(default = "get_default_policy_dev_criteria")]
     #[serde(skip_serializing_if = "is_default_policy_dev_criteria")]
-    #[serde(deserialize_with = "deserialize_string_or_vec")]
-    #[serde(serialize_with = "serialize_string_or_vec")]
+    #[serde(with = "serialization::string_or_vec")]
     pub dev_criteria: Vec<String>,
 
     /// Custom criteria for a specific first-party crate's dependencies.
@@ -432,8 +385,7 @@ pub struct CriteriaMapping {
     /// This local criteria is implied...
     pub ours: String,
     /// If all of these foreign criteria apply
-    #[serde(deserialize_with = "deserialize_string_or_vec")]
-    #[serde(serialize_with = "serialize_string_or_vec")]
+    #[serde(with = "serialization::string_or_vec")]
     pub theirs: Vec<String>,
 }
 
