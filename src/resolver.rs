@@ -1,9 +1,9 @@
 use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
 use core::fmt;
-use log::{error, trace, warn};
 use serde::Serialize;
 use serde_json::json;
 use std::io::Write;
+use tracing::{error, trace, trace_span, warn};
 
 use crate::format::{self, AuditKind, Delta, DiffStat};
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
@@ -926,6 +926,7 @@ pub fn resolve<'a>(
     store: &'a Store,
     guess_deeper: bool,
 ) -> ResolveReport<'a> {
+    let _resolve_span = trace_span!("resolve").entered();
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
     let graph = DepGraph::new(metadata, filter_graph);
@@ -933,6 +934,7 @@ pub fn resolve<'a>(
     trace!("built DepGraph!");
 
     let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
+    trace!("built CriteriaMapper!");
 
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
     let mut results =
@@ -1028,6 +1030,8 @@ pub fn resolve<'a>(
             }),
         };
     }
+    _resolve_span.exit();
+    let _blame_span = trace_span!("blame").entered();
 
     // There weren't any violations, so now compute the final failures by pushing blame
     // down from the roots to the leaves that caused those failures.
@@ -1041,7 +1045,7 @@ pub fn resolve<'a>(
         |failure, depth, own_failure| {
             if let Some(criteria_failures) = own_failure {
                 trace!(
-                    "blame: {:width$}blaming: {}:{} for {:?}",
+                    " {:width$}blaming: {}:{} for {:?}",
                     "",
                     graph.nodes[failure].name,
                     graph.nodes[failure].version,
@@ -1680,7 +1684,7 @@ fn resolve_first_party<'a>(
         }
     }
     trace!(
-        "resolve: first-party {}:{} initial validation: {:?}",
+        " first-party {}:{} initial validation: {:?}",
         package.name,
         package.version,
         criteria_mapper
@@ -1701,7 +1705,7 @@ fn resolve_first_party<'a>(
         if package.is_root {
             criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA])
         } else {
-            trace!("resolve:   has no policy, done");
+            trace!("   has no policy, done");
             // We have no policy, we're done
             return;
         }
@@ -1727,11 +1731,11 @@ fn resolve_first_party<'a>(
         // We had a policy and it passed, so now we're validated for all criteria
         // because our parents can never require anything else of us. No need
         // to update search_results, they'll be masked out by validated_criteria(?)
-        trace!("resolve:   passed policy");
+        trace!("   passed policy");
         results[pkgidx].validated_criteria = criteria_mapper.all_criteria();
     } else {
         // We had a policy and it failed, so now we're invalid for all criteria(?)
-        trace!("resolve:   failed policy");
+        trace!("   failed policy");
         results[pkgidx].validated_criteria = criteria_mapper.no_criteria();
         root_failures.push((pkgidx, policy_failures));
     }
@@ -1799,7 +1803,7 @@ fn resolve_dev<'a>(
         }
     }
     trace!(
-        "resolve: first-party dev {}:{} initial validation: {:?}",
+        " first-party dev {}:{} initial validation: {:?}",
         package.name,
         package.version,
         criteria_mapper
@@ -1836,9 +1840,9 @@ fn resolve_dev<'a>(
     }
 
     if policy_failures.is_empty() {
-        trace!("resolve:   passed dev policy");
+        trace!("   passed dev policy");
     } else {
-        trace!("resolve:   failed dev policy");
+        trace!("   failed dev policy");
         root_failures.push((pkgidx, policy_failures));
     }
 }
@@ -1852,7 +1856,7 @@ fn visit_failures<'a, T>(
     guess_deeper: bool,
     mut callback: impl FnMut(PackageIdx, usize, Option<&CriteriaSet>) -> Result<(), T>,
 ) -> Result<(), T> {
-    trace!("blame: traversing blame tree");
+    trace!(" traversing blame tree");
 
     // The crate graph can be messy in several ways:
     //
@@ -1889,14 +1893,14 @@ fn visit_failures<'a, T>(
     for (failed_idx, policy_failures) in root_failures {
         let failed_package = &graph.nodes[*failed_idx];
         trace!(
-            "blame: policy failure for {}:{}",
+            " policy failure for {}:{}",
             failed_package.name,
             failed_package.version
         );
         for (&failed_dep_idx, failed_criteria) in policy_failures {
             let failed_dep = &graph.nodes[failed_dep_idx];
             trace!(
-                "blame:   {}:{} needed {:?}",
+                "   {}:{} needed {:?}",
                 failed_dep.name,
                 failed_dep.version,
                 criteria_mapper
@@ -1927,7 +1931,7 @@ fn visit_failures<'a, T>(
         let result = &results[failure_idx];
         let package = &graph.nodes[failure_idx];
         trace!(
-            "blame: {:width$}visiting {}:{} for {:?}",
+            " {:width$}visiting {}:{} for {:?}",
             "",
             package.name,
             package.version,
@@ -2024,6 +2028,7 @@ impl<'a> ResolveReport<'a> {
         cfg: &Config,
         allow_deltas: bool,
     ) -> Result<Option<Suggest>, VetError> {
+        let _suggest_span = trace_span!("suggest").entered();
         let fail = if let Conclusion::FailForVet(fail) = &self.conclusion {
             fail
         } else {
@@ -2148,6 +2153,8 @@ impl<'a> ResolveReport<'a> {
                     });
                 }
                 Err(err) => {
+                    // We don't want to actually error out completely here since other packages
+                    // might still successfully diff!
                     error!("error diffing {}:{} {}", package.name, package.version, err);
                 }
             }
