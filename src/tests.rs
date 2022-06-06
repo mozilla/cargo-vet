@@ -229,8 +229,8 @@ fn violation(version: VersionReq, criteria: &str) -> AuditEntry {
 
 fn default_policy() -> PolicyEntry {
     PolicyEntry {
-        criteria: vec![],
-        dev_criteria: vec![],
+        criteria: None,
+        dev_criteria: None,
         dependency_criteria: SortedMap::new(),
         targets: None,
         dev_targets: None,
@@ -240,7 +240,7 @@ fn default_policy() -> PolicyEntry {
 
 fn self_policy(criteria: impl IntoIterator<Item = impl Into<String>>) -> PolicyEntry {
     PolicyEntry {
-        criteria: criteria.into_iter().map(|s| s.into()).collect(),
+        criteria: Some(criteria.into_iter().map(|s| s.into()).collect()),
         ..default_policy()
     }
 }
@@ -733,8 +733,8 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                 config.policy.insert(
                     package.name.clone(),
                     PolicyEntry {
-                        criteria: vec![DEFAULT_CRIT.to_string()],
-                        dev_criteria: vec![DEFAULT_CRIT.to_string()],
+                        criteria: Some(vec![DEFAULT_CRIT.to_string()]),
+                        dev_criteria: Some(vec![DEFAULT_CRIT.to_string()]),
                         dependency_criteria: DependencyCriteria::new(),
                         targets: None,
                         dev_targets: None,
