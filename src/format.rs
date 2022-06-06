@@ -319,18 +319,16 @@ pub struct PolicyEntry {
     /// set to satisfying all criteria.
     ///
     /// If not present, this defaults to the default criteria in the audits table.
-    #[serde(default = "get_default_policy_criteria")]
-    #[serde(skip_serializing_if = "is_default_policy_criteria")]
-    #[serde(with = "serialization::string_or_vec")]
-    pub criteria: Vec<String>,
+    #[serde(default)]
+    #[serde(with = "serialization::string_or_vec_or_none")]
+    pub criteria: Option<Vec<String>>,
 
     /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
     /// used as dev-dependencies.
     #[serde(rename = "dev-criteria")]
-    #[serde(default = "get_default_policy_dev_criteria")]
-    #[serde(skip_serializing_if = "is_default_policy_dev_criteria")]
-    #[serde(with = "serialization::string_or_vec")]
-    pub dev_criteria: Vec<String>,
+    #[serde(default)]
+    #[serde(with = "serialization::string_or_vec_or_none")]
+    pub dev_criteria: Option<Vec<String>>,
 
     /// Custom criteria for a specific first-party crate's dependencies.
     ///
@@ -353,21 +351,6 @@ pub struct PolicyEntry {
 
 pub static DEFAULT_POLICY_CRITERIA: &str = SAFE_TO_DEPLOY;
 pub static DEFAULT_POLICY_DEV_CRITERIA: &str = SAFE_TO_RUN;
-
-pub fn get_default_policy_criteria() -> Vec<String> {
-    vec![]
-}
-#[allow(clippy::ptr_arg)]
-fn is_default_policy_criteria(val: &Vec<String>) -> bool {
-    val.is_empty()
-}
-pub fn get_default_policy_dev_criteria() -> Vec<String> {
-    vec![]
-}
-#[allow(clippy::ptr_arg)]
-fn is_default_policy_dev_criteria(val: &Vec<String>) -> bool {
-    val.is_empty()
-}
 
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
 #[derive(serde::Serialize, serde::Deserialize)]

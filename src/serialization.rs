@@ -53,3 +53,30 @@ pub mod string_or_vec {
         deserializer.deserialize_any(StringOrVec)
     }
 }
+
+/// Similar to the above, but distinguishes an empty list from an absent one.
+///
+/// Fields using these handlers must be annotated with #[serde(default)]
+pub mod string_or_vec_or_none {
+    use super::*;
+
+    pub fn serialize<S>(maybe_v: &Option<Vec<String>>, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if let Some(v) = maybe_v {
+            string_or_vec::serialize(v, s)
+        } else {
+            s.serialize_none()
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // If the value isn't present in the stream, this deserializer won't be
+        // invoked at all and the #[serde(default)] will result in `None`.
+        string_or_vec::deserialize(deserializer).map(Some)
+    }
+}

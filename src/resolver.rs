@@ -1696,21 +1696,15 @@ fn resolve_first_party<'a>(
     results[pkgidx].validated_criteria = validated_criteria;
 
     // Now check that we pass our own policy
-    let own_policy = if let Some(policy) = store.config.policy.get(package.name) {
-        criteria_mapper.criteria_from_list(&policy.criteria)
+    let entry = store.config.policy.get(package.name);
+    let own_policy = if let Some(c) = entry.and_then(|p| p.criteria.as_ref()) {
+        criteria_mapper.criteria_from_list(c)
+    } else if package.is_root {
+        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA])
     } else {
-        criteria_mapper.no_criteria()
-    };
-    let own_policy = if own_policy.is_empty() {
-        if package.is_root {
-            criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA])
-        } else {
-            trace!("   has no policy, done");
-            // We have no policy, we're done
-            return;
-        }
-    } else {
-        own_policy
+        trace!("   has no policy, done");
+        // We have no policy, we're done
+        return;
     };
 
     let mut policy_failures = PolicyFailures::new();
@@ -1816,15 +1810,11 @@ fn resolve_dev<'a>(
     // results[pkgidx].validated_criteria = validated_criteria;
 
     // Now check that we pass our own policy
-    let own_policy = if let Some(policy) = store.config.policy.get(package.name) {
-        criteria_mapper.criteria_from_list(&policy.dev_criteria)
+    let entry = store.config.policy.get(package.name);
+    let own_policy = if let Some(c) = entry.and_then(|p| p.dev_criteria.as_ref()) {
+        criteria_mapper.criteria_from_list(c)
     } else {
-        criteria_mapper.no_criteria()
-    };
-    let own_policy = if own_policy.is_empty() {
         criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_DEV_CRITERIA])
-    } else {
-        own_policy
     };
 
     let mut policy_failures = PolicyFailures::new();
