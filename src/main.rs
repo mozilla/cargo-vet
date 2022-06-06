@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::fs::OpenOptions;
 use std::io::{BufReader, Read, Seek};
 use std::ops::Deref;
+use std::panic::panic_any;
 use std::path::Path;
 use std::process::Command;
 use std::str::FromStr;
@@ -680,7 +681,29 @@ impl PackageExt for Package {
     }
 }
 
+/// Trick to let us std::process::exit while still cleaning up
+/// by panicking with this type instead of a string.
+struct ExitPanic(i32);
+
 fn main() -> Result<(), VetError> {
+    // Wrap main up in a catch_panic so that we can use it to implement std::process::exit with
+    // unwinding, allowing us to silently exit the program while still cleaning up.
+    let result = std::panic::catch_unwind(real_main);
+    match result {
+        Ok(main_result) => main_result,
+        Err(e) => {
+            if let Some(ExitPanic(code)) = e.downcast_ref::<ExitPanic>() {
+                // Exit panic, just silently exit with this status
+                std::process::exit(*code);
+            } else {
+                // Normal panic, let it ride
+                std::panic::resume_unwind(e);
+            }
+        }
+    }
+}
+
+fn real_main() -> Result<(), VetError> {
     use Commands::*;
 
     let fake_cli = FakeCli::parse();
@@ -711,10 +734,15 @@ fn main() -> Result<(), VetError> {
 
     // Set a panic hook to redirect to the logger
     panic::set_hook(Box::new(|panic_info| {
+        if let Some(ExitPanic(_)) = panic_info.payload().downcast_ref::<ExitPanic>() {
+            // Be silent, we're just trying to std::process::exit
+            return;
+        }
         let (filename, line) = panic_info
             .location()
             .map(|loc| (loc.file(), loc.line()))
             .unwrap_or(("<unknown>", 0));
+
         let cause = panic_info
             .payload()
             .downcast_ref::<String>()
@@ -816,7 +844,7 @@ fn main() -> Result<(), VetError> {
         Ok(metadata) => metadata,
         Err(e) => {
             error!("'cargo metadata' failed: {}", e);
-            std::process::exit(-1);
+            panic_any(ExitPanic(-1));
         }
     };
 
@@ -847,7 +875,7 @@ fn main() -> Result<(), VetError> {
                     "Workspace had [{WORKSPACE_VET_CONFIG}] but it was malformed: {}",
                     e
                 );
-                std::process::exit(-1);
+                panic_any(ExitPanic(-1));
             })
             .ok()
     }();
@@ -860,14 +888,14 @@ fn main() -> Result<(), VetError> {
                     "Root package had [{PACKAGE_VET_CONFIG}] but it was malformed: {}",
                     e
                 );
-                std::process::exit(-1);
+                panic_any(ExitPanic(-1));
             })
             .ok()
     }();
 
     if workspace_metacfg.is_some() && package_metacfg.is_some() {
         error!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!");
-        std::process::exit(-1);
+        panic_any(ExitPanic(-1));
     }
 
     let mut metacfgs = vec![default_config];
@@ -894,14 +922,14 @@ fn main() -> Result<(), VetError> {
                 "'cargo vet' already initialized (store found at {:#?})",
                 metacfg.store_path()
             );
-            std::process::exit(-1);
+            panic_any(ExitPanic(-1));
         }
     } else if !init {
         error!(
             "You must run 'cargo vet init' (store not found at {:#?})",
             metacfg.store_path()
         );
-        std::process::exit(-1);
+        panic_any(ExitPanic(-1));
     }
 
     let cfg = Config {
@@ -1102,13 +1130,13 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         eula
     } else {
         error!("couldn't get description of criteria");
-        std::process::exit(-1);
+        panic_any(ExitPanic(-1));
     };
 
     // FIXME: can we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
         error!("'{}' isn't one of your foreign packages", sub_args.package);
-        std::process::exit(-1);
+        panic_any(ExitPanic(-1));
     }
 
     // Print out the EULA and prompt
@@ -1139,7 +1167,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     let answer = term.read_line()?.trim().to_lowercase();
     if answer != "yes" {
         writeln!(out, "rejected certification")?;
-        std::process::exit(-1);
+        panic_any(ExitPanic(-1));
     }
 
     // Ok! Ready to commit the audit!
@@ -1199,7 +1227,7 @@ fn cmd_add_violation(
     // FIXME: can we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
         error!("'{}' isn't one of your foreign packages", sub_args.package);
-        std::process::exit(-1);
+        panic_any(ExitPanic(-1));
     }
 
     // Ok! Ready to commit the audit!
@@ -1264,7 +1292,7 @@ fn cmd_add_unaudited(
     // FIXME: can we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
         error!("'{}' isn't one of your foreign packages", sub_args.package);
-        std::process::exit(-1);
+        panic_any(ExitPanic(-1));
     }
 
     // Ok! Ready to commit the audit!
@@ -1458,37 +1486,23 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
-    // Scope acquiring the store so that we release the lockfile before potentially calling
-    // std::process::exit.
-    let has_errors = {
-        let mut store = Store::acquire(cfg)?;
-        if !cfg.cli.locked {
-            store.fetch_foreign_audits()?;
-        }
+    let mut store = Store::acquire(cfg)?;
+    if !cfg.cli.locked {
+        store.fetch_foreign_audits()?;
+    }
 
-        // DO THE THING!!!!
-        let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store, false);
-        match cfg.cli.output_format {
-            OutputFormat::Human => report.print_human(out, cfg)?,
-            OutputFormat::Json => report.print_json(out, cfg)?,
-        }
+    // DO THE THING!!!!
+    let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store, false);
+    match cfg.cli.output_format {
+        OutputFormat::Human => report.print_human(out, cfg)?,
+        OutputFormat::Json => report.print_json(out, cfg)?,
+    }
 
-        // Only save imports if we succeeded, to avoid any modifications on error.
-        if !report.has_errors() {
-            store.commit()?;
-            false
-        } else {
-            true
-        }
-    };
-
-    if has_errors {
-        // Want a non-zero error code in this situation. Note that we invoke exit
-        // here rather than unwinding to main to avoid printing a stack trace
-        // and whatnot on vetting failures. If there's a way to return a VetError
-        // that just silently causes the process to resolve with a non-zero exit
-        // code we could simplify this.
-        std::process::exit(-1);
+    // Only save imports if we succeeded, to avoid any modifications on error.
+    if report.has_errors() {
+        panic_any(ExitPanic(-1));
+    } else {
+        store.commit()?;
     }
 
     Ok(())
