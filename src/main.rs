@@ -1339,8 +1339,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
         OutputFormat::Json => report.print_json(out, cfg)?,
     }
 
-    // We were successful, commit the store
-    store.commit()?;
+    // Don't commit the store, because we purged the unaudited table above.
 
     Ok(())
 }
