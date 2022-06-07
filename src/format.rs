@@ -177,6 +177,7 @@ pub enum AuditKind {
         version: Version,
         #[serde(rename = "dependency-criteria")]
         #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
+        #[serde(with = "serialization::dependency_criteria")]
         #[serde(default)]
         dependency_criteria: DependencyCriteria,
     },
@@ -184,6 +185,7 @@ pub enum AuditKind {
         delta: Delta,
         #[serde(rename = "dependency-criteria")]
         #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
+        #[serde(with = "serialization::dependency_criteria")]
         #[serde(default)]
         dependency_criteria: DependencyCriteria,
     },
@@ -330,14 +332,6 @@ pub struct PolicyEntry {
     #[serde(with = "serialization::string_or_vec_or_none")]
     pub dev_criteria: Option<Vec<String>>,
 
-    /// Custom criteria for a specific first-party crate's dependencies.
-    ///
-    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
-    #[serde(rename = "dependency-criteria")]
-    #[serde(default = "DependencyCriteria::new")]
-    #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
-    pub dependency_criteria: DependencyCriteria,
-
     /// TODO: figure this out
     pub targets: Option<Vec<String>>,
 
@@ -347,6 +341,15 @@ pub struct PolicyEntry {
 
     /// Freeform notes
     pub notes: Option<String>,
+
+    /// Custom criteria for a specific first-party crate's dependencies.
+    ///
+    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
+    #[serde(rename = "dependency-criteria")]
+    #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
+    #[serde(with = "serialization::dependency_criteria")]
+    #[serde(default)]
+    pub dependency_criteria: DependencyCriteria,
 }
 
 pub static DEFAULT_POLICY_CRITERIA: &str = SAFE_TO_DEPLOY;
@@ -382,19 +385,20 @@ pub struct UnauditedDependency {
     /// satisfy this criteria). This isn't defaulted, 'vet init' and similar commands will
     /// pick a "good" initial value.
     pub criteria: String,
-    /// Custom criteria for an unaudited crate's dependencies.
-    ///
-    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
-    #[serde(rename = "dependency-criteria")]
-    #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
-    #[serde(default)]
-    pub dependency_criteria: DependencyCriteria,
     /// Whether 'suggest' should bother mentioning this (defaults true).
     #[serde(default = "get_default_unaudited_suggest")]
     #[serde(skip_serializing_if = "is_default_unaudited_suggest")]
     pub suggest: bool,
     /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
     pub notes: Option<String>,
+    /// Custom criteria for an unaudited crate's dependencies.
+    ///
+    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
+    #[serde(rename = "dependency-criteria")]
+    #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
+    #[serde(with = "serialization::dependency_criteria")]
+    #[serde(default)]
+    pub dependency_criteria: DependencyCriteria,
 }
 
 static DEFAULT_UNAUDITED_SUGGEST: bool = true;

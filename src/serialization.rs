@@ -1,5 +1,6 @@
 //! Serialization helpers
 
+use crate::format::{DependencyCriteria, SortedMap};
 use core::fmt;
 use serde::{
     de::{self, value, SeqAccess, Visitor},
@@ -78,5 +79,31 @@ pub mod string_or_vec_or_none {
         // If the value isn't present in the stream, this deserializer won't be
         // invoked at all and the #[serde(default)] will result in `None`.
         string_or_vec::deserialize(deserializer).map(Some)
+    }
+}
+
+/// Allows the Vec<String> map value in dependency-criteria to support string_or_vec semantics.
+pub mod dependency_criteria {
+    use super::*;
+    #[derive(Serialize, Deserialize)]
+    struct Wrapper(#[serde(with = "string_or_vec")] Vec<String>);
+
+    pub fn serialize<S>(c: &DependencyCriteria, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let m: SortedMap<String, Wrapper> = c
+            .iter()
+            .map(|(k, v)| (k.clone(), Wrapper(v.clone())))
+            .collect();
+        m.serialize(s)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<DependencyCriteria, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let m: SortedMap<String, Wrapper> = SortedMap::deserialize(deserializer)?;
+        Ok(m.into_iter().map(|(k, Wrapper(v))| (k, v)).collect())
     }
 }
