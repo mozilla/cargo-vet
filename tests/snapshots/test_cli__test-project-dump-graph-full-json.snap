@@ -1,7 +1,8 @@
 ---
 source: tests/test-cli.rs
-expression: stdout
+expression: format_outputs(&output)
 ---
+stdout:
 [
   {
     "build_type": "normal",
@@ -2466,3 +2467,5 @@ expression: stdout
     "is_dev_only": false
   }
 ]
+stderr:
+

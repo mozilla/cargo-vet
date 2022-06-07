@@ -1,8 +1,8 @@
 ---
 source: tests/test-cli.rs
-assertion_line: 158
-expression: stdout
+expression: format_outputs(&output)
 ---
+stdout:
 {
   "conclusion": "success",
   "useless_unaudited": [],
@@ -429,3 +429,5 @@ expression: stdout
     }
   ]
 }
+stderr:
+

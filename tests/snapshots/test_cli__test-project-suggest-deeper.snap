@@ -1,7 +1,8 @@
 ---
 source: tests/test-cli.rs
-expression: stdout
+expression: format_outputs(&output)
 ---
+stdout:
 recommended audits for safe-to-deploy:
     cargo vet inspect tinyvec_macros 0.1.0                (used by tinyvec)                                           (87 lines)
     cargo vet inspect matches 0.1.9                       (used by url, idna, form_urlencoded)                        (211 lines)
@@ -107,4 +108,6 @@ recommended audits for safe-to-run:
 estimated audit backlog: 1771316 lines
 
 Use |cargo vet certify| to record the audits.
+
+stderr:
 

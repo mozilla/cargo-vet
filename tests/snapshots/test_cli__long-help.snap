@@ -1,7 +1,8 @@
 ---
 source: tests/test-cli.rs
-expression: stdout
+expression: format_outputs(&output)
 ---
+stdout:
 cargo-vet 0.1.0
 Supply-chain security for Rust
 
@@ -146,4 +147,6 @@ SUBCOMMANDS:
             Regenerate the 'unaudited' entries to try to minimize them and make the vet pass
     suggest
             Suggest some low-hanging fruit to review
+
+stderr:
 
