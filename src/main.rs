@@ -868,25 +868,25 @@ fn real_main() -> Result<(), VetError> {
         }),
     };
 
-    let workspace_metacfg = || -> Option<Result<MetaConfigInstance, VetError>> {
-        // FIXME: what is `store.path` relative to here?
-        Some(
-            MetaConfigInstance::deserialize(metadata.workspace_metadata.get(WORKSPACE_VET_CONFIG)?)
-                .wrap_err("Workspace had [{WORKSPACE_VET_CONFIG}] but it was malformed"),
-        )
-    }()
-    .transpose()?;
+    // FIXME: what is `store.path` relative to here?
+    let workspace_metacfg = metadata
+        .workspace_metadata
+        .get(WORKSPACE_VET_CONFIG)
+        .map(|cfg| {
+            MetaConfigInstance::deserialize(cfg)
+                .wrap_err("Workspace had [{WORKSPACE_VET_CONFIG}] but it was malformed")
+        })
+        .transpose()?;
 
-    let package_metacfg = || -> Option<Result<MetaConfigInstance, VetError>> {
-        // FIXME: what is `store.path` relative to here?
-        Some(
-            MetaConfigInstance::deserialize(
-                metadata.root_package()?.metadata.get(PACKAGE_VET_CONFIG)?,
-            )
-            .wrap_err("Root package had [{PACKAGE_VET_CONFIG}] but it was malformed"),
-        )
-    }()
-    .transpose()?;
+    // FIXME: what is `store.path` relative to here?
+    let package_metacfg = metadata
+        .root_package()
+        .and_then(|r| r.metadata.get(PACKAGE_VET_CONFIG))
+        .map(|cfg| {
+            MetaConfigInstance::deserialize(cfg)
+                .wrap_err("Root package had [{PACKAGE_VET_CONFIG}] but it was malformed")
+        })
+        .transpose()?;
 
     if workspace_metacfg.is_some() && package_metacfg.is_some() {
         Err(eyre!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!"))?;
