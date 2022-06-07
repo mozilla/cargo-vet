@@ -114,11 +114,11 @@ const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
 #[derive(Debug, Clone)]
 pub struct CriteriaMapper {
     /// All the criteria in their raw form
-    list: Vec<(String, CriteriaEntry)>,
+    pub list: Vec<(String, CriteriaEntry)>,
     /// name -> index in all lists
-    index: FastMap<String, usize>,
+    pub index: FastMap<String, usize>,
     /// The transitive closure of all criteria implied by each criteria (including self)
-    implied_criteria: Vec<CriteriaSet>,
+    pub implied_criteria: Vec<CriteriaSet>,
 }
 
 /// An "interned" cargo PackageId which is used to uniquely identify packages throughout
@@ -323,10 +323,9 @@ impl CriteriaMapper {
         set.clear_criteria(&self.implied_criteria[self.index[criteria]])
     }
     /// An iterator over every criteria in order, with 'implies' fully applied.
-    pub fn criteria_iter(&self) -> impl Iterator<Item = &CriteriaSet> {
+    pub fn all_criteria_iter(&self) -> impl Iterator<Item = &CriteriaSet> {
         self.implied_criteria.iter()
     }
-
     pub fn len(&self) -> usize {
         self.list.len()
     }
@@ -1396,7 +1395,7 @@ fn resolve_third_party<'a>(
     let mut validated_criteria = criteria_mapper.no_criteria();
     let mut fully_audited_criteria = criteria_mapper.no_criteria();
     let mut search_results = vec![];
-    for criteria in criteria_mapper.criteria_iter() {
+    for criteria in criteria_mapper.all_criteria_iter() {
         let result = search_for_path(
             criteria,
             &ROOT_VERSION,
@@ -1657,7 +1656,7 @@ fn resolve_first_party<'a>(
     // Compute whether we have each criteria based on our dependencies
     let mut validated_criteria = criteria_mapper.no_criteria();
     let mut search_results = vec![];
-    for criteria in criteria_mapper.criteria_iter() {
+    for criteria in criteria_mapper.all_criteria_iter() {
         // Find any build/normal dependencies that don't satisfy this criteria
         let mut failed_deps = SortedMap::new();
         for &depidx in package.normal_deps.iter().chain(&package.build_deps) {
@@ -1770,7 +1769,7 @@ fn resolve_dev<'a>(
     // Compute whether we have each criteria based on our dependencies
     let mut validated_criteria = criteria_mapper.no_criteria();
     let mut search_results = vec![];
-    for criteria in criteria_mapper.criteria_iter() {
+    for criteria in criteria_mapper.all_criteria_iter() {
         // Find any build/normal dependencies that don't satisfy this criteria
         let mut failed_deps = SortedMap::new();
         for &depidx in &package.dev_deps {
