@@ -178,7 +178,8 @@ pub struct ResolveResult<'a> {
 }
 
 pub type PolicyFailures = SortedMap<PackageIdx, CriteriaSet>;
-pub type RootFailures = Vec<(PackageIdx, PolicyFailures)>;
+/// (FailedPackage, Failures, is_dev)
+pub type RootFailures = Vec<(PackageIdx, PolicyFailures, bool)>;
 
 #[derive(Default, Debug, Clone)]
 pub struct AuditFailure {
@@ -1731,7 +1732,7 @@ fn resolve_first_party<'a>(
         // We had a policy and it failed, so now we're invalid for all criteria(?)
         trace!("   failed policy");
         results[pkgidx].validated_criteria = criteria_mapper.no_criteria();
-        root_failures.push((pkgidx, policy_failures));
+        root_failures.push((pkgidx, policy_failures, false));
     }
 }
 
@@ -1833,7 +1834,7 @@ fn resolve_dev<'a>(
         trace!("   passed dev policy");
     } else {
         trace!("   failed dev policy");
-        root_failures.push((pkgidx, policy_failures));
+        root_failures.push((pkgidx, policy_failures, true));
     }
 }
 
@@ -1880,7 +1881,8 @@ fn visit_failures<'a, T>(
     // to avoid infinite loops and just don't worry about the semantics.
     let mut search_stack = Vec::new();
 
-    for (failed_idx, policy_failures) in root_failures {
+    let mut immune_to_parent_demands = FastSet::new();
+    for (failed_idx, policy_failures, is_dev) in root_failures {
         let failed_package = &graph.nodes[*failed_idx];
         trace!(
             " policy failure for {}:{}",
@@ -1898,6 +1900,13 @@ fn visit_failures<'a, T>(
                     .collect::<Vec<_>>()
             );
             search_stack.push((failed_dep_idx, 0, Some(failed_criteria.clone())));
+        }
+        if !is_dev {
+            // If we have a root failure and it's not from the virtual dev-node, then
+            // we have a self-policy that "shadows" anything a parent could require.
+            // We will probably blame our children based on the existence of this entry,
+            // so we should refuse any attempts from a parent to blame us for anything.
+            immune_to_parent_demands.insert(failed_idx);
         }
     }
     let mut visited = FastMap::<PackageIdx, CriteriaSet>::new();
@@ -1985,9 +1994,15 @@ fn visit_failures<'a, T>(
                     // We already visited them more precisely
                     continue;
                 }
+                if immune_to_parent_demands.contains(&failed_dep) {
+                    continue;
+                }
                 search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
             }
             for (failed_dep, failed_criteria) in dep_faults {
+                if immune_to_parent_demands.contains(&failed_dep) {
+                    continue;
+                }
                 search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
             }
         } else {
