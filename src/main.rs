@@ -13,7 +13,7 @@ use std::{fs::File, io::Write, panic, path::PathBuf};
 use cargo_metadata::{Metadata, Package, Version};
 use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
 use console::{style, Term};
-use eyre::Context;
+use eyre::{eyre, WrapErr};
 use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig, VersionReq};
 use reqwest::blocking as req;
@@ -841,13 +841,9 @@ fn real_main() -> Result<(), VetError> {
 
     info!("Running: {:#?}", cmd.cargo_command());
 
-    let metadata = match cmd.exec() {
-        Ok(metadata) => metadata,
-        Err(e) => {
-            error!("'cargo metadata' failed: {}", e);
-            panic_any(ExitPanic(-1));
-        }
-    };
+    let metadata = cmd
+        .exec()
+        .wrap_err("'cargo metadata' exited unsuccessfully")?;
 
     // trace!("Got Metadata! {:#?}", metadata);
     trace!("Got Metadata!");
@@ -868,35 +864,28 @@ fn real_main() -> Result<(), VetError> {
         }),
     };
 
-    let workspace_metacfg = || -> Option<MetaConfigInstance> {
+    let workspace_metacfg = || -> Option<Result<MetaConfigInstance, VetError>> {
         // FIXME: what is `store.path` relative to here?
-        MetaConfigInstance::deserialize(metadata.workspace_metadata.get(WORKSPACE_VET_CONFIG)?)
-            .map_err(|e| {
-                error!(
-                    "Workspace had [{WORKSPACE_VET_CONFIG}] but it was malformed: {}",
-                    e
-                );
-                panic_any(ExitPanic(-1));
-            })
-            .ok()
-    }();
+        Some(
+            MetaConfigInstance::deserialize(metadata.workspace_metadata.get(WORKSPACE_VET_CONFIG)?)
+                .wrap_err("Workspace had [{WORKSPACE_VET_CONFIG}] but it was malformed"),
+        )
+    }()
+    .transpose()?;
 
-    let package_metacfg = || -> Option<MetaConfigInstance> {
+    let package_metacfg = || -> Option<Result<MetaConfigInstance, VetError>> {
         // FIXME: what is `store.path` relative to here?
-        MetaConfigInstance::deserialize(metadata.root_package()?.metadata.get(PACKAGE_VET_CONFIG)?)
-            .map_err(|e| {
-                error!(
-                    "Root package had [{PACKAGE_VET_CONFIG}] but it was malformed: {}",
-                    e
-                );
-                panic_any(ExitPanic(-1));
-            })
-            .ok()
-    }();
+        Some(
+            MetaConfigInstance::deserialize(
+                metadata.root_package()?.metadata.get(PACKAGE_VET_CONFIG)?,
+            )
+            .wrap_err("Root package had [{PACKAGE_VET_CONFIG}] but it was malformed"),
+        )
+    }()
+    .transpose()?;
 
     if workspace_metacfg.is_some() && package_metacfg.is_some() {
-        error!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!");
-        panic_any(ExitPanic(-1));
+        Err(eyre!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!"))?;
     }
 
     let mut metacfgs = vec![default_config];
@@ -919,18 +908,16 @@ fn real_main() -> Result<(), VetError> {
     let init = is_init(&metacfg);
     if matches!(cli.command, Some(Commands::Init { .. })) {
         if init {
-            error!(
+            Err(eyre!(
                 "'cargo vet' already initialized (store found at {:#?})",
                 metacfg.store_path()
-            );
-            panic_any(ExitPanic(-1));
+            ))?;
         }
     } else if !init {
-        error!(
+        Err(eyre!(
             "You must run 'cargo vet init' (store not found at {:#?})",
             metacfg.store_path()
-        );
-        panic_any(ExitPanic(-1));
+        ))?;
     }
 
     let cfg = Config {
@@ -1130,14 +1117,15 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     let eula = if let Some(eula) = eula_for_criteria(&store.audits, &criteria) {
         eula
     } else {
-        error!("couldn't get description of criteria");
-        panic_any(ExitPanic(-1));
+        Err(eyre!("couldn't get description of criteria"))?
     };
 
     // FIXME: can we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
-        error!("'{}' isn't one of your foreign packages", sub_args.package);
-        panic_any(ExitPanic(-1));
+        Err(eyre!(
+            "'{}' isn't one of your foreign packages",
+            sub_args.package
+        ))?
     }
 
     // Print out the EULA and prompt
@@ -1227,8 +1215,10 @@ fn cmd_add_violation(
 
     // FIXME: can we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
-        error!("'{}' isn't one of your foreign packages", sub_args.package);
-        panic_any(ExitPanic(-1));
+        Err(eyre!(
+            "'{}' isn't one of your foreign packages",
+            sub_args.package
+        ))?
     }
 
     // Ok! Ready to commit the audit!
@@ -1292,8 +1282,10 @@ fn cmd_add_unaudited(
 
     // FIXME: can we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
-        error!("'{}' isn't one of your foreign packages", sub_args.package);
-        panic_any(ExitPanic(-1));
+        Err(eyre!(
+            "'{}' isn't one of your foreign packages",
+            sub_args.package
+        ))?
     }
 
     // Ok! Ready to commit the audit!
@@ -1500,7 +1492,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     // Only save imports if we succeeded, to avoid any modifications on error.
     if report.has_errors() {
-        panic_any(ExitPanic(-1));
+        Err(eyre!("report contains errors"))?;
     } else {
         store.commit()?;
     }
