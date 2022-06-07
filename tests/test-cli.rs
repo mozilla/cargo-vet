@@ -16,13 +16,19 @@
 
 use std::{
     path::PathBuf,
-    process::{Command, Stdio},
+    process::{Command, Output, Stdio},
 };
 
 // Some tests need to write files (and read them back).
 // To keep this tidy and hidden, we make a new directory
 // in `target`.
 // const TEST_TMP: &str = "../target/testdata/";
+
+fn format_outputs(output: &Output) -> String {
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    format!("stdout:\n{stdout}\nstderr:\n{stderr}")
+}
 
 #[test]
 fn test_version() {
@@ -61,12 +67,8 @@ fn test_long_help() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("long-help", stdout);
+    insta::assert_snapshot!("long-help", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
@@ -80,12 +82,8 @@ fn test_short_help() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("short-help", stdout);
+    insta::assert_snapshot!("short-help", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
@@ -99,12 +97,8 @@ fn test_markdown_help() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("markdown-help", stdout);
+    insta::assert_snapshot!("markdown-help", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
@@ -126,12 +120,8 @@ fn test_project() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("test-project", stdout);
+    insta::assert_snapshot!("test-project", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
@@ -154,12 +144,8 @@ fn test_project_json() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("test-project-json", stdout);
+    insta::assert_snapshot!("test-project-json", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
@@ -182,12 +168,8 @@ fn test_project_suggest() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("test-project-suggest", stdout);
+    insta::assert_snapshot!("test-project-suggest", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
@@ -211,12 +193,8 @@ fn test_project_suggest_json() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("test-project-suggest-json", stdout);
+    insta::assert_snapshot!("test-project-suggest-json", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
@@ -240,12 +218,8 @@ fn test_project_suggest_deeper() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("test-project-suggest-deeper", stdout);
+    insta::assert_snapshot!("test-project-suggest-deeper", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
@@ -270,12 +244,8 @@ fn test_project_suggest_deeper_json() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("test-project-suggest-deeper-json", stdout);
+    insta::assert_snapshot!("test-project-suggest-deeper-json", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
@@ -300,12 +270,8 @@ fn test_project_dump_graph_full_json() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("test-project-dump-graph-full-json", stdout);
+    insta::assert_snapshot!("test-project-dump-graph-full-json", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
@@ -329,10 +295,6 @@ fn test_project_dump_graph_full() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
-
-    assert!(output.status.success(), "{}", stderr);
-    assert_eq!(stderr, "");
-    insta::assert_snapshot!("test-project-dump-graph-full", stdout);
+    insta::assert_snapshot!("test-project-dump-graph-full", format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
 }

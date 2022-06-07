@@ -1,7 +1,8 @@
 ---
 source: tests/test-cli.rs
-expression: stdout
+expression: format_outputs(&output)
 ---
+stdout:
 graph LR
     subgraph roots
         node74{test-project:0.1.0}
@@ -336,4 +337,6 @@ graph LR
     node100 --> node103
     node102 --> node100
     node104 --> node100
+
+stderr:
 

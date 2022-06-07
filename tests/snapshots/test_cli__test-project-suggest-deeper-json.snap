@@ -1,7 +1,8 @@
 ---
 source: tests/test-cli.rs
-expression: stdout
+expression: format_outputs(&output)
 ---
+stdout:
 {
   "conclusion": "fail (vetting)",
   "failures": [
@@ -3644,3 +3645,5 @@ expression: stdout
     "total_lines": 1771316
   }
 }
+stderr:
+

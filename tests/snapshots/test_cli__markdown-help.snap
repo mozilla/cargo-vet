@@ -1,7 +1,8 @@
 ---
 source: tests/test-cli.rs
-expression: stdout
+expression: format_outputs(&output)
 ---
+stdout:
 # cargo vet CLI manual
 
 > This manual can be regenerated with `cargo vet help-markdown`
@@ -438,4 +439,6 @@ cargo vet init
 #### `-h, --help`
 Print help information
 
+
+stderr:
 
