@@ -17,7 +17,7 @@ use eyre::Context;
 use flate2::read::GzDecoder;
 use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig, VersionReq};
 use reqwest::blocking as req;
-use resolver::{DepGraph, DiffRecommendation};
+use resolver::{CriteriaMapper, DepGraph, DiffRecommendation};
 use serde::{de::Deserialize, ser::Serialize};
 use tar::Archive;
 use tracing::level_filters::LevelFilter;
@@ -1073,7 +1073,7 @@ fn cmd_inspect(
 fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
     // Certify that you have reviewed a crate's source for some version / delta
     let mut store = Store::acquire(cfg)?;
-
+    let term = Term::stdout();
     let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
         // TODO: look at the current audits to infer this? prompt?
         DependencyCriteria::new()
@@ -1113,78 +1113,142 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     };
 
     let notes = sub_args.notes.clone();
+    let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
 
-    let mut criteria = if sub_args.criteria.is_empty() {
+    let criteria_names = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
-        vec![store.config.default_criteria.clone()]
+        let mut chosen_criteria = vec![];
+
+        loop {
+            term.clear_screen()?;
+            writeln!(out, "choose a criteria:")?;
+            let implied_criteria = criteria_mapper.criteria_from_list(&chosen_criteria);
+            for (criteria_idx, (criteria_name, _criteria_entry)) in
+                criteria_mapper.list.iter().enumerate()
+            {
+                if chosen_criteria.contains(criteria_name) {
+                    writeln!(
+                        out,
+                        "  {}. {}",
+                        criteria_idx + 1,
+                        style(criteria_name).green()
+                    )?;
+                } else if implied_criteria.has_criteria(criteria_idx) {
+                    writeln!(
+                        out,
+                        "  {}. {}",
+                        criteria_idx + 1,
+                        style(criteria_name).yellow()
+                    )?;
+                } else {
+                    writeln!(out, "  {}. {}", criteria_idx + 1, criteria_name)?;
+                }
+            }
+
+            writeln!(out)?;
+            writeln!(
+                out,
+                "current selection: {:?}",
+                criteria_mapper
+                    .criteria_names(&implied_criteria)
+                    .collect::<Vec<_>>()
+            )?;
+            writeln!(out, "(just press ENTER to accept the current criteria)")?;
+            writeln!(out)?;
+            let input = term.read_line()?;
+            let input = input.trim();
+            if input.is_empty() {
+                // User done selecting criteria
+                break;
+            }
+
+            // FIXME: these errors get cleared away right away
+            let answer = if let Ok(val) = input.parse::<usize>() {
+                val
+            } else {
+                writeln!(out, "error: not a valid integer")?;
+                continue;
+            };
+            if answer > criteria_mapper.list.len() {
+                writeln!(out, "error: not a valid criteria")?;
+                continue;
+            }
+            chosen_criteria.push(criteria_mapper.list[answer - 1].0.clone());
+        }
+        chosen_criteria
     } else {
         sub_args.criteria.clone()
     };
 
-    // TODO: implement multi-criteria
-    if criteria.len() != 1 {
-        unimplemented!("multiple criteria not yet implemented");
-    }
-    let criteria = criteria.swap_remove(0);
+    // Round-trip this through the criteria_mapper to clean up `implies` relationships
+    let criteria_set = criteria_mapper.criteria_from_list(&criteria_names);
+    for criteria in criteria_mapper.criteria_names(&criteria_set) {
+        term.clear_screen()?;
+        let eula = if let Some(eula) = eula_for_criteria(&store.audits, criteria) {
+            eula
+        } else {
+            writeln!(out, "error: couldn't get description of criteria")?;
+            panic_any(ExitPanic(-1));
+        };
 
-    let eula = if let Some(eula) = eula_for_criteria(&store.audits, &criteria) {
-        eula
-    } else {
-        error!("couldn't get description of criteria");
-        panic_any(ExitPanic(-1));
-    };
-
-    // FIXME: can we check if the version makes sense..?
-    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
-        error!("'{}' isn't one of your foreign packages", sub_args.package);
-        panic_any(ExitPanic(-1));
-    }
-
-    // Print out the EULA and prompt
-    let what_version = match &kind {
-        AuditKind::Full { version, .. } => {
-            format!("version {}", version)
+        // FIXME: can we check if the version makes sense..?
+        if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+            writeln!(
+                out,
+                "error: '{}' isn't one of your foreign packages",
+                sub_args.package
+            )?;
+            panic_any(ExitPanic(-1));
         }
-        AuditKind::Delta { delta, .. } => {
-            format!("the changes from version {} to {}", delta.from, delta.to)
+
+        if !sub_args.accept_all {
+            // Print out the EULA and prompt
+            let what_version = match &kind {
+                AuditKind::Full { version, .. } => {
+                    format!("version {}", version)
+                }
+                AuditKind::Delta { delta, .. } => {
+                    format!("the changes from version {} to {}", delta.from, delta.to)
+                }
+                AuditKind::Violation { .. } => unreachable!(),
+            };
+            let statement = format!(
+                "I, {}, certify that I have audited {} of {} in accordance with the following criteria:",
+                username, what_version, sub_args.package,
+            );
+
+            write!(
+                out,
+                "\n{}\n\n",
+                style(textwrap::fill(&statement, 80)).yellow().bold()
+            )?;
+            writeln!(out, "{}\n", style(eula).cyan())?;
+            write!(out, r#"(type "yes" to certify): "#)?;
+            out.flush()?;
+
+            let answer = term.read_line()?.trim().to_lowercase();
+            if answer != "yes" {
+                writeln!(out, "rejected certification")?;
+                panic_any(ExitPanic(-1));
+            }
         }
-        AuditKind::Violation { .. } => unreachable!(),
-    };
-    let statement = format!(
-        "I, {}, certify that I have audited {} of {} in accordance with the following criteria:",
-        username, what_version, sub_args.package,
-    );
 
-    write!(
-        out,
-        "\n{}\n\n",
-        style(textwrap::fill(&statement, 80)).yellow().bold()
-    )?;
-    writeln!(out, "{}\n", style(eula).cyan())?;
-    write!(out, r#"(type "yes" to certify): "#)?;
-    out.flush()?;
+        // Ok! Ready to commit the audit!
+        let new_entry = AuditEntry {
+            kind: kind.clone(),
+            criteria: criteria.to_string(),
+            who: who.clone(),
+            notes: notes.clone(),
+        };
 
-    let term = Term::stdout();
-    let answer = term.read_line()?.trim().to_lowercase();
-    if answer != "yes" {
-        writeln!(out, "rejected certification")?;
-        panic_any(ExitPanic(-1));
+        store
+            .audits
+            .audits
+            .entry(sub_args.package.clone())
+            .or_insert(vec![])
+            .push(new_entry);
     }
 
-    // Ok! Ready to commit the audit!
-    let new_entry = AuditEntry {
-        kind,
-        criteria,
-        who,
-        notes,
-    };
-
-    store
-        .audits
-        .audits
-        .entry(sub_args.package.clone())
-        .or_insert(vec![])
-        .push(new_entry);
     store.commit()?;
 
     Ok(())
