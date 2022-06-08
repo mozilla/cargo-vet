@@ -16,76 +16,36 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          components: rustfmt
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - uses: actions/checkout@v2
+      - name: Run cargo fmt
+        run: |
+          cargo fmt --all -- --check
 
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions-rs/toolchain@v1
-        with:
-            toolchain: stable
-            profile: minimal
-            components: clippy
-            override: true
-      - uses: actions-rs/clippy-check@v1
-        env:
-          PWD: ${{ env.GITHUB_WORKSPACE }}
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --workspace --tests --examples
+      - uses: actions/checkout@v2
+      - name: Run cargo clippy
+        run: |
+          cargo clippy --workspace --tests --examples
 
   docs:
     runs-on: ubuntu-latest
     env:
       RUSTDOCFLAGS: -Dwarnings
     steps:
-      - uses: actions/checkout@master
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          components: rust-docs
-          override: true
-      - uses: swatinem/rust-cache@v1
-      - uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          args: --workspace --no-deps
+      - uses: actions/checkout@v2
+      - name: Run cargo clippy
+        run: |
+          cargo doc --workspace --no-deps
 
   test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust: [nightly, stable]
     steps:
-      - uses: actions/checkout@master
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust }}
-          profile: minimal
-          override: true
-      - uses: swatinem/rust-cache@v1
-      - uses: actions-rs/cargo@v1
-        env:
-          PWD: ${{ env.GITHUB_WORKSPACE }}
-        with:
-          command: test
-          args: --workspace
-      - uses: actions-rs/cargo@v1
-        env:
-          PWD: ${{ env.GITHUB_WORKSPACE }}
-        with:
-          command: test
-          args: --workspace --examples --bins
+      - uses: actions/checkout@v2
+      - name: Run cargo test
+        run: |
+          cargo test --workspace --examples --bins
