@@ -15,7 +15,10 @@ use clap::{ArgEnum, CommandFactory, Parser, Subcommand};
 use console::{style, Term};
 use eyre::Context;
 use flate2::read::GzDecoder;
-use format::{AuditEntry, AuditKind, Delta, DiffCache, DiffStat, MetaConfig, VersionReq};
+use format::{
+    AuditEntry, AuditKind, CommandHistory, Delta, DiffCache, DiffStat, FetchCommand, MetaConfig,
+    VersionReq,
+};
 use reqwest::blocking as req;
 use resolver::{CriteriaMapper, DepGraph, DiffRecommendation};
 use serde::{de::Deserialize, ser::Serialize};
@@ -235,9 +238,9 @@ struct DiffArgs {
 #[derive(clap::Args)]
 struct CertifyArgs {
     /// The package to certify as audited
-    package: String,
+    package: Option<String>,
     /// The version to certify as audited
-    version1: Version,
+    version1: Option<Version>,
     /// If present, instead certify a diff from version1->version2
     version2: Option<Version>,
     /// The criteria to certify for this audit
@@ -646,6 +649,7 @@ impl FromStr for GraphFilter {
 // tmp cache for various shenanigans
 static TEMP_DIR_SUFFIX: &str = "cargo-vet-checkout";
 static TEMP_DIFF_CACHE: &str = "diff-cache.toml";
+static TEMP_COMMAND_HISTORY: &str = "command-history.json";
 static TEMP_EMPTY_PACKAGE: &str = "empty";
 static TEMP_REGISTRY_SRC: &str = "packages";
 static TEMP_LOCKFILE: &str = "lockfile";
@@ -1043,6 +1047,11 @@ fn cmd_inspect(
 ) -> Result<(), VetError> {
     // Download a crate's source to a temp location for review
     let mut cache = Cache::acquire(cfg)?;
+    // Record this command for magic in `vet certify`
+    cache.command_history.last_fetch = Some(FetchCommand::Inspect {
+        package: sub_args.package.clone(),
+        version: sub_args.version.clone(),
+    });
 
     let package = &*sub_args.package;
 
@@ -1073,6 +1082,9 @@ fn cmd_inspect(
 fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
     // Certify that you have reviewed a crate's source for some version / delta
     let mut store = Store::acquire(cfg)?;
+    // Grab the command history and immediately drop the cache
+    let command_history = Cache::acquire(cfg)?.command_history.clone();
+
     let term = Term::stdout();
     let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
         // TODO: look at the current audits to infer this? prompt?
@@ -1088,20 +1100,71 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         dep_criteria
     };
 
-    let kind = if let Some(version2) = &sub_args.version2 {
-        // This is a delta audit
-        AuditKind::Delta {
-            delta: Delta {
-                from: sub_args.version1.clone(),
-                to: version2.clone(),
+    let package = if let Some(package) = &sub_args.package {
+        package.clone()
+    } else if let Some(FetchCommand::Inspect { package, .. } | FetchCommand::Diff { package, .. }) =
+        &command_history.last_fetch
+    {
+        package.clone()
+    } else {
+        writeln!(
+            out,
+            "error: couldn't guess what package to certify, please specify"
+        )?;
+        panic_any(ExitPanic(-1));
+    };
+
+    let kind = if let Some(v1) = &sub_args.version1 {
+        if let Some(v2) = &sub_args.version2 {
+            // This is a delta audit
+            AuditKind::Delta {
+                delta: Delta {
+                    from: v1.clone(),
+                    to: v2.clone(),
+                },
+                dependency_criteria,
+            }
+        } else {
+            // This is a full audit
+            AuditKind::Full {
+                version: v1.clone(),
+                dependency_criteria,
+            }
+        }
+    } else if let Some(fetch) = &command_history.last_fetch {
+        match fetch {
+            FetchCommand::Inspect {
+                package: package_name,
+                version,
+            } if package_name == &package => AuditKind::Full {
+                version: version.clone(),
+                dependency_criteria: DependencyCriteria::new(),
             },
-            dependency_criteria,
+            FetchCommand::Diff {
+                package: package_name,
+                version1,
+                version2,
+            } if package_name == &package => AuditKind::Delta {
+                delta: Delta {
+                    from: version1.clone(),
+                    to: version2.clone(),
+                },
+                dependency_criteria: DependencyCriteria::new(),
+            },
+            _ => {
+                writeln!(
+                    out,
+                    "error: couldn't guess what version to certify, please specify"
+                )?;
+                panic_any(ExitPanic(-1));
+            }
         }
     } else {
-        AuditKind::Full {
-            version: sub_args.version1.clone(),
-            dependency_criteria,
-        }
+        writeln!(
+            out,
+            "error: couldn't guess what version to certify, please specify"
+        )?;
+        panic_any(ExitPanic(-1));
     };
 
     let (username, who) = if let Some(who) = &sub_args.who {
@@ -1112,7 +1175,6 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         (user_info.username, Some(who))
     };
 
-    let notes = sub_args.notes.clone();
     let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
 
     let criteria_names = if sub_args.criteria.is_empty() {
@@ -1121,7 +1183,8 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
 
         loop {
             term.clear_screen()?;
-            writeln!(out, "choose a criteria:")?;
+            writeln!(out, "choose criteria to certify:")?;
+            writeln!(out, "  0. <clear selections>")?;
             let implied_criteria = criteria_mapper.criteria_from_list(&chosen_criteria);
             for (criteria_idx, (criteria_name, _criteria_entry)) in
                 criteria_mapper.list.iter().enumerate()
@@ -1153,8 +1216,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                     .criteria_names(&implied_criteria)
                     .collect::<Vec<_>>()
             )?;
-            writeln!(out, "(just press ENTER to accept the current criteria)")?;
-            writeln!(out)?;
+            writeln!(out, "(press ENTER to accept the current criteria)")?;
             let input = term.read_line()?;
             let input = input.trim();
             if input.is_empty() {
@@ -1169,6 +1231,10 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                 writeln!(out, "error: not a valid integer")?;
                 continue;
             };
+            if answer == 0 {
+                chosen_criteria.clear();
+                continue;
+            }
             if answer > criteria_mapper.list.len() {
                 writeln!(out, "error: not a valid criteria")?;
                 continue;
@@ -1180,10 +1246,24 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         sub_args.criteria.clone()
     };
 
+    let notes = if let Some(notes) = sub_args.notes.clone() {
+        Some(notes)
+    } else {
+        term.clear_screen()?;
+        writeln!(out, "do you have any notes? (press ENTER to continue)")?;
+        writeln!(out)?;
+        let input = term.read_line()?;
+        let input = input.trim();
+        if input.is_empty() {
+            None
+        } else {
+            Some(input.to_string())
+        }
+    };
+
     // Round-trip this through the criteria_mapper to clean up `implies` relationships
     let criteria_set = criteria_mapper.criteria_from_list(&criteria_names);
     for criteria in criteria_mapper.criteria_names(&criteria_set) {
-        term.clear_screen()?;
         let eula = if let Some(eula) = eula_for_criteria(&store.audits, criteria) {
             eula
         } else {
@@ -1192,16 +1272,17 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         };
 
         // FIXME: can we check if the version makes sense..?
-        if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+        if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == *package) {
             writeln!(
                 out,
                 "error: '{}' isn't one of your foreign packages",
-                sub_args.package
+                package
             )?;
             panic_any(ExitPanic(-1));
         }
 
         if !sub_args.accept_all {
+            term.clear_screen()?;
             // Print out the EULA and prompt
             let what_version = match &kind {
                 AuditKind::Full { version, .. } => {
@@ -1214,7 +1295,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
             };
             let statement = format!(
                 "I, {}, certify that I have audited {} of {} in accordance with the following criteria:",
-                username, what_version, sub_args.package,
+                username, what_version, package,
             );
 
             write!(
@@ -1244,7 +1325,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         store
             .audits
             .audits
-            .entry(sub_args.package.clone())
+            .entry(package.clone())
             .or_insert(vec![])
             .push(new_entry);
     }
@@ -1525,6 +1606,11 @@ pub fn minimize_unaudited(cfg: &Config, store: &mut Store) -> Result<(), VetErro
 
 fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Result<(), VetError> {
     let mut cache = Cache::acquire(cfg)?;
+    cache.command_history.last_fetch = Some(FetchCommand::Diff {
+        package: sub_args.package.clone(),
+        version1: sub_args.version1.clone(),
+        version2: sub_args.version2.clone(),
+    });
 
     let package = &*sub_args.package;
 
@@ -1775,6 +1861,26 @@ where
     writeln!(&mut output, "{}\n{}", heading, toml_string)?;
     Ok(())
 }
+fn load_json<T>(path: &Path) -> Result<T, VetError>
+where
+    T: for<'a> Deserialize<'a>,
+{
+    let mut reader = BufReader::new(File::open(path)?);
+    let mut string = String::new();
+    reader.read_to_string(&mut string)?;
+    let json = serde_json::from_str(&string)?;
+    Ok(json)
+}
+fn store_json<T>(path: &Path, val: T) -> Result<(), VetError>
+where
+    T: Serialize,
+{
+    // FIXME: do this in a temp file and swap it into place to avoid corruption?
+    let json_string = serde_json::to_string(&val)?;
+    let mut output = File::create(path)?;
+    writeln!(&mut output, "{}", json_string)?;
+    Ok(())
+}
 
 fn load_audits(store_path: &Path) -> Result<AuditsFile, VetError> {
     // TODO: do integrity checks? (for things like criteria keys being valid)
@@ -1799,6 +1905,10 @@ fn load_imports(store_path: &Path) -> Result<ImportsFile, VetError> {
 
 fn load_diff_cache(diff_cache_path: &Path) -> Result<DiffCache, VetError> {
     let file: DiffCache = load_toml(diff_cache_path)?;
+    Ok(file)
+}
+fn load_command_history(command_history_path: &Path) -> Result<CommandHistory, VetError> {
+    let file: CommandHistory = load_json(command_history_path)?;
     Ok(file)
 }
 
@@ -1842,6 +1952,13 @@ fn store_diff_cache(diff_cache_path: &Path, diff_cache: DiffCache) -> Result<(),
     let heading = "";
 
     store_toml(diff_cache_path, heading, diff_cache)?;
+    Ok(())
+}
+fn store_command_history(
+    command_history_path: &Path,
+    command_history: CommandHistory,
+) -> Result<(), VetError> {
+    store_json(command_history_path, command_history)?;
     Ok(())
 }
 
@@ -2032,6 +2149,10 @@ pub struct Cache {
     diff_cache_path: Option<PathBuf>,
     /// The loaded DiffCache, will be written back on Drop
     diff_cache: DiffCache,
+    /// Path to the CommandHistory (for when we want to save it back)
+    command_history_path: Option<PathBuf>,
+    /// Command history to provide some persistent magic smarts
+    command_history: CommandHistory,
 }
 
 /// A Registry in CARGO_HOME (usually the crates.io one)
@@ -2062,6 +2183,11 @@ impl Drop for Cache {
             // Write back the diff_cache
             store_diff_cache(diff_cache_path, mem::take(&mut self.diff_cache)).unwrap();
         }
+        if let Some(command_history_path) = &self.command_history_path {
+            // Write back the command_history
+            store_command_history(command_history_path, mem::take(&mut self.command_history))
+                .unwrap();
+        }
         // `_lock: FileLock` implicitly released here
     }
 }
@@ -2078,6 +2204,8 @@ impl Cache {
                 cargo_registry: None,
                 diff_cache_path: None,
                 diff_cache: DiffCache::new(),
+                command_history_path: None,
+                command_history: CommandHistory::default(),
             });
         }
 
@@ -2117,6 +2245,16 @@ impl Cache {
             DiffCache::new()
         };
 
+        // Setup the command_history.
+        let command_history_path = root.join(TEMP_COMMAND_HISTORY);
+        let command_history =
+            if let Ok(command_history) = load_command_history(&command_history_path) {
+                command_history
+            } else {
+                // Might be our first run, create a fresh command_history that we'll write back at the end
+                CommandHistory::default()
+            };
+
         // Try to get the cargo registry
         let cargo_registry = find_cargo_registry(cfg);
         if let Err(e) = &cargo_registry {
@@ -2128,6 +2266,8 @@ impl Cache {
             root: Some(root),
             diff_cache_path: Some(diff_cache_path),
             diff_cache,
+            command_history_path: Some(command_history_path),
+            command_history,
             cargo_registry: cargo_registry.ok(),
         })
     }

@@ -5,7 +5,7 @@ use serde_json::json;
 use std::io::Write;
 use tracing::{error, trace, trace_span, warn};
 
-use crate::format::{self, AuditKind, Delta, DiffStat};
+use crate::format::{self, AuditKind, Delta, DiffStat, FetchCommand, SuggestedAudit};
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::{
     AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
@@ -1903,7 +1903,7 @@ fn visit_failures<'a, T>(
         if !is_dev {
             // If we have a root failure and it's not from the virtual dev-node, then
             // we have a self-policy that "shadows" anything a parent could require.
-            // We will probably blame our children based on the existence of this entry,
+            // We will properly blame our children based on the existence of this entry,
             // so we should refuse any attempts from a parent to blame us for anything.
             immune_to_parent_demands.insert(failed_idx);
         }
@@ -2181,6 +2181,30 @@ impl<'a> ResolveReport<'a> {
                 .or_default()
                 .push(s);
         }
+
+        let mut last_suggest = vec![];
+        for suggestion in &suggestions {
+            let package = self.graph.nodes[suggestion.package].name.to_string();
+            let command = if suggestion.suggested_diff.from == ROOT_VERSION {
+                FetchCommand::Inspect {
+                    package,
+                    version: suggestion.suggested_diff.to.clone(),
+                }
+            } else {
+                FetchCommand::Diff {
+                    package,
+                    version1: suggestion.suggested_diff.from.clone(),
+                    version2: suggestion.suggested_diff.to.clone(),
+                }
+            };
+            let criteria = self
+                .criteria_mapper
+                .criteria_names(&suggestion.suggested_criteria)
+                .map(String::from)
+                .collect::<Vec<_>>();
+            last_suggest.push(SuggestedAudit { command, criteria });
+        }
+        cache.command_history.last_suggest = last_suggest;
 
         Ok(Some(Suggest {
             suggestions,

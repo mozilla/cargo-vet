@@ -330,7 +330,7 @@ Mark `$package $version` as reviewed
 
 ### cargo vet certify USAGE
 ```
-cargo vet certify [OPTIONS] <PACKAGE> <VERSION1> [VERSION2]
+cargo vet certify [OPTIONS] [ARGS]
 ```
 
 ### cargo vet certify ARGS

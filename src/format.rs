@@ -442,3 +442,40 @@ pub struct DiffStat {
     pub raw: String,
     pub count: u64,
 }
+
+////////////////////////////////////////////////////////////////////////////////////
+//                                                                                //
+//                                                                                //
+//                                                                                //
+//                             command-history.json                               //
+//                                                                                //
+//                                                                                //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum FetchCommand {
+    Inspect {
+        package: String,
+        version: Version,
+    },
+    Diff {
+        package: String,
+        version1: Version,
+        version2: Version,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SuggestedAudit {
+    #[serde(flatten)]
+    pub command: FetchCommand,
+    pub criteria: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct CommandHistory {
+    #[serde(flatten)]
+    pub last_fetch: Option<FetchCommand>,
+    pub last_suggest: Vec<SuggestedAudit>,
+}
