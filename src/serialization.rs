@@ -84,15 +84,17 @@ pub mod string_or_vec_or_none {
 
 /// Allows the Vec<String> map value in dependency-criteria to support string_or_vec semantics.
 pub mod dependency_criteria {
+    use crate::format::{CriteriaName, PackageName};
+
     use super::*;
     #[derive(Serialize, Deserialize)]
-    struct Wrapper(#[serde(with = "string_or_vec")] Vec<String>);
+    struct Wrapper(#[serde(with = "string_or_vec")] Vec<CriteriaName>);
 
     pub fn serialize<S>(c: &DependencyCriteria, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let m: SortedMap<String, Wrapper> = c
+        let m: SortedMap<PackageName, Wrapper> = c
             .iter()
             .map(|(k, v)| (k.clone(), Wrapper(v.clone())))
             .collect();
@@ -103,7 +105,7 @@ pub mod dependency_criteria {
     where
         D: Deserializer<'de>,
     {
-        let m: SortedMap<String, Wrapper> = SortedMap::deserialize(deserializer)?;
+        let m: SortedMap<PackageName, Wrapper> = SortedMap::deserialize(deserializer)?;
         Ok(m.into_iter().map(|(k, Wrapper(v))| (k, v)).collect())
     }
 }

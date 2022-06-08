@@ -5,7 +5,10 @@ use serde_json::json;
 use std::io::Write;
 use tracing::{error, trace, trace_span, warn};
 
-use crate::format::{self, AuditKind, Delta, DiffStat, FetchCommand, SuggestedAudit};
+use crate::format::{
+    self, AuditKind, CriteriaName, CriteriaStr, Delta, DiffStat, FetchCommand, ImportName,
+    PackageStr, SuggestedAudit,
+};
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::{
     AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
@@ -79,13 +82,13 @@ pub enum ViolationConflict {
 #[derive(Debug, Clone, Serialize)]
 pub enum AuditSource {
     OwnAudits,
-    Foreign(String),
+    Foreign(ImportName),
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct Suggest {
     pub suggestions: Vec<SuggestItem>,
-    pub suggestions_by_criteria: SortedMap<String, Vec<SuggestItem>>,
+    pub suggestions_by_criteria: SortedMap<CriteriaName, Vec<SuggestItem>>,
     pub total_lines: u64,
 }
 
@@ -114,9 +117,9 @@ const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
 #[derive(Debug, Clone)]
 pub struct CriteriaMapper {
     /// All the criteria in their raw form
-    pub list: Vec<(String, CriteriaEntry)>,
+    pub list: Vec<(CriteriaName, CriteriaEntry)>,
     /// name -> index in all lists
-    pub index: FastMap<String, usize>,
+    pub index: FastMap<CriteriaName, usize>,
     /// The transitive closure of all criteria implied by each criteria (including self)
     pub implied_criteria: Vec<CriteriaSet>,
 }
@@ -131,7 +134,7 @@ pub struct PackageNode<'a> {
     pub build_type: DependencyKind,
     #[serde(skip_serializing_if = "pkgid_unstable")]
     pub package_id: &'a PackageId,
-    pub name: &'a str,
+    pub name: PackageStr<'a>,
     pub version: &'a Version,
     pub normal_deps: Vec<PackageIdx>,
     pub build_deps: Vec<PackageIdx>,
@@ -158,7 +161,7 @@ fn pkgid_unstable(pkgid: &PackageId) -> bool {
 pub struct DepGraph<'a> {
     pub nodes: Vec<PackageNode<'a>>,
     pub interner_by_pkgid: SortedMap<&'a PackageId, PackageIdx>,
-    pub interner_by_name_and_ver: SortedMap<&'a str, SortedMap<&'a Version, PackageIdx>>,
+    pub interner_by_name_and_ver: SortedMap<PackageStr<'a>, SortedMap<&'a Version, PackageIdx>>,
     pub topo_index: Vec<PackageIdx>,
 }
 
@@ -227,13 +230,13 @@ pub struct DeltaEdge<'a> {
     criteria: CriteriaSet,
     /// Requirements that dependencies must satisfy for the edge to be valid.
     /// If a dependency isn't mentionned, then it defaults to `criteria`.
-    dependency_criteria: FastMap<&'a str, CriteriaSet>,
+    dependency_criteria: FastMap<PackageStr<'a>, CriteriaSet>,
     /// Whether this edge represents an 'unaudited' entry. These will initially
     /// be ignored, and then used only if we can't find a path.
     is_unaudited_entry: bool,
 }
 
-fn builtin_criteria() -> SortedMap<String, CriteriaEntry> {
+fn builtin_criteria() -> SortedMap<CriteriaName, CriteriaEntry> {
     [
         (
             "safe-to-run".to_string(),
@@ -257,14 +260,14 @@ fn builtin_criteria() -> SortedMap<String, CriteriaEntry> {
 }
 
 impl CriteriaMapper {
-    pub fn new(criteria: &SortedMap<String, CriteriaEntry>) -> CriteriaMapper {
+    pub fn new(criteria: &SortedMap<CriteriaName, CriteriaEntry>) -> CriteriaMapper {
         let builtins = builtin_criteria();
         let list = criteria
             .iter()
             .chain(builtins.iter())
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<Vec<_>>();
-        let index: FastMap<String, usize> = list
+        let index: FastMap<CriteriaName, usize> = list
             .iter()
             .enumerate()
             .map(|(idx, v)| (v.0.clone(), idx))
@@ -281,9 +284,9 @@ impl CriteriaMapper {
 
             fn recursive_implies(
                 result: &mut CriteriaSet,
-                implies: &[String],
-                index: &FastMap<String, usize>,
-                list: &[(String, CriteriaEntry)],
+                implies: &[CriteriaName],
+                index: &FastMap<CriteriaName, usize>,
+                list: &[(CriteriaName, CriteriaEntry)],
             ) {
                 for implied in implies {
                     let idx = index[&**implied];
@@ -316,10 +319,10 @@ impl CriteriaMapper {
         }
         result
     }
-    pub fn set_criteria(&self, set: &mut CriteriaSet, criteria: &str) {
+    pub fn set_criteria(&self, set: &mut CriteriaSet, criteria: CriteriaStr) {
         set.set_criteria(self.index[criteria])
     }
-    pub fn clear_criteria(&self, set: &mut CriteriaSet, criteria: &str) {
+    pub fn clear_criteria(&self, set: &mut CriteriaSet, criteria: CriteriaStr) {
         set.clear_criteria(&self.implied_criteria[self.index[criteria]])
     }
     /// An iterator over every criteria in order, with 'implies' fully applied.
@@ -340,7 +343,7 @@ impl CriteriaMapper {
     pub fn criteria_names<'a>(
         &'a self,
         criteria: &'a CriteriaSet,
-    ) -> impl Iterator<Item = &'a str> + 'a {
+    ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
         // Filter out any criteria implied by other criteria
         criteria
             .indices()
@@ -473,7 +476,7 @@ impl<'a> DepGraph<'a> {
         // and setup the interners, which will only ever refer to these nodes
         let mut interner_by_pkgid = SortedMap::<&PackageId, PackageIdx>::new();
         let mut interner_by_name_and_ver =
-            SortedMap::<&str, SortedMap<&Version, PackageIdx>>::new();
+            SortedMap::<PackageStr, SortedMap<&Version, PackageIdx>>::new();
         let mut nodes = vec![];
 
         // Stub out the initial state of all the nodes
@@ -1201,7 +1204,7 @@ fn resolve_third_party<'a>(
             .get(foreign_name)
             .expect("Foreign Import isn't in config file (imports.lock outdated?)")
             .criteria_map;
-        let criteria_map: Vec<(&str, CriteriaSet)> = criteria_map
+        let criteria_map: Vec<(CriteriaStr, CriteriaSet)> = criteria_map
             .iter()
             .map(|mapping| {
                 let set = foreign_criteria_mapper.criteria_from_list(&mapping.theirs);
@@ -2168,7 +2171,7 @@ impl<'a> ResolveReport<'a> {
         suggestions.sort_by_key(|item| self.graph.nodes[item.package].name);
         suggestions.sort_by_key(|item| item.suggested_diff.diffstat.count);
 
-        let mut suggestions_by_criteria = SortedMap::<String, Vec<SuggestItem>>::new();
+        let mut suggestions_by_criteria = SortedMap::<CriteriaName, Vec<SuggestItem>>::new();
         for s in suggestions.clone().into_iter() {
             let criteria_names = self
                 .criteria_mapper
@@ -2200,7 +2203,7 @@ impl<'a> ResolveReport<'a> {
             let criteria = self
                 .criteria_mapper
                 .criteria_names(&suggestion.suggested_criteria)
-                .map(String::from)
+                .map(CriteriaName::from)
                 .collect::<Vec<_>>();
             last_suggest.push(SuggestedAudit { command, criteria });
         }

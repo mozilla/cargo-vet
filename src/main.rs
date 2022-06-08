@@ -16,8 +16,8 @@ use console::{style, Term};
 use eyre::Context;
 use flate2::read::GzDecoder;
 use format::{
-    AuditEntry, AuditKind, CommandHistory, Delta, DiffCache, DiffStat, FetchCommand, MetaConfig,
-    VersionReq,
+    AuditEntry, AuditKind, CommandHistory, CriteriaName, CriteriaStr, Delta, DiffCache, DiffStat,
+    FetchCommand, MetaConfig, PackageName, VersionReq,
 };
 use reqwest::blocking as req;
 use resolver::{CriteriaMapper, DepGraph, DiffRecommendation};
@@ -28,7 +28,7 @@ use tracing::{error, info, trace, trace_span, warn};
 
 use crate::format::{
     AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
-    SortedMap, StoreInfo, UnauditedDependency,
+    PackageStr, SortedMap, StoreInfo, UnauditedDependency,
 };
 use crate::resolver::{Conclusion, SuggestItem};
 
@@ -218,7 +218,7 @@ struct InitArgs {}
 #[derive(clap::Args)]
 struct InspectArgs {
     /// The package to inspect
-    package: String,
+    package: PackageName,
     /// The version to inspect
     version: Version,
 }
@@ -227,7 +227,7 @@ struct InspectArgs {
 #[derive(clap::Args)]
 struct DiffArgs {
     /// The package to diff
-    package: String,
+    package: PackageName,
     /// The base version to diff
     version1: Version,
     /// The target version to diff
@@ -238,7 +238,7 @@ struct DiffArgs {
 #[derive(clap::Args)]
 struct CertifyArgs {
     /// The package to certify as audited
-    package: Option<String>,
+    package: Option<PackageName>,
     /// The version to certify as audited
     version1: Option<Version>,
     /// If present, instead certify a diff from version1->version2
@@ -247,7 +247,7 @@ struct CertifyArgs {
     ///
     /// If not provided, we will prompt you for this information.
     #[clap(long)]
-    criteria: Vec<String>,
+    criteria: Vec<CriteriaName>,
     /// The dependency-criteria to require for this audit to be valid
     ///
     /// If not provided, we will still implicitly require dependencies to satisfy `criteria`.
@@ -272,14 +272,14 @@ struct CertifyArgs {
 #[derive(clap::Args)]
 struct AddViolationArgs {
     /// The package to forbid
-    package: String,
+    package: PackageName,
     /// The versions to forbid
     versions: VersionReq,
     /// (???) The criteria to be forbidden (???)
     ///
     /// If not provided, we will prompt you for this information(?)
     #[clap(long)]
-    criteria: Vec<String>,
+    criteria: Vec<CriteriaName>,
     /// Who to name as the auditor
     ///
     /// If not provided, we will collect this information from the local git.
@@ -296,14 +296,14 @@ struct AddViolationArgs {
 #[derive(clap::Args)]
 struct AddUnauditedArgs {
     /// The package to mark as unaudited (trusted)
-    package: String,
+    package: PackageName,
     /// The version to mark as unaudited
     version: Version,
     /// The criteria to assume (trust)
     ///
     /// If not provided, we will prompt you for this information.
     #[clap(long)]
-    criteria: Vec<String>,
+    criteria: Vec<CriteriaName>,
     /// The dependency-criteria to require for this unaudited entry to be valid
     ///
     /// If not provided, we will still implicitly require dependencies to satisfy `criteria`.
@@ -394,8 +394,8 @@ pub enum Verbose {
 
 #[derive(Clone, Debug)]
 pub struct DependencyCriteriaArg {
-    pub dependency: String,
-    pub criteria: String,
+    pub dependency: PackageName,
+    pub criteria: CriteriaName,
 }
 
 impl FromStr for DependencyCriteriaArg {
@@ -504,7 +504,7 @@ pub enum GraphFilterQuery {
 
 #[derive(Clone, Debug)]
 pub enum GraphFilterProperty {
-    Name(String),
+    Name(PackageName),
     Version(Version),
     IsRoot(bool),
     IsWorkspaceMember(bool),
@@ -1532,7 +1532,7 @@ pub fn minimize_unaudited(cfg: &Config, store: &mut Store) -> Result<(), VetErro
     trace!("minimizing unaudited...");
     let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, false)? {
         let mut new_unaudited = SortedMap::new();
-        let mut suggest_by_package_name = SortedMap::<&str, Vec<SuggestItem>>::new();
+        let mut suggest_by_package_name = SortedMap::<PackageStr, Vec<SuggestItem>>::new();
         for item in suggest.suggestions {
             let package = &report.graph.nodes[item.package];
             suggest_by_package_name
@@ -2290,8 +2290,8 @@ impl Cache {
 
     pub fn fetch_packages<'a>(
         &mut self,
-        packages: &[(&'a str, &'a Version)],
-    ) -> Result<BTreeMap<&'a str, BTreeMap<&'a Version, PathBuf>>, VetError> {
+        packages: &[(PackageStr<'a>, &'a Version)],
+    ) -> Result<BTreeMap<PackageStr<'a>, BTreeMap<&'a Version, PathBuf>>, VetError> {
         let _span = trace_span!("fetch-packages").entered();
         // Don't do anything if we're mocked, or there is no work to do
         if self.root.is_none() || packages.is_empty() {
@@ -2302,7 +2302,7 @@ impl Cache {
         let fetch_dir = root.join(TEMP_REGISTRY_SRC);
         let cargo_registry = self.cargo_registry.as_ref();
 
-        let mut paths = BTreeMap::<&str, BTreeMap<&Version, PathBuf>>::new();
+        let mut paths = BTreeMap::<PackageStr, BTreeMap<&Version, PathBuf>>::new();
         let mut to_download = Vec::new();
 
         // Get all the cached things / find out what needs to be downloaded.
@@ -2348,7 +2348,7 @@ impl Cache {
 
     pub fn fetch_and_diffstat_all(
         &mut self,
-        package: &str,
+        package: PackageStr,
         diffs: &BTreeSet<Delta>,
     ) -> Result<DiffRecommendation, VetError> {
         let _span = trace_span!("diffstat-all").entered();
@@ -2433,7 +2433,7 @@ impl Cache {
 
     fn download_package(
         &mut self,
-        package: &str,
+        package: PackageStr,
         version: &Version,
         to_dir: &Path,
     ) -> Result<(), VetError> {
@@ -2697,7 +2697,7 @@ fn get_user_info() -> Result<UserInfo, VetError> {
     })
 }
 
-fn eula_for_criteria(audits: &AuditsFile, criteria: &str) -> Option<String> {
+fn eula_for_criteria(audits: &AuditsFile, criteria: CriteriaStr) -> Option<String> {
     let builtin_eulas = [
         (
             format::SAFE_TO_DEPLOY,

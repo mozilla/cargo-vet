@@ -5,8 +5,8 @@ use serde_json::{json, Value};
 
 use crate::{
     format::{
-        AuditKind, Delta, DependencyCriteria, MetaConfig, PolicyEntry, VersionReq, SAFE_TO_DEPLOY,
-        SAFE_TO_RUN,
+        AuditKind, CriteriaName, CriteriaStr, Delta, DependencyCriteria, MetaConfig, PackageName,
+        PackageStr, PolicyEntry, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     init_files,
     resolver::ResolveReport,
@@ -16,12 +16,12 @@ use crate::{
 
 // Some room above and below
 const DEFAULT_VER: u64 = 10;
-const DEFAULT_CRIT: &str = "reviewed";
+const DEFAULT_CRIT: CriteriaStr = "reviewed";
 
 struct MockMetadata {
     packages: Vec<MockPackage>,
     pkgids: Vec<String>,
-    idx_by_name_and_ver: BTreeMap<&'static str, BTreeMap<Version, usize>>,
+    idx_by_name_and_ver: BTreeMap<PackageStr<'static>, BTreeMap<Version, usize>>,
 }
 
 struct MockPackage {
@@ -86,7 +86,7 @@ fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependen
         suggest: true,
     }
 }
-fn unaudited(version: Version, criteria: &str) -> UnauditedDependency {
+fn unaudited(version: Version, criteria: CriteriaStr) -> UnauditedDependency {
     UnauditedDependency {
         version,
         criteria: criteria.to_string(),
@@ -98,11 +98,11 @@ fn unaudited(version: Version, criteria: &str) -> UnauditedDependency {
 
 fn unaudited_dep(
     version: Version,
-    criteria: &str,
+    criteria: CriteriaStr,
     dependency_criteria: impl IntoIterator<
         Item = (
-            impl Into<String>,
-            impl IntoIterator<Item = impl Into<String>>,
+            impl Into<PackageName>,
+            impl IntoIterator<Item = impl Into<CriteriaName>>,
         ),
     >,
 ) -> UnauditedDependency {
@@ -123,7 +123,7 @@ fn unaudited_dep(
     }
 }
 
-fn delta_audit(from: Version, to: Version, criteria: &str) -> AuditEntry {
+fn delta_audit(from: Version, to: Version, criteria: CriteriaStr) -> AuditEntry {
     let delta = Delta { from, to };
     AuditEntry {
         who: None,
@@ -140,11 +140,11 @@ fn delta_audit(from: Version, to: Version, criteria: &str) -> AuditEntry {
 fn delta_audit_dep(
     from: Version,
     to: Version,
-    criteria: &str,
+    criteria: CriteriaStr,
     dependency_criteria: impl IntoIterator<
         Item = (
-            impl Into<String>,
-            impl IntoIterator<Item = impl Into<String>>,
+            impl Into<PackageName>,
+            impl IntoIterator<Item = impl Into<CriteriaName>>,
         ),
     >,
 ) -> AuditEntry {
@@ -168,7 +168,7 @@ fn delta_audit_dep(
     }
 }
 
-fn full_audit(version: Version, criteria: &str) -> AuditEntry {
+fn full_audit(version: Version, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
         who: None,
         notes: None,
@@ -182,11 +182,11 @@ fn full_audit(version: Version, criteria: &str) -> AuditEntry {
 
 fn full_audit_dep(
     version: Version,
-    criteria: &str,
+    criteria: CriteriaStr,
     dependency_criteria: impl IntoIterator<
         Item = (
-            impl Into<String>,
-            impl IntoIterator<Item = impl Into<String>>,
+            impl Into<PackageName>,
+            impl IntoIterator<Item = impl Into<CriteriaName>>,
         ),
     >,
 ) -> AuditEntry {
@@ -218,7 +218,7 @@ fn violation_hard(version: VersionReq) -> AuditEntry {
     }
 }
 #[allow(dead_code)]
-fn violation(version: VersionReq, criteria: &str) -> AuditEntry {
+fn violation(version: VersionReq, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
         who: None,
         notes: None,
@@ -238,7 +238,7 @@ fn default_policy() -> PolicyEntry {
     }
 }
 
-fn self_policy(criteria: impl IntoIterator<Item = impl Into<String>>) -> PolicyEntry {
+fn self_policy(criteria: impl IntoIterator<Item = impl Into<CriteriaName>>) -> PolicyEntry {
     PolicyEntry {
         criteria: Some(criteria.into_iter().map(|s| s.into()).collect()),
         ..default_policy()
@@ -248,8 +248,8 @@ fn self_policy(criteria: impl IntoIterator<Item = impl Into<String>>) -> PolicyE
 fn dep_policy(
     dependency_criteria: impl IntoIterator<
         Item = (
-            impl Into<String>,
-            impl IntoIterator<Item = impl Into<String>>,
+            impl Into<PackageName>,
+            impl IntoIterator<Item = impl Into<CriteriaName>>,
         ),
     >,
 ) -> PolicyEntry {
@@ -529,7 +529,7 @@ impl MockMetadata {
 
     fn new(packages: Vec<MockPackage>) -> Self {
         let mut pkgids = vec![];
-        let mut idx_by_name_and_ver = BTreeMap::<&str, BTreeMap<Version, usize>>::new();
+        let mut idx_by_name_and_ver = BTreeMap::<PackageStr, BTreeMap<Version, usize>>::new();
 
         for (idx, package) in packages.iter().enumerate() {
             let pkgid = if package.is_first_party {
@@ -567,11 +567,11 @@ impl MockMetadata {
         self.pkgid_by(package.name, &package.version)
     }
 
-    fn pkgid_by(&self, name: &str, version: &Version) -> &str {
+    fn pkgid_by(&self, name: PackageStr, version: &Version) -> &str {
         &self.pkgids[self.idx_by_name_and_ver[name][version]]
     }
 
-    fn package_by(&self, name: &str, version: &Version) -> &MockPackage {
+    fn package_by(&self, name: PackageStr, version: &Version) -> &MockPackage {
         &self.packages[self.idx_by_name_and_ver[name][version]]
     }
 
@@ -644,7 +644,7 @@ impl MockMetadata {
             }).collect::<Vec<_>>(),
             "resolve": {
                 "nodes": self.packages.iter().map(|package| {
-                    let mut all_deps = BTreeMap::<(&str, &Version), Vec<Option<&str>>>::new();
+                    let mut all_deps = BTreeMap::<(PackageStr, &Version), Vec<Option<&str>>>::new();
                     for dep in &package.deps {
                         all_deps.entry((dep.name, &dep.version)).or_default().push(None);
                     }
@@ -769,7 +769,7 @@ fn files_no_unaudited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
 fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     let (config, mut audits, imports) = files_no_unaudited(metadata);
 
-    let mut audited = SortedMap::<String, Vec<AuditEntry>>::new();
+    let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
         if package.is_third_party() {
             audited
@@ -798,7 +798,7 @@ fn builtin_files_no_unaudited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
 fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     let (config, mut audits, imports) = builtin_files_no_unaudited(metadata);
 
-    let mut audited = SortedMap::<String, Vec<AuditEntry>>::new();
+    let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
         if package.is_third_party() {
             audited
@@ -814,7 +814,7 @@ fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
 fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     let (mut config, mut audits, imports) = builtin_files_inited(metadata);
 
-    let mut audited = SortedMap::<String, Vec<AuditEntry>>::new();
+    let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for (name, entries) in std::mem::take(&mut config.unaudited) {
         for entry in entries {
             audited

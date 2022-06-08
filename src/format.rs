@@ -18,6 +18,13 @@ pub type FastSet<T> = HashSet<T>;
 pub type SortedMap<K, V> = BTreeMap<K, V>;
 pub type SortedSet<T> = BTreeSet<T>;
 
+pub type CriteriaName = String;
+pub type CriteriaStr<'a> = &'a str;
+pub type ForeignCriteriaName = String;
+pub type PackageName = String;
+pub type PackageStr<'a> = &'a str;
+pub type ImportName = String;
+
 // newtype VersionReq so that we can implement PartialOrd on it.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VersionReq(pub cargo_metadata::VersionReq);
@@ -116,7 +123,7 @@ impl MetaConfig {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-pub type AuditedDependencies = SortedMap<String, Vec<AuditEntry>>;
+pub type AuditedDependencies = SortedMap<PackageName, Vec<AuditEntry>>;
 
 /// audits.toml
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -124,7 +131,7 @@ pub struct AuditsFile {
     /// A map of criteria_name to details on that criteria.
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub criteria: SortedMap<String, CriteriaEntry>,
+    pub criteria: SortedMap<CriteriaName, CriteriaEntry>,
     /// Actual audits.
     pub audits: AuditedDependencies,
 }
@@ -142,7 +149,7 @@ pub struct CriteriaEntry {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec")]
-    pub implies: Vec<String>,
+    pub implies: Vec<CriteriaName>,
 }
 
 /// This is conceptually an enum
@@ -150,7 +157,7 @@ pub struct CriteriaEntry {
 pub struct AuditEntry {
     pub who: Option<String>,
     pub notes: Option<String>,
-    pub criteria: String,
+    pub criteria: CriteriaName,
     #[serde(flatten)]
     pub kind: AuditKind,
 }
@@ -202,7 +209,7 @@ pub enum AuditKind {
 /// ```toml
 /// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
 /// ```
-pub type DependencyCriteria = SortedMap<String, Vec<String>>;
+pub type DependencyCriteria = SortedMap<PackageName, Vec<CriteriaName>>;
 
 /// A "VERSION -> VERSION"
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -269,34 +276,34 @@ pub struct ConfigFile {
     #[serde(rename = "default-criteria")]
     #[serde(default = "get_default_criteria")]
     #[serde(skip_serializing_if = "is_default_criteria")]
-    pub default_criteria: String,
+    pub default_criteria: CriteriaName,
 
     /// Remote audits.toml's that we trust and want to import.
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub imports: SortedMap<String, RemoteImport>,
+    pub imports: SortedMap<ImportName, RemoteImport>,
 
     /// A table of policies for first-party crates.
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub policy: SortedMap<String, PolicyEntry>,
+    pub policy: SortedMap<PackageName, PolicyEntry>,
 
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub unaudited: SortedMap<String, Vec<UnauditedDependency>>,
+    pub unaudited: SortedMap<PackageName, Vec<UnauditedDependency>>,
 }
 
-pub static SAFE_TO_DEPLOY: &str = "safe-to-deploy";
-pub static SAFE_TO_RUN: &str = "safe-to-run";
-pub static DEFAULT_CRITERIA: &str = SAFE_TO_DEPLOY;
+pub static SAFE_TO_DEPLOY: CriteriaStr = "safe-to-deploy";
+pub static SAFE_TO_RUN: CriteriaStr = "safe-to-run";
+pub static DEFAULT_CRITERIA: CriteriaStr = SAFE_TO_DEPLOY;
 
-pub fn get_default_criteria() -> String {
-    String::from(DEFAULT_CRITERIA)
+pub fn get_default_criteria() -> CriteriaName {
+    CriteriaName::from(DEFAULT_CRITERIA)
 }
-fn is_default_criteria(val: &String) -> bool {
+fn is_default_criteria(val: &CriteriaName) -> bool {
     val == DEFAULT_CRITERIA
 }
 
@@ -323,14 +330,14 @@ pub struct PolicyEntry {
     /// If not present, this defaults to the default criteria in the audits table.
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec_or_none")]
-    pub criteria: Option<Vec<String>>,
+    pub criteria: Option<Vec<CriteriaName>>,
 
     /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
     /// used as dev-dependencies.
     #[serde(rename = "dev-criteria")]
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec_or_none")]
-    pub dev_criteria: Option<Vec<String>>,
+    pub dev_criteria: Option<Vec<CriteriaName>>,
 
     /// TODO: figure this out
     pub targets: Option<Vec<String>>,
@@ -352,8 +359,8 @@ pub struct PolicyEntry {
     pub dependency_criteria: DependencyCriteria,
 }
 
-pub static DEFAULT_POLICY_CRITERIA: &str = SAFE_TO_DEPLOY;
-pub static DEFAULT_POLICY_DEV_CRITERIA: &str = SAFE_TO_RUN;
+pub static DEFAULT_POLICY_CRITERIA: CriteriaStr = SAFE_TO_DEPLOY;
+pub static DEFAULT_POLICY_DEV_CRITERIA: CriteriaStr = SAFE_TO_RUN;
 
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -369,10 +376,10 @@ pub struct RemoteImport {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct CriteriaMapping {
     /// This local criteria is implied...
-    pub ours: String,
+    pub ours: CriteriaName,
     /// If all of these foreign criteria apply
     #[serde(with = "serialization::string_or_vec")]
-    pub theirs: Vec<String>,
+    pub theirs: Vec<ForeignCriteriaName>,
 }
 
 /// Semantically identical to a 'full audit' entry, but private to our project
@@ -384,7 +391,7 @@ pub struct UnauditedDependency {
     /// Criteria that we're willing to handwave for this version (assuming our dependencies
     /// satisfy this criteria). This isn't defaulted, 'vet init' and similar commands will
     /// pick a "good" initial value.
-    pub criteria: String,
+    pub criteria: CriteriaName,
     /// Whether 'suggest' should bother mentioning this (defaults true).
     #[serde(default = "get_default_unaudited_suggest")]
     #[serde(skip_serializing_if = "is_default_unaudited_suggest")]
@@ -422,7 +429,7 @@ fn is_default_unaudited_suggest(val: &bool) -> bool {
 /// imports.lock, not sure what I want to put in here yet.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ImportsFile {
-    pub audits: SortedMap<String, AuditsFile>,
+    pub audits: SortedMap<ImportName, AuditsFile>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -435,7 +442,7 @@ pub struct ImportsFile {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-pub type DiffCache = SortedMap<String, SortedMap<Delta, DiffStat>>;
+pub type DiffCache = SortedMap<PackageName, SortedMap<Delta, DiffStat>>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DiffStat {
@@ -456,18 +463,18 @@ pub struct DiffStat {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum FetchCommand {
     Inspect {
-        package: String,
+        package: PackageName,
         version: Version,
     },
     Diff {
-        package: String,
+        package: PackageName,
         version1: Version,
         version2: Version,
     },
 }
 
 impl FetchCommand {
-    pub fn package(&self) -> &str {
+    pub fn package(&self) -> PackageStr {
         match self {
             FetchCommand::Inspect { package, .. } => package,
             FetchCommand::Diff { package, .. } => package,
@@ -479,7 +486,7 @@ impl FetchCommand {
 pub struct SuggestedAudit {
     #[serde(flatten)]
     pub command: FetchCommand,
-    pub criteria: Vec<String>,
+    pub criteria: Vec<CriteriaName>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
