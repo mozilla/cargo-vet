@@ -1178,12 +1178,24 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
 
     let criteria_names = if sub_args.criteria.is_empty() {
-        // TODO: provide an interactive prompt for this
-        let mut chosen_criteria = vec![];
+        // Try to guess the criteria based on any previous suggest
+        let mut chosen_criteria = command_history
+            .last_suggest
+            .into_iter()
+            .find(|s| s.command.package() == package)
+            .map(|s| s.criteria)
+            .unwrap_or_default();
 
+        // Prompt for criteria
         loop {
             term.clear_screen()?;
-            writeln!(out, "choose criteria to certify:")?;
+            write!(out, "choose criteria to certify for {}", package)?;
+            match &kind {
+                AuditKind::Full { version, .. } => write!(out, ":{}", version)?,
+                AuditKind::Delta { delta, .. } => write!(out, ":{} -> {}", delta.from, delta.to)?,
+                AuditKind::Violation { .. } => unreachable!(),
+            }
+            writeln!(out)?;
             writeln!(out, "  0. <clear selections>")?;
             let implied_criteria = criteria_mapper.criteria_from_list(&chosen_criteria);
             for (criteria_idx, (criteria_name, _criteria_entry)) in
@@ -1220,6 +1232,10 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
             let input = term.read_line()?;
             let input = input.trim();
             if input.is_empty() {
+                if chosen_criteria.is_empty() {
+                    writeln!(out, "no criteria chosen, aborting")?;
+                    panic_any(ExitPanic(-1));
+                }
                 // User done selecting criteria
                 break;
             }

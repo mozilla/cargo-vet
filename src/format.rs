@@ -466,6 +466,15 @@ pub enum FetchCommand {
     },
 }
 
+impl FetchCommand {
+    pub fn package(&self) -> &str {
+        match self {
+            FetchCommand::Inspect { package, .. } => package,
+            FetchCommand::Diff { package, .. } => package,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SuggestedAudit {
     #[serde(flatten)]
