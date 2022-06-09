@@ -1075,7 +1075,8 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     // Only save imports if we succeeded, to avoid any modifications on error.
     if report.has_errors() {
         // ERRORS: immediate fatal diagnostic? Arguably should be silent.
-        Err(eyre!("report contains errors"))?;
+        // Err(eyre!("report contains errors"))?;
+        panic_any(ExitPanic(-1));
     } else {
         store.commit()?;
     }
