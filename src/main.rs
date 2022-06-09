@@ -466,26 +466,14 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     let command_history = Cache::acquire(cfg)?.command_history.clone();
 
     let term = Term::stdout();
-    let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
-        // TODO: look at the current audits to infer this? prompt?
-        DependencyCriteria::new()
-    } else {
-        let mut dep_criteria = DependencyCriteria::new();
-        for arg in &sub_args.dependency_criteria {
-            dep_criteria
-                .entry(arg.dependency.clone())
-                .or_insert_with(Vec::new)
-                .push(arg.criteria.clone());
-        }
-        dep_criteria
-    };
 
+    // Before setting up magic, we need to agree on a package
+    let last_fetch_name = command_history.last_fetch.as_ref().map(|f| f.package());
     let package = if let Some(package) = &sub_args.package {
         package.clone()
-    } else if let Some(FetchCommand::Inspect { package, .. } | FetchCommand::Diff { package, .. }) =
-        &command_history.last_fetch
-    {
-        package.clone()
+    } else if let Some(package) = last_fetch_name {
+        // If we just fetched a package, assume we want to certify it
+        package.to_owned()
     } else {
         // ERRORS: immediate fatal diagnostic
         writeln!(
@@ -509,7 +497,30 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         panic_any(ExitPanic(-1));
     }
 
+    // If the package name now matches last_fetch, make it available for further magic
+    let last_fetch = if last_fetch_name == Some(&package) {
+        command_history.last_fetch.as_ref()
+    } else {
+        None
+    };
+
+    let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
+        // TODO: look at the current audits to infer this? prompt?
+        DependencyCriteria::new()
+    } else {
+        let mut dep_criteria = DependencyCriteria::new();
+        for arg in &sub_args.dependency_criteria {
+            dep_criteria
+                .entry(arg.dependency.clone())
+                .or_insert_with(Vec::new)
+                .push(arg.criteria.clone());
+        }
+        dep_criteria
+    };
+
+    let mut criteria_guess = None;
     let kind = if let Some(v1) = &sub_args.version1 {
+        // If explicit versions were provided, use those
         if let Some(v2) = &sub_args.version2 {
             // This is a delta audit
             AuditKind::Delta {
@@ -526,34 +537,93 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                 dependency_criteria,
             }
         }
-    } else if let Some(fetch) = &command_history.last_fetch {
+    } else if let Some(fetch) = last_fetch {
+        // Otherwise, is we just fetched this package, use the version(s) we fetched
         match fetch {
-            FetchCommand::Inspect {
-                package: package_name,
-                version,
-            } if package_name == &package => AuditKind::Full {
+            FetchCommand::Inspect { version, .. } => AuditKind::Full {
                 version: version.clone(),
-                dependency_criteria: DependencyCriteria::new(),
+                dependency_criteria,
             },
             FetchCommand::Diff {
-                package: package_name,
-                version1,
-                version2,
-            } if package_name == &package => AuditKind::Delta {
+                version1, version2, ..
+            } => AuditKind::Delta {
                 delta: Delta {
                     from: version1.clone(),
                     to: version2.clone(),
                 },
-                dependency_criteria: DependencyCriteria::new(),
+                dependency_criteria,
             },
-            _ => {
-                // ERRORS: immediate fatal diagnostic
-                writeln!(
-                    out,
-                    "error: couldn't guess what version to certify, please specify"
-                )?;
-                panic_any(ExitPanic(-1));
+        }
+    } else if let Some(unaudited_list) = store.config.unaudited.get(&package) {
+        // Otherwise, if we have an unaudited entry for this package, use that version
+        if unaudited_list.len() > 1 {
+            // ERRORS: immediate fatal diagnostic
+            writeln!(
+                out,
+                "error: couldn't guess what version to certify, you have multiple 'unaudited' entries for {}:",
+                package
+            )?;
+            for entry in unaudited_list {
+                writeln!(out, "  {}", entry.version)?;
             }
+            panic_any(ExitPanic(-1));
+        }
+        let entry = &unaudited_list[0];
+        criteria_guess = Some(vec![entry.criteria.clone()]);
+        // FIXME: this should arguably use entry.dependency_criteria unless the cli specified,
+        // should probably have a more coherent "strategy picking" right at the start instead
+        // of individually sourcing each piece of information
+        AuditKind::Full {
+            version: entry.version.clone(),
+            dependency_criteria,
+        }
+    } else if !command_history.last_suggest.is_empty() {
+        // Otherwise, if we suggested a fetch for this package, use that version
+        let relevant_suggestions = command_history
+            .last_suggest
+            .iter()
+            .filter(|s| s.command.package() == package)
+            .collect::<Vec<_>>();
+        if relevant_suggestions.is_empty() {
+            // ERRORS: immediate fatal diagnostic
+            writeln!(
+                out,
+                "error: couldn't guess what version to certify, please specify"
+            )?;
+            panic_any(ExitPanic(-1));
+        }
+        if relevant_suggestions.len() > 1 {
+            // ERRORS: immediate fatal diagnostic
+            writeln!(
+                out,
+                "error: couldn't guess what version to certify, you have multiple suggestions for {}:",
+                package
+            )?;
+            for entry in relevant_suggestions {
+                match &entry.command {
+                    FetchCommand::Inspect { version, .. } => writeln!(out, "inspect {}", version)?,
+                    FetchCommand::Diff {
+                        version1, version2, ..
+                    } => writeln!(out, "diff {} {}", version1, version2)?,
+                }
+            }
+            panic_any(ExitPanic(-1));
+        }
+        criteria_guess = Some(relevant_suggestions[0].criteria.clone());
+        match &relevant_suggestions[0].command {
+            FetchCommand::Inspect { version, .. } => AuditKind::Full {
+                version: version.clone(),
+                dependency_criteria,
+            },
+            FetchCommand::Diff {
+                version1, version2, ..
+            } => AuditKind::Delta {
+                delta: Delta {
+                    from: version1.clone(),
+                    to: version2.clone(),
+                },
+                dependency_criteria,
+            },
         }
     } else {
         // ERRORS: immediate fatal diagnostic
@@ -575,12 +645,34 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
 
     let criteria_names = if sub_args.criteria.is_empty() {
-        // Try to guess the criteria based on any previous suggest
-        let mut chosen_criteria = command_history
-            .last_suggest
-            .into_iter()
-            .find(|s| s.command.package() == package)
-            .map(|s| s.criteria)
+        // If we don't have explicit cli criteria, guess the criteria
+        //
+        // * If any previous operation resulted in a guess, use that
+        // * Otherwise check for a suggest on this exact audit
+        // * Otherwise guess nothing
+        //
+        // Regardless of the guess, prompt the user to confirm (just needs to mash enter)
+        let mut chosen_criteria = criteria_guess
+            .or_else(|| {
+                command_history
+                    .last_suggest
+                    .into_iter()
+                    .filter(|s| s.command.package() == package)
+                    .find(|v| match (&kind, &v.command) {
+                        (
+                            AuditKind::Full { version: lhs, .. },
+                            FetchCommand::Inspect { version: rhs, .. },
+                        ) => lhs == rhs,
+                        (
+                            AuditKind::Delta { delta, .. },
+                            FetchCommand::Diff {
+                                version1, version2, ..
+                            },
+                        ) => &delta.from == version1 && &delta.to == version2,
+                        _ => false,
+                    })
+                    .map(|s| s.criteria)
+            })
             .unwrap_or_default();
 
         // Prompt for criteria
@@ -661,12 +753,27 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         sub_args.criteria.clone()
     };
 
+    // Round-trip this through the criteria_mapper to clean up `implies` relationships
+    let criteria_set = criteria_mapper.criteria_from_list(&criteria_names);
+    let criteria_names = criteria_mapper
+        .criteria_names(&criteria_set)
+        .collect::<Vec<_>>();
+
     let notes = if let Some(notes) = sub_args.notes.clone() {
         Some(notes)
     } else {
         term.clear_screen()?;
+        write!(out, "certifying {}", package)?;
+        match &kind {
+            AuditKind::Full { version, .. } => write!(out, ":{}", version)?,
+            AuditKind::Delta { delta, .. } => write!(out, ":{} -> {}", delta.from, delta.to)?,
+            AuditKind::Violation { .. } => unreachable!(),
+        }
+        writeln!(out, " for {:?}", criteria_names)?;
         writeln!(out, "do you have any notes? (press ENTER to continue)")?;
         writeln!(out)?;
+        // FIXME: this should take multiline
+        // FIXME: we should linebreak long inputs
         let input = term.read_line()?;
         let input = input.trim();
         if input.is_empty() {
@@ -676,9 +783,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         }
     };
 
-    // Round-trip this through the criteria_mapper to clean up `implies` relationships
-    let criteria_set = criteria_mapper.criteria_from_list(&criteria_names);
-    for criteria in criteria_mapper.criteria_names(&criteria_set) {
+    for criteria in criteria_names {
         if !sub_args.accept_all {
             let eula = if let Some(eula) = eula_for_criteria(&store.audits, criteria) {
                 eula
@@ -713,7 +818,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                 style(textwrap::fill(&statement, 80)).yellow().bold()
             )?;
             writeln!(out, "{}\n", style(eula).cyan())?;
-            write!(out, r#"(type "yes" to certify): "#)?;
+            write!(out, "(type \"yes\" to certify for {}): ", criteria)?;
             out.flush()?;
 
             let answer = term.read_line()?.trim().to_lowercase();
@@ -739,6 +844,25 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
             .entry(package.clone())
             .or_insert(vec![])
             .push(new_entry);
+
+        // If we're submitting a full audit, look for a matching unaudited entry to remove
+        if let AuditKind::Full { version, .. } = &kind {
+            if let Some(unaudited_list) = store.config.unaudited.get_mut(&package) {
+                let cur_criteria_set = criteria_mapper.criteria_from_list([criteria]);
+                // Iterate backwards so that we can delete while iterating
+                // (will only affect indices that we've already visited!)
+                for idx in (0..unaudited_list.len()).rev() {
+                    let entry = &unaudited_list[idx];
+                    let entry_criteria_set = criteria_mapper.criteria_from_list([&entry.criteria]);
+                    if &entry.version == version && cur_criteria_set.contains(&entry_criteria_set) {
+                        unaudited_list.remove(idx);
+                    }
+                }
+                if unaudited_list.is_empty() {
+                    store.config.unaudited.remove(&package);
+                }
+            }
+        }
     }
 
     store.commit()?;
