@@ -46,4 +46,4 @@ features = [
 ]
 
 [dev-dependencies]
-insta = "1.13.0"
+insta = "1.14.1"
