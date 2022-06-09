@@ -291,7 +291,7 @@ fn real_main() -> Result<(), VetError> {
 
     if workspace_metacfg.is_some() && package_metacfg.is_some() {
         // ERRORS: immediate fatal diagnostic
-        Err(eyre!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!"))?;
+        return Err(eyre!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!"));
     }
 
     let mut metacfgs = vec![default_config];
@@ -315,17 +315,17 @@ fn real_main() -> Result<(), VetError> {
     if matches!(cli.command, Some(Commands::Init { .. })) {
         if init {
             // ERRORS: immediate fatal diagnostic
-            Err(eyre!(
+            return Err(eyre!(
                 "'cargo vet' already initialized (store found at {})",
                 metacfg.store_path().display()
-            ))?;
+            ));
         }
     } else if !init {
         // ERRORS: immediate fatal diagnostic
-        Err(eyre!(
+        return Err(eyre!(
             "You must run 'cargo vet init' (store not found at {})",
             metacfg.store_path().display()
-        ))?;
+        ));
     }
 
     let cfg = Config {
@@ -787,10 +787,10 @@ fn cmd_record_violation(
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
         // useful audits whenever you update your dependencies! But this might be a useful guard
         // against typosquatting or other weird issues?
-        Err(eyre!(
+        return Err(eyre!(
             "'{}' isn't one of your foreign packages",
             sub_args.package
-        ))?
+        ));
     }
 
     // Ok! Ready to commit the audit!
@@ -858,10 +858,10 @@ fn cmd_add_unaudited(
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
         // useful audits whenever you update your dependencies! But this might be a useful guard
         // against typosquatting or other weird issues?
-        Err(eyre!(
+        return Err(eyre!(
             "'{}' isn't one of your foreign packages",
             sub_args.package
-        ))?
+        ));
     }
 
     // Ok! Ready to commit the audit!
