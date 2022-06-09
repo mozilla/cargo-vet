@@ -70,11 +70,15 @@ OPTIONS:
             * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original
             graph
 
+        --frozen
+            Avoid the network entirely, requiring either that the cargo cache is populated or the
+            dependencies are vendored. Requires --locked
+
     -h, --help
             Print help information
 
         --locked
-            Do not pull in new "audits" and try to avoid the network
+            Do not fetch new imported audits
 
         --log-file <LOG_FILE>
             Instead of stderr, write logs to this file (only used after successful CLI parsing)

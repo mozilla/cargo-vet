@@ -2267,9 +2267,8 @@ impl<'a> ResolveReport<'a> {
                 }).collect::<SortedMap<_,_>>(),
             }),
             Conclusion::FailForVet(fail) => {
-                // Don't print suggest output if we're --locked because we don't want to
-                // touch the network in that configuration and we're probably in CI.
-                let suggest = if cfg.cli.locked {
+                // Suggest output generally requires hitting the network.
+                let suggest = if cfg.cli.frozen {
                     None
                 } else {
                     self.compute_suggest(cfg, true)?
@@ -2460,9 +2459,8 @@ impl FailForVet {
             )?;
         }
 
-        // Don't print suggest output if we're --locked because we don't want to
-        // touch the network in that configuration and we're probably in CI.
-        if !cfg.cli.locked {
+        // Suggest output generally requires hitting the network.
+        if !cfg.cli.frozen {
             if let Some(suggest) = report.compute_suggest(cfg, true)? {
                 writeln!(out)?;
                 suggest.print_human(out, report)?;

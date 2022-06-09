@@ -32,9 +32,15 @@ pub struct Cli {
     pub features: Features,
 
     // Top-level flags
-    /// Do not pull in new "audits" and try to avoid the network
+    /// Do not fetch new imported audits.
     #[clap(long)]
     pub locked: bool,
+
+    /// Avoid the network entirely, requiring either that the cargo cache is
+    /// populated or the dependencies are vendored. Requires --locked.
+    #[clap(long)]
+    #[clap(requires = "locked")]
+    pub frozen: bool,
 
     /// Do not modify or lock the store (supply-chain) directory
     ///
@@ -412,6 +418,7 @@ impl Cli {
             workspace: clap_cargo::Workspace::default(),
             features: Features::default(),
             locked: false,
+            frozen: false,
             readonly_lockless: true,
             verbose: LevelFilter::OFF,
             output_file: None,
