@@ -9,23 +9,19 @@ use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package};
 use clap::{CommandFactory, Parser};
-use cli::*;
 use console::{style, Term};
 use eyre::{eyre, WrapErr};
-use format::{AuditEntry, AuditKind, CriteriaStr, Delta, DiffStat, FetchCommand, MetaConfig};
-use reqwest::blocking as req;
-use resolver::{CriteriaMapper, DepGraph};
 use serde::de::Deserialize;
-use storage::Cache;
-
 use tracing::{error, info, trace, warn};
 
+use crate::cli::*;
 use crate::format::{
-    AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria, ImportsFile, MetaConfigInstance,
+    AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, CriteriaStr, Delta,
+    DependencyCriteria, DiffStat, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance,
     PackageStr, SortedMap, StoreInfo, UnauditedDependency,
 };
-use crate::resolver::{Conclusion, SuggestItem};
-use crate::storage::Store;
+use crate::resolver::{Conclusion, CriteriaMapper, DepGraph, SuggestItem};
+use crate::storage::{Cache, Store};
 
 mod cli;
 pub mod format;
@@ -35,7 +31,7 @@ pub mod storage;
 #[cfg(test)]
 mod tests;
 
-type VetError = eyre::Report;
+pub type VetError = eyre::Report;
 
 /// Absolutely All The Global Configurations
 pub struct Config {
@@ -1425,7 +1421,7 @@ fn eula_for_criteria(audits: &AuditsFile, criteria: CriteriaStr) -> Option<Strin
             audits.criteria.get(criteria).and_then(|c| {
                 c.description.clone().or_else(|| {
                     c.description_url.as_ref().map(|url| {
-                        req::get(url)
+                        reqwest::blocking::get(url)
                             .and_then(|r| r.text())
                             .map_err(|e| {
                                 // ERRORS: does the user care, if we have this recovery mode afterwards?
