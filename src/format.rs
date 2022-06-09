@@ -1,9 +1,9 @@
 //! Details of the file formats used by cargo vet
 
-use crate::serialization;
+use crate::{flock::Filesystem, serialization};
 use core::{cmp, fmt};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use cargo_metadata::Version;
@@ -91,12 +91,12 @@ pub struct StoreInfo {
 pub struct MetaConfig(pub Vec<MetaConfigInstance>);
 
 impl MetaConfig {
-    pub fn store_path(&self) -> &Path {
+    pub fn store_path(&self) -> Filesystem {
         // Last config gets priority to set this
         for config in self.0.iter().rev() {
             if let Some(store) = &config.store {
                 if let Some(path) = &store.path {
-                    return path;
+                    return Filesystem::new(path.into());
                 }
             }
         }

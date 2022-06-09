@@ -26,7 +26,13 @@ use std::{
 
 fn format_outputs(output: &Output) -> String {
     let stdout = std::str::from_utf8(&output.stdout).unwrap();
-    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+    // NOTE: We filter out the "Blocking: waiting for file lock" lines, as they
+    // are printed out non-deterministically when there is file contention.
+    let stderr = std::str::from_utf8(&output.stderr)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.starts_with("Blocking: waiting for file lock"))
+        .collect::<String>();
     format!("stdout:\n{stdout}\nstderr:\n{stderr}")
 }
 
@@ -110,7 +116,6 @@ fn test_project() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
-        .arg("--readonly-lockless")
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--diff-cache")
@@ -133,7 +138,6 @@ fn test_project_json() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
-        .arg("--readonly-lockless")
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--diff-cache")
@@ -157,7 +161,6 @@ fn test_project_suggest() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
-        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -181,7 +184,6 @@ fn test_project_suggest_json() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
-        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -206,7 +208,6 @@ fn test_project_suggest_deeper() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
-        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -231,7 +232,6 @@ fn test_project_suggest_deeper_json() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
-        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -257,7 +257,6 @@ fn test_project_dump_graph_full_json() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
-        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
@@ -283,7 +282,6 @@ fn test_project_dump_graph_full() {
     let output = Command::new(bin)
         .current_dir(&project)
         .arg("vet")
-        .arg("--readonly-lockless")
         .arg("--diff-cache")
         .arg("../diff-cache.toml")
         .arg("--manifest-path")

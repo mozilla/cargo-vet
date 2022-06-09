@@ -1,7 +1,7 @@
 use std::{
     ffi::OsString,
     fs::{self, File, OpenOptions},
-    io::{BufReader, Read, Seek, Write},
+    io::{self, BufReader, Read, Seek, Write},
     mem,
     path::{Path, PathBuf},
 };
@@ -11,9 +11,10 @@ use eyre::Context;
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
-use tracing::{log::warn, trace, trace_span};
+use tracing::{error, log::warn, trace, trace_span};
 
 use crate::{
+    flock::{FileLock, Filesystem},
     format::{
         AuditsFile, CommandHistory, ConfigFile, Delta, DiffCache, DiffStat, ImportsFile,
         MetaConfig, PackageStr, SortedMap, SortedSet,
@@ -27,7 +28,7 @@ static TEMP_DIFF_CACHE: &str = "diff-cache.toml";
 static TEMP_COMMAND_HISTORY: &str = "command-history.json";
 static TEMP_EMPTY_PACKAGE: &str = "empty";
 static TEMP_REGISTRY_SRC: &str = "packages";
-static TEMP_LOCKFILE: &str = "lockfile";
+static TEMP_VET_LOCK: &str = ".vet-lock";
 
 // Various cargo values
 static CARGO_REGISTRY: &str = "registry";
@@ -41,39 +42,39 @@ pub static DEFAULT_STORE: &str = "supply-chain";
 static AUDITS_TOML: &str = "audits.toml";
 static CONFIG_TOML: &str = "config.toml";
 static IMPORTS_LOCK: &str = "imports.lock";
-static STORE_LOCKFILE: &str = "lockfile";
 
-pub struct FileLock {
-    path: PathBuf,
+struct StoreLock {
+    config: FileLock,
 }
 
-impl FileLock {
-    pub fn acquire(path: impl Into<PathBuf>) -> Result<Self, VetError> {
-        // TODO: learn how to do this more robustly
-        // TODO: should we hold onto the file to avoid anyone deleting it?
-        // Or drop it right away to make it easier to cleanup if something goes wrong?
-        let path = path.into();
-        // ERRORS: arguably this is totally recoverable... maybe
-        //
-        // For Cache you can theoretically do some things without it (it's just "nice to have")
-        // but that kind of logic isn't yet implemented.
-        //
-        // For Store this would be basically immediately fatal (but that's the store's problem).
-        let _lock = File::options()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .with_context(|| format!("Could not acquire lockfile at {}", path.display()))?;
-
-        Ok(Self { path })
+impl StoreLock {
+    fn new(store: &Filesystem) -> Result<Self, VetError> {
+        Ok(StoreLock {
+            config: store.open_rw(CONFIG_TOML, "vet store")?,
+        })
     }
-}
-
-impl Drop for FileLock {
-    fn drop(&mut self) {
-        // Try to clean up the lock
-        std::fs::remove_file(&self.path)
-            .unwrap_or_else(|_| panic!("Couldn't delete file lock!? {}", self.path.display()));
+    fn read_config(&self) -> io::Result<impl Read + '_> {
+        let mut file = self.config.file();
+        file.rewind()?;
+        Ok(file)
+    }
+    fn write_config(&self) -> io::Result<impl Write + '_> {
+        let mut file = self.config.file();
+        file.rewind()?;
+        file.set_len(0)?;
+        Ok(file)
+    }
+    fn read_audits(&self) -> io::Result<impl Read> {
+        File::open(self.config.parent().join(AUDITS_TOML))
+    }
+    fn write_audits(&self) -> io::Result<impl Write> {
+        File::create(self.config.parent().join(AUDITS_TOML))
+    }
+    fn read_imports(&self) -> io::Result<impl Read> {
+        File::open(self.config.parent().join(IMPORTS_LOCK))
+    }
+    fn write_imports(&self) -> io::Result<impl Write> {
+        File::create(self.config.parent().join(IMPORTS_LOCK))
     }
 }
 
@@ -86,10 +87,8 @@ impl Drop for FileLock {
 ///
 /// To write back this value, use [`Store::commit`][].
 pub struct Store {
-    /// Repo-global lock over the store, will be None if we're mocking.
-    _lock: Option<FileLock>,
-    /// Path to the root of the store
-    root: Option<PathBuf>,
+    // Exclusive file lock held for the config file
+    lock: Option<StoreLock>,
 
     // Contents of the store, eagerly loaded and already validated.
     pub config: ConfigFile,
@@ -101,23 +100,12 @@ impl Store {
     /// Create a new store (files will be completely empty, must be committed for files to be created)
     pub fn create(cfg: &Config) -> Result<Self, VetError> {
         let root = cfg.metacfg.store_path();
-        std::fs::create_dir(&root).with_context(|| {
-            format!(
-                "Couldn't create cargo-vet Store because it already exists at {}",
-                root.display()
-            )
-        })?;
+        root.create_dir()?;
 
-        let lock = if cfg.cli.readonly_lockless {
-            None
-        } else {
-            Some(FileLock::acquire(root.join(STORE_LOCKFILE))?)
-        };
+        let lock = StoreLock::new(&root)?;
 
         Ok(Self {
-            _lock: lock,
-            root: Some(root.to_owned()),
-
+            lock: Some(lock),
             config: ConfigFile {
                 default_criteria: String::new(),
                 imports: SortedMap::new(),
@@ -136,33 +124,25 @@ impl Store {
 
     pub fn is_init(metacfg: &MetaConfig) -> bool {
         // Probably want to do more here later...
-        metacfg.store_path().exists()
+        metacfg.store_path().as_path_unlocked().exists()
     }
 
     /// Acquire an existing store
     pub fn acquire(cfg: &Config) -> Result<Self, VetError> {
-        let root = cfg.metacfg.store_path().to_owned();
-        // Before we do anything, acquire the lockfile to get exclusive access
-        let lock = if cfg.cli.readonly_lockless {
-            None
-        } else {
-            Some(FileLock::acquire(root.join(STORE_LOCKFILE))?)
-        };
+        let root = cfg.metacfg.store_path();
 
-        let config = load_config(&root)?;
-        let audits = load_audits(&root)?;
-        let imports = load_imports(&root)?;
+        // Before we do anything else, acquire an exclusive lock on the
+        // config.toml file in the store.
+        // XXX: Consider acquiring a non-exclusive lock in cases where an
+        // exclusive one isn't needed.
+        let lock = StoreLock::new(&root)?;
 
-        let root = if cfg.cli.readonly_lockless {
-            None
-        } else {
-            Some(root)
-        };
+        let config: ConfigFile = load_toml(lock.read_config()?)?;
+        let audits: AuditsFile = load_toml(lock.read_audits()?)?;
+        let imports: ImportsFile = load_toml(lock.read_imports()?)?;
 
         let store = Self {
-            _lock: lock,
-            root,
-
+            lock: Some(lock),
             config,
             audits,
             imports,
@@ -178,9 +158,7 @@ impl Store {
     #[cfg(test)]
     pub fn mock(config: ConfigFile, audits: AuditsFile, imports: ImportsFile) -> Self {
         Self {
-            _lock: None,
-            root: None,
-
+            lock: None,
             config,
             imports,
             audits,
@@ -190,11 +168,14 @@ impl Store {
     /// Commit the store's contents back to disk
     pub fn commit(self) -> Result<(), VetError> {
         // TODO: make this truly transactional?
-        // (With a dir rename? Does that work with the _lock? Fine because it's already closed?)
-        if let Some(root) = self.root {
-            store_audits(&root, self.audits)?;
-            store_config(&root, self.config)?;
-            store_imports(&root, self.imports)?;
+        // (With a dir rename? Does that work with the lock? Fine because it's already closed?)
+        if let Some(lock) = self.lock {
+            let audits = lock.write_audits()?;
+            let config = lock.write_config()?;
+            let imports = lock.write_imports()?;
+            store_audits(audits, self.audits)?;
+            store_config(config, self.config)?;
+            store_imports(imports, self.imports)?;
         }
         Ok(())
     }
@@ -254,26 +235,6 @@ impl Store {
     }
 }
 
-/// The cache where we store globally shared artifacts like fetched packages and diffstats
-///
-/// All access to this directory should be managed by this type to avoid races.
-pub struct Cache {
-    /// System-global lock over the cache, will be None if we're mocking.
-    _lock: Option<FileLock>,
-    /// Path to the root of the cache
-    root: Option<PathBuf>,
-    /// Cargo's crates.io package registry (in CARGO_HOME) for us to query opportunistically
-    cargo_registry: Option<CargoRegistry>,
-    /// Path to the DiffCache (for when we want to save it back)
-    diff_cache_path: Option<PathBuf>,
-    /// The loaded DiffCache, will be written back on Drop
-    pub diff_cache: DiffCache,
-    /// Path to the CommandHistory (for when we want to save it back)
-    command_history_path: Option<PathBuf>,
-    /// Command history to provide some persistent magic smarts
-    pub command_history: CommandHistory,
-}
-
 /// A Registry in CARGO_HOME (usually the crates.io one)
 pub struct CargoRegistry {
     /// The base path all registries share
@@ -296,16 +257,51 @@ impl CargoRegistry {
     // Could also include the index, not reason to do that yet
 }
 
+/// The cache where we store globally shared artifacts like fetched packages and diffstats
+///
+/// All access to this directory should be managed by this type to avoid races.
+pub struct Cache {
+    /// System-global lock over the cache, will be None if we're mocking.
+    _lock: Option<FileLock>,
+    /// Path to the root of the cache
+    root: Option<PathBuf>,
+    /// Cargo's crates.io package registry (in CARGO_HOME) for us to query opportunistically
+    cargo_registry: Option<CargoRegistry>,
+    /// Path to the DiffCache (for when we want to save it back)
+    diff_cache_path: Option<PathBuf>,
+    /// The loaded DiffCache, will be written back on Drop
+    pub diff_cache: DiffCache,
+    /// Path to the CommandHistory (for when we want to save it back)
+    command_history_path: Option<PathBuf>,
+    /// Command history to provide some persistent magic smarts
+    pub command_history: CommandHistory,
+}
+
 impl Drop for Cache {
     fn drop(&mut self) {
         if let Some(diff_cache_path) = &self.diff_cache_path {
             // Write back the diff_cache
-            store_diff_cache(diff_cache_path, mem::take(&mut self.diff_cache)).unwrap();
+            if let Err(err) = || -> Result<(), VetError> {
+                store_diff_cache(
+                    File::create(diff_cache_path)?,
+                    mem::take(&mut self.diff_cache),
+                )?;
+                Ok(())
+            }() {
+                error!("error writing back changes to diff-cache: {:?}", err);
+            }
         }
         if let Some(command_history_path) = &self.command_history_path {
             // Write back the command_history
-            store_command_history(command_history_path, mem::take(&mut self.command_history))
-                .unwrap();
+            if let Err(err) = || -> Result<(), VetError> {
+                store_command_history(
+                    File::create(command_history_path)?,
+                    mem::take(&mut self.command_history),
+                )?;
+                Ok(())
+            }() {
+                error!("error writing back changes to diff-cache: {:?}", err);
+            }
         }
         // `_lock: FileLock` implicitly released here
     }
@@ -328,28 +324,27 @@ impl Cache {
             });
         }
 
+        // Make sure the cache directory exists, and acquire an exclusive lock on it.
         let root = cfg.tmp.clone();
+        fs::create_dir_all(&root)
+            .wrap_err_with(|| format!("failed to create cache directory `{}`", root.display()))?;
+
+        let lock = Filesystem::new(root.clone()).open_rw(TEMP_VET_LOCK, "cache lock")?;
+
         let empty = root.join(TEMP_EMPTY_PACKAGE);
-        let packages: PathBuf = root.join(TEMP_REGISTRY_SRC);
-
-        // Make sure our cache exists
-        if !root.exists() {
-            fs::create_dir_all(&root)?;
-        }
-        // Now acquire the lockfile
-        let lock = if cfg.cli.readonly_lockless {
-            None
-        } else {
-            Some(FileLock::acquire(root.join(TEMP_LOCKFILE))?)
-        };
-
-        // Make sure everything else exists
-        if !empty.exists() {
-            fs::create_dir_all(&empty)?;
-        }
-        if !packages.exists() {
-            fs::create_dir_all(&packages)?;
-        }
+        fs::create_dir_all(&empty).wrap_err_with(|| {
+            format!(
+                "failed to create cache empty directory `{}`",
+                empty.display()
+            )
+        })?;
+        let packages = root.join(TEMP_REGISTRY_SRC);
+        fs::create_dir_all(&packages).wrap_err_with(|| {
+            format!(
+                "failed to create cache packages directory `{}`",
+                packages.display()
+            )
+        })?;
 
         // Setup the diff_cache.
         let diff_cache_path = cfg
@@ -357,22 +352,17 @@ impl Cache {
             .diff_cache
             .clone()
             .unwrap_or_else(|| root.join(TEMP_DIFF_CACHE));
-        let diff_cache = if let Ok(cache) = load_diff_cache(&diff_cache_path) {
-            cache
-        } else {
-            // Might be our first run, create a fresh diff-cache that we'll write back at the end
-            DiffCache::new()
-        };
+        let diff_cache: DiffCache = File::open(&diff_cache_path)
+            .ok()
+            .and_then(|f| load_toml(f).ok())
+            .unwrap_or_default();
 
         // Setup the command_history.
         let command_history_path = root.join(TEMP_COMMAND_HISTORY);
-        let command_history =
-            if let Ok(command_history) = load_command_history(&command_history_path) {
-                command_history
-            } else {
-                // Might be our first run, create a fresh command_history that we'll write back at the end
-                CommandHistory::default()
-            };
+        let command_history: CommandHistory = File::open(&command_history_path)
+            .ok()
+            .and_then(|f| load_json(f).ok())
+            .unwrap_or_default();
 
         // Try to get the cargo registry
         let cargo_registry = find_cargo_registry(cfg);
@@ -382,7 +372,7 @@ impl Cache {
         }
 
         Ok(Self {
-            _lock: lock,
+            _lock: Some(lock),
             root: Some(root),
             diff_cache_path: Some(diff_cache_path),
             diff_cache,
@@ -674,78 +664,46 @@ fn find_cargo_registry(cfg: &PartialConfig) -> Result<CargoRegistry, VetError> {
     }
 }
 
-fn load_toml<T>(path: &Path) -> Result<T, VetError>
+fn load_toml<T>(reader: impl Read) -> Result<T, VetError>
 where
     T: for<'a> Deserialize<'a>,
 {
-    let mut reader = BufReader::new(File::open(path)?);
+    let mut reader = BufReader::new(reader);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
     let toml = toml::from_str(&string)?;
     Ok(toml)
 }
-fn store_toml<T>(path: &Path, heading: &str, val: T) -> Result<(), VetError>
+fn store_toml<T>(mut writer: impl Write, heading: &str, val: T) -> Result<(), VetError>
 where
     T: Serialize,
 {
     // FIXME: do this in a temp file and swap it into place to avoid corruption?
     let toml_string = toml::to_string(&val)?;
-    let mut output = File::create(path)?;
-    writeln!(&mut output, "{}\n{}", heading, toml_string)?;
+    writeln!(writer, "{}\n{}", heading, toml_string)?;
     Ok(())
 }
-fn load_json<T>(path: &Path) -> Result<T, VetError>
+fn load_json<T>(reader: impl Read) -> Result<T, VetError>
 where
     T: for<'a> Deserialize<'a>,
 {
-    let mut reader = BufReader::new(File::open(path)?);
+    let mut reader = BufReader::new(reader);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
     let json = serde_json::from_str(&string)?;
     Ok(json)
 }
-fn store_json<T>(path: &Path, val: T) -> Result<(), VetError>
+fn store_json<T>(mut writer: impl Write, val: T) -> Result<(), VetError>
 where
     T: Serialize,
 {
     // FIXME: do this in a temp file and swap it into place to avoid corruption?
     let json_string = serde_json::to_string(&val)?;
-    let mut output = File::create(path)?;
-    writeln!(&mut output, "{}", json_string)?;
+    writeln!(writer, "{}", json_string)?;
     Ok(())
 }
 
-fn load_audits(store_path: &Path) -> Result<AuditsFile, VetError> {
-    // TODO: do integrity checks? (for things like criteria keys being valid)
-    let path = store_path.join(AUDITS_TOML);
-    let file: AuditsFile = load_toml(&path)?;
-    Ok(file)
-}
-
-fn load_config(store_path: &Path) -> Result<ConfigFile, VetError> {
-    // TODO: do integrity checks?
-    let path = store_path.join(CONFIG_TOML);
-    let file: ConfigFile = load_toml(&path)?;
-    Ok(file)
-}
-
-fn load_imports(store_path: &Path) -> Result<ImportsFile, VetError> {
-    // TODO: do integrity checks?
-    let path = store_path.join(IMPORTS_LOCK);
-    let file: ImportsFile = load_toml(&path)?;
-    Ok(file)
-}
-
-fn load_diff_cache(diff_cache_path: &Path) -> Result<DiffCache, VetError> {
-    let file: DiffCache = load_toml(diff_cache_path)?;
-    Ok(file)
-}
-fn load_command_history(command_history_path: &Path) -> Result<CommandHistory, VetError> {
-    let file: CommandHistory = load_json(command_history_path)?;
-    Ok(file)
-}
-
-fn store_audits(store_path: &Path, mut audits: AuditsFile) -> Result<(), VetError> {
+fn store_audits(writer: impl Write, mut audits: AuditsFile) -> Result<(), VetError> {
     let heading = r###"
 # cargo-vet audits file
 "###;
@@ -754,11 +712,10 @@ fn store_audits(store_path: &Path, mut audits: AuditsFile) -> Result<(), VetErro
         .values_mut()
         .for_each(|entries| entries.sort());
 
-    let path = store_path.join(AUDITS_TOML);
-    store_toml(&path, heading, audits)?;
+    store_toml(writer, heading, audits)?;
     Ok(())
 }
-fn store_config(store_path: &Path, mut config: ConfigFile) -> Result<(), VetError> {
+fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), VetError> {
     config
         .unaudited
         .values_mut()
@@ -768,29 +725,27 @@ fn store_config(store_path: &Path, mut config: ConfigFile) -> Result<(), VetErro
 # cargo-vet config file
 "###;
 
-    let path = store_path.join(CONFIG_TOML);
-    store_toml(&path, heading, config)?;
+    store_toml(writer, heading, config)?;
     Ok(())
 }
-fn store_imports(store_path: &Path, imports: ImportsFile) -> Result<(), VetError> {
+fn store_imports(writer: impl Write, imports: ImportsFile) -> Result<(), VetError> {
     let heading = r###"
 # cargo-vet imports lock
 "###;
 
-    let path = store_path.join(IMPORTS_LOCK);
-    store_toml(&path, heading, imports)?;
+    store_toml(writer, heading, imports)?;
     Ok(())
 }
-fn store_diff_cache(diff_cache_path: &Path, diff_cache: DiffCache) -> Result<(), VetError> {
+fn store_diff_cache(writer: impl Write, diff_cache: DiffCache) -> Result<(), VetError> {
     let heading = "";
 
-    store_toml(diff_cache_path, heading, diff_cache)?;
+    store_toml(writer, heading, diff_cache)?;
     Ok(())
 }
 fn store_command_history(
-    command_history_path: &Path,
+    writer: impl Write,
     command_history: CommandHistory,
 ) -> Result<(), VetError> {
-    store_json(command_history_path, command_history)?;
+    store_json(writer, command_history)?;
     Ok(())
 }
