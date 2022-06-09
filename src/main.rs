@@ -340,7 +340,7 @@ fn real_main() -> Result<(), VetError> {
         Some(AcceptCriteriaChange(sub_args)) => cmd_accept_criteria_change(out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
         Some(AddUnaudited(sub_args)) => cmd_add_unaudited(out, &cfg, sub_args),
-        Some(AddViolation(sub_args)) => cmd_add_violation(out, &cfg, sub_args),
+        Some(RecordViolation(sub_args)) => cmd_record_violation(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
         Some(FetchImports(sub_args)) => cmd_fetch_imports(out, &cfg, sub_args),
@@ -746,10 +746,10 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     Ok(())
 }
 
-fn cmd_add_violation(
+fn cmd_record_violation(
     _out: &mut dyn Write,
     cfg: &Config,
-    sub_args: &AddViolationArgs,
+    sub_args: &RecordViolationArgs,
 ) -> Result<(), VetError> {
     // Mark a package as a violation
     let mut store = Store::acquire(cfg)?;

@@ -145,7 +145,7 @@ pub enum Commands {
 
     /// Mark `$package $version` as a violation of policy
     #[clap(disable_version_flag = true)]
-    AddViolation(AddViolationArgs),
+    RecordViolation(RecordViolationArgs),
 
     /// Suggest some low-hanging fruit to review
     #[clap(disable_version_flag = true)]
@@ -236,7 +236,7 @@ pub struct CertifyArgs {
 
 /// Forbids the given version
 #[derive(clap::Args)]
-pub struct AddViolationArgs {
+pub struct RecordViolationArgs {
     /// The package to forbid
     pub package: PackageName,
     /// The versions to forbid
