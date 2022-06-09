@@ -24,6 +24,7 @@ use crate::resolver::{Conclusion, CriteriaMapper, DepGraph, SuggestItem};
 use crate::storage::{Cache, Store};
 
 mod cli;
+mod flock;
 pub mod format;
 pub mod resolver;
 mod serialization;

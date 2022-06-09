@@ -69,7 +69,7 @@ criteria = "safe-to-deploy"
 version = "3.1.8"
 
 [audits.clap.dependency-criteria]
-atty = ["safe-to-run"]
+atty = "safe-to-run"
 bitflags = ["audited", "fuzzed"]
 
 [[audits.unicode-bidi]]

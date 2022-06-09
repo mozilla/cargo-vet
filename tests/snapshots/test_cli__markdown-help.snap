@@ -114,11 +114,6 @@ The format of the output
 #### `-p, --package <SPEC>`
 Package to process (see `cargo help pkgid`)
 
-#### `--readonly-lockless`
-Do not modify or lock the store (supply-chain) directory
-
-This is primarily intended for testing and should not be used without good reason.
-
 #### `-V, --version`
 Print version information
 

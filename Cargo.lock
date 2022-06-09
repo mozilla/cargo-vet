@@ -88,6 +88,7 @@ dependencies = [
  "flate2",
  "home",
  "insta",
+ "libc",
  "nom",
  "reqwest",
  "serde",
@@ -98,6 +99,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "winapi",
 ]
 
 [[package]]

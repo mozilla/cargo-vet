@@ -42,12 +42,6 @@ pub struct Cli {
     #[clap(requires = "locked")]
     pub frozen: bool,
 
-    /// Do not modify or lock the store (supply-chain) directory
-    ///
-    /// This is primarily intended for testing and should not be used without good reason.
-    #[clap(long)]
-    pub readonly_lockless: bool,
-
     /// How verbose logging should be (log level)
     #[clap(long)]
     #[clap(default_value_t = LevelFilter::WARN)]
@@ -419,7 +413,6 @@ impl Cli {
             features: Features::default(),
             locked: false,
             frozen: false,
-            readonly_lockless: true,
             verbose: LevelFilter::OFF,
             output_file: None,
             output_format: OutputFormat::Human,
