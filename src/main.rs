@@ -845,6 +845,7 @@ fn real_main() -> Result<(), VetError> {
 
     info!("Running: {:#?}", cmd.cargo_command());
 
+    // ERRORS: immediate fatal diagnostic
     let metadata = cmd
         .exec()
         .wrap_err("'cargo metadata' exited unsuccessfully")?;
@@ -873,6 +874,7 @@ fn real_main() -> Result<(), VetError> {
         .workspace_metadata
         .get(WORKSPACE_VET_CONFIG)
         .map(|cfg| {
+            // ERRORS: immediate fatal diagnostic
             MetaConfigInstance::deserialize(cfg)
                 .wrap_err("Workspace had [{WORKSPACE_VET_CONFIG}] but it was malformed")
         })
@@ -883,12 +885,14 @@ fn real_main() -> Result<(), VetError> {
         .root_package()
         .and_then(|r| r.metadata.get(PACKAGE_VET_CONFIG))
         .map(|cfg| {
+            // ERRORS: immediate fatal diagnostic
             MetaConfigInstance::deserialize(cfg)
                 .wrap_err("Root package had [{PACKAGE_VET_CONFIG}] but it was malformed")
         })
         .transpose()?;
 
     if workspace_metacfg.is_some() && package_metacfg.is_some() {
+        // ERRORS: immediate fatal diagnostic
         Err(eyre!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!"))?;
     }
 
@@ -912,15 +916,17 @@ fn real_main() -> Result<(), VetError> {
     let init = is_init(&metacfg);
     if matches!(cli.command, Some(Commands::Init { .. })) {
         if init {
+            // ERRORS: immediate fatal diagnostic
             Err(eyre!(
-                "'cargo vet' already initialized (store found at {:#?})",
-                metacfg.store_path()
+                "'cargo vet' already initialized (store found at {})",
+                metacfg.store_path().display()
             ))?;
         }
     } else if !init {
+        // ERRORS: immediate fatal diagnostic
         Err(eyre!(
-            "You must run 'cargo vet init' (store not found at {:#?})",
-            metacfg.store_path()
+            "You must run 'cargo vet init' (store not found at {})",
+            metacfg.store_path().display()
         ))?;
     }
 
@@ -1094,12 +1100,27 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     {
         package.clone()
     } else {
+        // ERRORS: immediate fatal diagnostic
         writeln!(
             out,
             "error: couldn't guess what package to certify, please specify"
         )?;
         panic_any(ExitPanic(-1));
     };
+
+    // FIXME: can/should we check if the version makes sense..?
+    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == *package) {
+        // ERRORS: immediate fatal diagnostic? should we allow you to certify random packages?
+        // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
+        // useful audits whenever you update your dependencies! But this might be a useful guard
+        // against typosquatting or other weird issues?
+        writeln!(
+            out,
+            "error: '{}' isn't one of your foreign packages",
+            package
+        )?;
+        panic_any(ExitPanic(-1));
+    }
 
     let kind = if let Some(v1) = &sub_args.version1 {
         if let Some(v2) = &sub_args.version2 {
@@ -1139,6 +1160,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                 dependency_criteria: DependencyCriteria::new(),
             },
             _ => {
+                // ERRORS: immediate fatal diagnostic
                 writeln!(
                     out,
                     "error: couldn't guess what version to certify, please specify"
@@ -1147,6 +1169,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
             }
         }
     } else {
+        // ERRORS: immediate fatal diagnostic
         writeln!(
             out,
             "error: couldn't guess what version to certify, please specify"
@@ -1231,6 +1254,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
             let answer = if let Ok(val) = input.parse::<usize>() {
                 val
             } else {
+                // ERRORS: immediate error print to output for feedback, non-fatal
                 writeln!(out, "error: not a valid integer")?;
                 continue;
             };
@@ -1239,6 +1263,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                 continue;
             }
             if answer > criteria_mapper.list.len() {
+                // ERRORS: immediate error print to output for feedback, non-fatal
                 writeln!(out, "error: not a valid criteria")?;
                 continue;
             }
@@ -1267,24 +1292,18 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     // Round-trip this through the criteria_mapper to clean up `implies` relationships
     let criteria_set = criteria_mapper.criteria_from_list(&criteria_names);
     for criteria in criteria_mapper.criteria_names(&criteria_set) {
-        let eula = if let Some(eula) = eula_for_criteria(&store.audits, criteria) {
-            eula
-        } else {
-            writeln!(out, "error: couldn't get description of criteria")?;
-            panic_any(ExitPanic(-1));
-        };
-
-        // FIXME: can we check if the version makes sense..?
-        if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == *package) {
-            writeln!(
-                out,
-                "error: '{}' isn't one of your foreign packages",
-                package
-            )?;
-            panic_any(ExitPanic(-1));
-        }
-
         if !sub_args.accept_all {
+            let eula = if let Some(eula) = eula_for_criteria(&store.audits, criteria) {
+                eula
+            } else {
+                // ERRORS: fatal diagnostic, unclear if should be immediate or gathered?
+                // Some versions of this error can arguably be a validation error in `Store`
+                // so perhaps this validation doesn't need to exist at all if properly designed
+                // (would require a fallback for failing to fetch url, maybe just print the url)
+                writeln!(out, "error: couldn't get description of criteria")?;
+                panic_any(ExitPanic(-1));
+            };
+
             term.clear_screen()?;
             // Print out the EULA and prompt
             let what_version = match &kind {
@@ -1312,6 +1331,8 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
 
             let answer = term.read_line()?.trim().to_lowercase();
             if answer != "yes" {
+                // ERRORS: immediate fatal diagnostic, although arguably less of an error and more of
+                // a "fine, be that way" and exit.
                 writeln!(out, "rejected certification")?;
                 panic_any(ExitPanic(-1));
             }
@@ -1373,8 +1394,12 @@ fn cmd_add_violation(
     }
     let criteria = criteria.swap_remove(0);
 
-    // FIXME: can we check if the version makes sense..?
+    // FIXME: can/should we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+        // ERRORS: immediate fatal diagnostic? should we allow you to forbid random packages?
+        // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
+        // useful audits whenever you update your dependencies! But this might be a useful guard
+        // against typosquatting or other weird issues?
         Err(eyre!(
             "'{}' isn't one of your foreign packages",
             sub_args.package
@@ -1440,8 +1465,12 @@ fn cmd_add_unaudited(
     }
     let criteria = criteria.swap_remove(0);
 
-    // FIXME: can we check if the version makes sense..?
+    // FIXME: can/should we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+        // ERRORS: immediate fatal diagnostic? should we allow you to certify random packages?
+        // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
+        // useful audits whenever you update your dependencies! But this might be a useful guard
+        // against typosquatting or other weird issues?
         Err(eyre!(
             "'{}' isn't one of your foreign packages",
             sub_args.package
@@ -1600,6 +1629,7 @@ pub fn minimize_unaudited(cfg: &Config, store: &mut Store) -> Result<(), VetErro
     } else if let Conclusion::Success(_) = report.conclusion {
         SortedMap::new()
     } else {
+        // ERRORS: immediate fatal diagnostic
         return Err(eyre::eyre!(
             "error: regenerate-unaudited failed for unknown reason"
         ));
@@ -1657,6 +1687,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     // Only save imports if we succeeded, to avoid any modifications on error.
     if report.has_errors() {
+        // ERRORS: immediate fatal diagnostic? Arguably should be silent.
         Err(eyre!("report contains errors"))?;
     } else {
         store.commit()?;
@@ -1676,6 +1707,9 @@ fn cmd_fetch_imports(
     if !cfg.cli.locked {
         store.fetch_foreign_audits()?;
     } else {
+        // ERRORS: just a warning that you're holding it wrong, unclear if immediate or buffered,
+        // or if this should be a hard error, or if we should ignore the --locked flag and
+        // just do it anyway
         writeln!(
             out,
             "warning: ran fetch-imports with --locked, this won't fetch!"
@@ -1719,9 +1753,7 @@ fn cmd_accept_criteria_change(
     // Accept changes that a foreign audits.toml made to their criteria.
     trace!("accepting...");
 
-    error!("TODO(#68): unimplemented feature!");
-
-    Ok(())
+    unimplemented!("TODO(#68): unimplemented feature!");
 }
 
 /// Perform crimes on clap long_help to generate markdown docs
@@ -1979,6 +2011,12 @@ impl FileLock {
         // TODO: should we hold onto the file to avoid anyone deleting it?
         // Or drop it right away to make it easier to cleanup if something goes wrong?
         let path = path.into();
+        // ERRORS: arguably this is totally recoverable... maybe
+        //
+        // For Cache you can theoretically do some things without it (it's just "nice to have")
+        // but that kind of logic isn't yet implemented.
+        //
+        // For Store this would be basically immediately fatal (but that's the store's problem).
         let _lock = File::options()
             .write(true)
             .create_new(true)
@@ -2094,6 +2132,9 @@ impl Store {
 
     /// Validate the store's integrity
     pub fn validate(&self) -> Result<(), VetError> {
+        // ERRORS: ideally these are all gathered diagnostics, want to report as many errors
+        // at once as possible!
+
         // TODO(#66): implement validation
         //
         // * check that policy entries are only first-party
@@ -2121,10 +2162,12 @@ impl Store {
             // FIXME: this should probably be async but that's a Whole Thing and these files are small.
             let audit_txt = req::get(url).and_then(|r| r.text());
             if let Err(e) = audit_txt {
+                // ERRORS: gathered diagnostic, we should find all the fetch errors at once
                 return Err(eyre::eyre!("Could not load {name} @ {url} - {e}"));
             }
             let audit_file: Result<AuditsFile, _> = toml::from_str(&audit_txt.unwrap());
             if let Err(e) = audit_file {
+                // ERRORS: gathered diagnostic, we should find all the fetch errors at once
                 return Err(eyre::eyre!("Could not parse {name} @ {url} - {e}"));
             }
             audits.insert(name.clone(), audit_file.unwrap());
@@ -2265,6 +2308,7 @@ impl Cache {
         // Try to get the cargo registry
         let cargo_registry = find_cargo_registry(cfg);
         if let Err(e) = &cargo_registry {
+            // ERRORS: this warning really rides the line, I'm not sure if the user can/should care
             warn!("Couldn't find cargo registry: {e}");
         }
 
@@ -2389,6 +2433,7 @@ impl Cache {
                     diffstat
                 } else {
                     // If we don't have fetches, assume we want mocked results
+                    // ERRORS: this warning really rides the line, I'm not sure if the user can/should care
                     warn!("Missing fetches, assuming we're in tests and mocking");
 
                     let from_len = delta.from.major * delta.from.major;
@@ -2517,6 +2562,8 @@ fn fetch_is_ok(fetch: &Path) -> bool {
 }
 
 fn find_cargo_registry(cfg: &PartialConfig) -> Result<CargoRegistry, VetError> {
+    // ERRORS: all of this is genuinely fallible internal workings
+
     // Find the cargo registry
     //
     // This is all unstable nonsense so being a bit paranoid here so that we can notice
@@ -2539,6 +2586,7 @@ fn find_cargo_registry(cfg: &PartialConfig) -> Result<CargoRegistry, VetError> {
         let dir_name = path.file_name().unwrap().to_owned();
         if path.is_dir() {
             if registry.is_some() {
+                // ERRORS: these warnings really ride the line, not sure the user can/should care
                 warn!("Found multiple subdirectories in CARGO_HOME/registry/src");
                 warn!("  Preferring any named github.com-*");
                 if dir_name.to_string_lossy().starts_with("github.com-") {
@@ -2563,6 +2611,9 @@ fn diff_crate(
     version1: &Path,
     version2: &Path,
 ) -> Result<(), VetError> {
+    // ERRORS: arguably this is all proper fallible, but it would be fatal to
+    // `cargo vet diff`, the primary consumer, to not be able to diff
+
     // FIXME: mask out .cargo_vcs_info.json
     // FIXME: look into libgit2 vs just calling git
 
@@ -2578,13 +2629,15 @@ fn diff_crate(
     // 0 = empty
     // 1 = some diff
     if status != 0 && status != 1 {
-        return Err(eyre::eyre!("git diff failed!\n {}", status,));
+        return Err(eyre::eyre!("git diff failed!\n {}", status));
     }
 
     Ok(())
 }
 
 fn diffstat_crate(version1: &Path, version2: &Path) -> Result<DiffStat, VetError> {
+    // ERRORS: all of this is properly fallible internal workings, we can fail
+    // to diffstat some packages and still produce some useful output
     trace!("diffstating {version1:#?} {version2:#?}");
     // FIXME: mask out .cargo_vcs_info.json
     // FIXME: look into libgit2 vs just calling git
@@ -2625,6 +2678,9 @@ fn diffstat_crate(version1: &Path, version2: &Path) -> Result<DiffStat, VetError
         let added: u64 = parse_diffnum(parts.next()).unwrap_or(0);
         let removed: u64 = parse_diffnum(parts.next()).unwrap_or(0);
 
+        // ERRORS: Arguably this should just be an error but it's more of a
+        // "have I completely misunderstood this format, if so let me know"
+        // panic, so the assert *is* what I want..?
         assert_eq!(
             parts.next(),
             None,
@@ -2647,6 +2703,7 @@ struct UserInfo {
 }
 
 fn get_user_info() -> Result<UserInfo, VetError> {
+    // ERRORS: this is all properly fallible internal workings
     let username = {
         let out = Command::new("git")
             .arg("config")
@@ -2689,6 +2746,7 @@ fn get_user_info() -> Result<UserInfo, VetError> {
 }
 
 fn eula_for_criteria(audits: &AuditsFile, criteria: CriteriaStr) -> Option<String> {
+    // ERRORS: it's possible this should be infallible, guarded by pre-validation?
     let builtin_eulas = [
         (
             format::SAFE_TO_DEPLOY,
@@ -2717,6 +2775,7 @@ fn eula_for_criteria(audits: &AuditsFile, criteria: CriteriaStr) -> Option<Strin
                         req::get(url)
                             .and_then(|r| r.text())
                             .map_err(|e| {
+                                // ERRORS: does the user care, if we have this recovery mode afterwards?
                                 warn!("Could not fetch criteria description: {e}");
                             })
                             .ok()
