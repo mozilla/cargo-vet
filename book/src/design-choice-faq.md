@@ -30,21 +30,6 @@ enable developers to quickly get to a green state, and then use `cargo vet
 suggest` to ratchet down the set of unaudited code at their own pace.
 
 
-## Why is there no helper for recording violation entries?
-
-One could imagine pairing `cargo vet certify` with a corresponding `cargo vet
-record-violation`. This isn't supported for three reasons:
-* Security problems are rarely isolated to an exact version, which is why
-  `violation` [supports](audit-entries.md#violation) range syntax. Some elements
-  of this syntax (like `*', `<` and `>`) are shell-parsed, and so passing
-  them to a helper would either require cumbersome escaping, or the complexity
-  of an alternative shell-friendly syntax.
-* The situation in which you need to record a violation is not likely to arise
-  frequently.
-* When the situation does arise, the effort required to manually update
-  `audits.toml` is dwarfed by the effort of actually extricating the dependency
-  from your project.
-
 ## Why does `cargo vet` require audits for overridden dependencies?
 
 Cargo supports [dependency
