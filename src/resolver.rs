@@ -332,6 +332,9 @@ impl CriteriaMapper {
     pub fn len(&self) -> usize {
         self.list.len()
     }
+    pub fn is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
     pub fn no_criteria(&self) -> CriteriaSet {
         CriteriaSet::none(self.len())
     }
