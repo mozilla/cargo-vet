@@ -232,9 +232,8 @@ fn real_main() -> Result<(), VetError> {
         other_options.push(package.to_string());
     }
     // We never want cargo-vet to update the Cargo.lock.
-    // For locked runs we don't want to touch the network so use --frozen
-    // For unlocked runs we want to error out if the lock is out of date, so use --locked
-    if cli.locked {
+    // For frozen runs we also don't want to touch the network.
+    if cli.frozen {
         other_options.push("--frozen".to_string());
     } else {
         other_options.push("--locked".to_string());
