@@ -7,19 +7,20 @@ implies = "safe-to-deploy"
 
 [criteria.fuzzed]
 description = "fuzzed"
+
 [[audits.atty]]
 criteria = "safe-to-run"
 version = "0.2.14"
 
 [[audits.autocfg]]
-notes = "test for simple absolute version with non-defaults"
 criteria = "safe-to-deploy"
 version = "1.1.0"
+notes = "test for simple absolute version with non-defaults"
 
 [[audits.base64]]
-notes = "test for basic resolution"
 criteria = "safe-to-deploy"
 version = "0.1.0"
+notes = "test for basic resolution"
 
 [[audits.base64]]
 criteria = "safe-to-deploy"
@@ -30,9 +31,9 @@ criteria = "safe-to-deploy"
 delta = "0.1.0 -> 0.4.0"
 
 [[audits.base64]]
-notes = "basic resolution"
 criteria = "safe-to-deploy"
 delta = "0.2.0 -> 0.14.0"
+notes = "basic resolution"
 
 [[audits.base64]]
 criteria = "safe-to-deploy"
@@ -47,9 +48,9 @@ criteria = "safe-to-deploy"
 delta = "0.9.0 -> 0.13.0"
 
 [[audits.bitflags]]
-notes = "test for unioning criteria from two chains"
 criteria = "audited"
 version = "0.1.0"
+notes = "test for unioning criteria from two chains"
 
 [[audits.bitflags]]
 criteria = "fuzzed"
@@ -64,16 +65,13 @@ criteria = "fuzzed"
 delta = "0.2.0 -> 1.3.2"
 
 [[audits.clap]]
-notes = "test for custom criteria (low-grade and high-grade)"
 criteria = "safe-to-deploy"
 version = "3.1.8"
-
-[audits.clap.dependency-criteria]
-atty = "safe-to-run"
-bitflags = ["audited", "fuzzed"]
+dependency-criteria = { atty = "safe-to-run", bitflags = ["audited", "fuzzed"] }
+notes = "test for custom criteria (low-grade and high-grade)"
 
 [[audits.unicode-bidi]]
-notes = "test for delta to unaudited"
 criteria = "safe-to-deploy"
 delta = "0.2.0 -> 0.3.7"
+notes = "test for delta to unaudited"
 
