@@ -4,11 +4,13 @@ use std::{
     io::{self, BufReader, Read, Seek, Write},
     mem,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use cargo_metadata::Version;
 use eyre::Context;
 use flate2::read::GzDecoder;
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
 use tracing::{error, log::warn, trace, trace_span};
@@ -17,8 +19,9 @@ use crate::{
     flock::{FileLock, Filesystem},
     format::{
         AuditsFile, CommandHistory, ConfigFile, Delta, DiffCache, DiffStat, ImportsFile,
-        MetaConfig, PackageStr, SortedMap, SortedSet,
+        MetaConfig, PackageName, PackageStr, SortedMap, SortedSet,
     },
+    network::Network,
     resolver::{self, DiffRecommendation},
     serialization::to_formatted_toml,
     Config, PartialConfig, VetError,
@@ -28,7 +31,8 @@ use crate::{
 static TEMP_DIFF_CACHE: &str = "diff-cache.toml";
 static TEMP_COMMAND_HISTORY: &str = "command-history.json";
 static TEMP_EMPTY_PACKAGE: &str = "empty";
-static TEMP_REGISTRY_SRC: &str = "packages";
+static TEMP_REGISTRY_SRC: &str = "src";
+static TEMP_REGISTRY_CACHE: &str = "cache";
 static TEMP_VET_LOCK: &str = ".vet-lock";
 
 // Various cargo values
@@ -206,9 +210,17 @@ impl Store {
     }
 
     /// Fetch foreign audits, only call this is we're not --locked
-    pub fn fetch_foreign_audits(&mut self) -> Result<(), VetError> {
+    pub fn fetch_foreign_audits(&mut self, network: Arc<Network>) -> Result<(), VetError> {
         let mut audits = SortedMap::new();
+        let mut to_fetch = SortedMap::new();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
+
         for (name, import) in &self.config.imports {
+<<<<<<< HEAD
             let url = &import.url;
             // FIXME: this should probably be async but that's a Whole Thing and these files are small.
             let audit_txt = reqwest::blocking::get(url).and_then(|r| r.text());
@@ -222,6 +234,16 @@ impl Store {
                 return Err(eyre::eyre!("Could not parse {name} @ {url} - {e}"));
             }
             audits.insert(name.clone(), audit_file.unwrap());
+=======
+            let url = Url::parse(&import.url).unwrap();
+            let handle = runtime.spawn(fetch_foreign_audit(network.clone(), name.clone(), url));
+            to_fetch.insert(name, handle);
+        }
+        for (name, handle) in to_fetch {
+            let audit_file: Result<AuditsFile, VetError> = runtime.block_on(handle)?;
+            let audit_file: AuditsFile = audit_file?;
+            audits.insert(name.to_string(), audit_file);
+>>>>>>> 5df8aef... WIP async downloads
         }
 
         let new_imports = ImportsFile { audits };
@@ -234,6 +256,20 @@ impl Store {
         self.validate()?;
         Ok(())
     }
+}
+
+async fn fetch_foreign_audit(
+    network: Arc<Network>,
+    name: String,
+    url: Url,
+) -> Result<AuditsFile, VetError> {
+    let audit_bytes = network
+        .download(url.clone())
+        .await
+        .wrap_err_with(|| format!("Could not import audit {name} @ {url}"))?;
+    let audit_file: AuditsFile = toml::from_slice(&audit_bytes)
+        .wrap_err_with(|| format!("Could not parse {name} @ {url}"))?;
+    Ok(audit_file)
 }
 
 /// A Registry in CARGO_HOME (usually the crates.io one)
@@ -339,11 +375,18 @@ impl Cache {
                 empty.display()
             )
         })?;
-        let packages = root.join(TEMP_REGISTRY_SRC);
-        fs::create_dir_all(&packages).wrap_err_with(|| {
+        let packages_src = root.join(TEMP_REGISTRY_SRC);
+        fs::create_dir_all(&packages_src).wrap_err_with(|| {
             format!(
-                "failed to create cache packages directory `{}`",
-                packages.display()
+                "failed to create package src directory `{}`",
+                packages_src.display()
+            )
+        })?;
+        let packages_cache = root.join(TEMP_REGISTRY_CACHE);
+        fs::create_dir_all(&packages_cache).wrap_err_with(|| {
+            format!(
+                "failed to create package cache directory `{}`",
+                packages_cache.display()
             )
         })?;
 
@@ -385,6 +428,7 @@ impl Cache {
 
     pub fn fetch_packages<'a>(
         &mut self,
+        network: Option<Arc<Network>>,
         packages: &[(PackageStr<'a>, &'a Version)],
     ) -> Result<SortedMap<PackageStr<'a>, SortedMap<&'a Version, PathBuf>>, VetError> {
         let _span = trace_span!("fetch-packages").entered();
@@ -394,7 +438,8 @@ impl Cache {
         }
 
         let root = self.root.as_ref().unwrap();
-        let fetch_dir = root.join(TEMP_REGISTRY_SRC);
+        let package_src_dir = root.join(TEMP_REGISTRY_SRC);
+        let package_cache_dir = root.join(TEMP_REGISTRY_CACHE);
         let cargo_registry = self.cargo_registry.as_ref();
 
         let mut paths = SortedMap::<PackageStr, SortedMap<&Version, PathBuf>>::new();
@@ -409,31 +454,57 @@ impl Cache {
                 // First try to get a cached copy from cargo's register or our own
                 let dir_name = format!("{}-{}", name, version);
 
-                let cached = cargo_registry
+                let fetched_src = cargo_registry
                     .map(|reg| reg.src().join(&dir_name))
                     .filter(|path| fetch_is_ok(path))
-                    .unwrap_or_else(|| fetch_dir.join(&dir_name));
+                    .unwrap_or_else(|| package_src_dir.join(&dir_name));
 
-                if !fetch_is_ok(&cached) {
+                if !fetch_is_ok(&fetched_src) {
                     // If we don't have a cached copy, push this to the download queue
-                    to_download.push((name, version, cached.clone()));
+                    let crate_name = format!("{}.crate", dir_name);
+                    let fetched_package = package_cache_dir.join(crate_name);
+                    to_download.push((name, version, fetched_package, fetched_src.clone()));
                 }
 
                 // Either this path exists or we'll download it, either way, it's right
-                cached
+                fetched_src
             };
 
             paths.entry(name).or_default().insert(version, path);
         }
 
-        if !to_download.is_empty() {
-            trace!("downloading {} packages", to_download.len());
-        }
         // If there is anything to download, do it
-        for (name, version, to_dir) in to_download {
-            trace!("  downloading {}:{} to {}", name, version, to_dir.display());
-            // FIXME: make this all async instead of blocking
-            self.download_package(name, version, &to_dir)?;
+        if !to_download.is_empty() {
+            // ERRORS: this could arguably be swallowed but this will mostly come up in tests
+            let network = network.expect("running as --frozen but needed fetches!");
+            trace!("downloading {} packages", to_download.len());
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .enable_all()
+                .build()
+                .unwrap();
+            let mut handles = vec![];
+
+            for (name, version, download_to, unpack_to) in to_download {
+                trace!(
+                    "  downloading {}:{} to {}",
+                    name,
+                    version,
+                    download_to.display()
+                );
+                handles.push(runtime.spawn(download_package(
+                    network.clone(),
+                    name.to_string(),
+                    (*version).clone(),
+                    download_to,
+                    unpack_to,
+                )));
+            }
+
+            for handle in handles {
+                let res = runtime.block_on(handle)?;
+                res?;
+            }
         }
 
         trace!("all fetched!");
@@ -443,6 +514,7 @@ impl Cache {
 
     pub fn fetch_and_diffstat_all(
         &mut self,
+        network: Option<Arc<Network>>,
         package: PackageStr,
         diffs: &SortedSet<Delta>,
     ) -> Result<DiffRecommendation, VetError> {
@@ -467,7 +539,7 @@ impl Cache {
             .iter()
             .map(|v| (package, *v))
             .collect::<Vec<_>>();
-        let fetches = self.fetch_packages(&to_fetch)?;
+        let fetches = self.fetch_packages(network, &to_fetch)?;
 
         for delta in diffs {
             let cached = self
@@ -526,80 +598,85 @@ impl Cache {
 
         Ok(best_rec.unwrap())
     }
+}
 
-    fn download_package(
-        &mut self,
-        package: PackageStr,
-        version: &Version,
-        to_dir: &Path,
-    ) -> Result<(), VetError> {
-        // Download to an anonymous temp file
-        let url = format!("https://crates.io/api/v1/crates/{package}/{version}/download");
-        let mut tempfile = tempfile::tempfile()?;
-        let bytes = reqwest::blocking::get(url).and_then(|r| r.bytes())?;
-        tempfile.write_all(&bytes[..])?;
-        tempfile.rewind()?;
+async fn download_package(
+    network: Arc<Network>,
+    package: PackageName,
+    version: Version,
+    download_to: PathBuf,
+    unpack_to: PathBuf,
+) -> Result<(), VetError> {
+    // If we already have the downloaded .crate, then use it
+    let file = if let Ok(file) = File::open(&download_to) {
+        file
+    } else {
+        // We don't have it, so download it
+        let url = Url::parse(&format!(
+            "https://crates.io/api/v1/crates/{package}/{version}/download"
+        ))?;
+        let (_bytes, file) = network.download_and_persist(url, &download_to).await?;
+        // TODO(#116): take the SHA2 of the bytes and compare it to what the registry says
+        file
+    };
 
-        // Now unpack it
-        self.unpack_package(&tempfile, to_dir)?;
+    // Now unpack it
+    unpack_package(&file, &unpack_to)?;
 
-        Ok(())
+    Ok(())
+}
+
+fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
+    // If we get here and the unpack_dir exists, this implies we had a previously failed fetch,
+    // blast it away so we can have a clean slate!
+    if unpack_dir.exists() {
+        fs::remove_dir_all(unpack_dir)?;
+    }
+    fs::create_dir(unpack_dir)?;
+    let lockfile = unpack_dir.join(CARGO_OK_FILE);
+    let gz = GzDecoder::new(tarball);
+    let mut tar = Archive::new(gz);
+    let prefix = unpack_dir.file_name().unwrap();
+    let parent = unpack_dir.parent().unwrap();
+    for entry in tar.entries()? {
+        let mut entry = entry.wrap_err("failed to iterate over archive")?;
+        let entry_path = entry
+            .path()
+            .wrap_err("failed to read entry path")?
+            .into_owned();
+
+        // We're going to unpack this tarball into the global source
+        // directory, but we want to make sure that it doesn't accidentally
+        // (or maliciously) overwrite source code from other crates. Cargo
+        // itself should never generate a tarball that hits this error, and
+        // crates.io should also block uploads with these sorts of tarballs,
+        // but be extra sure by adding a check here as well.
+        if !entry_path.starts_with(prefix) {
+            return Err(eyre::eyre!(
+                "invalid tarball downloaded, contains \
+                    a file at {} which isn't under {}",
+                entry_path.display(),
+                prefix.to_string_lossy()
+            ));
+        }
+        // Unpacking failed
+        let result = entry.unpack_in(parent).map_err(VetError::from);
+        result.wrap_err_with(|| format!("failed to unpack entry at `{}`", entry_path.display()))?;
     }
 
-    fn unpack_package(&mut self, tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
-        // If we get here and the unpack_dir exists, this implies we had a previously failed fetch,
-        // blast it away so we can have a clean slate!
-        if unpack_dir.exists() {
-            fs::remove_dir_all(unpack_dir)?;
-        }
-        fs::create_dir(unpack_dir)?;
-        let lockfile = unpack_dir.join(CARGO_OK_FILE);
-        let gz = GzDecoder::new(tarball);
-        let mut tar = Archive::new(gz);
-        let prefix = unpack_dir.file_name().unwrap();
-        let parent = unpack_dir.parent().unwrap();
-        for entry in tar.entries()? {
-            let mut entry = entry.wrap_err("failed to iterate over archive")?;
-            let entry_path = entry
-                .path()
-                .wrap_err("failed to read entry path")?
-                .into_owned();
+    // The lock file is created after unpacking so we overwrite a lock file
+    // which may have been extracted from the package.
+    let mut ok = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&lockfile)
+        .wrap_err_with(|| format!("failed to open `{}`", lockfile.display()))?;
 
-            // We're going to unpack this tarball into the global source
-            // directory, but we want to make sure that it doesn't accidentally
-            // (or maliciously) overwrite source code from other crates. Cargo
-            // itself should never generate a tarball that hits this error, and
-            // crates.io should also block uploads with these sorts of tarballs,
-            // but be extra sure by adding a check here as well.
-            if !entry_path.starts_with(prefix) {
-                return Err(eyre::eyre!(
-                    "invalid tarball downloaded, contains \
-                        a file at {} which isn't under {}",
-                    entry_path.display(),
-                    prefix.to_string_lossy()
-                ));
-            }
-            // Unpacking failed
-            let result = entry.unpack_in(parent).map_err(VetError::from);
-            result.wrap_err_with(|| {
-                format!("failed to unpack entry at `{}`", entry_path.display())
-            })?;
-        }
+    // Write to the lock file to indicate that unpacking was successful.
+    write!(ok, "ok")?;
 
-        // The lock file is created after unpacking so we overwrite a lock file
-        // which may have been extracted from the package.
-        let mut ok = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .open(&lockfile)
-            .wrap_err_with(|| format!("failed to open `{}`", lockfile.display()))?;
-
-        // Write to the lock file to indicate that unpacking was successful.
-        write!(ok, "ok")?;
-
-        Ok(())
-    }
+    Ok(())
 }
 
 fn fetch_is_ok(fetch: &Path) -> bool {

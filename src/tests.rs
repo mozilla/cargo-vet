@@ -844,7 +844,10 @@ fn mock_cfg(metadata: &Metadata) -> Config {
 fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
     let cfg = mock_cfg(metadata);
     let mut output = Vec::new();
-    report.print_human(&mut output, &cfg).unwrap();
+    let suggest = report.compute_suggest(&cfg, None, true).unwrap();
+    report
+        .print_human(&mut output, &cfg, suggest.as_ref())
+        .unwrap();
     String::from_utf8(output).unwrap()
 }
 
@@ -2548,7 +2551,7 @@ fn builtin_simple_unaudited_extra_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!("builtin-simple-unaudited-extra-regenerate", unaudited);
@@ -2593,7 +2596,7 @@ fn builtin_simple_unaudited_not_a_real_dep_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!("builtin-simple-not-a-real-dep-regenerate", unaudited);
@@ -2642,7 +2645,7 @@ fn builtin_simple_deps_unaudited_overbroad_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!("builtin-simple-unaudited-overbroad-regenerate", unaudited);
@@ -2696,7 +2699,7 @@ fn builtin_complex_unaudited_twins_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!("builtin-simple-unaudited-twins-regenerate", unaudited);
@@ -2750,7 +2753,7 @@ fn builtin_complex_unaudited_partial_twins_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!(
@@ -2816,7 +2819,7 @@ fn builtin_simple_unaudited_in_delta_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!("builtin-simple-unaudited-in-delta-regenerate", unaudited);
@@ -2879,7 +2882,7 @@ fn builtin_simple_unaudited_in_full_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!("builtin-simple-unaudited-in-full-regenerate", unaudited);
@@ -2933,7 +2936,7 @@ fn builtin_simple_unaudited_in_direct_full_regnerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!(
@@ -3104,7 +3107,7 @@ fn builtin_simple_unaudited_nested_weaker_req_regnerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!(
@@ -3221,7 +3224,7 @@ fn builtin_simple_unaudited_nested_stronger_req_regnerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!(
@@ -3286,7 +3289,7 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!(
@@ -3355,7 +3358,7 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store).unwrap();
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
 
     let unaudited = get_unaudited(&store);
     insta::assert_snapshot!(

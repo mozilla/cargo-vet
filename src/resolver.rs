@@ -3,6 +3,7 @@ use core::fmt;
 use serde::Serialize;
 use serde_json::json;
 use std::io::Write;
+use std::sync::Arc;
 use tracing::{error, trace, trace_span, warn};
 
 use crate::format::{
@@ -10,6 +11,7 @@ use crate::format::{
     PackageStr, SuggestedAudit,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
+use crate::network::Network;
 use crate::{
     AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
     GraphFilterQuery, PackageExt, Store, VetError,
@@ -2036,6 +2038,7 @@ impl<'a> ResolveReport<'a> {
     pub fn compute_suggest(
         &self,
         cfg: &Config,
+        network: Option<Arc<Network>>,
         allow_deltas: bool,
     ) -> Result<Option<Suggest>, VetError> {
         let _suggest_span = trace_span!("suggest").entered();
@@ -2152,7 +2155,7 @@ impl<'a> ResolveReport<'a> {
                 }
             }
 
-            match cache.fetch_and_diffstat_all(package.name, &candidates) {
+            match cache.fetch_and_diffstat_all(network.clone(), package.name, &candidates) {
                 Ok(suggested_diff) => {
                     total_lines += suggested_diff.diffstat.count;
                     suggestions.push(SuggestItem {
@@ -2220,17 +2223,27 @@ impl<'a> ResolveReport<'a> {
     }
 
     /// Print a full human-readable report
-    pub fn print_human(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
+    pub fn print_human(
+        &self,
+        out: &mut dyn Write,
+        cfg: &Config,
+        suggest: Option<&Suggest>,
+    ) -> Result<(), VetError> {
         match &self.conclusion {
             Conclusion::Success(res) => res.print_human(out, self, cfg),
             Conclusion::FailForViolationConflict(res) => res.print_human(out, self, cfg),
-            Conclusion::FailForVet(res) => res.print_human(out, self, cfg),
+            Conclusion::FailForVet(res) => res.print_human(out, self, cfg, suggest),
         }
     }
 
     /// Print only the suggest portion of a human-readable report
-    pub fn print_suggest_human(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
-        if let Some(suggest) = self.compute_suggest(cfg, true)? {
+    pub fn print_suggest_human(
+        &self,
+        out: &mut dyn Write,
+        _cfg: &Config,
+        suggest: Option<&Suggest>,
+    ) -> Result<(), VetError> {
+        if let Some(suggest) = suggest {
             suggest.print_human(out, self)?;
         } else {
             // This API is only used for vet-suggest
@@ -2240,7 +2253,12 @@ impl<'a> ResolveReport<'a> {
     }
 
     /// Print a full human-readable report
-    pub fn print_json(&self, out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
+    pub fn print_json(
+        &self,
+        out: &mut dyn Write,
+        _cfg: &Config,
+        suggest: Option<&Suggest>,
+    ) -> Result<(), VetError> {
         let result = match &self.conclusion {
             Conclusion::Success(success) => {
                 let json_package = |pkgidx: &PackageIdx| {
@@ -2267,12 +2285,6 @@ impl<'a> ResolveReport<'a> {
                 }).collect::<SortedMap<_,_>>(),
             }),
             Conclusion::FailForVet(fail) => {
-                // Suggest output generally requires hitting the network.
-                let suggest = if cfg.cli.frozen {
-                    None
-                } else {
-                    self.compute_suggest(cfg, true)?
-                };
                 let json_suggest_item = |item: &SuggestItem| {
                     let package = &self.graph.nodes[item.package];
                     json!({
@@ -2435,7 +2447,8 @@ impl FailForVet {
         &self,
         out: &mut dyn Write,
         report: &ResolveReport,
-        cfg: &Config,
+        _cfg: &Config,
+        suggest: Option<&Suggest>,
     ) -> Result<(), VetError> {
         writeln!(out, "Vetting Failed!")?;
         writeln!(out)?;
@@ -2460,11 +2473,9 @@ impl FailForVet {
         }
 
         // Suggest output generally requires hitting the network.
-        if !cfg.cli.frozen {
-            if let Some(suggest) = report.compute_suggest(cfg, true)? {
-                writeln!(out)?;
-                suggest.print_human(out, report)?;
-            }
+        if let Some(suggest) = suggest {
+            writeln!(out)?;
+            suggest.print_human(out, report)?;
         }
 
         Ok(())
