@@ -89,16 +89,28 @@ static WORKSPACE_VET_CONFIG: &str = "vet";
 /// by panicking with this type instead of a string.
 struct ExitPanic(i32);
 
+/// Similar to the above, but allows us to exec a new command
+/// as our final act.
+struct ExecPanic(std::process::Command);
+
 fn main() -> Result<(), VetError> {
     // Wrap main up in a catch_panic so that we can use it to implement std::process::exit with
     // unwinding, allowing us to silently exit the program while still cleaning up.
     let result = std::panic::catch_unwind(real_main);
     match result {
         Ok(main_result) => main_result,
-        Err(e) => {
+        Err(mut e) => {
             if let Some(ExitPanic(code)) = e.downcast_ref::<ExitPanic>() {
                 // Exit panic, just silently exit with this status
                 std::process::exit(*code);
+            } else if let Some(ExecPanic(_command)) = e.downcast_mut::<ExecPanic>() {
+                // Exit with an exec.
+                #[cfg(target_family = "unix")]
+                {
+                    use std::os::unix::process::CommandExt;
+                    _command.exec();
+                }
+                unreachable!("we only use ExecPanic for unix");
             } else {
                 // Normal panic, let it ride
                 std::panic::resume_unwind(e);
@@ -138,7 +150,7 @@ fn real_main() -> Result<(), VetError> {
 
     // Set a panic hook to redirect to the logger
     panic::set_hook(Box::new(|panic_info| {
-        if let Some(ExitPanic(_)) = panic_info.payload().downcast_ref::<ExitPanic>() {
+        if panic_info.payload().is::<ExitPanic>() || panic_info.payload().is::<ExecPanic>() {
             // Be silent, we're just trying to std::process::exit
             return;
         }
@@ -442,21 +454,19 @@ fn cmd_inspect(
     #[cfg(target_family = "unix")]
     {
         // Loosely borrowed from cargo crev.
-        use std::os::unix::process::CommandExt;
         let shell = std::env::var_os("SHELL").unwrap();
         writeln!(out, "Opening nested shell in: {:#?}", fetched)?;
         writeln!(out, "Use `exit` or Ctrl-D to finish.",)?;
         let mut command = std::process::Command::new(shell);
         command.current_dir(fetched.clone()).env("PWD", fetched);
-        command.exec();
+        panic_any(ExecPanic(command));
     }
 
     #[cfg(not(target_family = "unix"))]
     {
         writeln!(out, "  fetched to {:#?}", fetched)?;
+        Ok(())
     }
-
-    Ok(())
 }
 
 fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
