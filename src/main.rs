@@ -5,21 +5,25 @@ use std::ops::Deref;
 use std::panic::panic_any;
 use std::path::Path;
 use std::process::Command;
+use std::sync::Arc;
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package};
 use clap::{CommandFactory, Parser};
 use console::{style, Term};
 use eyre::{eyre, WrapErr};
+use format::CriteriaName;
+use network::Network;
+use reqwest::Url;
 use serde::de::Deserialize;
-use tracing::{error, info, trace, warn};
+use tracing::{error, info, trace};
 
 use crate::cli::*;
 use crate::editor::Editor;
 use crate::format::{
-    AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, CriteriaStr, Delta,
-    DependencyCriteria, DiffStat, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance,
-    PackageStr, SortedMap, StoreInfo, UnauditedDependency,
+    AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, Delta, DependencyCriteria,
+    DiffStat, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap,
+    StoreInfo, UnauditedDependency,
 };
 use crate::resolver::{Conclusion, CriteriaMapper, DepGraph, SuggestItem};
 use crate::storage::{Cache, Store};
@@ -28,6 +32,7 @@ mod cli;
 mod editor;
 mod flock;
 pub mod format;
+pub mod network;
 pub mod resolver;
 mod serialization;
 pub mod storage;
@@ -441,6 +446,7 @@ fn cmd_inspect(
 ) -> Result<(), VetError> {
     // Download a crate's source to a temp location for review
     let mut cache = Cache::acquire(cfg)?;
+    let network = Network::acquire(cfg);
     // Record this command for magic in `vet certify`
     cache.command_history.last_fetch = Some(FetchCommand::Inspect {
         package: sub_args.package.clone(),
@@ -450,7 +456,7 @@ fn cmd_inspect(
     let package = &*sub_args.package;
 
     let to_fetch = &[(package, &sub_args.version)];
-    let fetched_paths = cache.fetch_packages(to_fetch)?;
+    let fetched_paths = cache.fetch_packages(network, to_fetch)?;
     let fetched = &fetched_paths[package][&sub_args.version];
 
     #[cfg(target_family = "unix")]
@@ -474,6 +480,7 @@ fn cmd_inspect(
 fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
     // Certify that you have reviewed a crate's source for some version / delta
     let mut store = Store::acquire(cfg)?;
+    let network = Network::acquire(cfg);
     // Grab the command history and immediately drop the cache
     let command_history = Cache::acquire(cfg)?.command_history.clone();
 
@@ -785,6 +792,24 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         username, what_version, package,
     );
 
+    // Get all the EULAs at once
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+    .worker_threads(1)
+    .enable_all()
+    .build()
+    .unwrap();
+    let mut eulas = SortedMap::new();
+    if !sub_args.accept_all {
+        for criteria in &criteria_names {
+            let handle = runtime.spawn(eula_for_criteria(
+                network.clone(),
+                store.audits.criteria.clone(),
+                criteria.to_string(),
+            ));
+            eulas.insert(*criteria, handle);
+        }
+    }
+
     let mut notes = sub_args.notes.clone();
     if !sub_args.accept_all {
         let mut editor = Editor::new("VET_CERTIFY")?;
@@ -798,21 +823,13 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         editor.add_text("")?;
 
         for criteria in &criteria_names {
-            if let Some(eula) = eula_for_criteria(&store.audits, criteria) {
-                editor.add_comments(&format!("=== BEGIN CRITERIA {:?} ===", criteria))?;
-                editor.add_comments("")?;
-                editor.add_comments(&eula)?;
-                editor.add_comments("")?;
-                editor.add_comments("=== END CRITERIA ===")?;
-                editor.add_comments("")?;
-            } else {
-                // ERRORS: fatal diagnostic, unclear if should be immediate or gathered?
-                // Some versions of this error can arguably be a validation error in `Store`
-                // so perhaps this validation doesn't need to exist at all if properly designed
-                // (would require a fallback for failing to fetch url, maybe just print the url)
-                writeln!(out, "error: couldn't get description of criteria")?;
-                panic_any(ExitPanic(-1));
-            };
+            let eula = runtime.block_on(eulas.remove(criteria).unwrap())?;
+            editor.add_comments(&format!("=== BEGIN CRITERIA {:?} ===", criteria))?;
+            editor.add_comments("")?;
+            editor.add_comments(&eula)?;
+            editor.add_comments("")?;
+            editor.add_comments("=== END CRITERIA ===")?;
+            editor.add_comments("")?;
         }
         editor.add_comments("STATEMENT:")?;
         editor.add_text("")?;
@@ -1040,6 +1057,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
     let mut store = Store::acquire(cfg)?;
+    let network = Network::acquire(cfg);
 
     // Delete all unaudited entries except those that are suggest=false
     for versions in &mut store.config.unaudited.values_mut() {
@@ -1053,9 +1071,10 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
         &store,
         sub_args.guess_deeper,
     );
+    let suggest = report.compute_suggest(cfg, network, true)?;
     match cfg.cli.output_format {
-        OutputFormat::Human => report.print_suggest_human(out, cfg)?,
-        OutputFormat::Json => report.print_json(out, cfg)?,
+        OutputFormat::Human => report.print_suggest_human(out, cfg, suggest.as_ref())?,
+        OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
     }
 
     // Don't commit the store, because we purged the unaudited table above.
@@ -1071,8 +1090,9 @@ fn cmd_regenerate_unaudited(
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("regenerating unaudited...");
     let mut store = Store::acquire(cfg)?;
+    let network = Network::acquire(cfg);
 
-    minimize_unaudited(cfg, &mut store)?;
+    minimize_unaudited(cfg, &mut store, network)?;
 
     // We were successful, commit the store
     store.commit()?;
@@ -1080,7 +1100,11 @@ fn cmd_regenerate_unaudited(
     Ok(())
 }
 
-pub fn minimize_unaudited(cfg: &Config, store: &mut Store) -> Result<(), VetError> {
+pub fn minimize_unaudited(
+    cfg: &Config,
+    store: &mut Store,
+    network: Option<Arc<Network>>,
+) -> Result<(), VetError> {
     // Set the unaudited entries to nothing
     let old_unaudited = mem::take(&mut store.config.unaudited);
 
@@ -1088,7 +1112,7 @@ pub fn minimize_unaudited(cfg: &Config, store: &mut Store) -> Result<(), VetErro
     let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), store, true);
 
     trace!("minimizing unaudited...");
-    let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, false)? {
+    let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, network, false)? {
         let mut new_unaudited = SortedMap::new();
         let mut suggest_by_package_name = SortedMap::<PackageStr, Vec<SuggestItem>>::new();
         for item in suggest.suggestions {
@@ -1181,6 +1205,8 @@ pub fn minimize_unaudited(cfg: &Config, store: &mut Store) -> Result<(), VetErro
 
 fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Result<(), VetError> {
     let mut cache = Cache::acquire(cfg)?;
+    let network = Network::acquire(cfg);
+
     cache.command_history.last_fetch = Some(FetchCommand::Diff {
         package: sub_args.package.clone(),
         version1: sub_args.version1.clone(),
@@ -1196,7 +1222,7 @@ fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Re
     )?;
 
     let to_fetch = &[(package, &sub_args.version1), (package, &sub_args.version2)];
-    let fetched_paths = cache.fetch_packages(to_fetch)?;
+    let fetched_paths = cache.fetch_packages(network, to_fetch)?;
     let fetched1 = &fetched_paths[package][&sub_args.version1];
     let fetched2 = &fetched_paths[package][&sub_args.version2];
 
@@ -1212,15 +1238,20 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     trace!("vetting...");
 
     let mut store = Store::acquire(cfg)?;
-    if !cfg.cli.locked {
-        store.fetch_foreign_audits()?;
+    let network = Network::acquire(cfg);
+
+    if let Some(network) = network.clone() {
+        if !cfg.cli.locked {
+            store.fetch_foreign_audits(network)?;
+        }
     }
 
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store, false);
+    let suggest = report.compute_suggest(cfg, network, true)?;
     match cfg.cli.output_format {
-        OutputFormat::Human => report.print_human(out, cfg)?,
-        OutputFormat::Json => report.print_json(out, cfg)?,
+        OutputFormat::Human => report.print_human(out, cfg, suggest.as_ref())?,
+        OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
     }
 
     // Only save imports if we succeeded, to avoid any modifications on error.
@@ -1243,18 +1274,23 @@ fn cmd_fetch_imports(
     trace!("fetching imports...");
 
     let mut store = Store::acquire(cfg)?;
-    if !cfg.cli.locked {
-        store.fetch_foreign_audits()?;
-    } else {
-        // ERRORS: just a warning that you're holding it wrong, unclear if immediate or buffered,
-        // or if this should be a hard error, or if we should ignore the --locked flag and
-        // just do it anyway
-        writeln!(
-            out,
-            "warning: ran fetch-imports with --locked, this won't fetch!"
-        )?;
+    let network = Network::acquire(cfg);
+
+    if let Some(network) = network {
+        if !cfg.cli.locked {
+            store.fetch_foreign_audits(network)?;
+            store.commit()?;
+            return Ok(());
+        }
     }
-    store.commit()?;
+
+    // ERRORS: just a warning that you're holding it wrong, unclear if immediate or buffered,
+    // or if this should be a hard error, or if we should ignore the --locked flag and
+    // just do it anyway
+    writeln!(
+        out,
+        "warning: ran fetch-imports with --locked, this won't do anything!"
+    )?;
 
     Ok(())
 }
@@ -1546,7 +1582,11 @@ fn get_user_info() -> Result<UserInfo, VetError> {
     })
 }
 
-fn eula_for_criteria(audits: &AuditsFile, criteria: CriteriaStr) -> Option<String> {
+async fn eula_for_criteria(
+    network: Option<Arc<Network>>,
+    criteria_map: SortedMap<CriteriaName, CriteriaEntry>,
+    criteria: CriteriaName,
+) -> String {
     // ERRORS: it's possible this should be infallible, guarded by pre-validation?
     let builtin_eulas = [
         (
@@ -1566,25 +1606,42 @@ fn eula_for_criteria(audits: &AuditsFile, criteria: CriteriaStr) -> Option<Strin
     // * Try to get the criteria's description
     // * Try to fetch the criteria's url
     // * Just display the url
-    builtin_eulas
-        .get(criteria)
-        .map(|s| s.to_string())
-        .or_else(|| {
-            audits.criteria.get(criteria).and_then(|c| {
-                c.description.clone().or_else(|| {
-                    c.description_url.as_ref().map(|url| {
-                        reqwest::blocking::get(url)
-                            .and_then(|r| r.text())
-                            .map_err(|e| {
-                                // ERRORS: does the user care, if we have this recovery mode afterwards?
-                                warn!("Could not fetch criteria description: {e}");
-                            })
-                            .ok()
-                            .unwrap_or_else(|| format!("See criteria description at {url}"))
-                    })
-                })
-            })
-        })
+
+    // First try the builtins
+    let builtin = builtin_eulas.get(&*criteria).map(|s| s.to_string());
+    if let Some(eula) = builtin {
+        return eula;
+    }
+
+    // ERRORS: the caller should have verified this entry already!
+    let criteria_entry = criteria_map
+        .get(&*criteria)
+        .unwrap_or_else(|| panic!("no entry for the criteria {}", criteria));
+    assert!(
+        criteria_entry.description.is_some() || criteria_entry.description_url.is_some(),
+        "entry for criteria {} is corrupt!",
+        criteria
+    );
+
+    // Now try the description
+    if let Some(eula) = criteria_entry.description.clone() {
+        return eula;
+    }
+
+    // If we get here then there must be a URL, try to fetch it. If it fails, just print the URL
+    let url = Url::parse(criteria_entry.description_url.as_ref().unwrap()).unwrap();
+    if let Some(network) = network {
+        if let Ok(eula) = network
+            .download(url.clone())
+            .await
+            .and_then(|bytes| Ok(String::from_utf8(bytes)?))
+        {
+            return eula;
+        }
+    }
+
+    // If we get here then the download failed, just print the URL
+    format!("Could not download criteria description, it should be available at {url}")
 }
 
 fn foreign_packages(metadata: &Metadata) -> impl Iterator<Item = &Package> {
