@@ -156,10 +156,10 @@ pub struct CriteriaEntry {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct AuditEntry {
     pub who: Option<String>,
-    pub notes: Option<String>,
     pub criteria: CriteriaName,
     #[serde(flatten)]
     pub kind: AuditKind,
+    pub notes: Option<String>,
 }
 
 /// Implement PartialOrd manually because the order we want for sorting is
@@ -346,9 +346,6 @@ pub struct PolicyEntry {
     #[serde(rename = "dev-targets")]
     pub dev_targets: Option<Vec<String>>,
 
-    /// Freeform notes
-    pub notes: Option<String>,
-
     /// Custom criteria for a specific first-party crate's dependencies.
     ///
     /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
@@ -357,6 +354,9 @@ pub struct PolicyEntry {
     #[serde(with = "serialization::dependency_criteria")]
     #[serde(default)]
     pub dependency_criteria: DependencyCriteria,
+
+    /// Freeform notes
+    pub notes: Option<String>,
 }
 
 pub static DEFAULT_POLICY_CRITERIA: CriteriaStr = SAFE_TO_DEPLOY;
@@ -396,8 +396,6 @@ pub struct UnauditedDependency {
     #[serde(default = "get_default_unaudited_suggest")]
     #[serde(skip_serializing_if = "is_default_unaudited_suggest")]
     pub suggest: bool,
-    /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
-    pub notes: Option<String>,
     /// Custom criteria for an unaudited crate's dependencies.
     ///
     /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
@@ -406,6 +404,8 @@ pub struct UnauditedDependency {
     #[serde(with = "serialization::dependency_criteria")]
     #[serde(default)]
     pub dependency_criteria: DependencyCriteria,
+    /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
+    pub notes: Option<String>,
 }
 
 static DEFAULT_UNAUDITED_SUGGEST: bool = true;

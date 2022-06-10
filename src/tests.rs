@@ -849,7 +849,7 @@ fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
 }
 
 fn get_unaudited(store: &Store) -> String {
-    toml::ser::to_string_pretty(&store.config.unaudited).unwrap()
+    toml_edit::ser::to_string_pretty(&store.config.unaudited).unwrap()
 }
 
 fn _init_trace_logger() {
