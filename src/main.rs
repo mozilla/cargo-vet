@@ -881,7 +881,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
 }
 
 fn cmd_record_violation(
-    _out: &mut dyn Write,
+    out: &mut dyn Write,
     cfg: &Config,
     sub_args: &RecordViolationArgs,
 ) -> Result<(), VetError> {
@@ -943,6 +943,8 @@ fn cmd_record_violation(
         .push(new_entry);
 
     store.commit()?;
+
+    writeln!(out, "If you've identified a security vulnerability in {} please report it at https://github.com/rustsec/advisory-db#reporting-vulnerabilities", sub_args.package).unwrap();
 
     Ok(())
 }
