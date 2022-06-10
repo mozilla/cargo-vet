@@ -21,8 +21,7 @@ to each other. Developers can inspect the difference between two versions, and r
 that if the first version was vetted, the second can be considered vetted as well.
 
 * **Deferred Audits**: It is not always practical to achieve full coverage.
-Dependencies can be added to a list of exceptions which can be ratched down
-down over time. This makes it trivial to introduce `cargo vet` to a new project
+Dependencies can be added to a list of exceptions which can be ratcheted down over time. This makes it trivial to introduce `cargo vet` to a new project
 and guard against future vulnerabilities while vetting the pre-existing code
 gradually as time permits.
 
