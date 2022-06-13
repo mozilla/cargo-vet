@@ -61,7 +61,7 @@ impl Network {
         &self,
         url: Url,
         persist_to: &Path,
-    ) -> Result<(Vec<u8>, File), VetError> {
+    ) -> Result<File, VetError> {
         let mut res = self
             .client
             .get(url.clone())
@@ -72,11 +72,9 @@ impl Network {
 
         let mut partial_download = NamedTempFile::new_in(&self.in_progress_download_dir)
             .wrap_err("could not create tempfile for download")?;
-        let mut output = vec![];
         while let Some(chunk) = res.chunk().await? {
             let network_bytes = &chunk[..];
             partial_download.write_all(network_bytes)?;
-            output.write_all(network_bytes)?;
         }
 
         let file = partial_download
@@ -87,7 +85,7 @@ impl Network {
                     persist_to.display()
                 )
             })?;
-        Ok((output, file))
+        Ok(file)
     }
 
     /// Download a file into memory

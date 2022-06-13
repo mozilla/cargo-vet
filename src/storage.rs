@@ -615,7 +615,7 @@ async fn download_package(
         let url = Url::parse(&format!(
             "https://crates.io/api/v1/crates/{package}/{version}/download"
         ))?;
-        let (_bytes, file) = network.download_and_persist(url, &download_to).await?;
+        let file = network.download_and_persist(url, &download_to).await?;
         // TODO(#116): take the SHA2 of the bytes and compare it to what the registry says
         file
     };

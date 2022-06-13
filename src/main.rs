@@ -1587,7 +1587,6 @@ async fn eula_for_criteria(
     criteria_map: SortedMap<CriteriaName, CriteriaEntry>,
     criteria: CriteriaName,
 ) -> String {
-    // ERRORS: it's possible this should be infallible, guarded by pre-validation?
     let builtin_eulas = [
         (
             format::SAFE_TO_DEPLOY,
