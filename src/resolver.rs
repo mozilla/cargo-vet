@@ -229,7 +229,7 @@ pub struct DeltaEdge<'a> {
     /// The criteria that this edge is valid for.
     criteria: CriteriaSet,
     /// Requirements that dependencies must satisfy for the edge to be valid.
-    /// If a dependency isn't mentionned, then it defaults to `criteria`.
+    /// If a dependency isn't mentioned, then it defaults to `criteria`.
     dependency_criteria: FastMap<PackageStr<'a>, CriteriaSet>,
     /// Whether this edge represents an 'unaudited' entry. These will initially
     /// be ignored, and then used only if we can't find a path.

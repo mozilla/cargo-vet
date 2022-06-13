@@ -86,7 +86,7 @@ pub struct StoreInfo {
 // This is... Weird, and it's unclear what that *means*... but maybe it's valid?
 // Either way, we definitely don't support it right now!
 
-/// All available configuration files, overlaying eachother.
+/// All available configuration files, overlaying each other.
 /// Generally contains: `[Default, Workspace, Package]`
 pub struct MetaConfig(pub Vec<MetaConfigInstance>);
 

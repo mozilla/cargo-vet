@@ -16,7 +16,7 @@ $ cargo update
 $ cargo vet
   Vetting Failed!
 
-  3 unvetted depedencies:
+  3 unvetted dependencies:
       bar:1.5 missing ["safe-to-deploy"]
       baz:1.3 missing ["safe-to-deploy"]
       foo:1.2.1 missing ["safe-to-deploy"]

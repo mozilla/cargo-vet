@@ -47,7 +47,7 @@ versions, a list of version deltas, a list of violation versions. Each insertion
 checks for overlap between the set of audited versions and violation versions;
 if overlap is created, an error is thrown.
 
-Next, the depedency subtrees of each top-level crate are traversed in accordance
+Next, the dependency subtrees of each top-level crate are traversed in accordance
 with the policy specified for each crate. TODO: Precisely specify the subtree
 traversal algorithm.
 
