@@ -2,7 +2,7 @@
 
 The discussion thus far assumes the project exists in a single repository, but
 it's common for organizations to manage code across multiple repositories. At
-first glance this presents a dillema as to whether to centralize or distribute
+first glance this presents a dilemma as to whether to centralize or distribute
 the audit records. Putting them all in one place makes them easier to consume,
 but more cumbersome to produce, since updating a package in one repository may
 require a developer to record a new audit in another repository.

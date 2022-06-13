@@ -258,7 +258,7 @@ pub struct RecordViolationArgs {
     pub notes: Option<String>,
 }
 
-/// Cerifies the given version
+/// Certifies the given version
 #[derive(clap::Args)]
 pub struct AddUnauditedArgs {
     /// The package to mark as unaudited (trusted)

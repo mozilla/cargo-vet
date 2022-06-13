@@ -1262,7 +1262,7 @@ fn cmd_dump_graph(
 }
 
 fn cmd_fmt(_out: &mut dyn Write, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), VetError> {
-    // Reformat all the files (just load and store them, formatting is implict).
+    // Reformat all the files (just load and store them, formatting is implicit).
     trace!("formatting...");
     let store = Store::acquire(cfg)?;
     store.commit()?;
