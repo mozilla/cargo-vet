@@ -20,6 +20,7 @@ use crate::{
         MetaConfig, PackageStr, SortedMap, SortedSet,
     },
     resolver::{self, DiffRecommendation},
+    serialization::to_formatted_toml,
     Config, PartialConfig, VetError,
 };
 
@@ -664,39 +665,6 @@ fn find_cargo_registry(cfg: &PartialConfig) -> Result<CargoRegistry, VetError> {
     }
 }
 
-/// tables with these names will be rendered by TomlFormatter as inline tables,
-/// rather than dotted tables.
-fn always_render_inline(key: &str) -> bool {
-    key == "dependency-criteria"
-}
-
-struct TomlFormatter;
-impl toml_edit::visit_mut::VisitMut for TomlFormatter {
-    fn visit_table_mut(&mut self, node: &mut toml_edit::Table) {
-        // Hide unnecessary implicit table headers for tables containing
-        // only other tables. We don't do this for empty tables as otherwise
-        // they could be hidden.
-        if !node.is_empty() {
-            node.set_implicit(true);
-        }
-        for (k, v) in node.iter_mut() {
-            if !always_render_inline(&k) {
-                // Try to convert the value into either a table or an array of
-                // tables if it is currently an inline table or inline array of
-                // tables.
-                *v = std::mem::take(v)
-                    .into_table()
-                    .map(toml_edit::Item::Table)
-                    .unwrap_or_else(|i| i)
-                    .into_array_of_tables()
-                    .map(toml_edit::Item::ArrayOfTables)
-                    .unwrap_or_else(|i| i);
-            }
-            self.visit_item_mut(v);
-        }
-    }
-}
-
 fn load_toml<T>(reader: impl Read) -> Result<T, VetError>
 where
     T: for<'a> Deserialize<'a>,
@@ -711,10 +679,8 @@ fn store_toml<T>(mut writer: impl Write, heading: &str, val: T) -> Result<(), Ve
 where
     T: Serialize,
 {
-    use toml_edit::visit_mut::VisitMut;
     // FIXME: do this in a temp file and swap it into place to avoid corruption?
-    let mut toml_document = toml_edit::ser::to_document(&val)?;
-    TomlFormatter.visit_document_mut(&mut toml_document);
+    let toml_document = to_formatted_toml(val)?;
     writeln!(writer, "{}{}", heading, toml_document)?;
     Ok(())
 }
