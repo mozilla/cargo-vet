@@ -344,7 +344,7 @@ impl Cache {
         }
 
         // Make sure the cache directory exists, and acquire an exclusive lock on it.
-        let root = cfg.tmp.clone();
+        let root = cfg.cache_dir.clone();
         fs::create_dir_all(&root)
             .wrap_err_with(|| format!("failed to create cache directory `{}`", root.display()))?;
 
