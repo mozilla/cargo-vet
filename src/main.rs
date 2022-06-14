@@ -55,8 +55,8 @@ pub struct Config {
 pub struct PartialConfig {
     /// Details of the CLI invocation (args)
     pub cli: Cli,
-    /// Path to the global tmp we're using
-    pub tmp: PathBuf,
+    /// Path to the cache directory we're using
+    pub cache_dir: PathBuf,
     /// Whether we should mock the global cache (for unit testing)
     pub mock_cache: bool,
 }
@@ -86,7 +86,7 @@ impl PackageExt for Package {
     }
 }
 
-static TEMP_DIR_SUFFIX: &str = "cargo-vet-checkout";
+static CACHE_DIR_SUFFIX: &str = "cargo-vet";
 static CARGO_ENV: &str = "CARGO";
 // package.metadata.vet
 static PACKAGE_VET_CONFIG: &str = "vet";
@@ -208,10 +208,12 @@ fn real_main() -> Result<(), VetError> {
     ////////////////////////////////////////////////////
 
     // TODO: make this configurable
-    let tmp = std::env::temp_dir().join(TEMP_DIR_SUFFIX);
+    let cache_dir = dirs::cache_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join(CACHE_DIR_SUFFIX);
     let partial_cfg = PartialConfig {
         cli,
-        tmp,
+        cache_dir,
         mock_cache: false,
     };
 

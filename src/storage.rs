@@ -29,12 +29,12 @@ use crate::{
 };
 
 // tmp cache for various shenanigans
-static TEMP_DIFF_CACHE: &str = "diff-cache.toml";
-static TEMP_COMMAND_HISTORY: &str = "command-history.json";
-static TEMP_EMPTY_PACKAGE: &str = "empty";
-static TEMP_REGISTRY_SRC: &str = "src";
-static TEMP_REGISTRY_CACHE: &str = "cache";
-static TEMP_VET_LOCK: &str = ".vet-lock";
+static CACHE_DIFF_CACHE: &str = "diff-cache.toml";
+static CACHE_COMMAND_HISTORY: &str = "command-history.json";
+static CACHE_EMPTY_PACKAGE: &str = "empty";
+static CACHE_REGISTRY_SRC: &str = "src";
+static CACHE_REGISTRY_CACHE: &str = "cache";
+static CACHE_VET_LOCK: &str = ".vet-lock";
 
 // Various cargo values
 static CARGO_REGISTRY_SRC: &str = "src";
@@ -344,27 +344,27 @@ impl Cache {
         }
 
         // Make sure the cache directory exists, and acquire an exclusive lock on it.
-        let root = cfg.tmp.clone();
+        let root = cfg.cache_dir.clone();
         fs::create_dir_all(&root)
             .wrap_err_with(|| format!("failed to create cache directory `{}`", root.display()))?;
 
-        let lock = Filesystem::new(root.clone()).open_rw(TEMP_VET_LOCK, "cache lock")?;
+        let lock = Filesystem::new(root.clone()).open_rw(CACHE_VET_LOCK, "cache lock")?;
 
-        let empty = root.join(TEMP_EMPTY_PACKAGE);
+        let empty = root.join(CACHE_EMPTY_PACKAGE);
         fs::create_dir_all(&empty).wrap_err_with(|| {
             format!(
                 "failed to create cache empty directory `{}`",
                 empty.display()
             )
         })?;
-        let packages_src = root.join(TEMP_REGISTRY_SRC);
+        let packages_src = root.join(CACHE_REGISTRY_SRC);
         fs::create_dir_all(&packages_src).wrap_err_with(|| {
             format!(
                 "failed to create package src directory `{}`",
                 packages_src.display()
             )
         })?;
-        let packages_cache = root.join(TEMP_REGISTRY_CACHE);
+        let packages_cache = root.join(CACHE_REGISTRY_CACHE);
         fs::create_dir_all(&packages_cache).wrap_err_with(|| {
             format!(
                 "failed to create package cache directory `{}`",
@@ -377,14 +377,14 @@ impl Cache {
             .cli
             .diff_cache
             .clone()
-            .unwrap_or_else(|| root.join(TEMP_DIFF_CACHE));
+            .unwrap_or_else(|| root.join(CACHE_DIFF_CACHE));
         let diff_cache: DiffCache = File::open(&diff_cache_path)
             .ok()
             .and_then(|f| load_toml(f).ok())
             .unwrap_or_default();
 
         // Setup the command_history.
-        let command_history_path = root.join(TEMP_COMMAND_HISTORY);
+        let command_history_path = root.join(CACHE_COMMAND_HISTORY);
         let command_history: CommandHistory = File::open(&command_history_path)
             .ok()
             .and_then(|f| load_json(f).ok())
@@ -431,8 +431,8 @@ impl Cache {
         }
 
         let root = self.root.as_ref().unwrap();
-        let package_src_dir = root.join(TEMP_REGISTRY_SRC);
-        let package_cache_dir = root.join(TEMP_REGISTRY_CACHE);
+        let package_src_dir = root.join(CACHE_REGISTRY_SRC);
+        let package_cache_dir = root.join(CACHE_REGISTRY_CACHE);
         let cargo_registry = self.cargo_registry.as_ref();
 
         let mut paths = SortedMap::<PackageStr, SortedMap<&Version, PathBuf>>::new();
@@ -442,7 +442,7 @@ impl Cache {
         for (name, version) in packages {
             let path = if **version == resolver::ROOT_VERSION {
                 // Empty package
-                root.join(TEMP_EMPTY_PACKAGE)
+                root.join(CACHE_EMPTY_PACKAGE)
             } else {
                 // First try to get a cached copy from cargo's register or our own
                 let dir_name = format!("{}-{}", name, version);

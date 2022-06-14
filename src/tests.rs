@@ -861,7 +861,7 @@ fn mock_cfg(metadata: &Metadata) -> Config {
         metadata: metadata.clone(),
         _rest: PartialConfig {
             cli: Cli::mock(),
-            tmp: PathBuf::new(),
+            cache_dir: PathBuf::new(),
             mock_cache: true,
         },
     }
