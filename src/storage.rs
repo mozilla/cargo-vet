@@ -221,21 +221,6 @@ impl Store {
             .unwrap();
 
         for (name, import) in &self.config.imports {
-<<<<<<< HEAD
-            let url = &import.url;
-            // FIXME: this should probably be async but that's a Whole Thing and these files are small.
-            let audit_txt = reqwest::blocking::get(url).and_then(|r| r.text());
-            if let Err(e) = audit_txt {
-                // ERRORS: gathered diagnostic, we should find all the fetch errors at once
-                return Err(eyre::eyre!("Could not load {name} @ {url} - {e}"));
-            }
-            let audit_file: Result<AuditsFile, _> = toml_edit::de::from_str(&audit_txt.unwrap());
-            if let Err(e) = audit_file {
-                // ERRORS: gathered diagnostic, we should find all the fetch errors at once
-                return Err(eyre::eyre!("Could not parse {name} @ {url} - {e}"));
-            }
-            audits.insert(name.clone(), audit_file.unwrap());
-=======
             let url = Url::parse(&import.url).unwrap();
             let handle = runtime.spawn(fetch_foreign_audit(network.clone(), name.clone(), url));
             to_fetch.insert(name, handle);
@@ -244,7 +229,6 @@ impl Store {
             let audit_file: Result<AuditsFile, VetError> = runtime.block_on(handle)?;
             let audit_file: AuditsFile = audit_file?;
             audits.insert(name.to_string(), audit_file);
->>>>>>> 5df8aef... WIP async downloads
         }
 
         let new_imports = ImportsFile { audits };
@@ -268,7 +252,7 @@ async fn fetch_foreign_audit(
         .download(url.clone())
         .await
         .wrap_err_with(|| format!("Could not import audit {name} @ {url}"))?;
-    let audit_file: AuditsFile = toml::from_slice(&audit_bytes)
+    let audit_file: AuditsFile = toml_edit::de::from_slice(&audit_bytes)
         .wrap_err_with(|| format!("Could not parse {name} @ {url}"))?;
     Ok(audit_file)
 }
