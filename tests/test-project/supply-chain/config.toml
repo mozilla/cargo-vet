@@ -1,6 +1,9 @@
 
 # cargo-vet config file
 
+[audit-as-crates-io]
+asddfs = true
+test-project = false
 [[unaudited.bumpalo]]
 version = "3.9.1"
 criteria = "safe-to-deploy"

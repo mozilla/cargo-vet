@@ -8,6 +8,7 @@ use std::{
 };
 
 use cargo_metadata::Version;
+use crates_index::Index;
 use eyre::Context;
 use flate2::read::GzDecoder;
 use reqwest::Url;
@@ -36,7 +37,6 @@ static TEMP_REGISTRY_CACHE: &str = "cache";
 static TEMP_VET_LOCK: &str = ".vet-lock";
 
 // Various cargo values
-static CARGO_REGISTRY: &str = "registry";
 static CARGO_REGISTRY_SRC: &str = "src";
 static CARGO_REGISTRY_CACHE: &str = "cache";
 static CARGO_OK_FILE: &str = ".cargo-ok";
@@ -116,6 +116,7 @@ impl Store {
                 imports: SortedMap::new(),
                 policy: SortedMap::new(),
                 unaudited: SortedMap::new(),
+                audit_as_crates_io: SortedMap::new(),
             },
             imports: ImportsFile {
                 audits: SortedMap::new(),
@@ -274,9 +275,11 @@ async fn fetch_foreign_audit(
 
 /// A Registry in CARGO_HOME (usually the crates.io one)
 pub struct CargoRegistry {
-    /// The base path all registries share
+    /// The queryable index
+    index: Index,
+    /// The base path all registries share (`$CARGO_HOME/registry`)
     base_dir: PathBuf,
-    /// The name of the registry
+    /// The name of the registry (`github.com-1ecc6299db9ec823`)
     registry: OsString,
 }
 
@@ -347,9 +350,8 @@ impl Drop for Cache {
 impl Cache {
     /// Acquire the cache
     pub fn acquire(cfg: &PartialConfig) -> Result<Self, VetError> {
-        if cfg.cargo_home.is_none() {
-            // If the registry_src isn't set, then assume we're running in tests and mocked.
-            // In that case, don't read/write disk for the DiffCache
+        if cfg.mock_cache {
+            // We're in unit tests, everything should be mocked and not touch real caches
             return Ok(Cache {
                 _lock: None,
                 root: None,
@@ -409,7 +411,7 @@ impl Cache {
             .unwrap_or_default();
 
         // Try to get the cargo registry
-        let cargo_registry = find_cargo_registry(cfg);
+        let cargo_registry = find_cargo_registry();
         if let Err(e) = &cargo_registry {
             // ERRORS: this warning really rides the line, I'm not sure if the user can/should care
             warn!("Couldn't find cargo registry: {e}");
@@ -424,6 +426,17 @@ impl Cache {
             command_history,
             cargo_registry: cargo_registry.ok(),
         })
+    }
+
+    /// Gets any information the crates.io index has on this package, locally
+    /// with no downloads. The fact that we invoke `cargo metadata` on startup
+    /// means the index should be as populated as we're able to get it.
+    ///
+    /// However this may do some expensive disk i/o, so ideally we should do
+    /// some bulk processing of this later. For now let's get it working...
+    pub fn query_package_from_index(&self, name: PackageStr) -> Option<crates_index::Crate> {
+        let reg = self.cargo_registry.as_ref()?;
+        reg.index.crate_(name)
     }
 
     pub fn fetch_packages<'a>(
@@ -698,48 +711,20 @@ fn fetch_is_ok(fetch: &Path) -> bool {
     }
 }
 
-fn find_cargo_registry(cfg: &PartialConfig) -> Result<CargoRegistry, VetError> {
+fn find_cargo_registry() -> Result<CargoRegistry, VetError> {
     // ERRORS: all of this is genuinely fallible internal workings
+    // but if these path adjustments don't work then something is very fundamentally wrong
 
-    // Find the cargo registry
-    //
-    // This is all unstable nonsense so being a bit paranoid here so that we can notice
-    // when things get weird and understand corner cases better...
-    if cfg.cargo_home.is_none() {
-        return Err(eyre::eyre!("Could not resolve CARGO_HOME!?"));
-    }
+    let index = Index::new_cargo_default()?;
 
-    let base_dir = cfg.cargo_home.as_ref().unwrap().join(CARGO_REGISTRY);
-    let registry_src = base_dir.join(CARGO_REGISTRY_SRC);
-    if !registry_src.exists() {
-        return Err(eyre::eyre!("Cargo registry src cache doesn't exist!?"));
-    }
+    let base_dir = index.path().parent().unwrap().parent().unwrap().to_owned();
+    let registry = index.path().file_name().unwrap().to_owned();
 
-    // There's some weird opaque directory name here, so no hardcoding of the path
-    let mut registry = None;
-    for entry in std::fs::read_dir(registry_src)? {
-        let entry = entry?;
-        let path = entry.path();
-        let dir_name = path.file_name().unwrap().to_owned();
-        if path.is_dir() {
-            if registry.is_some() {
-                // ERRORS: these warnings really ride the line, not sure the user can/should care
-                warn!("Found multiple subdirectories in CARGO_HOME/registry/src");
-                warn!("  Preferring any named github.com-*");
-                if dir_name.to_string_lossy().starts_with("github.com-") {
-                    registry = Some(dir_name);
-                }
-            } else {
-                registry = Some(dir_name);
-            }
-        }
-    }
-
-    if let Some(registry) = registry {
-        Ok(CargoRegistry { base_dir, registry })
-    } else {
-        Err(eyre::eyre!("failed to find cargo package sources"))
-    }
+    Ok(CargoRegistry {
+        index,
+        base_dir,
+        registry,
+    })
 }
 
 fn load_toml<T>(reader: impl Read) -> Result<T, VetError>

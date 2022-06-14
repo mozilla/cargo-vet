@@ -8,7 +8,7 @@ use tracing::{error, trace, trace_span, warn};
 
 use crate::format::{
     self, AuditKind, CriteriaName, CriteriaStr, Delta, DiffStat, FetchCommand, ImportName,
-    PackageStr, SuggestedAudit,
+    PackageName, PackageStr, SuggestedAudit,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
@@ -459,7 +459,13 @@ impl ResolveResult<'_> {
 }
 
 impl<'a> DepGraph<'a> {
-    pub fn new(metadata: &'a Metadata, filter_graph: Option<&Vec<GraphFilter>>) -> Self {
+    pub fn new(
+        metadata: &'a Metadata,
+        filter_graph: Option<&Vec<GraphFilter>>,
+        audit_as_crates_io: Option<&SortedMap<PackageName, bool>>,
+    ) -> Self {
+        let empty_override = SortedMap::new();
+        let audit_as_crates_io = audit_as_crates_io.unwrap_or(&empty_override);
         let package_list = &*metadata.packages;
         let resolve_list = &*metadata
             .resolve
@@ -492,7 +498,7 @@ impl<'a> DepGraph<'a> {
                 package_id: &resolve_node.id,
                 name: &package.name,
                 version: &package.version,
-                is_third_party: package.is_third_party(),
+                is_third_party: package.is_third_party(audit_as_crates_io),
                 // These will get (re)computed later
                 normal_deps: vec![],
                 build_deps: vec![],
@@ -937,7 +943,11 @@ pub fn resolve<'a>(
     let _resolve_span = trace_span!("resolve").entered();
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
-    let graph = DepGraph::new(metadata, filter_graph);
+    let graph = DepGraph::new(
+        metadata,
+        filter_graph,
+        Some(&store.config.audit_as_crates_io),
+    );
     // trace!("built DepGraph: {:#?}", graph);
     trace!("built DepGraph!");
 
