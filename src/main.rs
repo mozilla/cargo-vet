@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::ffi::OsString;
 use std::mem;
 use std::ops::Deref;
 use std::panic::panic_any;
@@ -12,7 +11,7 @@ use cargo_metadata::{Metadata, Package};
 use clap::{CommandFactory, Parser};
 use console::{style, Term};
 use eyre::{eyre, WrapErr};
-use format::CriteriaName;
+use format::{CriteriaName, PackageName};
 use network::Network;
 use reqwest::Url;
 use serde::de::Deserialize;
@@ -44,9 +43,9 @@ pub type VetError = eyre::Report;
 /// Absolutely All The Global Configurations
 pub struct Config {
     /// Cargo.toml `metadata.vet`
-    metacfg: MetaConfig,
+    pub metacfg: MetaConfig,
     /// `cargo metadata`
-    metadata: Metadata,
+    pub metadata: Metadata,
     /// Freestanding configuration values
     _rest: PartialConfig,
 }
@@ -55,13 +54,11 @@ pub struct Config {
 /// (no actual cargo-vet instance to load/query).
 pub struct PartialConfig {
     /// Details of the CLI invocation (args)
-    cli: Cli,
-    /// Path to the `cargo` binary that invoked us
-    cargo: OsString,
-    /// Path to the cargo's home, whose registry/cache, we opportunistically use for inspect/diff
-    cargo_home: Option<PathBuf>,
+    pub cli: Cli,
     /// Path to the global tmp we're using
-    tmp: PathBuf,
+    pub tmp: PathBuf,
+    /// Whether we should mock the global cache (for unit testing)
+    pub mock_cache: bool,
 }
 
 // Makes it a bit easier to have both a "partial" and "full" config
@@ -73,15 +70,19 @@ impl Deref for Config {
 }
 
 pub trait PackageExt {
-    fn is_third_party(&self) -> bool;
+    fn is_third_party(&self, audit_as_crates_io: &SortedMap<PackageName, bool>) -> bool;
 }
 
 impl PackageExt for Package {
-    fn is_third_party(&self) -> bool {
-        self.source
+    fn is_third_party(&self, audit_as_crates_io: &SortedMap<PackageName, bool>) -> bool {
+        let forced_third_party = *audit_as_crates_io.get(&self.name).unwrap_or(&false);
+        let is_crates_io = self
+            .source
             .as_ref()
             .map(|s| s.is_crates_io())
-            .unwrap_or(false)
+            .unwrap_or(false);
+
+        forced_third_party || is_crates_io
     }
 }
 
@@ -199,14 +200,11 @@ fn real_main() -> Result<(), VetError> {
     ////////////////////////////////////////////////////
 
     // TODO: make this configurable
-    let cargo = std::env::var_os(CARGO_ENV).expect("Cargo failed to set $CARGO, how?");
     let tmp = std::env::temp_dir().join(TEMP_DIR_SUFFIX);
-    let cargo_home = home::cargo_home().ok();
     let partial_cfg = PartialConfig {
         cli,
-        cargo,
         tmp,
-        cargo_home,
+        mock_cache: false,
     };
 
     match &partial_cfg.cli.command {
@@ -223,8 +221,10 @@ fn real_main() -> Result<(), VetError> {
     ///////////////////////////////////////////////////
 
     let cli = &partial_cfg.cli;
+    let cargo_path = std::env::var_os(CARGO_ENV).expect("Cargo failed to set $CARGO, how?");
+
     let mut cmd = cargo_metadata::MetadataCommand::new();
-    cmd.cargo_path(&partial_cfg.cargo);
+    cmd.cargo_path(cargo_path);
     if let Some(manifest_path) = &cli.manifest.manifest_path {
         cmd.manifest_path(manifest_path);
     }
@@ -404,7 +404,7 @@ pub fn init_files(
     // This is the hard one
     let config = {
         let mut dependencies = SortedMap::new();
-        let graph = DepGraph::new(metadata, filter_graph);
+        let graph = DepGraph::new(metadata, filter_graph, None);
         for package in &graph.nodes {
             if !package.is_third_party {
                 // Only care about third-party packages
@@ -433,6 +433,7 @@ pub fn init_files(
             imports: SortedMap::new(),
             unaudited: dependencies,
             policy: SortedMap::new(),
+            audit_as_crates_io: SortedMap::new(),
         }
     };
 
@@ -503,7 +504,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     };
 
     // FIXME: can/should we check if the version makes sense..?
-    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == *package) {
+    if !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == *package) {
         // ERRORS: immediate fatal diagnostic? should we allow you to certify random packages?
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
         // useful audits whenever you update your dependencies! But this might be a useful guard
@@ -948,7 +949,7 @@ fn cmd_record_violation(
     let criteria = criteria.swap_remove(0);
 
     // FIXME: can/should we check if the version makes sense..?
-    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+    if !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == sub_args.package) {
         // ERRORS: immediate fatal diagnostic? should we allow you to forbid random packages?
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
         // useful audits whenever you update your dependencies! But this might be a useful guard
@@ -1021,7 +1022,7 @@ fn cmd_add_unaudited(
     let criteria = criteria.swap_remove(0);
 
     // FIXME: can/should we check if the version makes sense..?
-    if !foreign_packages(&cfg.metadata).any(|pkg| pkg.name == sub_args.package) {
+    if !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == sub_args.package) {
         // ERRORS: immediate fatal diagnostic? should we allow you to certify random packages?
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
         // useful audits whenever you update your dependencies! But this might be a useful guard
@@ -1240,9 +1241,47 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
-    if let Some(network) = network.clone() {
-        if !cfg.cli.locked {
+    if !cfg.cli.locked {
+        // Try to update the foreign audits (imports)
+        if let Some(network) = network.clone() {
             store.fetch_foreign_audits(network)?;
+        }
+
+        // Check if any of our first-parties are on crates.io and not explicitly noted as such
+        let cache = Cache::acquire(cfg)?;
+        let mut needs_audit_as_entry = vec![];
+        for package in first_party_packages(&cfg.metadata, &store.config) {
+            if !store.config.audit_as_crates_io.contains_key(&package.name) {
+                if let Some(index_entry) = cache.query_package_from_index(&package.name) {
+                    for index_version in index_entry.versions() {
+                        if let Ok(parsed_version) =
+                            index_version.version().parse::<cargo_metadata::Version>()
+                        {
+                            if parsed_version == package.version {
+                                needs_audit_as_entry.push(package);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if !needs_audit_as_entry.is_empty() {
+            writeln!(
+                out,
+                "error: some first-party packages match published crates.io versions"
+            )?;
+            writeln!(out)?;
+            writeln!(out, "  [audit-as-crates-io]")?;
+            for package in needs_audit_as_entry {
+                writeln!(out, "  {} = false", package.name)?;
+            }
+            writeln!(out)?;
+            writeln!(
+                out,
+                "add these entries to config.toml to silence this error"
+            )?;
+            panic_any(ExitPanic(-1));
         }
     }
 
@@ -1303,7 +1342,7 @@ fn cmd_dump_graph(
     // Dump a mermaid-js graph
     trace!("dumping...");
 
-    let graph = resolver::DepGraph::new(&cfg.metadata, cfg.cli.filter_graph.as_ref());
+    let graph = resolver::DepGraph::new(&cfg.metadata, cfg.cli.filter_graph.as_ref(), None);
     match cfg.cli.output_format {
         OutputFormat::Human => graph.print_mermaid(out, sub_args)?,
         OutputFormat::Json => serde_json::to_writer_pretty(out, &graph.nodes)?,
@@ -1643,10 +1682,24 @@ async fn eula_for_criteria(
     format!("Could not download criteria description, it should be available at {url}")
 }
 
-fn foreign_packages(metadata: &Metadata) -> impl Iterator<Item = &Package> {
+fn foreign_packages<'a>(
+    metadata: &'a Metadata,
+    config: &'a ConfigFile,
+) -> impl Iterator<Item = &'a Package> + 'a {
     // Only analyze things from crates.io (no source = path-dep / workspace-member)
     metadata
         .packages
         .iter()
-        .filter(|package| package.is_third_party())
+        .filter(|package| package.is_third_party(&config.audit_as_crates_io))
+}
+
+fn first_party_packages<'a>(
+    metadata: &'a Metadata,
+    config: &'a ConfigFile,
+) -> impl Iterator<Item = &'a Package> + 'a {
+    // Only analyze things from crates.io (no source = path-dep / workspace-member)
+    metadata
+        .packages
+        .iter()
+        .filter(|package| !package.is_third_party(&config.audit_as_crates_io))
 }

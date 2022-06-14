@@ -288,6 +288,12 @@ pub struct ConfigFile {
     #[serde(default)]
     pub policy: SortedMap<PackageName, PolicyEntry>,
 
+    /// Whether any first party crates with this name should be treated as if they're
+    /// crates.io deps (as long as they match something published to crates.io)
+    #[serde(rename = "audit-as-crates-io")]
+    #[serde(default)]
+    pub audit_as_crates_io: SortedMap<PackageName, bool>,
+
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.

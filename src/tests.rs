@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use cargo_metadata::{Metadata, Version};
 use serde_json::{json, Value};
@@ -771,7 +771,7 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
 
     let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
-        if package.is_third_party() {
+        if package.is_third_party(&config.audit_as_crates_io) {
             audited
                 .entry(package.name.clone())
                 .or_insert(vec![])
@@ -800,7 +800,7 @@ fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
 
     let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
-        if package.is_third_party() {
+        if package.is_third_party(&config.audit_as_crates_io) {
             audited
                 .entry(package.name.clone())
                 .or_insert(vec![])
@@ -834,9 +834,8 @@ fn mock_cfg(metadata: &Metadata) -> Config {
         metadata: metadata.clone(),
         _rest: PartialConfig {
             cli: Cli::mock(),
-            cargo: OsString::new(),
             tmp: PathBuf::new(),
-            cargo_home: None,
+            mock_cache: true,
         },
     }
 }
