@@ -214,11 +214,7 @@ impl Store {
     pub fn fetch_foreign_audits(&mut self, network: Arc<Network>) -> Result<(), VetError> {
         let mut audits = SortedMap::new();
         let mut to_fetch = SortedMap::new();
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(1)
-            .enable_all()
-            .build()
-            .unwrap();
+        let runtime = tokio::runtime::Handle::current();
 
         for (name, import) in &self.config.imports {
             let url = Url::parse(&import.url).unwrap();
@@ -475,11 +471,7 @@ impl Cache {
             // ERRORS: this could arguably be swallowed but this will mostly come up in tests
             let network = network.expect("running as --frozen but needed fetches!");
             trace!("downloading {} packages", to_download.len());
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(1)
-                .enable_all()
-                .build()
-                .unwrap();
+            let runtime = tokio::runtime::Handle::current();
             let mut handles = vec![];
 
             for (name, version, download_to, unpack_to) in to_download {

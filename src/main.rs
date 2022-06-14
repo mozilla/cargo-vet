@@ -102,6 +102,13 @@ struct ExitPanic(i32);
 struct ExecPanic(std::process::Command);
 
 fn main() -> Result<(), VetError> {
+    let _runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap()
+        .enter();
+
     // Wrap main up in a catch_panic so that we can use it to implement std::process::exit with
     // unwinding, allowing us to silently exit the program while still cleaning up.
     let result = std::panic::catch_unwind(real_main);
@@ -794,11 +801,8 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     );
 
     // Get all the EULAs at once
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-    .worker_threads(1)
-    .enable_all()
-    .build()
-    .unwrap();
+
+    let runtime = tokio::runtime::Handle::current();
     let mut eulas = SortedMap::new();
     if !sub_args.accept_all {
         for criteria in &criteria_names {
@@ -824,7 +828,8 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         editor.add_text("")?;
 
         for criteria in &criteria_names {
-            let eula = runtime.block_on(eulas.remove(criteria).unwrap())?;
+            let handle = eulas.remove(*criteria).unwrap();
+            let eula = runtime.block_on(handle)?;
             editor.add_comments(&format!("=== BEGIN CRITERIA {:?} ===", criteria))?;
             editor.add_comments("")?;
             editor.add_comments(&eula)?;
