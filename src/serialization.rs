@@ -110,10 +110,38 @@ pub mod dependency_criteria {
     }
 }
 
-/// tables with these names will be rendered by TomlFormatter as inline tables,
-/// rather than dotted tables.
-fn always_render_inline(key: &str) -> bool {
-    key == "dependency-criteria"
+/// Inline arrays which have a representation longer than this will be rendered
+/// over multiple lines.
+const ARRAY_WRAP_THRESHOLD: usize = 80;
+
+/// Tables which would be rendered inline (see `INLINE_TABLE_KEYS`) and have an
+/// inline representation larger than this threshold will be rendered by
+/// TomlFormatter as non-inline tables.
+const INLINE_TABLE_THRESHOLD: usize = 120;
+
+/// Names for tables which should be rendered inline by TomlFormatter unless
+/// their inline representation exceeds `INLINE_TABLE_THRESHOLD`.
+const INLINE_TABLE_KEYS: &[&str] = &["dependency-criteria"];
+
+fn inline_length(key: &str, value: &toml_edit::Item) -> usize {
+    // Length of the string " = " which will appear between the key and value.
+    const DECORATION_LENGTH: usize = 3;
+
+    // The `Display` implementation for toml_edit values will produce the final
+    // serialized representation of the value in the TOML document, which we can
+    // use to determine the line length in utf-8 characters.
+    let value_repr = value.to_string();
+    key.chars().count() + value_repr.chars().count() + DECORATION_LENGTH
+}
+
+/// Tables with these names will be rendered by TomlFormatter as inline tables,
+/// rather than dotted tables unless their inline representation exceeds
+/// `INLINE_TABLE_THRESHOLD` UTF-8 characters in length.
+fn table_should_be_inline(key: &str, value: &toml_edit::Item) -> bool {
+    if !INLINE_TABLE_KEYS.contains(&key) {
+        return false;
+    }
+    inline_length(key, value) <= INLINE_TABLE_THRESHOLD
 }
 
 /// Serialize the given data structure as a formatted `toml_edit::Document`.
@@ -138,7 +166,7 @@ where
                 node.set_implicit(true);
             }
             for (k, v) in node.iter_mut() {
-                if !always_render_inline(&k) {
+                if !table_should_be_inline(&k, v) {
                     // Try to convert the value into either a table or an array of
                     // tables if it is currently an inline table or inline array of
                     // tables.
@@ -150,6 +178,19 @@ where
                         .map(toml_edit::Item::ArrayOfTables)
                         .unwrap_or_else(|i| i);
                 }
+
+                // If we didn't convert the array into an array of tables above,
+                // check if it would be too long and wrap it onto multiple lines
+                // if it would.
+                if v.is_array() && inline_length(&k, v) > ARRAY_WRAP_THRESHOLD {
+                    let array = v.as_array_mut().unwrap();
+                    for item in array.iter_mut() {
+                        item.decor_mut().set_prefix("\n    ");
+                    }
+                    array.set_trailing("\n");
+                    array.set_trailing_comma(true);
+                }
+
                 self.visit_item_mut(v);
             }
         }
@@ -158,4 +199,78 @@ where
     let mut toml_document = toml_edit::ser::to_document(&val)?;
     TomlFormatter.visit_document_mut(&mut toml_document);
     Ok(toml_document)
+}
+
+#[cfg(test)]
+mod test {
+    use crate::format::*;
+
+    #[test]
+    fn toml_formatter_wrapping() {
+        let mut dc_long = SortedMap::new();
+        dc_long.insert(
+            "example-crate-1".to_owned(),
+            vec![
+                "criteria-one-very-long".to_owned(),
+                "criteria-two-very-long".to_owned(),
+            ],
+        );
+        dc_long.insert(
+            "example-crate-2".to_owned(),
+            vec![
+                // This array would wrap over multiple lines if byte length was
+                // used rather than utf-8 character length.
+                "criteria-one-✨✨✨✨✨✨✨✨✨✨".to_owned(),
+                "criteria-two-✨✨✨✨✨✨✨✨✨✨".to_owned(),
+            ],
+        );
+        dc_long.insert(
+            "example-crate-3".to_owned(),
+            vec![
+                "criteria-one-very-long".to_owned(),
+                "criteria-two-very-long".to_owned(),
+                "criteria-three-extremely-long-this-array-should-wrap".to_owned(),
+            ],
+        );
+
+        let mut dc_short = SortedMap::new();
+        dc_short.insert(
+            "example-crate-1".to_owned(),
+            vec!["criteria-one".to_owned()],
+        );
+
+        let mut audits = SortedMap::new();
+        audits.insert(
+            "test".to_owned(),
+            vec![
+                AuditEntry {
+                    who: None,
+                    criteria: "long-criteria".to_owned(),
+                    kind: AuditKind::Full {
+                        version: "1.0.0".parse().unwrap(),
+                        dependency_criteria: dc_long,
+                    },
+                    notes: Some("notes go here!".to_owned()),
+                },
+                AuditEntry {
+                    who: None,
+                    criteria: "short-criteria".to_owned(),
+                    kind: AuditKind::Full {
+                        version: "1.0.0".parse().unwrap(),
+                        dependency_criteria: dc_short,
+                    },
+                    notes: Some("notes go here!".to_owned()),
+                },
+            ],
+        );
+
+        let formatted = super::to_formatted_toml(AuditsFile {
+            criteria: SortedMap::new(),
+            audits,
+        })
+        .unwrap()
+        .to_string();
+
+        insta::assert_snapshot!("formatted_toml_long_inline", formatted);
+    }
 }
