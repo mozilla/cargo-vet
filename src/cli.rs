@@ -1,6 +1,3 @@
-// Temporary hack for Cli::verbose being in semantic limbo for the new version of clap
-#![allow(deprecated)]
-
 use std::{path::PathBuf, str::FromStr};
 
 use cargo_metadata::Version;
