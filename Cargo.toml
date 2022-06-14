@@ -18,7 +18,7 @@ exclude = [
 
 [dependencies]
 cargo_metadata = "0.14.2"
-clap = "3.1.10"
+clap = { version = "3.2.0", features = ["derive"] }
 clap-cargo = "0.8.0"
 console = "0.15.0"
 crates-index = "0.18.8"
