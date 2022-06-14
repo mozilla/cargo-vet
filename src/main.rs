@@ -15,6 +15,7 @@ use serde::de::Deserialize;
 use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
+use crate::editor::Editor;
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, CriteriaStr, Delta,
     DependencyCriteria, DiffStat, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance,
@@ -24,6 +25,7 @@ use crate::resolver::{Conclusion, CriteriaMapper, DepGraph, SuggestItem};
 use crate::storage::{Cache, Store};
 
 mod cli;
+mod editor;
 mod flock;
 pub mod format;
 pub mod resolver;
@@ -769,34 +771,36 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         .criteria_names(&criteria_set)
         .collect::<Vec<_>>();
 
-    let notes = if let Some(notes) = sub_args.notes.clone() {
-        Some(notes)
-    } else {
-        term.clear_screen()?;
-        write!(out, "certifying {}", package)?;
-        match &kind {
-            AuditKind::Full { version, .. } => write!(out, ":{}", version)?,
-            AuditKind::Delta { delta, .. } => write!(out, ":{} -> {}", delta.from, delta.to)?,
-            AuditKind::Violation { .. } => unreachable!(),
+    let what_version = match &kind {
+        AuditKind::Full { version, .. } => {
+            format!("version {}", version)
         }
-        writeln!(out, " for {:?}", criteria_names)?;
-        writeln!(out, "do you have any notes? (press ENTER to continue)")?;
-        writeln!(out)?;
-        // FIXME: this should take multiline
-        // FIXME: we should linebreak long inputs
-        let input = term.read_line()?;
-        let input = input.trim();
-        if input.is_empty() {
-            None
-        } else {
-            Some(input.to_string())
+        AuditKind::Delta { delta, .. } => {
+            format!("the changes from version {} to {}", delta.from, delta.to)
         }
+        AuditKind::Violation { .. } => unreachable!(),
     };
+    let statement = format!(
+        "I, {}, certify that I have audited {} of {} in accordance with the above criteria.",
+        username, what_version, package,
+    );
 
-    for criteria in criteria_names {
-        if !sub_args.accept_all {
-            let eula = if let Some(eula) = eula_for_criteria(&store.audits, criteria) {
-                eula
+    let mut notes = sub_args.notes.clone();
+    if !sub_args.accept_all {
+        let mut editor = Editor::new("VET_CERTIFY")?;
+        editor.add_comments(
+            "Please read the following criteria and uncomment the statement below:",
+        )?;
+        editor.add_text("")?;
+
+        for criteria in &criteria_names {
+            if let Some(eula) = eula_for_criteria(&store.audits, criteria) {
+                editor.add_comments(&format!("=== BEGIN CRITERIA {:?} ===", criteria))?;
+                editor.add_comments("")?;
+                editor.add_comments(&eula)?;
+                editor.add_comments("")?;
+                editor.add_comments("=== END CRITERIA ===")?;
+                editor.add_comments("")?;
             } else {
                 // ERRORS: fatal diagnostic, unclear if should be immediate or gathered?
                 // Some versions of this error can arguably be a validation error in `Store`
@@ -805,41 +809,33 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                 writeln!(out, "error: couldn't get description of criteria")?;
                 panic_any(ExitPanic(-1));
             };
-
-            term.clear_screen()?;
-            // Print out the EULA and prompt
-            let what_version = match &kind {
-                AuditKind::Full { version, .. } => {
-                    format!("version {}", version)
-                }
-                AuditKind::Delta { delta, .. } => {
-                    format!("the changes from version {} to {}", delta.from, delta.to)
-                }
-                AuditKind::Violation { .. } => unreachable!(),
-            };
-            let statement = format!(
-                "I, {}, certify that I have audited {} of {} in accordance with the following criteria:",
-                username, what_version, package,
-            );
-
-            write!(
-                out,
-                "\n{}\n\n",
-                style(textwrap::fill(&statement, 80)).yellow().bold()
-            )?;
-            writeln!(out, "{}\n", style(eula).cyan())?;
-            write!(out, "(type \"yes\" to certify for {}): ", criteria)?;
-            out.flush()?;
-
-            let answer = term.read_line()?.trim().to_lowercase();
-            if answer != "yes" {
-                // ERRORS: immediate fatal diagnostic, although arguably less of an error and more of
-                // a "fine, be that way" and exit.
-                writeln!(out, "rejected certification")?;
-                panic_any(ExitPanic(-1));
-            }
+        }
+        editor.add_comments("STATEMENT:")?;
+        editor.add_text("")?;
+        editor.add_comments(&statement)?;
+        editor.add_text("")?;
+        editor.add_comments("NOTES:")?;
+        editor.add_text("")?;
+        if let Some(notes) = &notes {
+            editor.add_text(notes)?;
         }
 
+        let editor_result = editor.edit()?;
+        let note_text = match editor_result.strip_prefix(&statement) {
+            Some(notes) => notes.trim(),
+            None => {
+                writeln!(out, "error: Could not find certify statement")?;
+                panic_any(ExitPanic(-1));
+            }
+        };
+        notes = if note_text.is_empty() {
+            None
+        } else {
+            Some(note_text.to_owned())
+        };
+    }
+
+    for criteria in criteria_names {
         // Ok! Ready to commit the audit!
         let new_entry = AuditEntry {
             kind: kind.clone(),
