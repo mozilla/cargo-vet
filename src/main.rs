@@ -788,6 +788,10 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     let mut notes = sub_args.notes.clone();
     if !sub_args.accept_all {
         let mut editor = Editor::new("VET_CERTIFY")?;
+        if let Some(notes) = &notes {
+            editor.select_comment_char(notes);
+        }
+
         editor.add_comments(
             "Please read the following criteria and uncomment the statement below:",
         )?;
@@ -821,17 +825,32 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         }
 
         let editor_result = editor.edit()?;
-        let note_text = match editor_result.strip_prefix(&statement) {
-            Some(notes) => notes.trim(),
+
+        // Check to make sure that the statement was uncommented as the first
+        // line in the parsed file, and remove blank lines between the statement
+        // and notes.
+        let new_notes = match editor_result.trim_start().strip_prefix(&statement) {
+            Some(notes) => notes.trim_start_matches('\n'),
             None => {
-                writeln!(out, "error: Could not find certify statement")?;
+                // FIXME: Might be nice to try to save any notes the user typed
+                // in and re-try the prompt if the user asks for it, in case
+                // they wrote some nice notes, but forgot to uncomment the
+                // statement.
+                writeln!(out, "error: Could not find uncommented certify statement")?;
                 panic_any(ExitPanic(-1));
             }
         };
-        notes = if note_text.is_empty() {
+
+        // Strip trailing newline if notes would otherwise contain no newlines.
+        let new_notes = new_notes
+            .strip_suffix('\n')
+            .filter(|s| !s.contains('\n'))
+            .unwrap_or(new_notes);
+
+        notes = if new_notes.is_empty() {
             None
         } else {
-            Some(note_text.to_owned())
+            Some(new_notes.to_owned())
         };
     }
 

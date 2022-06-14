@@ -109,13 +109,44 @@ const LINE_ENDING: &str = "\n";
 
 pub struct Editor {
     tempfile: NamedTempFile,
+    comment_char: char,
 }
 
 impl Editor {
     /// Create a new editor for a temporary file.
     pub fn new(name: &str) -> Result<Self, VetError> {
-        let tempfile = tempfile::Builder::new().prefix(name).tempfile()?;
-        Ok(Editor { tempfile })
+        let tempfile = tempfile::Builder::new()
+            .prefix(&format!("{}.", name))
+            .tempfile()?;
+        Ok(Editor {
+            tempfile,
+            comment_char: '#',
+        })
+    }
+
+    /// Set the character to be used for comments.
+    pub fn set_comment_char(&mut self, comment_char: char) {
+        self.comment_char = comment_char;
+    }
+
+    /// Attempt to pick a comment character which does not appear at the start
+    /// of any line in the given text.
+    pub fn select_comment_char(&mut self, text: &str) {
+        let mut comment_chars = ['#', ';', '@', '!', '$', '%', '^', '&', '|', ':', '"', ';'];
+        for line in text.lines() {
+            for cc in &mut comment_chars {
+                if line.starts_with(*cc) {
+                    *cc = '\0';
+                    break;
+                }
+            }
+        }
+        self.set_comment_char(
+            comment_chars
+                .into_iter()
+                .find(|cc| *cc != '\0')
+                .expect("couldn't find a viable comment character"),
+        );
     }
 
     /// Add comment lines to the editor. Any newlines in the input will be
@@ -124,32 +155,34 @@ impl Editor {
     pub fn add_comments(&mut self, text: &str) -> io::Result<()> {
         let text = text.trim();
         if text.is_empty() {
-            write!(self.tempfile, "#{}", LINE_ENDING)?;
+            write!(self.tempfile, "{}{}", self.comment_char, LINE_ENDING)?;
         }
         for line in text.lines() {
             if line.is_empty() {
-                write!(self.tempfile, "#{}", LINE_ENDING)?;
+                write!(self.tempfile, "{}{}", self.comment_char, LINE_ENDING)?;
             } else {
-                write!(self.tempfile, "# {}{}", line, LINE_ENDING)?;
+                write!(
+                    self.tempfile,
+                    "{} {}{}",
+                    self.comment_char, line, LINE_ENDING
+                )?;
             }
         }
         Ok(())
     }
 
-    /// Add non-comment lines to the editor. These lines must not start with a
-    /// `#` character.
+    /// Add non-comment lines to the editor. These lines must not start with
+    /// comment_character.
     pub fn add_text(&mut self, text: &str) -> io::Result<()> {
         let text = text.trim();
         if text.is_empty() {
             write!(self.tempfile, "{}", LINE_ENDING)?;
         }
         for line in text.lines() {
-            // FIXME: Git has multiple comment character modes, including
-            // buffering the entire payload to pick a comment character not in
-            // the text, and respecting the user's core.commentChar config.
             assert!(
-                !line.starts_with('#'),
-                "Non-comment lines cannot start with a '#' comment character"
+                !line.starts_with(self.comment_char),
+                "non-comment lines cannot start with a '{}' comment character",
+                self.comment_char
             );
             write!(self.tempfile, "{}{}", line, LINE_ENDING)?;
         }
@@ -165,18 +198,33 @@ impl Editor {
         run_editor(&path)?;
 
         // Read in the result, filtering lines, and restoring unix line endings.
-        let mut result = String::new();
-        let file = BufReader::new(File::open(&path)?);
-        for line in file.lines() {
+        // This is roughly based on git's logic for cleaning up commit message
+        // files.
+        let mut lines: Vec<String> = Vec::new();
+        for line in BufReader::new(File::open(&path)?).lines() {
             let line = line?;
-            if line.starts_with('#') {
+            // Ignore lines starting with a comment character.
+            if line.starts_with(self.comment_char) {
                 continue;
             }
-            result.push_str(line.trim());
-            result.push('\n');
+            // Trim any trailing whitespace from each line, but leave leading
+            // whitespace untouched to avoid breaking formatted text.
+            let line = line.trim_end();
+            // Don't record 2 consecutive empty lines or empty lines at the
+            // start of the file.
+            if line.is_empty() && lines.last().map_or(true, |l| l.is_empty()) {
+                continue;
+            }
+            lines.push(line.to_owned());
         }
 
-        // Trim off excess whitespace.
-        Ok(result.trim().to_owned())
+        // Ensure there's a trailing newline for non-empty files.
+        match lines.last() {
+            None => return Ok(String::new()),
+            Some(line) if !line.is_empty() => lines.push(String::new()),
+            _ => {}
+        }
+
+        Ok(lines.join("\n"))
     }
 }
