@@ -1,7 +1,10 @@
+// Temporary hack for Cli::verbose being in semantic limbo for the new version of clap
+#![allow(deprecated)]
+
 use std::{path::PathBuf, str::FromStr};
 
 use cargo_metadata::Version;
-use clap::{ArgEnum, Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use tracing::level_filters::LevelFilter;
 
 use crate::format::{CriteriaName, PackageName, VersionReq};
@@ -33,31 +36,31 @@ pub struct Cli {
 
     // Top-level flags
     /// Do not fetch new imported audits.
-    #[clap(long)]
+    #[clap(long, action)]
     pub locked: bool,
 
     /// Avoid the network entirely, requiring either that the cargo cache is
     /// populated or the dependencies are vendored. Requires --locked.
-    #[clap(long)]
+    #[clap(long, action)]
     #[clap(requires = "locked")]
     pub frozen: bool,
 
     /// How verbose logging should be (log level)
-    #[clap(long)]
+    #[clap(long, action)]
     #[clap(default_value_t = LevelFilter::WARN)]
     #[clap(possible_values = ["off", "error", "warn", "info", "debug", "trace"])]
     pub verbose: LevelFilter,
 
     /// Instead of stdout, write output to this file
-    #[clap(long)]
+    #[clap(long, action)]
     pub output_file: Option<PathBuf>,
 
     /// Instead of stderr, write logs to this file (only used after successful CLI parsing)
-    #[clap(long)]
+    #[clap(long, action)]
     pub log_file: Option<PathBuf>,
 
     /// The format of the output
-    #[clap(long, arg_enum)]
+    #[clap(long, value_enum, action)]
     #[clap(default_value_t = OutputFormat::Human)]
     pub output_format: OutputFormat,
 
@@ -68,7 +71,7 @@ pub struct Cli {
     /// it somewhere more reliable, you can.
     ///
     /// This mostly exists for testing vet itself.
-    #[clap(long)]
+    #[clap(long, action)]
     pub diff_cache: Option<PathBuf>,
 
     /// Filter out different parts of the build graph and pretend that's the true graph
@@ -112,7 +115,7 @@ pub struct Cli {
     /// * `is_workspace_member($bool)`: whether the package is a workspace-member (can be tested)
     /// * `is_third_party($bool)`: whether the package is considered third-party by vet
     /// * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original graph
-    #[clap(long)]
+    #[clap(long, action)]
     #[clap(verbatim_doc_comment)]
     pub filter_graph: Option<Vec<GraphFilter>>,
 }
@@ -184,8 +187,10 @@ pub struct InitArgs {}
 #[derive(clap::Args)]
 pub struct InspectArgs {
     /// The package to inspect
+    #[clap(action)]
     pub package: PackageName,
     /// The version to inspect
+    #[clap(action)]
     pub version: Version,
 }
 
@@ -193,10 +198,13 @@ pub struct InspectArgs {
 #[derive(clap::Args)]
 pub struct DiffArgs {
     /// The package to diff
+    #[clap(action)]
     pub package: PackageName,
     /// The base version to diff
+    #[clap(action)]
     pub version1: Version,
     /// The target version to diff
+    #[clap(action)]
     pub version2: Version,
 }
 
@@ -204,33 +212,36 @@ pub struct DiffArgs {
 #[derive(clap::Args)]
 pub struct CertifyArgs {
     /// The package to certify as audited
+    #[clap(action)]
     pub package: Option<PackageName>,
     /// The version to certify as audited
+    #[clap(action)]
     pub version1: Option<Version>,
     /// If present, instead certify a diff from version1->version2
+    #[clap(action)]
     pub version2: Option<Version>,
     /// The criteria to certify for this audit
     ///
     /// If not provided, we will prompt you for this information.
-    #[clap(long)]
+    #[clap(long, action)]
     pub criteria: Vec<CriteriaName>,
     /// The dependency-criteria to require for this audit to be valid
     ///
     /// If not provided, we will still implicitly require dependencies to satisfy `criteria`.
-    #[clap(long)]
+    #[clap(long, action)]
     pub dependency_criteria: Vec<DependencyCriteriaArg>,
     /// Who to name as the auditor
     ///
     /// If not provided, we will collect this information from the local git.
-    #[clap(long)]
+    #[clap(long, action)]
     pub who: Option<String>,
     /// A free-form string to include with the new audit entry
     ///
     /// If not provided, there will be no notes.
-    #[clap(long)]
+    #[clap(long, action)]
     pub notes: Option<String>,
     /// Accept all criteria without an interactive prompt
-    #[clap(long)]
+    #[clap(long, action)]
     pub accept_all: bool,
 }
 
@@ -238,23 +249,25 @@ pub struct CertifyArgs {
 #[derive(clap::Args)]
 pub struct RecordViolationArgs {
     /// The package to forbid
+    #[clap(action)]
     pub package: PackageName,
     /// The versions to forbid
+    #[clap(action)]
     pub versions: VersionReq,
     /// (???) The criteria to be forbidden (???)
     ///
     /// If not provided, we will prompt you for this information(?)
-    #[clap(long)]
+    #[clap(long, action)]
     pub criteria: Vec<CriteriaName>,
     /// Who to name as the auditor
     ///
     /// If not provided, we will collect this information from the local git.
-    #[clap(long)]
+    #[clap(long, action)]
     pub who: Option<String>,
     /// A free-form string to include with the new forbid entry
     ///
     /// If not provided, there will be no notes.
-    #[clap(long)]
+    #[clap(long, action)]
     pub notes: Option<String>,
 }
 
@@ -262,26 +275,28 @@ pub struct RecordViolationArgs {
 #[derive(clap::Args)]
 pub struct AddUnauditedArgs {
     /// The package to mark as unaudited (trusted)
+    #[clap(action)]
     pub package: PackageName,
     /// The version to mark as unaudited
+    #[clap(action)]
     pub version: Version,
     /// The criteria to assume (trust)
     ///
     /// If not provided, we will prompt you for this information.
-    #[clap(long)]
+    #[clap(long, action)]
     pub criteria: Vec<CriteriaName>,
     /// The dependency-criteria to require for this unaudited entry to be valid
     ///
     /// If not provided, we will still implicitly require dependencies to satisfy `criteria`.
-    #[clap(long)]
+    #[clap(long, action)]
     pub dependency_criteria: Vec<DependencyCriteriaArg>,
     /// A free-form string to include with the new forbid entry
     ///
     /// If not provided, there will be no notes.
-    #[clap(long)]
+    #[clap(long, action)]
     pub notes: Option<String>,
     /// Suppress suggesting this unaudited entry
-    #[clap(long)]
+    #[clap(long, action)]
     pub no_suggest: bool,
 }
 
@@ -293,7 +308,7 @@ pub struct SuggestArgs {
     /// try to speculate on anything about its dependencies, because we lack sufficient
     /// information to say for certain what is required of those dependencies. This overrides
     /// that by making us assume the dependencies all need the same criteria as the parent.
-    #[clap(long)]
+    #[clap(long, action)]
     pub guess_deeper: bool,
 }
 
@@ -316,16 +331,16 @@ pub struct HelpMarkdownArgs {}
 #[derive(Default, Clone, Debug, PartialEq, Eq, clap::Args)]
 #[non_exhaustive]
 pub struct Features {
-    #[clap(long)]
+    #[clap(long, action)]
     /// Don't use --all-features
     ///
     /// We default to passing --all-features to `cargo metadata`
     /// because we want to analyze your full dependency tree
     pub no_all_features: bool,
-    #[clap(long)]
+    #[clap(long, action)]
     /// Do not activate the `default` feature
     pub no_default_features: bool,
-    #[clap(long, require_value_delimiter = true, value_delimiter = ' ')]
+    #[clap(long, action, require_value_delimiter = true, value_delimiter = ' ')]
     /// Space-separated list of features to activate
     pub features: Vec<String>,
 }
@@ -333,12 +348,12 @@ pub struct Features {
 #[derive(clap::Args)]
 pub struct DumpGraphArgs {
     /// The depth of the graph to print (for a large project, the full graph is a HUGE MESS).
-    #[clap(long, arg_enum)]
+    #[clap(long, value_enum, action)]
     #[clap(default_value_t = DumpGraphDepth::FirstParty)]
     pub depth: DumpGraphDepth,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum DumpGraphDepth {
     Roots,
     Workspace,
@@ -348,7 +363,7 @@ pub enum DumpGraphDepth {
 }
 
 /// Logging verbosity levels
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum Verbose {
     Off,
     Error,
@@ -397,7 +412,7 @@ impl FromStr for DependencyCriteriaArg {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum OutputFormat {
     Human,
     Json,
