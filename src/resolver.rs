@@ -1,4 +1,5 @@
 use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
+use console::{style, Style};
 use core::fmt;
 use serde::Serialize;
 use serde_json::json;
@@ -97,7 +98,7 @@ pub struct Suggest {
 #[derive(Debug, Clone)]
 pub struct SuggestItem {
     pub package: PackageIdx,
-    pub suggested_criteria: CriteriaSet,
+    pub suggested_criteria: CriteriaFailureSet,
     pub suggested_diff: DiffRecommendation,
     pub notable_parents: String,
 }
@@ -113,6 +114,14 @@ pub struct DiffRecommendation {
 #[derive(Clone, Default)]
 pub struct CriteriaSet(u64);
 const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
+
+/// Set of criteria which failed for a given package. `confident` contains only
+/// criteria which we're confident about, whereas `all` contains all criteria.
+#[derive(Debug, Clone, Default)]
+pub struct CriteriaFailureSet {
+    pub confident: CriteriaSet,
+    pub all: CriteriaSet,
+}
 
 /// A processed version of config.toml's criteria definitions, for mapping
 /// lists of criteria names to CriteriaSets.
@@ -188,7 +197,7 @@ pub type RootFailures = Vec<(PackageIdx, PolicyFailures, bool)>;
 
 #[derive(Default, Debug, Clone)]
 pub struct AuditFailure {
-    pub criteria_failures: CriteriaSet,
+    pub criteria_failures: CriteriaFailureSet,
 }
 
 /// The possible results of search for an audit chain for a Criteria
@@ -324,7 +333,7 @@ impl CriteriaMapper {
     pub fn set_criteria(&self, set: &mut CriteriaSet, criteria: CriteriaStr) {
         set.set_criteria(self.index[criteria])
     }
-    pub fn clear_criteria(&self, set: &mut CriteriaSet, criteria: CriteriaStr) {
+    pub fn clear_criteria(&self, set: &mut CriteriaFailureSet, criteria: CriteriaStr) {
         set.clear_criteria(&self.implied_criteria[self.index[criteria]])
     }
     /// An iterator over every criteria in order, with 'implies' fully applied.
@@ -343,6 +352,9 @@ impl CriteriaMapper {
     pub fn all_criteria(&self) -> CriteriaSet {
         CriteriaSet::_all(self.len())
     }
+    pub fn no_criteria_failures(&self) -> CriteriaFailureSet {
+        CriteriaFailureSet::none(self.len())
+    }
 
     /// Yields all the names of the set criteria with implied members filtered out.
     pub fn criteria_names<'a>(
@@ -357,6 +369,39 @@ impl CriteriaMapper {
                     // Require that we aren't implied by other_idx (and ignore our own index)
                     cur_idx == other_idx || !self.implied_criteria[other_idx].has_criteria(cur_idx)
                 })
+            })
+            .map(|idx| &*self.list[idx].0)
+    }
+
+    pub fn all_criteria_names<'a>(
+        &'a self,
+        criteria: &'a CriteriaFailureSet,
+    ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
+        self.criteria_names(criteria.all())
+    }
+
+    pub fn confident_criteria_names<'a>(
+        &'a self,
+        criteria: &'a CriteriaFailureSet,
+    ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
+        self.criteria_names(criteria.confident())
+    }
+
+    pub fn unconfident_criteria_names<'a>(
+        &'a self,
+        criteria: &'a CriteriaFailureSet,
+    ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
+        // Filter out any criteria implied by other criteria or present in `confident()`
+        criteria
+            .all()
+            .indices()
+            .filter(|&cur_idx| {
+                !criteria.confident().has_criteria(cur_idx)
+                    && criteria.all().indices().all(|other_idx| {
+                        // Require that we aren't implied by other_idx (and ignore our own index)
+                        cur_idx == other_idx
+                            || !self.implied_criteria[other_idx].has_criteria(cur_idx)
+                    })
             })
             .map(|idx| &*self.list[idx].0)
     }
@@ -421,6 +466,57 @@ impl CriteriaSet {
 impl fmt::Debug for CriteriaSet {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{:08b}", self.0)
+    }
+}
+
+impl CriteriaFailureSet {
+    pub fn none(count: usize) -> Self {
+        CriteriaFailureSet {
+            confident: CriteriaSet::none(count),
+            all: CriteriaSet::none(count),
+        }
+    }
+    pub fn from(criteria: &CriteriaSet, confident: bool) -> Self {
+        CriteriaFailureSet {
+            confident: if confident {
+                criteria.clone()
+            } else {
+                CriteriaSet::default()
+            },
+            all: criteria.clone(),
+        }
+    }
+    pub fn set_criteria(&mut self, idx: usize, confident: bool) {
+        self.all.set_criteria(idx);
+        if confident {
+            self.confident.set_criteria(idx);
+        }
+    }
+    pub fn clear_criteria(&mut self, other: &CriteriaSet) {
+        self.confident.clear_criteria(other);
+        self.all.clear_criteria(other);
+    }
+    pub fn unioned_with(&mut self, other: &CriteriaFailureSet) {
+        self.all.unioned_with(&other.all);
+        self.confident.unioned_with(&other.confident);
+    }
+    pub fn contains(&self, other: &CriteriaFailureSet) -> bool {
+        self.all.contains(&other.all) && self.confident.contains(&other.confident)
+    }
+    pub fn is_empty(&self) -> bool {
+        self.all.is_empty()
+    }
+    pub fn is_fully_confident(&self) -> bool {
+        self.confident.contains(&self.all)
+    }
+    pub fn is_fully_unconfident(&self) -> bool {
+        self.confident.is_empty()
+    }
+    pub fn all(&self) -> &CriteriaSet {
+        &self.all
+    }
+    pub fn confident(&self) -> &CriteriaSet {
+        &self.confident
     }
 }
 
@@ -1063,12 +1159,15 @@ pub fn resolve<'a>(
         |failure, depth, own_failure| {
             if let Some(criteria_failures) = own_failure {
                 trace!(
-                    " {:width$}blaming: {}:{} for {:?}",
+                    " {:width$}blaming: {}:{} for {:?} + {:?}",
                     "",
                     graph.nodes[failure].name,
                     graph.nodes[failure].version,
                     criteria_mapper
-                        .criteria_names(criteria_failures)
+                        .confident_criteria_names(criteria_failures)
+                        .collect::<Vec<_>>(),
+                    criteria_mapper
+                        .unconfident_criteria_names(criteria_failures)
                         .collect::<Vec<_>>(),
                     width = depth
                 );
@@ -1862,7 +1961,7 @@ fn visit_failures<'a, T>(
     results: &[ResolveResult<'a>],
     root_failures: &RootFailures,
     guess_deeper: bool,
-    mut callback: impl FnMut(PackageIdx, usize, Option<&CriteriaSet>) -> Result<(), T>,
+    mut callback: impl FnMut(PackageIdx, usize, Option<&CriteriaFailureSet>) -> Result<(), T>,
 ) -> Result<(), T> {
     trace!(" traversing blame tree");
 
@@ -1916,7 +2015,11 @@ fn visit_failures<'a, T>(
                     .criteria_names(failed_criteria)
                     .collect::<Vec<_>>()
             );
-            search_stack.push((failed_dep_idx, 0, Some(failed_criteria.clone())));
+            search_stack.push((
+                failed_dep_idx,
+                0,
+                Some(CriteriaFailureSet::from(failed_criteria, true)),
+            ));
         }
         if !is_dev {
             // If we have a root failure and it's not from the virtual dev-node, then
@@ -1926,8 +2029,8 @@ fn visit_failures<'a, T>(
             immune_to_parent_demands.insert(failed_idx);
         }
     }
-    let mut visited = FastMap::<PackageIdx, CriteriaSet>::new();
-    let no_criteria = criteria_mapper.no_criteria();
+    let mut visited = FastMap::<PackageIdx, CriteriaFailureSet>::new();
+    let no_criteria = criteria_mapper.no_criteria_failures();
 
     while let Some((failure_idx, depth, cur_criteria)) = search_stack.pop() {
         match visited.entry(failure_idx) {
@@ -1947,23 +2050,26 @@ fn visit_failures<'a, T>(
         let result = &results[failure_idx];
         let package = &graph.nodes[failure_idx];
         trace!(
-            " {:width$}visiting {}:{} for {:?}",
+            " {:width$}visiting {}:{} for {:?} + {:?}",
             "",
             package.name,
             package.version,
-            cur_criteria
-                .as_ref()
-                .map(|c| criteria_mapper.criteria_names(c).collect::<Vec<_>>()),
+            cur_criteria.as_ref().map(|c| criteria_mapper
+                .confident_criteria_names(c)
+                .collect::<Vec<_>>()),
+            cur_criteria.as_ref().map(|c| criteria_mapper
+                .unconfident_criteria_names(c)
+                .collect::<Vec<_>>()),
             width = depth
         );
 
         if let Some(failed_criteria) = cur_criteria {
-            let mut own_fault = criteria_mapper.no_criteria();
-            let mut dep_faults = FastMap::<PackageIdx, CriteriaSet>::new();
-            let mut deeper_faults = FastMap::<PackageIdx, CriteriaSet>::new();
+            let mut own_fault = no_criteria.clone();
+            let mut dep_faults = FastMap::<PackageIdx, CriteriaFailureSet>::new();
 
             // Collect up details of how we failed the criteria
-            for criteria_idx in failed_criteria.indices() {
+            for criteria_idx in failed_criteria.all().indices() {
+                let confident = failed_criteria.confident().has_criteria(criteria_idx);
                 match &result.search_results[criteria_idx] {
                     SearchResult::Connected { .. } => {
                         // Do nothing, this package is good
@@ -1974,12 +2080,15 @@ fn visit_failures<'a, T>(
                             dep_faults
                                 .entry(failed_dep)
                                 .or_insert_with(|| no_criteria.clone())
-                                .unioned_with(failed_criteria);
+                                .unioned_with(&CriteriaFailureSet::from(
+                                    failed_criteria,
+                                    confident,
+                                ));
                         }
                     }
                     SearchResult::Disconnected { .. } => {
                         // Oh dang ok we *are* to blame, our bad
-                        own_fault.set_criteria(criteria_idx);
+                        own_fault.set_criteria(criteria_idx, confident);
 
                         if guess_deeper {
                             // Try to Guess Deeper by blaming our children for all |self| failures
@@ -1987,10 +2096,10 @@ fn visit_failures<'a, T>(
                             for &dep_idx in &package.all_deps {
                                 let dep_result = &results[dep_idx];
                                 if !dep_result.validated_criteria.has_criteria(criteria_idx) {
-                                    deeper_faults
+                                    dep_faults
                                         .entry(dep_idx)
-                                        .or_default()
-                                        .set_criteria(criteria_idx);
+                                        .or_insert_with(|| no_criteria.clone())
+                                        .set_criteria(criteria_idx, false);
                                 }
                             }
                         }
@@ -2006,16 +2115,6 @@ fn visit_failures<'a, T>(
             }
 
             // Now visit our children
-            for (failed_dep, failed_criteria) in deeper_faults {
-                if dep_faults.contains_key(&failed_dep) {
-                    // We already visited them more precisely
-                    continue;
-                }
-                if immune_to_parent_demands.contains(&failed_dep) {
-                    continue;
-                }
-                search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
-            }
             for (failed_dep, failed_criteria) in dep_faults {
                 if immune_to_parent_demands.contains(&failed_dep) {
                     continue;
@@ -2097,7 +2196,7 @@ impl<'a> ResolveReport<'a> {
             // Collect up the details of how we failed
             let mut from_root = None::<SortedSet<&Version>>;
             let mut from_target = None::<SortedSet<&Version>>;
-            for criteria_idx in audit_failure.criteria_failures.indices() {
+            for criteria_idx in audit_failure.criteria_failures.all().indices() {
                 let search_result = &result.search_results[criteria_idx];
                 if let SearchResult::Disconnected {
                     reachable_from_root,
@@ -2186,12 +2285,13 @@ impl<'a> ResolveReport<'a> {
         suggestions.sort_by_key(|item| self.graph.nodes[item.package].version);
         suggestions.sort_by_key(|item| self.graph.nodes[item.package].name);
         suggestions.sort_by_key(|item| item.suggested_diff.diffstat.count);
+        suggestions.sort_by_key(|item| item.suggested_criteria.is_fully_unconfident());
 
         let mut suggestions_by_criteria = SortedMap::<CriteriaName, Vec<SuggestItem>>::new();
         for s in suggestions.clone().into_iter() {
             let criteria_names = self
                 .criteria_mapper
-                .criteria_names(&s.suggested_criteria)
+                .all_criteria_names(&s.suggested_criteria)
                 .collect::<Vec<_>>()
                 .join(", ");
 
@@ -2218,7 +2318,7 @@ impl<'a> ResolveReport<'a> {
             };
             let criteria = self
                 .criteria_mapper
-                .criteria_names(&suggestion.suggested_criteria)
+                .all_criteria_names(&suggestion.suggested_criteria)
                 .map(CriteriaName::from)
                 .collect::<Vec<_>>();
             last_suggest.push(SuggestedAudit { command, criteria });
@@ -2295,12 +2395,13 @@ impl<'a> ResolveReport<'a> {
                 }).collect::<SortedMap<_,_>>(),
             }),
             Conclusion::FailForVet(fail) => {
+                // FIXME: How to report confidence for suggested criteria?
                 let json_suggest_item = |item: &SuggestItem| {
                     let package = &self.graph.nodes[item.package];
                     json!({
                         "name": package.name,
                         "notable_parents": item.notable_parents,
-                        "suggested_criteria": self.criteria_mapper.criteria_names(&item.suggested_criteria).collect::<Vec<_>>(),
+                        "suggested_criteria": self.criteria_mapper.all_criteria_names(&item.suggested_criteria).collect::<Vec<_>>(),
                         "suggested_diff": item.suggested_diff,
                     })
                 };
@@ -2311,7 +2412,7 @@ impl<'a> ResolveReport<'a> {
                         json!({
                             "name": package.name,
                             "version": package.version,
-                            "missing_criteria": self.criteria_mapper.criteria_names(&audit_fail.criteria_failures).collect::<Vec<_>>(),
+                            "missing_criteria": self.criteria_mapper.all_criteria_names(&audit_fail.criteria_failures).collect::<Vec<_>>(),
                         })
                     }).collect::<Vec<_>>(),
                     "suggest": suggest.map(|suggest| json!({
@@ -2404,40 +2505,48 @@ impl Suggest {
                 .iter()
                 .map(|item| {
                     let package = &report.graph.nodes[item.package];
-                    (
-                        if item.suggested_diff.from == ROOT_VERSION {
-                            format!(
-                                "cargo vet inspect {} {}",
-                                package.name, item.suggested_diff.to
-                            )
-                        } else {
-                            format!(
-                                "cargo vet diff {} {} {}",
-                                package.name, item.suggested_diff.from, item.suggested_diff.to
-                            )
-                        },
-                        format!("(used by {})", item.notable_parents),
-                        if item.suggested_diff.from == ROOT_VERSION {
-                            format!("({} lines)", item.suggested_diff.diffstat.count)
-                        } else {
-                            format!("({})", item.suggested_diff.diffstat.raw.trim())
-                        },
-                    )
+                    let cmd = if item.suggested_diff.from == ROOT_VERSION {
+                        format!(
+                            "cargo vet inspect {} {}",
+                            package.name, item.suggested_diff.to
+                        )
+                    } else {
+                        format!(
+                            "cargo vet diff {} {} {}",
+                            package.name, item.suggested_diff.from, item.suggested_diff.to
+                        )
+                    };
+                    let parents = format!("(used by {})", item.notable_parents);
+                    let diffstat = if item.suggested_diff.from == ROOT_VERSION {
+                        format!("({} lines)", item.suggested_diff.diffstat.count)
+                    } else {
+                        format!("({})", item.suggested_diff.diffstat.raw.trim())
+                    };
+                    let style = if item.suggested_criteria.is_fully_unconfident() {
+                        Style::new().dim()
+                    } else {
+                        Style::new()
+                    };
+                    (cmd, parents, diffstat, style)
                 })
                 .collect::<Vec<_>>();
 
-            let max0 = strings.iter().max_by_key(|s| s.0.len()).unwrap().0.len();
-            let max1 = strings.iter().max_by_key(|s| s.1.len()).unwrap().1.len();
+            let mut max0 = 0;
+            let mut max1 = 0;
+            for (s0, s1, ..) in &strings {
+                max0 = max0.max(console::measure_text_width(s0));
+                max1 = max1.max(console::measure_text_width(s1));
+            }
 
-            // Do not align the last one
-            // let max3 = strings.iter().max_by_key(|s| s.3.len()).unwrap().3.len();
-
-            for (s0, s1, s2) in strings {
+            for (s0, s1, s2, style) in strings {
                 writeln!(
                     out,
-                    "    {s0:width0$}  {s1:width1$}  {s2}",
-                    width0 = max0,
-                    width1 = max1,
+                    "{}",
+                    style.apply_to(format_args!(
+                        "    {s0:width0$}  {s1:width1$}  {s2}",
+                        width0 = max0,
+                        width1 = max1,
+                    ))
                 )?;
             }
 
@@ -2470,16 +2579,37 @@ impl FailForVet {
             .collect::<Vec<_>>();
         failures.sort_by_key(|(failed, _)| failed.version);
         failures.sort_by_key(|(failed, _)| failed.name);
+        failures.sort_by_key(|(_, failure)| failure.criteria_failures.is_fully_unconfident());
         for (failed_package, failed_audit) in failures {
-            let criteria = report
+            let confident_criteria = report
                 .criteria_mapper
-                .criteria_names(&failed_audit.criteria_failures)
+                .confident_criteria_names(&failed_audit.criteria_failures)
                 .collect::<Vec<_>>();
-            writeln!(
-                out,
-                "  {}:{} missing {:?}",
-                failed_package.name, failed_package.version, &criteria
-            )?;
+            let unconfident_criteria = report
+                .criteria_mapper
+                .unconfident_criteria_names(&failed_audit.criteria_failures)
+                .collect::<Vec<_>>();
+
+            let label = format!("  {}:{}", failed_package.name, failed_package.version);
+            if !confident_criteria.is_empty() {
+                writeln!(out, "{} missing {:?}", label, confident_criteria)?;
+            }
+            if !unconfident_criteria.is_empty() {
+                writeln!(
+                    out,
+                    "{}",
+                    style(format_args!(
+                        "{} likely missing {:?}",
+                        if confident_criteria.is_empty() {
+                            label
+                        } else {
+                            format!("{:width$}", "", width = console::measure_text_width(&label))
+                        },
+                        unconfident_criteria
+                    ))
+                    .dim()
+                )?;
+            }
         }
 
         // Suggest output generally requires hitting the network.

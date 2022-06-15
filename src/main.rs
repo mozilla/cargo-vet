@@ -1142,7 +1142,7 @@ pub fn minimize_unaudited(
                     {
                         let mut new_criteria = report
                             .criteria_mapper
-                            .criteria_names(&new_item.suggested_criteria);
+                            .all_criteria_names(&new_item.suggested_criteria);
                         if new_item.suggested_diff.to == old_entry.version
                             && new_criteria.any(|s| s == &*old_entry.criteria)
                         {
@@ -1177,7 +1177,7 @@ pub fn minimize_unaudited(
             for item in new_items {
                 for criteria in report
                     .criteria_mapper
-                    .criteria_names(&item.suggested_criteria)
+                    .all_criteria_names(&item.suggested_criteria)
                 {
                     new_unaudited
                         .entry(package_name.to_string())
