@@ -228,7 +228,7 @@ fn violation_hard(version: VersionReq) -> AuditEntry {
     AuditEntry {
         who: None,
         notes: None,
-        criteria: vec!["weak-reviewed".to_string()],
+        criteria: vec![SAFE_TO_RUN.to_string()],
         kind: AuditKind::Violation { violation: version },
     }
 }
@@ -238,6 +238,18 @@ fn violation(version: VersionReq, criteria: CriteriaStr) -> AuditEntry {
         who: None,
         notes: None,
         criteria: vec![criteria.to_string()],
+        kind: AuditKind::Violation { violation: version },
+    }
+}
+#[allow(dead_code)]
+fn violation_m(
+    version: VersionReq,
+    criteria: impl IntoIterator<Item = impl Into<CriteriaName>>,
+) -> AuditEntry {
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.into_iter().map(|s| s.into()).collect(),
         kind: AuditKind::Violation { violation: version },
     }
 }
@@ -984,12 +996,12 @@ fn mock_simple_violation_cur_unaudited() {
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_inited(&metadata);
 
-    let violation = VersionReq::parse(&format!("={DEFAULT_VER}")).unwrap();
+    let violation_ver = VersionReq::parse(&format!("={DEFAULT_VER}")).unwrap();
     audits
         .audits
         .entry("third-party1".to_string())
         .or_insert(vec![])
-        .push(violation_hard(violation));
+        .push(violation(violation_ver, "weak-reviewed"));
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, false);
@@ -3718,6 +3730,156 @@ fn builtin_haunted_minimal_audited() {
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-haunted-minimal-audited", output);
+}
+
+#[test]
+fn builtin_simple_deps_violation_dodged() {
+    // (Pass) A 'violation' matches a full audit but we only audit for weaker so it's fine
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    let violation_ver = VersionReq::parse("*").unwrap();
+    audits.audits.insert(
+        "dev".to_string(),
+        vec![
+            violation(violation_ver, SAFE_TO_DEPLOY),
+            full_audit(ver(DEFAULT_VER), SAFE_TO_RUN),
+        ],
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, false);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-deps-violation-dodged", output);
+}
+
+#[test]
+fn builtin_simple_deps_violation_low_hit() {
+    // (Fail) A 'violation' matches a full audit and both are safe-to-run
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    let violation_ver = VersionReq::parse("*").unwrap();
+    audits.audits.insert(
+        "dev".to_string(),
+        vec![
+            violation(violation_ver, SAFE_TO_RUN),
+            full_audit(ver(DEFAULT_VER), SAFE_TO_RUN),
+        ],
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, false);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-deps-violation-low-hit", output);
+}
+
+#[test]
+fn builtin_simple_deps_violation_high_hit() {
+    // (Fail) A 'violation' matches a full audit and both are safe-to-deploy
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    let violation_ver = VersionReq::parse("*").unwrap();
+    audits.audits.insert(
+        "dev".to_string(),
+        vec![
+            violation(violation_ver, SAFE_TO_DEPLOY),
+            full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, false);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-deps-violation-high-hit", output);
+}
+
+#[test]
+fn builtin_simple_deps_violation_imply_hit() {
+    // (Fail) A safe-to-run 'violation' matches a safe-to-deploy full audit
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    let violation_ver = VersionReq::parse("*").unwrap();
+    audits.audits.insert(
+        "dev".to_string(),
+        vec![
+            violation(violation_ver, SAFE_TO_RUN),
+            full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+        ],
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, false);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-deps-violation-imply-hit", output);
+}
+
+#[test]
+fn builtin_simple_deps_violation_redundant_low_hit() {
+    // (Fail) A [safe-to-run, safe-to-deploy] 'violation' matches a safe-to-run full audit
+
+    let mock = MockMetadata::simple_deps();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    let violation_ver = VersionReq::parse("*").unwrap();
+    audits.audits.insert(
+        "dev".to_string(),
+        vec![
+            violation_m(violation_ver, [SAFE_TO_RUN, SAFE_TO_DEPLOY]),
+            full_audit(ver(DEFAULT_VER), SAFE_TO_RUN),
+        ],
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, false);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-deps-violation-redundant-low-hit", output);
+}
+
+#[test]
+fn mock_simple_violation_hit_with_extra_junk() {
+    // (Fail) A [safe-to-run, fuzzed] 'violation' matches a safe-to-run full audit
+
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = files_full_audited(&metadata);
+
+    let violation_ver = VersionReq::parse("*").unwrap();
+    audits.audits.insert(
+        "third-party1".to_string(),
+        vec![
+            violation_m(violation_ver, [SAFE_TO_RUN, "fuzzed"]),
+            full_audit(ver(DEFAULT_VER), SAFE_TO_RUN),
+        ],
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, false);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!("mock-simple-violation-hit-with-extra-junk", output);
 }
 
 // TESTING BACKLOG:

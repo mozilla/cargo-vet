@@ -69,7 +69,7 @@ use tracing::{error, trace, trace_span, warn};
 
 use crate::format::{
     self, AuditKind, CriteriaName, CriteriaStr, Delta, DiffStat, FetchCommand, ImportName,
-    PackageName, PackageStr, SuggestedAudit,
+    PackageName, PackageStr, SuggestedAudit, UnauditedDependency,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
@@ -130,9 +130,10 @@ pub struct FailForVet {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize)]
 pub enum ViolationConflict {
-    CurVersionConflict {
-        source: AuditSource,
+    UnauditedConflict {
+        violation_source: AuditSource,
         violation: AuditEntry,
+        unaudited: UnauditedDependency,
     },
     AuditConflict {
         violation_source: AuditSource,
@@ -1463,14 +1464,67 @@ fn resolve_third_party<'a>(
 
     // Reject forbidden packages (violations)
     for (violation_source, violation_entry) in &violation_nodes {
+        // Ok this is kind of weird. We want to reject any audits which contain any of these criteria.
+        // Normally we would slap all the criteria in this entry into a set and do some kind of set
+        // comparison, but that's not quite right. Here are the cases we want to work:
+        //
+        // * violation: safe-to-deploy, audit: safe-to-deploy -- ERROR!
+        // * violation: safe-to-deploy, audit: safe-to-run    -- OK!
+        // * violation: safe-to-run,    audit: safe-to-deploy -- ERROR!
+        // * violation: [a, b],         audit: [a, c]         -- ERROR!
+        //
+        // The first 3 cases are correctly handled by audit.contains(violation)
+        // but the last one isn't. I think the correct solution to this is to
+        // *for each individual entry in the violation* do audit.contains(violation).
+        // If any of those queries trips, then it's an ERROR.
+        //
+        // Note that this would also more correctly handle [safe-to-deploy, safe-to-run]
+        // as a violation entry because it would effectively become safe-to-run instead
+        // of safe-to-deploy, which is the correct and desirable behaviour!
+        //
+        // So here we make a criteria set for each entry in the violation.
+        let violation_criterias = violation_entry
+            .criteria
+            .iter()
+            .map(|c| criteria_mapper.criteria_from_list([&c]))
+            .collect::<Vec<_>>();
         let violation_range = if let AuditKind::Violation { violation } = &violation_entry.kind {
             violation
         } else {
             unreachable!("violation_entry wasn't a Violation?");
         };
 
+        // Note if this entry conflicts with any unaudited entries
+        if let Some(alloweds) = unaudited {
+            for allowed in alloweds {
+                let audit_criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
+                let has_violation = violation_criterias
+                    .iter()
+                    .any(|v| audit_criteria.contains(v));
+                if !has_violation {
+                    continue;
+                }
+                if violation_range.matches(&allowed.version) {
+                    violations.entry(pkgidx).or_default().push(
+                        ViolationConflict::UnauditedConflict {
+                            violation_source: violation_source.clone(),
+                            violation: (*violation_entry).clone(),
+                            unaudited: allowed.clone(),
+                        },
+                    );
+                }
+            }
+        }
+
         // Note if this entry conflicts with any audits
         for audit in own_audits {
+            let audit_criteria = criteria_mapper.criteria_from_entry(audit);
+            let has_violation = violation_criterias
+                .iter()
+                .any(|v| audit_criteria.contains(v));
+            if !has_violation {
+                continue;
+            }
             match &audit.kind {
                 AuditKind::Full { version, .. } => {
                     if violation_range.matches(version) {
@@ -1501,12 +1555,20 @@ fn resolve_third_party<'a>(
                 }
             }
         }
+
         for (foreign_name, foreign_audits) in &store.imports.audits {
             for audit in foreign_audits
                 .audits
                 .get(package.name)
                 .unwrap_or(&NO_AUDITS)
             {
+                let audit_criteria = criteria_mapper.criteria_from_entry(audit);
+                let has_violation = violation_criterias
+                    .iter()
+                    .any(|v| audit_criteria.contains(v));
+                if !has_violation {
+                    continue;
+                }
                 match &audit.kind {
                     AuditKind::Full { version, .. } => {
                         if violation_range.matches(version) {
@@ -1541,6 +1603,17 @@ fn resolve_third_party<'a>(
             }
         }
 
+        // FIXME: this kind of violation is annoying to catch, but you kind of don't have to.
+        //
+        // It's impossible to validate a package with some criteria without an audit/unaudited
+        // entry with that criteria (or a criteria that implies it) touching that version.
+        // Therefore we can catch any "true" violations by just looking at the AuditGraph's
+        // edges as we do above. However if you current version is a violation and but doesn't
+        // have an audit, we may suggest an audit that *is* a violation. This is bad.
+        //
+        // This commented out code stands as a memorial to that problem for later.
+
+        /*
         // Note if this entry conflicts with the current package's version
         if violation_range.matches(package.version) {
             violations
@@ -1551,6 +1624,7 @@ fn resolve_third_party<'a>(
                     violation: (*violation_entry).clone(),
                 });
         }
+        */
     }
 
     let mut directly_unaudited = false;
@@ -2719,9 +2793,15 @@ impl FailForViolationConflict {
             writeln!(out, "  {}:{}", package.name, package.version)?;
             for violation in violations {
                 match violation {
-                    ViolationConflict::CurVersionConflict { source, violation } => {
-                        write!(out, "    this version is forbidden by ")?;
-                        print_entry(out, source, violation)?;
+                    ViolationConflict::UnauditedConflict {
+                        violation_source,
+                        violation,
+                        unaudited,
+                    } => {
+                        write!(out, "    the ")?;
+                        print_unaudited_entry(out, unaudited)?;
+                        write!(out, "    conflicts with ")?;
+                        print_entry(out, violation_source, violation)?;
                     }
                     ViolationConflict::AuditConflict {
                         violation_source,
@@ -2737,6 +2817,18 @@ impl FailForViolationConflict {
                 }
                 writeln!(out)?;
             }
+        }
+
+        fn print_unaudited_entry(
+            out: &mut dyn Write,
+            entry: &UnauditedDependency,
+        ) -> Result<(), VetError> {
+            writeln!(out, "unaudited {}", entry.version)?;
+            writeln!(out, "      criteria: {:?}", entry.criteria)?;
+            if let Some(notes) = &entry.notes {
+                writeln!(out, "      notes: {notes}")?;
+            }
+            Ok(())
         }
 
         fn print_entry(
