@@ -245,7 +245,7 @@ mod test {
             vec![
                 AuditEntry {
                     who: None,
-                    criteria: "long-criteria".to_owned(),
+                    criteria: vec!["long-criteria".to_owned()],
                     kind: AuditKind::Full {
                         version: "1.0.0".parse().unwrap(),
                         dependency_criteria: dc_long,
@@ -254,7 +254,7 @@ mod test {
                 },
                 AuditEntry {
                     who: None,
-                    criteria: "short-criteria".to_owned(),
+                    criteria: vec!["short-criteria".to_owned()],
                     kind: AuditKind::Full {
                         version: "1.0.0".parse().unwrap(),
                         dependency_criteria: dc_short,

@@ -419,9 +419,9 @@ pub fn init_files(
                 continue;
             }
             let criteria = if package.is_dev_only {
-                format::DEFAULT_POLICY_DEV_CRITERIA.to_string()
+                vec![format::DEFAULT_POLICY_DEV_CRITERIA.to_string()]
             } else {
-                format::DEFAULT_POLICY_CRITERIA.to_string()
+                vec![format::DEFAULT_POLICY_CRITERIA.to_string()]
             };
             // NOTE: May have multiple copies of a package!
             let item = UnauditedDependency {
@@ -597,7 +597,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
             panic_any(ExitPanic(-1));
         }
         let entry = &unaudited_list[0];
-        criteria_guess = Some(vec![entry.criteria.clone()]);
+        criteria_guess = Some(entry.criteria.clone());
         // FIXME: this should arguably use entry.dependency_criteria unless the cli specified,
         // should probably have a more coherent "strategy picking" right at the start instead
         // of individually sourcing each piece of information
@@ -877,38 +877,35 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         };
     }
 
-    for criteria in criteria_names {
-        // Ok! Ready to commit the audit!
-        let new_entry = AuditEntry {
-            kind: kind.clone(),
-            criteria: criteria.to_string(),
-            who: who.clone(),
-            notes: notes.clone(),
-        };
+    let new_entry = AuditEntry {
+        kind: kind.clone(),
+        criteria: criteria_names.iter().map(|s| s.to_string()).collect(),
+        who,
+        notes,
+    };
 
-        store
-            .audits
-            .audits
-            .entry(package.clone())
-            .or_insert(vec![])
-            .push(new_entry);
+    store
+        .audits
+        .audits
+        .entry(package.clone())
+        .or_insert(vec![])
+        .push(new_entry);
 
-        // If we're submitting a full audit, look for a matching unaudited entry to remove
-        if let AuditKind::Full { version, .. } = &kind {
-            if let Some(unaudited_list) = store.config.unaudited.get_mut(&package) {
-                let cur_criteria_set = criteria_mapper.criteria_from_list([criteria]);
-                // Iterate backwards so that we can delete while iterating
-                // (will only affect indices that we've already visited!)
-                for idx in (0..unaudited_list.len()).rev() {
-                    let entry = &unaudited_list[idx];
-                    let entry_criteria_set = criteria_mapper.criteria_from_list([&entry.criteria]);
-                    if &entry.version == version && cur_criteria_set.contains(&entry_criteria_set) {
-                        unaudited_list.remove(idx);
-                    }
+    // If we're submitting a full audit, look for a matching unaudited entry to remove
+    if let AuditKind::Full { version, .. } = &kind {
+        if let Some(unaudited_list) = store.config.unaudited.get_mut(&package) {
+            let cur_criteria_set = criteria_mapper.criteria_from_list(criteria_names);
+            // Iterate backwards so that we can delete while iterating
+            // (will only affect indices that we've already visited!)
+            for idx in (0..unaudited_list.len()).rev() {
+                let entry = &unaudited_list[idx];
+                let entry_criteria_set = criteria_mapper.criteria_from_list(&entry.criteria);
+                if &entry.version == version && cur_criteria_set.contains(&entry_criteria_set) {
+                    unaudited_list.remove(idx);
                 }
-                if unaudited_list.is_empty() {
-                    store.config.unaudited.remove(&package);
-                }
+            }
+            if unaudited_list.is_empty() {
+                store.config.unaudited.remove(&package);
             }
         }
     }
@@ -940,18 +937,12 @@ fn cmd_record_violation(
 
     let notes = sub_args.notes.clone();
 
-    let mut criteria = if sub_args.criteria.is_empty() {
+    let criteria = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
         vec![store.config.default_criteria.clone()]
     } else {
         sub_args.criteria.clone()
     };
-
-    // TODO: implement multi-criteria
-    if criteria.len() != 1 {
-        unimplemented!("multiple criteria not yet implemented");
-    }
-    let criteria = criteria.swap_remove(0);
 
     // FIXME: can/should we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == sub_args.package) {
@@ -1011,7 +1002,7 @@ fn cmd_add_unaudited(
 
     let notes = sub_args.notes.clone();
 
-    let mut criteria = if sub_args.criteria.is_empty() {
+    let criteria = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
         vec![store.config.default_criteria.clone()]
     } else {
@@ -1019,12 +1010,6 @@ fn cmd_add_unaudited(
     };
 
     let suggest = !sub_args.no_suggest;
-
-    // TODO: implement multi-criteria
-    if criteria.len() != 1 {
-        unimplemented!("multiple criteria not yet implemented");
-    }
-    let criteria = criteria.swap_remove(0);
 
     // FIXME: can/should we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == sub_args.package) {
@@ -1140,17 +1125,14 @@ pub fn minimize_unaudited(
                     // If there's an existing entry for these criteria, preserve it
                     let new_item = &mut suggestions[item_idx];
                     {
-                        let mut new_criteria = report
+                        let old_criteria = report
                             .criteria_mapper
-                            .all_criteria_names(&new_item.suggested_criteria);
+                            .criteria_from_list(&old_entry.criteria);
                         if new_item.suggested_diff.to == old_entry.version
-                            && new_criteria.any(|s| s == &*old_entry.criteria)
+                            && new_item.suggested_criteria.all.contains(&old_criteria)
                         {
-                            std::mem::drop(new_criteria);
-                            report.criteria_mapper.clear_criteria(
-                                &mut new_item.suggested_criteria,
-                                &old_entry.criteria,
-                            );
+                            new_item.suggested_criteria.clear_criteria(&old_criteria);
+
                             new_unaudited
                                 .entry(package_name.clone())
                                 .or_insert(Vec::new())
@@ -1175,21 +1157,21 @@ pub fn minimize_unaudited(
         // Now insert any remaining suggestions
         for (package_name, new_items) in suggest_by_package_name {
             for item in new_items {
-                for criteria in report
+                let criteria_names = report
                     .criteria_mapper
                     .all_criteria_names(&item.suggested_criteria)
-                {
-                    new_unaudited
-                        .entry(package_name.to_string())
-                        .or_insert(Vec::new())
-                        .push(UnauditedDependency {
-                            version: item.suggested_diff.to.clone(),
-                            criteria: criteria.to_string(),
-                            dependency_criteria: DependencyCriteria::new(),
-                            notes: None,
-                            suggest: true,
-                        })
-                }
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>();
+                new_unaudited
+                    .entry(package_name.to_string())
+                    .or_insert(Vec::new())
+                    .push(UnauditedDependency {
+                        version: item.suggested_diff.to.clone(),
+                        criteria: criteria_names,
+                        dependency_criteria: DependencyCriteria::new(),
+                        notes: None,
+                        suggest: true,
+                    })
             }
         }
 

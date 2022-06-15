@@ -1,15 +1,15 @@
 ---
 source: src/tests.rs
-expression: stdout
+expression: output
 ---
 Violations Found!
   third-party1:10.0.0
     the own audit 10.0.0
-      criteria: "safe-to-deploy"
+      criteria: ["safe-to-deploy"]
     conflicts with own violation against *
-      criteria: "weak-reviewed"
+      criteria: ["weak-reviewed"]
 
     this version is forbidden by own violation against *
-      criteria: "weak-reviewed"
+      criteria: ["weak-reviewed"]
 
 

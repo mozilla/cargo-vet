@@ -404,7 +404,7 @@ impl CriteriaMapper {
         }
     }
     pub fn criteria_from_entry(&self, entry: &AuditEntry) -> CriteriaSet {
-        self.implied_criteria[self.index[&*entry.criteria]].clone()
+        self.criteria_from_list(&entry.criteria)
     }
     pub fn criteria_from_list<'b, S: AsRef<str> + 'b + ?Sized>(
         &self,
@@ -1562,7 +1562,7 @@ fn resolve_third_party<'a>(
             }
             let from_ver = &ROOT_VERSION;
             let to_ver = &allowed.version;
-            let criteria = criteria_mapper.criteria_from_list([&allowed.criteria]);
+            let criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
             let dependency_criteria: FastMap<_, _> = allowed
                 .dependency_criteria
                 .iter()
@@ -1768,7 +1768,7 @@ fn search_for_path<'a>(
                         let dep_req = edge
                             .dependency_criteria
                             .get(&*dep_package.name)
-                            .unwrap_or(&cur_criteria);
+                            .unwrap_or(cur_criteria);
 
                         if !dep_vet_result.contains(dep_req) {
                             failed_deps

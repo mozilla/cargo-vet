@@ -156,7 +156,9 @@ pub struct CriteriaEntry {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct AuditEntry {
     pub who: Option<String>,
-    pub criteria: CriteriaName,
+    #[serde(default)]
+    #[serde(with = "serialization::string_or_vec")]
+    pub criteria: Vec<CriteriaName>,
     #[serde(flatten)]
     pub kind: AuditKind,
     pub notes: Option<String>,
@@ -397,7 +399,9 @@ pub struct UnauditedDependency {
     /// Criteria that we're willing to handwave for this version (assuming our dependencies
     /// satisfy this criteria). This isn't defaulted, 'vet init' and similar commands will
     /// pick a "good" initial value.
-    pub criteria: CriteriaName,
+    #[serde(default)]
+    #[serde(with = "serialization::string_or_vec")]
+    pub criteria: Vec<CriteriaName>,
     /// Whether 'suggest' should bother mentioning this (defaults true).
     #[serde(default = "get_default_unaudited_suggest")]
     #[serde(skip_serializing_if = "is_default_unaudited_suggest")]
