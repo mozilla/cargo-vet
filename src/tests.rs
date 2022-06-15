@@ -80,7 +80,7 @@ fn dep_ver(name: &'static str, version: u64) -> MockDependency {
 fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependency {
     UnauditedDependency {
         version,
-        criteria: config.default_criteria.clone(),
+        criteria: vec![config.default_criteria.clone()],
         dependency_criteria: DependencyCriteria::new(),
         notes: None,
         suggest: true,
@@ -89,7 +89,7 @@ fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependen
 fn unaudited(version: Version, criteria: CriteriaStr) -> UnauditedDependency {
     UnauditedDependency {
         version,
-        criteria: criteria.to_string(),
+        criteria: vec![criteria.to_string()],
         dependency_criteria: DependencyCriteria::new(),
         notes: None,
         suggest: true,
@@ -108,7 +108,7 @@ fn unaudited_dep(
 ) -> UnauditedDependency {
     UnauditedDependency {
         version,
-        criteria: criteria.to_string(),
+        criteria: vec![criteria.to_string()],
         notes: None,
         suggest: true,
         dependency_criteria: dependency_criteria
@@ -128,7 +128,7 @@ fn delta_audit(from: Version, to: Version, criteria: CriteriaStr) -> AuditEntry 
     AuditEntry {
         who: None,
         notes: None,
-        criteria: criteria.to_string(),
+        criteria: vec![criteria.to_string()],
         kind: AuditKind::Delta {
             delta,
             dependency_criteria: DependencyCriteria::default(),
@@ -152,7 +152,7 @@ fn delta_audit_dep(
     AuditEntry {
         who: None,
         notes: None,
-        criteria: criteria.to_string(),
+        criteria: vec![criteria.to_string()],
         kind: AuditKind::Delta {
             delta,
             dependency_criteria: dependency_criteria
@@ -172,7 +172,22 @@ fn full_audit(version: Version, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
         who: None,
         notes: None,
-        criteria: criteria.to_string(),
+        criteria: vec![criteria.to_string()],
+        kind: AuditKind::Full {
+            version,
+            dependency_criteria: DependencyCriteria::default(),
+        },
+    }
+}
+
+fn full_audit_m(
+    version: Version,
+    criteria: impl IntoIterator<Item = impl Into<CriteriaName>>,
+) -> AuditEntry {
+    AuditEntry {
+        who: None,
+        notes: None,
+        criteria: criteria.into_iter().map(|s| s.into()).collect(),
         kind: AuditKind::Full {
             version,
             dependency_criteria: DependencyCriteria::default(),
@@ -193,7 +208,7 @@ fn full_audit_dep(
     AuditEntry {
         who: None,
         notes: None,
-        criteria: criteria.to_string(),
+        criteria: vec![criteria.to_string()],
         kind: AuditKind::Full {
             version,
             dependency_criteria: dependency_criteria
@@ -213,7 +228,7 @@ fn violation_hard(version: VersionReq) -> AuditEntry {
     AuditEntry {
         who: None,
         notes: None,
-        criteria: "weak-reviewed".to_string(),
+        criteria: vec!["weak-reviewed".to_string()],
         kind: AuditKind::Violation { violation: version },
     }
 }
@@ -222,7 +237,7 @@ fn violation(version: VersionReq, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
         who: None,
         notes: None,
-        criteria: criteria.to_string(),
+        criteria: vec![criteria.to_string()],
         kind: AuditKind::Violation { violation: version },
     }
 }
@@ -749,8 +764,8 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     // Rewrite the default used by init
     for unaudited in &mut config.unaudited {
         for entry in unaudited.1 {
-            assert_eq!(&*entry.criteria, "safe-to-deploy");
-            entry.criteria = DEFAULT_CRIT.to_string();
+            assert_eq!(&*entry.criteria, &["safe-to-deploy"]);
+            entry.criteria = vec![DEFAULT_CRIT.to_string()];
         }
     }
 
@@ -820,7 +835,7 @@ fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile
             audited
                 .entry(name.clone())
                 .or_insert(vec![])
-                .push(full_audit(entry.version, &entry.criteria));
+                .push(full_audit_m(entry.version, &entry.criteria));
         }
     }
     audits.audits = audited;
