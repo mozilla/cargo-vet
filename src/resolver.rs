@@ -1758,12 +1758,17 @@ fn search_for_path<'a>(
                         let dep_vet_result = &mut results[dependency];
 
                         // If no custom criteria is specified, then require our dependency to match
-                        // the same criteria that this delta claims to provide.
-                        // e.g. a 'secure' audit requires all dependencies to be 'secure' by default.
+                        // the same criteria that we're trying to validate. This makes audits effectively
+                        // break down their criteria into individually verifiable components instead of
+                        // purely "all or nothing".
+                        //
+                        // e.g. a safe-to-deploy audit with some deps that are only safe-to-run
+                        // still audits for safe-to-run, but not safe-to-deploy. Similarly so for
+                        // `[safe-to-run, some-other-criteria]` validating each criteria individually.
                         let dep_req = edge
                             .dependency_criteria
                             .get(&*dep_package.name)
-                            .unwrap_or(&edge.criteria);
+                            .unwrap_or(&cur_criteria);
 
                         if !dep_vet_result.contains(dep_req) {
                             failed_deps
