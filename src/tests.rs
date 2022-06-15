@@ -841,6 +841,10 @@ fn mock_cfg(metadata: &Metadata) -> Config {
 }
 
 fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
+    // FIXME: Figure out how to handle disabling output colours better in tests.
+    console::set_colors_enabled(false);
+    console::set_colors_enabled_stderr(false);
+
     let cfg = mock_cfg(metadata);
     let mut output = Vec::new();
     let suggest = report.compute_suggest(&cfg, None, true).unwrap();
