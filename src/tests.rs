@@ -3372,9 +3372,10 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect_regenerate() {
 
 #[test]
 fn builtin_dev_detection_cursed_full() {
-    // (Fail): dev-indirect has safe-to-run and by policy we only need safe-to-run
-    // but dev (its parent) is audited for safe-to-deploy which requires the child
-    // be safe-to-deploy. If we implement criteria "desugarring" this would pass.
+    // (Pass): dev-indirect has safe-to-run and by policy we only need safe-to-run
+    // but dev (its parent) is audited for safe-to-deploy which naively requires the child
+    // be safe-to-deploy. However criteria "decomposition" makes this ok, and we do succesfully
+    // validate for safe-to-run.
     //
     // This test is "cursed" because it caused some crashes in glitched out the blame system.
 
