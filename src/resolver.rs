@@ -1,3 +1,63 @@
+//! The Resolver is the heart of cargo-vet, and does all the work to validate the audits
+//! for your current packages and to suggest fixes. This is done in 3 phases:
+//!
+//! 1. Validating the audits against your policies
+//! 2. Blaming packages for failed policies
+//! 3. Suggesting audits that would make your project pass validation
+//!
+//! # High-level Usage
+//!
+//! * [`resolve`] is the main entry point, Validating and Blaming and producing a [`ResolveReport`]
+//! * [`ResolveReport::compute_suggest`] does Suggesting and produces a [`Suggest`]
+//! * various methods on [`ResolveReport`] and [`Suggest`] handle printing
+//!
+//! # Low-level Design
+//!
+//!
+//! ## Resolve
+//!
+//! * construct the [`DepGraph`] and [`CriteriaMapper`]
+//!     * the DepGraph contains computed facts like whether a node is a third-party or dev-only
+//!       and includes a special topological sorting of the packages that prioritizes the normal
+//!       build over the dev build (it's complicated...)
+//!
+//! * resolve_third_party: for each third-party package, resolve what criteria it's audited for
+//!     * compute the [`AuditGraph`] and check for violations
+//!     * for each criteria, search_for_path (check if it has a connected path in the audit graph)
+//!         * if it does, then we have validated that it has that criteria
+//!         * if it doesn't, but only because dependency_criteria, blame those dependencies
+//!         * otherwise, blame ourselves and note the reachable nodes from root and target
+//!
+//! * resolve_first_party: inherit third-party criteria from normal/build deps, check policies
+//!     * first-parties "inherit" the intersection of all their dependencies' validated criteria
+//!         * as with third-parties, this is done per-criteria so we can granularly blame deps
+//!     * if there is a policy.dependency_criteria, then that dep isn't inherited normally
+//!       and is instead effectively no_criteria or all_criteria based on whether it passes or not
+//!     * if there is a policy.criteria (or it's a root), then we check our inherited criteria
+//!       against that policy and then set ourselves to all_criteria or no_criteria
+//!         * **This is the check that matters!** Anything that fails this check is registered
+//!           as a "root (policy) failure" and will be fed into the blame phase.
+//!
+//! * resolve_first_party_dev: same as above, but check dev-deps and dev-policies
+//!     * this must be done as a second pass because dev-deps can introduce cycles. by doing
+//!       all other analysis first, we can guarantee all dev-deps are fully resolved, as you
+//!       cannot actually depend on the "dev" build of a package.
+//!
+//!
+//!
+//! ## Blame
+//!
+//! * take the "root failures" and descend back down the DepGraph as a tree, following
+//!   every package's "blames" until we hit packages that blame themselves. Packages that
+//!   blame themselves are "leaf failures" and are will be the basis for `suggest`
+//!
+//!
+//!
+//! ## Suggest
+//!
+//! * take the blame and do a huge pile of diffstats on the reachable versions
+//!   (from search_for_path) to figure out which audits to recommend for which criteria
+
 use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
 use console::{style, Style};
 use core::fmt;
@@ -229,6 +289,33 @@ pub enum SearchResult<'a> {
         reachable_from_target: SortedSet<&'a Version>,
     },
 }
+
+/// A graph of the audits for a package.
+///
+/// The nodes of the graph are Versions and the edges are audits.
+/// An AuditGraph is directed, potentially cyclic, and potentially disconnected.
+///
+/// There are two important versions in each AuditGraph:
+///
+/// * The "root" version (0.0.0) which exists as a dummy node for full-audits
+/// * The "target" version which is the current version of the package
+///
+/// The edges are constructed as follows:
+///
+/// * Delta Audits desugar directly to edges
+/// * Full Audits and Unaudited desugar to 0.0.0 -> Version
+///
+/// If there are multiple versions of a package in-tree, we analyze each individually
+/// so there is always one root and one target. All we want to know is if there exists
+/// a path between the two where every edge on that path has a given criteria. We do this
+/// check for every possible criteria in a loop to keep the analysis simple and composable.
+///
+/// When resolving the audits for a package, we create a "forward" graph and a "backward" graph.
+/// These are the same graphs but with the edges reversed. The backward graph is only used if
+/// we can't find the desired path in the forward graph, and is used to compute the
+/// reachability set of the target version for that criteria. That reachability is
+/// used for `suggest`.
+pub type AuditGraph<'a> = SortedMap<&'a Version, Vec<DeltaEdge<'a>>>;
 
 /// A directed edge in the graph of audits. This may be forward or backwards,
 /// depending on if we're searching from "roots" (forward) or the target (backward).
@@ -1036,7 +1123,7 @@ pub fn resolve<'a>(
     store: &'a Store,
     guess_deeper: bool,
 ) -> ResolveReport<'a> {
-    let _resolve_span = trace_span!("resolve").entered();
+    let _resolve_span = trace_span!("validate").entered();
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
     let graph = DepGraph::new(
@@ -1261,12 +1348,9 @@ fn resolve_third_party<'a>(
 
     let own_audits = store.audits.audits.get(package.name).unwrap_or(&NO_AUDITS);
 
-    // Deltas are flipped so that we have a map of 'to: [froms]'. This lets
-    // us start at the current version and look up all the deltas that *end* at that
-    // version. By repeating this over and over, we can loslowly walk back in time until
-    // we run out of deltas or reach full audit or an unaudited entry.
-    let mut forward_nodes = SortedMap::<&Version, Vec<DeltaEdge>>::new();
-    let mut backward_nodes = SortedMap::<&Version, Vec<DeltaEdge>>::new();
+    // See AuditGraph's docs for details on the lowering we do here
+    let mut forward_audits = AuditGraph::new();
+    let mut backward_audits = AuditGraph::new();
     let mut violation_nodes = Vec::new();
 
     // Collect up all the deltas, their criteria, and dependency_criteria
@@ -1294,13 +1378,13 @@ fn resolve_third_party<'a>(
             .map(|(pkg_name, criteria)| (&**pkg_name, criteria_mapper.criteria_from_list(criteria)))
             .collect();
 
-        forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
+        forward_audits.entry(from_ver).or_default().push(DeltaEdge {
             version: to_ver,
             criteria: criteria.clone(),
             dependency_criteria: dependency_criteria.clone(),
             is_unaudited_entry: false,
         });
-        backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
+        backward_audits.entry(to_ver).or_default().push(DeltaEdge {
             version: from_ver,
             criteria,
             dependency_criteria,
@@ -1362,13 +1446,13 @@ fn resolve_third_party<'a>(
                 }
             }
 
-            forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
+            forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: to_ver,
                 criteria: local_criteria.clone(),
                 dependency_criteria: Default::default(),
                 is_unaudited_entry: false,
             });
-            backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
+            backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                 version: from_ver,
                 criteria: local_criteria,
                 dependency_criteria: Default::default(),
@@ -1378,8 +1462,6 @@ fn resolve_third_party<'a>(
     }
 
     // Reject forbidden packages (violations)
-    //
-    // FIXME: should the "local" audit have a mechanism to override foreign forbids?
     for (violation_source, violation_entry) in &violation_nodes {
         let violation_range = if let AuditKind::Violation { violation } = &violation_entry.kind {
             violation
@@ -1472,11 +1554,7 @@ fn resolve_third_party<'a>(
     }
 
     let mut directly_unaudited = false;
-    // Identify if this version is directly marked as allowed in 'unaudited'.
-    // This implies that all dependency_criteria checks against it will succeed
-    // as if its validated_criteria was all_criteria.
-    //
-    // Also register all the unaudited entries as "roots" for search.
+    // Unaudited entries are equivalent to full-audits
     if let Some(alloweds) = unaudited {
         for allowed in alloweds {
             if &allowed.version == package.version {
@@ -1494,13 +1572,13 @@ fn resolve_third_party<'a>(
                 .collect();
 
             // For simplicity, turn 'unaudited' entries into deltas from 0.0.0
-            forward_nodes.entry(from_ver).or_default().push(DeltaEdge {
+            forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: to_ver,
                 criteria: criteria.clone(),
                 dependency_criteria: dependency_criteria.clone(),
                 is_unaudited_entry: true,
             });
-            backward_nodes.entry(to_ver).or_default().push(DeltaEdge {
+            backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                 version: from_ver,
                 criteria,
                 dependency_criteria,
@@ -1517,7 +1595,7 @@ fn resolve_third_party<'a>(
             criteria,
             &ROOT_VERSION,
             package.version,
-            &forward_nodes,
+            &forward_audits,
             graph,
             criteria_mapper,
             package,
@@ -1547,7 +1625,7 @@ fn resolve_third_party<'a>(
                     criteria,
                     package.version,
                     &ROOT_VERSION,
-                    &backward_nodes,
+                    &backward_audits,
                     graph,
                     criteria_mapper,
                     package,
@@ -1585,7 +1663,7 @@ fn search_for_path<'a>(
     cur_criteria: &CriteriaSet,
     from_version: &'a Version,
     to_version: &'a Version,
-    version_nodes: &SortedMap<&'a Version, Vec<DeltaEdge<'a>>>,
+    audit_graph: &AuditGraph<'a>,
     dep_graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     package: &PackageNode<'a>,
@@ -1662,7 +1740,7 @@ fn search_for_path<'a>(
             }
 
             // Apply deltas to move along to the next "layer" of the search
-            if let Some(edges) = version_nodes.get(cur_version) {
+            if let Some(edges) = audit_graph.get(cur_version) {
                 for edge in edges {
                     if !edge.criteria.contains(cur_criteria) {
                         // This edge never would have been useful to us
