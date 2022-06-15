@@ -195,6 +195,7 @@ fn real_main() -> Result<(), VetError> {
     let mut stdout;
     let mut output_f;
     let out: &mut dyn Write = if let Some(output_path) = &cli.output_file {
+        console::set_colors_enabled(false);
         output_f = File::create(output_path).unwrap();
         &mut output_f
     } else {
