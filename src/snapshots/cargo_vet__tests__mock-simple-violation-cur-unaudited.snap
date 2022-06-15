@@ -4,7 +4,9 @@ expression: output
 ---
 Violations Found!
   third-party1:10.0.0
-    this version is forbidden by own violation against =10
+    the unaudited 10.0.0
+      criteria: ["reviewed"]
+    conflicts with own violation against =10
       criteria: ["weak-reviewed"]
 
 

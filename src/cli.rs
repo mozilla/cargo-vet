@@ -251,7 +251,7 @@ pub struct RecordViolationArgs {
     /// The versions to forbid
     #[clap(action)]
     pub versions: VersionReq,
-    /// (???) The criteria to be forbidden (???)
+    /// The criteria that have failed to be satisfied.
     ///
     /// If not provided, we will prompt you for this information(?)
     #[clap(long, action)]

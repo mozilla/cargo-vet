@@ -3,9 +3,9 @@ source: src/tests.rs
 expression: output
 ---
 Violations Found!
-  third-party1:10.0.0
+  dev:10.0.0
     the own audit 10.0.0
-      criteria: ["safe-to-deploy"]
+      criteria: ["safe-to-run"]
     conflicts with own violation against *
       criteria: ["safe-to-run"]
 
