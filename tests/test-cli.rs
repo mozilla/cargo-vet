@@ -200,7 +200,7 @@ fn test_project_suggest_json() {
 }
 
 #[test]
-fn test_project_suggest_deeper() {
+fn test_project_suggest_shallow() {
     let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("test-project");
@@ -212,19 +212,19 @@ fn test_project_suggest_deeper() {
         .arg("../diff-cache.toml")
         .arg("--manifest-path")
         .arg("Cargo.toml")
+        .arg("--shallow")
         .arg("suggest")
-        .arg("--guess-deeper")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
         .unwrap();
 
-    insta::assert_snapshot!("test-project-suggest-deeper", format_outputs(&output));
+    insta::assert_snapshot!("test-project-suggest-shallow", format_outputs(&output));
     assert!(output.status.success(), "{}", output.status);
 }
 
 #[test]
-fn test_project_suggest_deeper_json() {
+fn test_project_suggest_shallow_json() {
     let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("test-project");
@@ -237,14 +237,14 @@ fn test_project_suggest_deeper_json() {
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--output-format=json")
+        .arg("--shallow")
         .arg("suggest")
-        .arg("--guess-deeper")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
         .unwrap();
 
-    insta::assert_snapshot!("test-project-suggest-deeper-json", format_outputs(&output));
+    insta::assert_snapshot!("test-project-suggest-shallow-json", format_outputs(&output));
     assert!(output.status.success(), "{}", output.status);
 }
 

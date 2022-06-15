@@ -1118,11 +1118,17 @@ impl<'a> DepGraph<'a> {
 pub static ROOT_VERSION: Version = Version::new(0, 0, 0);
 static NO_AUDITS: Vec<AuditEntry> = Vec::new();
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ResolveDepth {
+    Deep,
+    Shallow,
+}
+
 pub fn resolve<'a>(
     metadata: &'a Metadata,
     filter_graph: Option<&Vec<GraphFilter>>,
     store: &'a Store,
-    guess_deeper: bool,
+    resolve_depth: ResolveDepth,
 ) -> ResolveReport<'a> {
     let _resolve_span = trace_span!("validate").entered();
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
@@ -1243,7 +1249,7 @@ pub fn resolve<'a>(
         &criteria_mapper,
         &results,
         &root_failures,
-        guess_deeper,
+        resolve_depth,
         |failure, depth, own_failure| {
             if let Some(criteria_failures) = own_failure {
                 trace!(
@@ -2117,7 +2123,7 @@ fn visit_failures<'a, T>(
     criteria_mapper: &CriteriaMapper,
     results: &[ResolveResult<'a>],
     root_failures: &RootFailures,
-    guess_deeper: bool,
+    resolve_depth: ResolveDepth,
     mut callback: impl FnMut(PackageIdx, usize, Option<&CriteriaFailureSet>) -> Result<(), T>,
 ) -> Result<(), T> {
     trace!(" traversing blame tree");
@@ -2247,7 +2253,7 @@ fn visit_failures<'a, T>(
                         // Oh dang ok we *are* to blame, our bad
                         own_fault.set_criteria(criteria_idx, confident);
 
-                        if guess_deeper {
+                        if resolve_depth != ResolveDepth::Shallow {
                             // Try to Guess Deeper by blaming our children for all |self| failures
                             // by assuming we would need them to conform to our own criteria too.
                             for &dep_idx in &package.all_deps {

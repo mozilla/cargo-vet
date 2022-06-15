@@ -48,6 +48,15 @@ pub struct Cli {
     #[clap(possible_values = ["off", "error", "warn", "info", "debug", "trace"])]
     pub verbose: LevelFilter,
 
+    /// Avoid suggesting audits for dependencies of unaudited dependencies.
+    ///
+    /// By default, if a dependency doesn't have sufficient audits for *itself*
+    /// then we try to speculate that its dependencies require the criteria.
+    /// This flag disables that behaviour, causing only suggestions which we're
+    /// certain of the requirements for to be emitted.
+    #[clap(long, action)]
+    pub shallow: bool,
+
     /// Instead of stdout, write output to this file
     #[clap(long, action)]
     pub output_file: Option<PathBuf>,
@@ -298,16 +307,7 @@ pub struct AddUnauditedArgs {
 }
 
 #[derive(clap::Args)]
-pub struct SuggestArgs {
-    /// Try to suggest even deeper down the dependency tree (approximate guessing).
-    ///
-    /// By default, if a dependency doesn't have sufficient audits for *itself* then we won't
-    /// try to speculate on anything about its dependencies, because we lack sufficient
-    /// information to say for certain what is required of those dependencies. This overrides
-    /// that by making us assume the dependencies all need the same criteria as the parent.
-    #[clap(long, action)]
-    pub guess_deeper: bool,
-}
+pub struct SuggestArgs {}
 
 #[derive(clap::Args)]
 pub struct FmtArgs {}
@@ -426,6 +426,7 @@ impl Cli {
             locked: false,
             frozen: false,
             verbose: LevelFilter::OFF,
+            shallow: false,
             output_file: None,
             output_format: OutputFormat::Human,
             log_file: None,
