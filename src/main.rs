@@ -3,7 +3,6 @@ use std::mem;
 use std::ops::Deref;
 use std::panic::panic_any;
 use std::path::Path;
-use std::sync::Arc;
 use std::time::Duration;
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
@@ -471,7 +470,7 @@ fn cmd_inspect(
     let package = &*sub_args.package;
 
     let fetched = tokio::runtime::Handle::current().block_on(cache.fetch_package(
-        &network,
+        network.as_ref(),
         package,
         &sub_args.version,
     ))?;
@@ -816,7 +815,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
             criteria_names.iter().map(|criteria| async {
                 (
                     *criteria,
-                    eula_for_criteria(&network, &store.audits.criteria, criteria).await,
+                    eula_for_criteria(network.as_ref(), &store.audits.criteria, criteria).await,
                 )
             }),
         ));
@@ -1068,7 +1067,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
             ResolveDepth::Deep
         },
     );
-    let suggest = report.compute_suggest(cfg, network, true)?;
+    let suggest = report.compute_suggest(cfg, network.as_ref(), true)?;
     match cfg.cli.output_format {
         OutputFormat::Human => report.print_suggest_human(out, cfg, suggest.as_ref())?,
         OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
@@ -1089,7 +1088,7 @@ fn cmd_regenerate_unaudited(
     let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
-    minimize_unaudited(cfg, &mut store, network)?;
+    minimize_unaudited(cfg, &mut store, network.as_ref())?;
 
     // We were successful, commit the store
     store.commit()?;
@@ -1100,7 +1099,7 @@ fn cmd_regenerate_unaudited(
 pub fn minimize_unaudited(
     cfg: &Config,
     store: &mut Store,
-    network: Option<Arc<Network>>,
+    network: Option<&Network>,
 ) -> Result<(), VetError> {
     // Set the unaudited entries to nothing
     let old_unaudited = mem::take(&mut store.config.unaudited);
@@ -1222,8 +1221,8 @@ fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Re
 
     let (fetched1, fetched2) = tokio::runtime::Handle::current().block_on(async {
         tokio::try_join!(
-            cache.fetch_package(&network, package, &sub_args.version1),
-            cache.fetch_package(&network, package, &sub_args.version2)
+            cache.fetch_package(network.as_ref(), package, &sub_args.version1),
+            cache.fetch_package(network.as_ref(), package, &sub_args.version2)
         )
     })?;
 
@@ -1243,8 +1242,8 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
     if !cfg.cli.locked {
         // Try to update the foreign audits (imports)
-        if let Some(network) = network.clone() {
-            store.fetch_foreign_audits(network)?;
+        if let Some(network) = &network {
+            tokio::runtime::Handle::current().block_on(store.fetch_foreign_audits(network))?;
         }
 
         // Check if any of our first-parties are on crates.io and not explicitly noted as such
@@ -1296,7 +1295,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             ResolveDepth::Deep
         },
     );
-    let suggest = report.compute_suggest(cfg, network, true)?;
+    let suggest = report.compute_suggest(cfg, network.as_ref(), true)?;
     match cfg.cli.output_format {
         OutputFormat::Human => report.print_human(out, cfg, suggest.as_ref())?,
         OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
@@ -1324,9 +1323,9 @@ fn cmd_fetch_imports(
     let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
-    if let Some(network) = network {
+    if let Some(network) = &network {
         if !cfg.cli.locked {
-            store.fetch_foreign_audits(network)?;
+            tokio::runtime::Handle::current().block_on(store.fetch_foreign_audits(network))?;
             store.commit()?;
             return Ok(());
         }
@@ -1656,7 +1655,7 @@ fn get_user_info() -> Result<UserInfo, VetError> {
 }
 
 async fn eula_for_criteria(
-    network: &Option<Arc<Network>>,
+    network: Option<&Network>,
     criteria_map: &SortedMap<CriteriaName, CriteriaEntry>,
     criteria: CriteriaStr<'_>,
 ) -> String {
