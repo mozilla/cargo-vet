@@ -65,7 +65,6 @@ use futures_util::future::join_all;
 use serde::Serialize;
 use serde_json::json;
 use std::io::Write;
-use std::sync::Arc;
 use tracing::{error, trace, trace_span, warn};
 
 use crate::format::{
@@ -2311,7 +2310,7 @@ impl<'a> ResolveReport<'a> {
     pub fn compute_suggest(
         &self,
         cfg: &Config,
-        network: Option<Arc<Network>>,
+        network: Option<&Network>,
         allow_deltas: bool,
     ) -> Result<Option<Suggest>, VetError> {
         let _suggest_span = trace_span!("suggest").entered();
@@ -2432,7 +2431,7 @@ impl<'a> ResolveReport<'a> {
 
                     let diffstats = join_all(candidates.iter().map(|delta| async {
                         match cache
-                            .fetch_and_diffstat_package(&network, package.name, delta)
+                            .fetch_and_diffstat_package(network, package.name, delta)
                             .await
                         {
                             Ok(diffstat) => Some(DiffRecommendation {

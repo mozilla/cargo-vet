@@ -10,7 +10,6 @@
 use std::{
     ffi::{OsStr, OsString},
     path::Path,
-    sync::Arc,
     time::Duration,
 };
 
@@ -36,7 +35,7 @@ impl Network {
     ///
     /// There should only ever be one Network instance instantiated. Do it early
     /// and then pass it around by-ref.
-    pub fn acquire(cfg: &PartialConfig) -> Option<Arc<Self>> {
+    pub fn acquire(cfg: &PartialConfig) -> Option<Self> {
         if cfg.cli.frozen {
             None
         } else {
@@ -47,10 +46,10 @@ impl Network {
                 .timeout(timeout)
                 .build()
                 .expect("Couldn't construct HTTP Client?");
-            Some(Arc::new(Self {
+            Some(Self {
                 client,
                 connection_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS),
-            }))
+            })
         }
     }
 

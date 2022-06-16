@@ -12,6 +12,7 @@ use cargo_metadata::Version;
 use crates_index::Index;
 use eyre::{eyre, Context};
 use flate2::read::GzDecoder;
+use futures_util::future::try_join_all;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
@@ -223,23 +224,17 @@ impl Store {
     }
 
     /// Fetch foreign audits, only call this is we're not --locked
-    pub fn fetch_foreign_audits(&mut self, network: Arc<Network>) -> Result<(), VetError> {
-        let mut audits = SortedMap::new();
-        let mut to_fetch = SortedMap::new();
-        let runtime = tokio::runtime::Handle::current();
+    pub async fn fetch_foreign_audits(&mut self, network: &Network) -> Result<(), VetError> {
+        let new_imports = ImportsFile {
+            audits: try_join_all(self.config.imports.iter().map(|(name, import)| async {
+                let audit_file = fetch_foreign_audit(network, name, &import.url).await?;
+                Ok::<_, VetError>((name.clone(), audit_file))
+            }))
+            .await?
+            .into_iter()
+            .collect(),
+        };
 
-        for (name, import) in &self.config.imports {
-            let url = Url::parse(&import.url).unwrap();
-            let handle = runtime.spawn(fetch_foreign_audit(network.clone(), name.clone(), url));
-            to_fetch.insert(name, handle);
-        }
-        for (name, handle) in to_fetch {
-            let audit_file: Result<AuditsFile, VetError> = runtime.block_on(handle)?;
-            let audit_file: AuditsFile = audit_file?;
-            audits.insert(name.to_string(), audit_file);
-        }
-
-        let new_imports = ImportsFile { audits };
         // TODO(#68): error out if the criteria changed
 
         // Accept the new imports. These will only be committed if the current command succeeds.
@@ -252,12 +247,14 @@ impl Store {
 }
 
 async fn fetch_foreign_audit(
-    network: Arc<Network>,
-    name: String,
-    url: Url,
+    network: &Network,
+    name: &str,
+    url: &str,
 ) -> Result<AuditsFile, VetError> {
+    let parsed_url =
+        Url::parse(url).wrap_err_with(|| format!("Invalid url for audit {name} @ {url}"))?;
     let audit_bytes = network
-        .download(url.clone())
+        .download(parsed_url)
         .await
         .wrap_err_with(|| format!("Could not import audit {name} @ {url}"))?;
     let audit_file: AuditsFile = toml_edit::de::from_slice(&audit_bytes)
@@ -352,10 +349,10 @@ impl Drop for Cache {
 
 impl Cache {
     /// Acquire the cache
-    pub fn acquire(cfg: &PartialConfig) -> Result<Arc<Self>, VetError> {
+    pub fn acquire(cfg: &PartialConfig) -> Result<Self, VetError> {
         if cfg.mock_cache {
             // We're in unit tests, everything should be mocked and not touch real caches
-            return Ok(Arc::new(Cache {
+            return Ok(Cache {
                 _lock: None,
                 root: None,
                 cargo_registry: None,
@@ -367,7 +364,7 @@ impl Cache {
                     fetched_packages: FastMap::new(),
                     diffed: FastMap::new(),
                 }),
-            }));
+            });
         }
 
         // Make sure the cache directory exists, and acquire an exclusive lock on it.
@@ -424,7 +421,7 @@ impl Cache {
             warn!("Couldn't find cargo registry: {e}");
         }
 
-        Ok(Arc::new(Self {
+        Ok(Self {
             _lock: Some(lock),
             root: Some(root),
             diff_cache_path: Some(diff_cache_path),
@@ -436,7 +433,7 @@ impl Cache {
                 fetched_packages: FastMap::new(),
                 diffed: FastMap::new(),
             }),
-        }))
+        })
     }
 
     /// Gets any information the crates.io index has on this package, locally
@@ -453,7 +450,7 @@ impl Cache {
     #[tracing::instrument(skip(self, network))]
     pub async fn fetch_package(
         &self,
-        network: &Option<Arc<Network>>,
+        network: Option<&Network>,
         package: PackageStr<'_>,
         version: &Version,
     ) -> Result<PathBuf, VetError> {
@@ -519,7 +516,7 @@ impl Cache {
                 let file = match cached_file {
                     Ok(file) => file,
                     Err(_) => {
-                        let network = network.as_ref().ok_or_else(|| {
+                        let network = network.ok_or_else(|| {
                             eyre!("running as --frozen but needed to fetch {package}:{version}")
                         })?;
 
@@ -571,7 +568,7 @@ impl Cache {
     #[tracing::instrument(skip(self, network))]
     pub async fn fetch_and_diffstat_package(
         &self,
-        network: &Option<Arc<Network>>,
+        network: Option<&Network>,
         package: PackageStr<'_>,
         delta: &Delta,
     ) -> Result<DiffStat, VetError> {
