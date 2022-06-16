@@ -1,15 +1,16 @@
 use std::{
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     fs::{self, File, OpenOptions},
     io::{self, BufReader, Read, Seek, Write},
     mem,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::{Duration, SystemTime},
 };
 
 use cargo_metadata::Version;
 use crates_index::Index;
-use eyre::Context;
+use eyre::{eyre, Context};
 use flate2::read::GzDecoder;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -29,24 +30,35 @@ use crate::{
 };
 
 // tmp cache for various shenanigans
-static CACHE_DIFF_CACHE: &str = "diff-cache.toml";
-static CACHE_COMMAND_HISTORY: &str = "command-history.json";
-static CACHE_EMPTY_PACKAGE: &str = "empty";
-static CACHE_REGISTRY_SRC: &str = "src";
-static CACHE_REGISTRY_CACHE: &str = "cache";
-static CACHE_VET_LOCK: &str = ".vet-lock";
+const CACHE_DIFF_CACHE: &str = "diff-cache.toml";
+const CACHE_COMMAND_HISTORY: &str = "command-history.json";
+const CACHE_EMPTY_PACKAGE: &str = "empty";
+const CACHE_REGISTRY_SRC: &str = "src";
+const CACHE_REGISTRY_CACHE: &str = "cache";
+const CACHE_VET_LOCK: &str = ".vet-lock";
+
+// Files which are allowed to appear in the root of the cache directory, and
+// will not be GC'd
+const CACHE_ALLOWED_FILES: &[&str] = &[
+    CACHE_DIFF_CACHE,
+    CACHE_COMMAND_HISTORY,
+    CACHE_EMPTY_PACKAGE,
+    CACHE_REGISTRY_SRC,
+    CACHE_REGISTRY_CACHE,
+    CACHE_VET_LOCK,
+];
 
 // Various cargo values
-static CARGO_REGISTRY_SRC: &str = "src";
-static CARGO_REGISTRY_CACHE: &str = "cache";
-static CARGO_OK_FILE: &str = ".cargo-ok";
-static CARGO_OK_BODY: &str = "ok";
+const CARGO_REGISTRY_SRC: &str = "src";
+const CARGO_REGISTRY_CACHE: &str = "cache";
+const CARGO_OK_FILE: &str = ".cargo-ok";
+const CARGO_OK_BODY: &str = "ok";
 
-pub static DEFAULT_STORE: &str = "supply-chain";
+pub const DEFAULT_STORE: &str = "supply-chain";
 
-static AUDITS_TOML: &str = "audits.toml";
-static CONFIG_TOML: &str = "config.toml";
-static IMPORTS_LOCK: &str = "imports.lock";
+const AUDITS_TOML: &str = "audits.toml";
+const CONFIG_TOML: &str = "config.toml";
+const IMPORTS_LOCK: &str = "imports.lock";
 
 struct StoreLock {
     config: FileLock,
@@ -631,6 +643,123 @@ impl Cache {
         Ok(diffstat.clone())
     }
 
+    /// Run a garbage-collection pass over the cache, removing any files which
+    /// aren't supposed to be there, or which haven't been touched for an
+    /// extended period of time.
+    pub async fn gc(&self, max_package_age: Duration) {
+        if self.root.is_none() {
+            return;
+        }
+
+        let (root_rv, empty_rv, packages_rv) = tokio::join!(
+            self.gc_root(),
+            self.gc_empty(),
+            self.gc_packages(max_package_age)
+        );
+        if let Err(err) = root_rv {
+            error!("gc: performing gc on the cache root failed: {err}");
+        }
+        if let Err(err) = empty_rv {
+            error!("gc: performing gc on the empty package failed: {err}");
+        }
+        if let Err(err) = packages_rv {
+            error!("gc: performing gc on the package cache failed: {err}");
+        }
+    }
+
+    /// Sync version of `gc`
+    pub fn gc_sync(&self, max_package_age: Duration) {
+        tokio::runtime::Handle::current().block_on(self.gc(max_package_age));
+    }
+
+    /// Remove any unrecognized files from the root of the cargo-vet cache
+    /// directory.
+    async fn gc_root(&self) -> Result<(), VetError> {
+        let root = self.root.as_ref().unwrap();
+        let mut root_entries = tokio::fs::read_dir(root).await?;
+        while let Some(entry) = root_entries.next_entry().await? {
+            if !entry
+                .file_name()
+                .to_str()
+                .map_or(false, |name| CACHE_ALLOWED_FILES.contains(&name))
+            {
+                remove_dir_entry(&entry).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Remove all files located in the `cargo-vet/empty` directory, as it
+    /// should be empty.
+    async fn gc_empty(&self) -> Result<(), VetError> {
+        let empty = self.root.as_ref().unwrap().join(CACHE_EMPTY_PACKAGE);
+        let mut empty_entries = tokio::fs::read_dir(&empty).await?;
+        while let Some(entry) = empty_entries.next_entry().await? {
+            remove_dir_entry(&entry).await?;
+        }
+        Ok(())
+    }
+
+    /// Remove any non '.crate' files from the registry cache, '.crate' files
+    /// which are older than `max_package_age`, and any source directories from
+    /// the registry src which no longer have a corresponding .crate.
+    async fn gc_packages(&self, max_package_age: Duration) -> Result<(), VetError> {
+        let cache = self.root.as_ref().unwrap().join(CACHE_REGISTRY_CACHE);
+        let src = self.root.as_ref().unwrap().join(CACHE_REGISTRY_SRC);
+
+        let mut kept_packages = Vec::new();
+
+        let mut cache_entries = tokio::fs::read_dir(&cache).await?;
+        while let Some(entry) = cache_entries.next_entry().await? {
+            if let Some(to_keep) = should_keep_package(&entry, max_package_age).await {
+                kept_packages.push(to_keep);
+            } else {
+                remove_dir_entry(&entry).await?;
+            }
+        }
+
+        let mut src_entries = tokio::fs::read_dir(&src).await?;
+        while let Some(entry) = src_entries.next_entry().await? {
+            if !kept_packages.contains(&entry.file_name()) || !fetch_is_ok(&entry.path()).await {
+                remove_dir_entry(&entry).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Delete every file in the cache directory other than the cache lock, and
+    /// clear out the command history and diff cache files.
+    ///
+    /// NOTE: The diff_cache and command_history files will be re-created when
+    /// the cache is unlocked, however they will be empty.
+    pub async fn clean(&self) -> Result<(), VetError> {
+        let root = self
+            .root
+            .as_ref()
+            .ok_or_else(|| eyre!("cannot clean a mocked cache"))?;
+
+        // Make sure we don't write back the command history and diff cache when
+        // dropping.
+        {
+            let mut guard = self.state.lock().unwrap();
+            guard.command_history = Default::default();
+            guard.diff_cache = Default::default();
+        }
+
+        let mut root_entries = tokio::fs::read_dir(&root).await?;
+        while let Some(entry) = root_entries.next_entry().await? {
+            if entry.file_name() != Path::new(CACHE_VET_LOCK) {
+                remove_dir_entry(&entry).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Sync version of `clean`
+    pub fn clean_sync(&self) -> Result<(), VetError> {
+        tokio::runtime::Handle::current().block_on(self.clean())
+    }
+
     pub fn get_command_history(&self) -> CommandHistory {
         let guard = self.state.lock().unwrap();
         guard.command_history.clone()
@@ -704,6 +833,47 @@ async fn fetch_is_ok(fetch: &Path) -> bool {
     match tokio::fs::read_to_string(fetch.join(CARGO_OK_FILE)).await {
         Ok(ok) => ok == CARGO_OK_BODY,
         Err(_) => false,
+    }
+}
+
+/// Based on the type of file for an entry, either recursively remove the
+/// directory, or remove the file. This is intended to be roughly equivalent to
+/// `rm -r`.
+async fn remove_dir_entry(entry: &tokio::fs::DirEntry) -> Result<(), VetError> {
+    info!("gc: removing {}", entry.path().display());
+    let file_type = entry.file_type().await?;
+    if file_type.is_dir() {
+        tokio::fs::remove_dir_all(entry.path()).await?;
+    } else {
+        tokio::fs::remove_file(entry.path()).await?;
+    }
+    Ok(())
+}
+
+/// Given a directory entry for a file, returns how old it is. If there is an
+/// issue (e.g. mtime >= now), will return `None` instead.
+async fn get_file_age(entry: &tokio::fs::DirEntry) -> Option<Duration> {
+    let now = SystemTime::now();
+    let meta = entry.metadata().await.ok()?;
+    now.duration_since(meta.modified().ok()?).ok()
+}
+
+/// Returns tne name of the crate if it should be preserved, or `None` if it shouldn't.
+async fn should_keep_package(
+    entry: &tokio::fs::DirEntry,
+    max_package_age: Duration,
+) -> Option<OsString> {
+    // Get the stem and extension from the directory entry's path, and
+    // immediately remove it if something goes wrong.
+    let path = entry.path();
+    let stem = path.file_stem()?;
+    if path.extension()? != OsStr::new("crate") {
+        return None;
+    }
+
+    match get_file_age(entry).await {
+        Some(age) if age > max_package_age => None,
+        _ => Some(stem.to_owned()),
     }
 }
 

@@ -4,6 +4,7 @@ use std::ops::Deref;
 use std::panic::panic_any;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package};
@@ -86,12 +87,14 @@ impl PackageExt for Package {
     }
 }
 
-static CACHE_DIR_SUFFIX: &str = "cargo-vet";
-static CARGO_ENV: &str = "CARGO";
+const CACHE_DIR_SUFFIX: &str = "cargo-vet";
+const CARGO_ENV: &str = "CARGO";
 // package.metadata.vet
-static PACKAGE_VET_CONFIG: &str = "vet";
+const PACKAGE_VET_CONFIG: &str = "vet";
 // workspace.metadata.vet
-static WORKSPACE_VET_CONFIG: &str = "vet";
+const WORKSPACE_VET_CONFIG: &str = "vet";
+
+const DURATION_DAY: Duration = Duration::from_secs(60 * 60 * 24);
 
 /// Trick to let us std::process::exit while still cleaning up
 /// by panicking with this type instead of a string.
@@ -221,6 +224,7 @@ fn real_main() -> Result<(), VetError> {
         Some(Inspect(sub_args)) => return cmd_inspect(out, &partial_cfg, sub_args),
         Some(Diff(sub_args)) => return cmd_diff(out, &partial_cfg, sub_args),
         Some(HelpMarkdown(sub_args)) => return cmd_help_md(out, &partial_cfg, sub_args),
+        Some(Gc(sub_args)) => return cmd_gc(out, &partial_cfg, sub_args),
         _ => {
             // Not a freestanding command, time to do full parsing and setup
         }
@@ -1481,6 +1485,30 @@ fn cmd_help_md(
         is_full_command = false;
     }
 
+    Ok(())
+}
+
+fn cmd_gc(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &GcArgs) -> Result<(), VetError> {
+    let cache = Cache::acquire(cfg)?;
+
+    if sub_args.clean {
+        writeln!(
+            out,
+            "cleaning entire contents of cache directory: {}",
+            cfg.cache_dir.display()
+        )?;
+        cache.clean_sync()?;
+        return Ok(());
+    }
+
+    if sub_args.max_package_age_days.is_nan() {
+        return Err(eyre!("max package age cannot be NaN"));
+    }
+    if sub_args.max_package_age_days < 0.0 {
+        return Err(eyre!("max package age cannot be negative"));
+    }
+
+    cache.gc_sync(DURATION_DAY.mul_f64(sub_args.max_package_age_days));
     Ok(())
 }
 

@@ -184,6 +184,15 @@ pub enum Commands {
     #[clap(disable_version_flag = true)]
     #[clap(hide = true)]
     HelpMarkdown(HelpMarkdownArgs),
+
+    /// Clean up old packages from the vet cache
+    ///
+    /// Removes  packages which haven't been accessed in a while, and deletes
+    /// any extra files which aren't recognized by cargo-vet.
+    ///
+    /// In the future, many cargo-vet subcommands will implicitly do this.
+    #[clap(disable_version_flag = true)]
+    Gc(GcArgs),
 }
 
 #[derive(clap::Args)]
@@ -323,6 +332,20 @@ pub struct AcceptCriteriaChangeArgs {}
 
 #[derive(clap::Args)]
 pub struct HelpMarkdownArgs {}
+
+#[derive(clap::Args)]
+pub struct GcArgs {
+    /// Packages in the vet cache which haven't been used for this many days
+    /// will be removed.
+    #[clap(long, action)]
+    #[clap(default_value_t = 30.0)]
+    pub max_package_age_days: f64,
+
+    /// Remove the entire cache directory, forcing it to be regenerated next
+    /// time you use cargo vet.
+    #[clap(long, action)]
+    pub clean: bool,
+}
 
 /// Cargo feature flags, copied from clap_cargo to change defaults.
 #[derive(Default, Clone, Debug, PartialEq, Eq, clap::Args)]
