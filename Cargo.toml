@@ -24,7 +24,9 @@ console = "0.15.0"
 crates-index = { version = "0.18.8", default-features = false }
 dirs = "4.0.0"
 eyre = "0.6.8"
+filetime = "0.2.16"
 flate2 = { version = "1.0.3", default-features = false, features = ["zlib"] }
+futures-util = { version = "0.3.21", default-features = false, features = ["std"] }
 home = "0.5.3"
 libc = "0.2"
 nom = "7.1.1"
@@ -35,7 +37,7 @@ tar = { version = "0.4.26", default-features = false }
 tempfile = "3.3.0"
 textwrap = { version = "0.15", default-features = false }
 toml_edit = { version = "0.14.4", features = ["serde"] }
-tokio = { version = "1.12.0", features = ["rt-multi-thread"] }
+tokio = { version = "1.12.0", features = ["fs", "macros", "process", "rt-multi-thread"] }
 tracing = { version = "0.1.34", features = ["log"] }
 tracing-subscriber = "0.3.11"
 
@@ -50,3 +52,4 @@ features = [
 
 [dev-dependencies]
 insta = "1.13.0"
+lazy_static = "1.4.0"

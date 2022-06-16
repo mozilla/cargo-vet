@@ -3,7 +3,6 @@ use std::mem;
 use std::ops::Deref;
 use std::panic::panic_any;
 use std::path::Path;
-use std::process::Command;
 use std::sync::Arc;
 use std::{fs::File, io::Write, panic, path::PathBuf};
 
@@ -11,7 +10,8 @@ use cargo_metadata::{Metadata, Package};
 use clap::{CommandFactory, Parser};
 use console::{style, Term};
 use eyre::{eyre, WrapErr};
-use format::{CriteriaName, PackageName};
+use format::{CriteriaName, CriteriaStr, PackageName};
+use futures_util::future::join_all;
 use network::Network;
 use reqwest::Url;
 use serde::de::Deserialize;
@@ -456,19 +456,21 @@ fn cmd_inspect(
     sub_args: &InspectArgs,
 ) -> Result<(), VetError> {
     // Download a crate's source to a temp location for review
-    let mut cache = Cache::acquire(cfg)?;
+    let cache = Cache::acquire(cfg)?;
     let network = Network::acquire(cfg);
     // Record this command for magic in `vet certify`
-    cache.command_history.last_fetch = Some(FetchCommand::Inspect {
+    cache.set_last_fetch(FetchCommand::Inspect {
         package: sub_args.package.clone(),
         version: sub_args.version.clone(),
     });
 
     let package = &*sub_args.package;
 
-    let to_fetch = &[(package, &sub_args.version)];
-    let fetched_paths = cache.fetch_packages(network, to_fetch)?;
-    let fetched = &fetched_paths[package][&sub_args.version];
+    let fetched = tokio::runtime::Handle::current().block_on(cache.fetch_package(
+        &network,
+        package,
+        &sub_args.version,
+    ))?;
 
     #[cfg(target_family = "unix")]
     {
@@ -493,7 +495,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
     // Grab the command history and immediately drop the cache
-    let command_history = Cache::acquire(cfg)?.command_history.clone();
+    let command_history = Cache::acquire(cfg)?.get_command_history();
 
     let term = Term::stdout();
 
@@ -803,23 +805,18 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         username, what_version, package,
     );
 
-    // Get all the EULAs at once
-
-    let runtime = tokio::runtime::Handle::current();
-    let mut eulas = SortedMap::new();
-    if !sub_args.accept_all {
-        for criteria in &criteria_names {
-            let handle = runtime.spawn(eula_for_criteria(
-                network.clone(),
-                store.audits.criteria.clone(),
-                criteria.to_string(),
-            ));
-            eulas.insert(*criteria, handle);
-        }
-    }
-
     let mut notes = sub_args.notes.clone();
     if !sub_args.accept_all {
+        // Get all the EULAs at once
+        let eulas = tokio::runtime::Handle::current().block_on(join_all(
+            criteria_names.iter().map(|criteria| async {
+                (
+                    *criteria,
+                    eula_for_criteria(&network, &store.audits.criteria, criteria).await,
+                )
+            }),
+        ));
+
         let mut editor = Editor::new("VET_CERTIFY")?;
         if let Some(notes) = &notes {
             editor.select_comment_char(notes);
@@ -830,11 +827,10 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         )?;
         editor.add_text("")?;
 
-        for criteria in &criteria_names {
-            let eula = runtime.block_on(eulas.remove(*criteria).unwrap())?;
+        for (criteria, eula) in &eulas {
             editor.add_comments(&format!("=== BEGIN CRITERIA {:?} ===", criteria))?;
             editor.add_comments("")?;
-            editor.add_comments(&eula)?;
+            editor.add_comments(eula)?;
             editor.add_comments("")?;
             editor.add_comments("=== END CRITERIA ===")?;
             editor.add_comments("")?;
@@ -1203,10 +1199,10 @@ pub fn minimize_unaudited(
 }
 
 fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Result<(), VetError> {
-    let mut cache = Cache::acquire(cfg)?;
+    let cache = Cache::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
-    cache.command_history.last_fetch = Some(FetchCommand::Diff {
+    cache.set_last_fetch(FetchCommand::Diff {
         package: sub_args.package.clone(),
         version1: sub_args.version1.clone(),
         version2: sub_args.version2.clone(),
@@ -1220,14 +1216,16 @@ fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Re
         sub_args.package, sub_args.version1, sub_args.version2,
     )?;
 
-    let to_fetch = &[(package, &sub_args.version1), (package, &sub_args.version2)];
-    let fetched_paths = cache.fetch_packages(network, to_fetch)?;
-    let fetched1 = &fetched_paths[package][&sub_args.version1];
-    let fetched2 = &fetched_paths[package][&sub_args.version2];
+    let (fetched1, fetched2) = tokio::runtime::Handle::current().block_on(async {
+        tokio::try_join!(
+            cache.fetch_package(&network, package, &sub_args.version1),
+            cache.fetch_package(&network, package, &sub_args.version2)
+        )
+    })?;
 
     writeln!(out)?;
 
-    diff_crate(out, cfg, fetched1, fetched2)?;
+    diff_crate(out, cfg, &fetched1, &fetched2)?;
 
     Ok(())
 }
@@ -1500,7 +1498,7 @@ fn diff_crate(
     // FIXME: mask out .cargo_vcs_info.json
     // FIXME: look into libgit2 vs just calling git
 
-    let status = Command::new("git")
+    let status = std::process::Command::new("git")
         .arg("diff")
         .arg("--no-index")
         .arg(version1)
@@ -1518,23 +1516,24 @@ fn diff_crate(
     Ok(())
 }
 
-fn diffstat_crate(version1: &Path, version2: &Path) -> Result<DiffStat, VetError> {
+#[tracing::instrument]
+async fn diffstat_crate(version1: &Path, version2: &Path) -> Result<DiffStat, VetError> {
     // ERRORS: all of this is properly fallible internal workings, we can fail
     // to diffstat some packages and still produce some useful output
     trace!("diffstating {version1:#?} {version2:#?}");
     // FIXME: mask out .cargo_vcs_info.json
     // FIXME: look into libgit2 vs just calling git
 
-    let out = Command::new("git")
+    let out = tokio::process::Command::new("git")
         .arg("diff")
         .arg("--no-index")
         .arg("--shortstat")
         .arg(version1)
         .arg(version2)
-        .output()?;
+        .output()
+        .await?;
 
-    // TODO: don't unwrap this
-    let status = out.status.code().unwrap();
+    let status = out.status.code().unwrap_or(-1);
     // 0 = empty
     // 1 = some diff
     if status != 0 && status != 1 {
@@ -1588,7 +1587,7 @@ struct UserInfo {
 fn get_user_info() -> Result<UserInfo, VetError> {
     // ERRORS: this is all properly fallible internal workings
     let username = {
-        let out = Command::new("git")
+        let out = std::process::Command::new("git")
             .arg("config")
             .arg("--get")
             .arg("user.name")
@@ -1605,7 +1604,7 @@ fn get_user_info() -> Result<UserInfo, VetError> {
     };
 
     let email = {
-        let out = Command::new("git")
+        let out = std::process::Command::new("git")
             .arg("config")
             .arg("--get")
             .arg("user.email")
@@ -1629,9 +1628,9 @@ fn get_user_info() -> Result<UserInfo, VetError> {
 }
 
 async fn eula_for_criteria(
-    network: Option<Arc<Network>>,
-    criteria_map: SortedMap<CriteriaName, CriteriaEntry>,
-    criteria: CriteriaName,
+    network: &Option<Arc<Network>>,
+    criteria_map: &SortedMap<CriteriaName, CriteriaEntry>,
+    criteria: CriteriaStr<'_>,
 ) -> String {
     let builtin_eulas = [
         (

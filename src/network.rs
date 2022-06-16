@@ -8,29 +8,28 @@
 //! tasks.
 
 use std::{
-    fs::File,
-    io::Write,
-    path::{Path, PathBuf},
+    ffi::{OsStr, OsString},
+    path::Path,
     sync::Arc,
     time::Duration,
 };
 
 use eyre::Context;
 use reqwest::{Client, Url};
-use tempfile::NamedTempFile;
+use tokio::io::AsyncWriteExt;
 
 use crate::{PartialConfig, VetError};
 
 pub struct Network {
     /// The HTTP client all requests go through
     client: Client,
-    /// A temp dir where partial downloads for things that want to be persisted
-    /// to disk will be built up before being transactionally put in their final
-    /// destination with a rename.
-    in_progress_download_dir: PathBuf,
+    /// Semaphore preventing exceeding the maximum number of connections.
+    connection_semaphore: tokio::sync::Semaphore,
 }
 
 static DEFAULT_TIMEOUT_SECS: u64 = 60;
+
+const MAX_CONCURRENT_CONNECTIONS: usize = 40;
 
 impl Network {
     /// Acquire access to the network
@@ -44,52 +43,61 @@ impl Network {
             // TODO: make this configurable on the CLI or something
             let timeout = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
             // TODO: make this configurable on the CLI or something
-            let in_progress_download_dir = std::env::temp_dir();
             let client = Client::builder()
                 .timeout(timeout)
                 .build()
                 .expect("Couldn't construct HTTP Client?");
             Some(Arc::new(Self {
                 client,
-                in_progress_download_dir,
+                connection_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS),
             }))
         }
     }
 
     /// Download a file and persist it to disk
-    pub async fn download_and_persist(
-        &self,
-        url: Url,
-        persist_to: &Path,
-    ) -> Result<File, VetError> {
-        let mut res = self
-            .client
-            .get(url.clone())
-            .send()
-            .await
-            .and_then(|res| res.error_for_status())
-            .wrap_err_with(|| format!("Failed to download {}", url))?;
+    pub async fn download_and_persist(&self, url: Url, persist_to: &Path) -> Result<(), VetError> {
+        let download_tmp_path = OsString::from_iter([persist_to.as_os_str(), OsStr::new(".part")]);
+        {
+            let _permit = self.connection_semaphore.acquire().await?;
 
-        let mut partial_download = NamedTempFile::new_in(&self.in_progress_download_dir)
-            .wrap_err("could not create tempfile for download")?;
-        while let Some(chunk) = res.chunk().await? {
-            let network_bytes = &chunk[..];
-            partial_download.write_all(network_bytes)?;
+            let mut res = self
+                .client
+                .get(url.clone())
+                .send()
+                .await
+                .and_then(|res| res.error_for_status())
+                .wrap_err_with(|| format!("Failed to download {}", url))?;
+
+            let mut download_tmp = tokio::fs::File::create(&download_tmp_path)
+                .await
+                .wrap_err("could not create tempfile for download")?;
+            while let Some(chunk) = res.chunk().await? {
+                let network_bytes = &chunk[..];
+                download_tmp.write_all(network_bytes).await?;
+            }
         }
 
-        let file = partial_download
-            .persist_noclobber(&persist_to)
-            .wrap_err_with(|| {
-                format!(
-                    "Couldn't swap download into final location: {}",
-                    persist_to.display()
-                )
-            })?;
-        Ok(file)
+        // Rename the downloaded file into the final location.
+        match tokio::fs::rename(&download_tmp_path, &persist_to).await {
+            Ok(()) => {}
+            Err(err) => {
+                let _ = tokio::fs::remove_file(&download_tmp_path).await;
+                return Err(err).wrap_err_with(|| {
+                    format!(
+                        "Couldn't swap download into final location: {}",
+                        persist_to.display()
+                    )
+                });
+            }
+        }
+
+        Ok(())
     }
 
     /// Download a file into memory
     pub async fn download(&self, url: Url) -> Result<Vec<u8>, VetError> {
+        let _permit = self.connection_semaphore.acquire().await?;
+
         let mut res = self
             .client
             .get(url.clone())
@@ -101,7 +109,7 @@ impl Network {
         let mut output = vec![];
         while let Some(chunk) = res.chunk().await? {
             let network_bytes = &chunk[..];
-            output.write_all(network_bytes)?;
+            output.extend_from_slice(network_bytes);
         }
 
         Ok(output)
