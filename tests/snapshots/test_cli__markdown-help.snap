@@ -114,6 +114,13 @@ The format of the output
 #### `-p, --package <SPEC>`
 Package to process (see `cargo help pkgid`)
 
+#### `--shallow`
+Avoid suggesting audits for dependencies of unaudited dependencies.
+
+By default, if a dependency doesn't have sufficient audits for *itself* then we try to
+speculate that its dependencies require the criteria. This flag disables that behaviour,
+causing only suggestions which we're certain of the requirements for to be emitted.
+
 #### `-V, --version`
 Print version information
 
@@ -235,18 +242,10 @@ Suggest some low-hanging fruit to review
 
 ### cargo vet suggest USAGE
 ```
-cargo vet suggest [OPTIONS]
+cargo vet suggest
 ```
 
 ### cargo vet suggest OPTIONS
-#### `--guess-deeper`
-Try to suggest even deeper down the dependency tree (approximate guessing).
-
-By default, if a dependency doesn't have sufficient audits for *itself* then we won't
-try to speculate on anything about its dependencies, because we lack sufficient
-information to say for certain what is required of those dependencies. This overrides
-that by making us assume the dependencies all need the same criteria as the parent.
-
 #### `-h, --help`
 Print help information
 

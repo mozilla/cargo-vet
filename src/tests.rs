@@ -9,7 +9,7 @@ use crate::{
         PackageStr, PolicyEntry, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     init_files,
-    resolver::ResolveReport,
+    resolver::{ResolveDepth, ResolveReport},
     AuditEntry, AuditsFile, Cli, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
     PartialConfig, SortedMap, Store, UnauditedDependency,
 };
@@ -903,7 +903,7 @@ fn mock_simple_init() {
     let (config, audits, imports) = files_inited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-init", output);
 }
@@ -918,7 +918,7 @@ fn mock_simple_no_unaudited() {
     let (config, audits, imports) = files_no_unaudited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-no-unaudited", output);
@@ -934,7 +934,7 @@ fn mock_simple_full_audited() {
     let (config, audits, imports) = files_full_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-full-audited", output);
@@ -950,7 +950,7 @@ fn builtin_simple_init() {
     let (config, audits, imports) = builtin_files_inited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-init", output);
 }
@@ -965,7 +965,7 @@ fn builtin_simple_no_unaudited() {
     let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-no-unaudited", output);
@@ -981,7 +981,7 @@ fn builtin_simple_full_audited() {
     let (config, audits, imports) = builtin_files_full_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-full-audited", output);
@@ -1004,7 +1004,7 @@ fn mock_simple_violation_cur_unaudited() {
         .push(violation(violation_ver, "weak-reviewed"));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-violation-cur-unaudited", output);
@@ -1029,7 +1029,7 @@ fn mock_simple_violation_cur_full_audit() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-violation-cur-full-audit", output);
@@ -1056,7 +1056,7 @@ fn mock_simple_violation_delta() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-violation-delta", output);
@@ -1083,7 +1083,7 @@ fn mock_simple_violation_full_audit() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-violation-full-audit", output);
@@ -1108,7 +1108,7 @@ fn mock_simple_violation_wildcard() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-violation-wildcard", output);
@@ -1130,7 +1130,7 @@ fn mock_simple_missing_transitive() {
         .clear();
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-transitive", output);
@@ -1148,7 +1148,7 @@ fn mock_simple_missing_direct_internal() {
     audits.audits.get_mut("third-party1").unwrap().clear();
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-direct-internal", output);
@@ -1166,7 +1166,7 @@ fn mock_simple_missing_direct_leaf() {
     audits.audits.get_mut("third-party2").unwrap().clear();
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-direct-leaf", output);
@@ -1189,7 +1189,7 @@ fn mock_simple_missing_leaves() {
         .clear();
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-missing-leaves", output);
@@ -1217,7 +1217,7 @@ fn mock_simple_weaker_transitive_req() {
     ));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-weaker-transitive-req", output);
@@ -1246,7 +1246,7 @@ fn mock_simple_weaker_transitive_req_using_implies() {
     ));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-weaker-transitive-req-using-implies", output);
@@ -1266,7 +1266,7 @@ fn mock_simple_lower_version_review() {
     direct_audits.push(full_audit(ver(DEFAULT_VER - 1), DEFAULT_CRIT));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-lower-version-review", output);
@@ -1286,7 +1286,7 @@ fn mock_simple_higher_version_review() {
     direct_audits.push(full_audit(ver(DEFAULT_VER + 1), DEFAULT_CRIT));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-higher-version-review", output);
@@ -1309,7 +1309,7 @@ fn mock_simple_higher_and_lower_version_review() {
     direct_audits.push(full_audit(ver(DEFAULT_VER + 1), DEFAULT_CRIT));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-higher-and-lower-version-review", output);
@@ -1329,7 +1329,7 @@ fn mock_simple_reviewed_too_weakly() {
     trans_audits.push(full_audit(ver(DEFAULT_VER), "weak-reviewed"));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-reviewed-too-weakly", output);
@@ -1359,7 +1359,7 @@ fn mock_simple_delta_to_unaudited() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited", output);
@@ -1389,7 +1389,7 @@ fn mock_simple_delta_to_unaudited_overshoot() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited-overshoot", output);
@@ -1419,7 +1419,7 @@ fn mock_simple_delta_to_unaudited_undershoot() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited-undershoot", output);
@@ -1444,7 +1444,7 @@ fn mock_simple_delta_to_full_audit() {
     direct_audits.push(full_audit(ver(DEFAULT_VER - 5), DEFAULT_CRIT));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit", output);
@@ -1469,7 +1469,7 @@ fn mock_simple_delta_to_full_audit_overshoot() {
     direct_audits.push(full_audit(ver(DEFAULT_VER - 5), DEFAULT_CRIT));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit-overshoot", output);
@@ -1494,7 +1494,7 @@ fn mock_simple_delta_to_full_audit_undershoot() {
     direct_audits.push(full_audit(ver(DEFAULT_VER - 5), DEFAULT_CRIT));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit-undershoot", output);
@@ -1519,7 +1519,7 @@ fn mock_simple_reverse_delta_to_full_audit() {
     direct_audits.push(full_audit(ver(DEFAULT_VER + 5), DEFAULT_CRIT));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-reverse-delta-to-full-audit", output);
@@ -1549,7 +1549,7 @@ fn mock_simple_reverse_delta_to_unaudited() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-reverse-delta-to-unaudited", output);
@@ -1579,7 +1579,7 @@ fn mock_simple_wrongly_reversed_delta_to_unaudited() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-wrongly-reversed-delta-to-unaudited", output);
@@ -1604,7 +1604,7 @@ fn mock_simple_wrongly_reversed_delta_to_full_audit() {
     direct_audits.push(full_audit(ver(DEFAULT_VER - 5), DEFAULT_CRIT));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-wrongly-reversed-delta-to-full-audit", output);
@@ -1634,7 +1634,7 @@ fn mock_simple_needed_reversed_delta_to_unaudited() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-needed-reversed-delta-to-unaudited", output);
@@ -1664,7 +1664,7 @@ fn mock_simple_delta_to_unaudited_too_weak() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-unaudited-too-weak", output);
@@ -1689,7 +1689,7 @@ fn mock_simple_delta_to_full_audit_too_weak() {
     direct_audits.push(full_audit(ver(DEFAULT_VER - 5), DEFAULT_CRIT));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-full-audit-too-weak", output);
@@ -1714,7 +1714,7 @@ fn mock_simple_delta_to_too_weak_full_audit() {
     direct_audits.push(full_audit(ver(DEFAULT_VER - 5), "weak-reviewed"));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-delta-to-too-weak-full-audit", output);
@@ -1729,7 +1729,7 @@ fn mock_complex_inited() {
     let (config, audits, imports) = files_inited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-complex-inited", output);
 }
@@ -1743,7 +1743,7 @@ fn mock_complex_no_unaudited() {
     let (config, audits, imports) = files_no_unaudited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-complex-no-unaudited", output);
 }
@@ -1757,7 +1757,7 @@ fn mock_complex_full_audited() {
     let (config, audits, imports) = files_full_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-complex-full-audited", output);
 }
@@ -1771,7 +1771,7 @@ fn builtin_complex_inited() {
     let (config, audits, imports) = builtin_files_inited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-complex-inited", output);
 }
@@ -1785,7 +1785,7 @@ fn builtin_complex_no_unaudited() {
     let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-complex-no-unaudited", output);
 }
@@ -1799,7 +1799,7 @@ fn builtin_complex_full_audited() {
     let (config, audits, imports) = builtin_files_full_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-complex-full-audited", output);
 }
@@ -1813,7 +1813,7 @@ fn builtin_complex_minimal_audited() {
     let (config, audits, imports) = builtin_files_minimal_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-complex-minimal-audited", output);
 }
@@ -1832,7 +1832,7 @@ fn mock_complex_missing_core5() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-complex-missing-core5", output);
 }
@@ -1851,7 +1851,7 @@ fn mock_complex_missing_core10() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-complex-missing-core10", output);
 }
@@ -1873,7 +1873,7 @@ fn mock_complex_core10_too_weak() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-complex-core10-too-weak", output);
 }
@@ -1907,7 +1907,7 @@ fn mock_complex_core10_partially_too_weak() {
         .insert("thirdAB".to_string(), vec![audit_with_weaker_req]);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-complex-core10-partially-too-weak", output);
 }
@@ -1941,7 +1941,7 @@ fn mock_complex_core10_partially_too_weak_via_weak_delta() {
         .insert("thirdAB".to_string(), vec![audit_with_weaker_req]);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!(
         "mock-complex-core10-partially-too-weak-via-weak-delta",
@@ -1984,7 +1984,7 @@ fn mock_complex_core10_partially_too_weak_via_strong_delta() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!(
         "mock-complex-core10-partially-too-weak-via-strong-delta",
@@ -2005,7 +2005,7 @@ fn mock_simple_policy_root_too_strong() {
         .insert("root-package".to_string(), self_policy(["strong-reviewed"]));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-root-too-strong", output);
 }
@@ -2023,7 +2023,7 @@ fn mock_simple_policy_root_weaker() {
         .insert("root-package".to_string(), self_policy(["weak-reviewed"]));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-root-weaker", output);
 }
@@ -2041,7 +2041,7 @@ fn mock_simple_policy_first_too_strong() {
         .insert("first-party".to_string(), self_policy(["strong-reviewed"]));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-too-strong", output);
 }
@@ -2059,7 +2059,7 @@ fn mock_simple_policy_first_weaker() {
         .insert("first-party".to_string(), self_policy(["weak-reviewed"]));
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-weaker", output);
 }
@@ -2078,7 +2078,7 @@ fn mock_simple_policy_root_dep_weaker() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-root-dep-weaker", output);
 }
@@ -2097,7 +2097,7 @@ fn mock_simple_policy_root_dep_too_strong() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-root-dep-too-strong", output);
 }
@@ -2116,7 +2116,7 @@ fn mock_simple_policy_first_dep_weaker() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-dep-weaker", output);
 }
@@ -2135,7 +2135,7 @@ fn mock_simple_policy_first_dep_too_strong() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-dep-too-strong", output);
 }
@@ -2159,7 +2159,7 @@ fn mock_simple_policy_first_dep_stronger() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-dep-stronger", output);
 }
@@ -2183,7 +2183,7 @@ fn mock_simple_policy_first_dep_weaker_needed() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-dep-weaker-needed", output);
 }
@@ -2210,7 +2210,7 @@ fn mock_simple_policy_first_dep_extra() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-dep-extra", output);
 }
@@ -2234,7 +2234,7 @@ fn mock_simple_policy_first_dep_extra_missing() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-dep-extra-missing", output);
 }
@@ -2261,7 +2261,7 @@ fn mock_simple_policy_first_extra_partially_missing() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-extra-partially-missing", output);
 }
@@ -2280,7 +2280,7 @@ fn mock_simple_first_policy_redundant() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("simple-policy-first-policy-redundant", output);
 }
@@ -2294,7 +2294,7 @@ fn builtin_simple_deps_inited() {
     let (config, audits, imports) = builtin_files_inited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-deps-init", output);
 }
@@ -2309,7 +2309,7 @@ fn builtin_simple_deps_no_unaudited() {
     let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-deps-no-unaudited", output);
@@ -2325,7 +2325,7 @@ fn builtin_simple_deps_full_audited() {
     let (config, audits, imports) = builtin_files_full_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-deps-full-audited", output);
@@ -2341,7 +2341,7 @@ fn builtin_simple_deps_minimal_audited() {
     let (config, audits, imports) = builtin_files_minimal_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-deps-minimal-audited", output);
@@ -2362,7 +2362,7 @@ fn builtin_no_deps() {
     let (config, audits, imports) = builtin_files_full_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-no-deps", output);
@@ -2391,7 +2391,7 @@ fn builtin_only_first_deps() {
     let (config, audits, imports) = builtin_files_full_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-only-first-deps", output);
@@ -2406,7 +2406,7 @@ fn builtin_cycle_inited() {
     let (config, audits, imports) = builtin_files_inited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-cycle-inited", output);
 }
@@ -2421,7 +2421,7 @@ fn builtin_cycle_unaudited() {
     let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-cycle-unaudited", output);
@@ -2437,7 +2437,7 @@ fn builtin_cycle_full_audited() {
     let (config, audits, imports) = builtin_files_full_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-cycle-full-audited", output);
@@ -2453,7 +2453,7 @@ fn builtin_cycle_minimal_audited() {
     let (config, audits, imports) = builtin_files_minimal_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-cycle-minimal-audited", output);
@@ -2494,7 +2494,7 @@ fn builtin_dev_detection() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-dev-detection", output);
@@ -2510,7 +2510,7 @@ fn builtin_dev_detection_empty() {
     let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-dev-detection-empty", output);
@@ -2526,7 +2526,7 @@ fn builtin_dev_detection_empty_deeper() {
     let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, true);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Deep);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-dev-detection-empty-deeper", output);
@@ -2553,7 +2553,7 @@ fn builtin_simple_unaudited_extra() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-extra", output);
@@ -2603,7 +2603,7 @@ fn builtin_simple_unaudited_not_a_real_dep() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-not-a-real-dep", output);
@@ -2650,7 +2650,7 @@ fn builtin_simple_deps_unaudited_overbroad() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-overbroad", output);
@@ -2701,7 +2701,7 @@ fn builtin_complex_unaudited_twins() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-twins", output);
@@ -2755,7 +2755,7 @@ fn builtin_complex_unaudited_partial_twins() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-partial-twins", output);
@@ -2817,7 +2817,7 @@ fn builtin_simple_unaudited_in_delta() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-in-delta", output);
@@ -2880,7 +2880,7 @@ fn builtin_simple_unaudited_in_full() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-in-full", output);
@@ -2938,7 +2938,7 @@ fn builtin_simple_unaudited_in_direct_full() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-in-direct-full", output);
@@ -3025,7 +3025,7 @@ fn builtin_simple_unaudited_nested_weaker_req() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-nested-weaker-req", output);
@@ -3077,7 +3077,7 @@ fn builtin_simple_unaudited_nested_weaker_req_needs_dep_criteria() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!(
@@ -3196,7 +3196,7 @@ fn builtin_simple_unaudited_nested_stronger_req() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-unaudited-nested-stronger-req", output);
@@ -3286,7 +3286,7 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria() {
         .insert("dev".to_string(), vec![unaudited(ver(5), SAFE_TO_DEPLOY)]);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!(
@@ -3353,7 +3353,7 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!(
@@ -3421,7 +3421,7 @@ fn builtin_dev_detection_cursed_full() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-dev-detection-cursed-full", output);
@@ -3446,7 +3446,7 @@ fn builtin_dev_detection_cursed_minimal() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-dev-detection-cursed-minimal", output);
@@ -3473,7 +3473,7 @@ fn builtin_simple_delta_cycle() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-delta-cycle", output);
@@ -3501,7 +3501,7 @@ fn builtin_simple_noop_delta() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-noop-delta", output);
@@ -3532,7 +3532,7 @@ fn builtin_simple_delta_double_cycle() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-delta-double-cycle", output);
@@ -3563,7 +3563,7 @@ fn builtin_simple_delta_broken_double_cycle() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-delta-broken-double-cycle", output);
@@ -3591,7 +3591,7 @@ fn builtin_simple_delta_broken_cycle() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-delta-broken-cycle", output);
@@ -3619,7 +3619,7 @@ fn builtin_simple_long_cycle() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-long-cycle", output);
@@ -3647,7 +3647,7 @@ fn builtin_simple_useless_long_cycle() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-useless-long-cycle", output);
@@ -3663,7 +3663,7 @@ fn builtin_haunted_init() {
     let (config, audits, imports) = builtin_files_inited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-haunted-init", output);
 }
@@ -3678,7 +3678,7 @@ fn builtin_haunted_no_unaudited() {
     let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-haunted-no-unaudited", output);
@@ -3694,7 +3694,7 @@ fn builtin_haunted_no_unaudited_deeper() {
     let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, true);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Deep);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-haunted-no-unaudited-deeper", output);
@@ -3710,7 +3710,7 @@ fn builtin_haunted_full_audited() {
     let (config, audits, imports) = builtin_files_full_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-haunted-full-audited", output);
@@ -3726,7 +3726,7 @@ fn builtin_haunted_minimal_audited() {
     let (config, audits, imports) = builtin_files_minimal_audited(&metadata);
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-haunted-minimal-audited", output);
@@ -3751,7 +3751,7 @@ fn builtin_simple_deps_violation_dodged() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-deps-violation-dodged", output);
@@ -3776,7 +3776,7 @@ fn builtin_simple_deps_violation_low_hit() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-deps-violation-low-hit", output);
@@ -3801,7 +3801,7 @@ fn builtin_simple_deps_violation_high_hit() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-deps-violation-high-hit", output);
@@ -3826,7 +3826,7 @@ fn builtin_simple_deps_violation_imply_hit() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-deps-violation-imply-hit", output);
@@ -3851,7 +3851,7 @@ fn builtin_simple_deps_violation_redundant_low_hit() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-deps-violation-redundant-low-hit", output);
@@ -3876,7 +3876,7 @@ fn mock_simple_violation_hit_with_extra_junk() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, false);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-violation-hit-with-extra-junk", output);

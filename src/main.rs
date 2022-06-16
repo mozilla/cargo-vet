@@ -24,7 +24,7 @@ use crate::format::{
     DiffStat, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap,
     StoreInfo, UnauditedDependency,
 };
-use crate::resolver::{Conclusion, CriteriaMapper, DepGraph, SuggestItem};
+use crate::resolver::{Conclusion, CriteriaMapper, DepGraph, ResolveDepth, SuggestItem};
 use crate::storage::{Cache, Store};
 
 mod cli;
@@ -1044,7 +1044,7 @@ fn cmd_add_unaudited(
     Ok(())
 }
 
-fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Result<(), VetError> {
+fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
     let mut store = Store::acquire(cfg)?;
@@ -1060,7 +1060,11 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, sub_args: &SuggestArgs) -> Res
         &cfg.metadata,
         cfg.cli.filter_graph.as_ref(),
         &store,
-        sub_args.guess_deeper,
+        if cfg.cli.shallow {
+            ResolveDepth::Shallow
+        } else {
+            ResolveDepth::Deep
+        },
     );
     let suggest = report.compute_suggest(cfg, network, true)?;
     match cfg.cli.output_format {
@@ -1100,7 +1104,12 @@ pub fn minimize_unaudited(
     let old_unaudited = mem::take(&mut store.config.unaudited);
 
     // Try to vet
-    let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), store, true);
+    let report = resolver::resolve(
+        &cfg.metadata,
+        cfg.cli.filter_graph.as_ref(),
+        store,
+        ResolveDepth::Deep,
+    );
 
     trace!("minimizing unaudited...");
     let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, network, false)? {
@@ -1273,7 +1282,16 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
     }
 
     // DO THE THING!!!!
-    let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store, false);
+    let report = resolver::resolve(
+        &cfg.metadata,
+        cfg.cli.filter_graph.as_ref(),
+        &store,
+        if cfg.cli.shallow {
+            ResolveDepth::Shallow
+        } else {
+            ResolveDepth::Deep
+        },
+    );
     let suggest = report.compute_suggest(cfg, network, true)?;
     match cfg.cli.output_format {
         OutputFormat::Human => report.print_human(out, cfg, suggest.as_ref())?,
