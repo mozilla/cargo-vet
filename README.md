@@ -1,3 +1,5 @@
+# 🚧 WARNING: This Project Is An Experiment Under Heavy Development And Not Ready For Third-Party Use 🚧
+
 # cargo-vet
 
 [![crates.io](https://img.shields.io/crates/v/cargo-vet.svg)](https://crates.io/crates/cargo-vet)
