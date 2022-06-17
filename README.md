@@ -1,4 +1,6 @@
-# 🚧 WARNING: This Project Is An Experiment Under Heavy Development And Not Ready For Third-Party Use 🚧
+
+
+> Note: cargo-vet is under heavy development and not quite ready for general use. Feel free to give it a try you're feeling adventerous — feedback is most welcome!
 
 # cargo-vet
 
