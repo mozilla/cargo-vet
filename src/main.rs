@@ -21,8 +21,8 @@ use crate::cli::*;
 use crate::editor::Editor;
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, Delta, DependencyCriteria,
-    DiffStat, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap,
-    StoreInfo, UnauditedDependency,
+    FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo,
+    UnauditedDependency,
 };
 use crate::resolver::{Conclusion, CriteriaMapper, DepGraph, ResolveDepth, SuggestItem};
 use crate::storage::{Cache, Store};
@@ -104,8 +104,13 @@ struct ExitPanic(i32);
 struct ExecPanic(std::process::Command);
 
 fn main() -> Result<(), VetError> {
+    // NOTE: Limit the maximum number of blocking threads to 128, rather than
+    // the default of 512.
+    // This may limit concurrency in some cases, but cargo-vet isn't running a
+    // server, and should avoid consuming all available resources.
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
+        .max_blocking_threads(128)
         .enable_all()
         .build()
         .unwrap();
@@ -1541,69 +1546,6 @@ fn diff_crate(
     }
 
     Ok(())
-}
-
-#[tracing::instrument]
-async fn diffstat_crate(version1: &Path, version2: &Path) -> Result<DiffStat, VetError> {
-    // ERRORS: all of this is properly fallible internal workings, we can fail
-    // to diffstat some packages and still produce some useful output
-    trace!("diffstating {version1:#?} {version2:#?}");
-    // FIXME: mask out .cargo_vcs_info.json
-    // FIXME: look into libgit2 vs just calling git
-
-    let out = tokio::process::Command::new("git")
-        .arg("diff")
-        .arg("--no-index")
-        .arg("--shortstat")
-        .arg(version1)
-        .arg(version2)
-        .output()
-        .await?;
-
-    let status = out.status.code().unwrap_or(-1);
-    // 0 = empty
-    // 1 = some diff
-    if status != 0 && status != 1 {
-        return Err(eyre::eyre!(
-            "command failed!\nout:\n{}\nstderr:\n{}",
-            String::from_utf8(out.stdout).unwrap(),
-            String::from_utf8(out.stderr).unwrap()
-        ));
-    }
-
-    let diffstat = String::from_utf8(out.stdout)?;
-
-    let count = if diffstat.is_empty() {
-        0
-    } else {
-        // 3 files changed, 9 insertions(+), 3 deletions(-)
-        let mut parts = diffstat.split(',');
-        parts.next().unwrap(); // Discard files
-
-        fn parse_diffnum(part: Option<&str>) -> Option<u64> {
-            part?.trim().split_once(' ')?.0.parse().ok()
-        }
-
-        let added: u64 = parse_diffnum(parts.next()).unwrap_or(0);
-        let removed: u64 = parse_diffnum(parts.next()).unwrap_or(0);
-
-        // ERRORS: Arguably this should just be an error but it's more of a
-        // "have I completely misunderstood this format, if so let me know"
-        // panic, so the assert *is* what I want..?
-        assert_eq!(
-            parts.next(),
-            None,
-            "diffstat had more parts than expected? {}",
-            diffstat
-        );
-
-        added + removed
-    };
-
-    Ok(DiffStat {
-        raw: diffstat,
-        count,
-    })
 }
 
 struct UserInfo {
