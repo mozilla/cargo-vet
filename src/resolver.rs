@@ -2702,14 +2702,19 @@ impl Suggest {
             }
 
             for (s0, s1, s2, style) in strings {
+                write!(
+                    out,
+                    "{}",
+                    style
+                        .clone()
+                        .cyan()
+                        .bold()
+                        .apply_to(format_args!("    {s0:width$}", width = max0))
+                )?;
                 writeln!(
                     out,
                     "{}",
-                    style.apply_to(format_args!(
-                        "    {s0:width0$}  {s1:width1$}  {s2}",
-                        width0 = max0,
-                        width1 = max1,
-                    ))
+                    style.apply_to(format_args!("  {s1:width$}  {s2}", width = max1))
                 )?;
             }
 
