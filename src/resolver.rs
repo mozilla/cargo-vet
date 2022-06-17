@@ -2443,7 +2443,7 @@ impl<'a> ResolveReport<'a> {
                                 // We don't want to actually error out completely here,
                                 // as other packages might still successfully diff!
                                 error!(
-                                    "error diffing {}:{} {}",
+                                    "error diffing {}:{}: {:?}",
                                     package.name, package.version, err
                                 );
                                 None

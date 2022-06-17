@@ -16,7 +16,7 @@ use futures_util::future::try_join_all;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
-use tracing::{error, info, log::warn};
+use tracing::{error, info, log::warn, trace};
 
 use crate::{
     flock::{FileLock, Filesystem},
@@ -60,6 +60,9 @@ pub const DEFAULT_STORE: &str = "supply-chain";
 const AUDITS_TOML: &str = "audits.toml";
 const CONFIG_TOML: &str = "config.toml";
 const IMPORTS_LOCK: &str = "imports.lock";
+
+// FIXME: This is a completely arbitrary number, and may be too high or too low.
+const MAX_CONCURRENT_DIFFS: usize = 40;
 
 struct StoreLock {
     config: FileLock,
@@ -311,6 +314,8 @@ pub struct Cache {
     diff_cache_path: Option<PathBuf>,
     /// Path to the CommandHistory (for when we want to save it back)
     command_history_path: Option<PathBuf>,
+    /// Semaphore preventing exceeding the maximum number of concurrent diffs.
+    diff_semaphore: tokio::sync::Semaphore,
     /// Common mutable state for the cache which can be mutated concurrently
     /// from multiple tasks.
     state: Mutex<CacheState>,
@@ -358,6 +363,7 @@ impl Cache {
                 cargo_registry: None,
                 diff_cache_path: None,
                 command_history_path: None,
+                diff_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_DIFFS),
                 state: Mutex::new(CacheState {
                     diff_cache: DiffCache::new(),
                     command_history: CommandHistory::default(),
@@ -427,6 +433,7 @@ impl Cache {
             diff_cache_path: Some(diff_cache_path),
             command_history_path: Some(command_history_path),
             cargo_registry: cargo_registry.ok(),
+            diff_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_DIFFS),
             state: Mutex::new(CacheState {
                 diff_cache,
                 command_history,
@@ -447,7 +454,7 @@ impl Cache {
         reg.index.crate_(name)
     }
 
-    #[tracing::instrument(skip(self, network))]
+    #[tracing::instrument(skip(self, network), err)]
     pub async fn fetch_package(
         &self,
         network: Option<&Network>,
@@ -565,7 +572,76 @@ impl Cache {
         Ok(path.to_owned())
     }
 
-    #[tracing::instrument(skip(self, network))]
+    #[tracing::instrument(skip_all, err)]
+    async fn diffstat_package(
+        &self,
+        version1: &Path,
+        version2: &Path,
+    ) -> Result<DiffStat, VetError> {
+        let _permit = self.diff_semaphore.acquire().await?;
+
+        // ERRORS: all of this is properly fallible internal workings, we can fail
+        // to diffstat some packages and still produce some useful output
+        trace!("diffstating {version1:#?} {version2:#?}");
+        // FIXME: mask out .cargo_vcs_info.json
+        // FIXME: look into libgit2 vs just calling git
+
+        let out = tokio::process::Command::new("git")
+            .arg("diff")
+            .arg("--no-index")
+            .arg("--shortstat")
+            .arg(version1)
+            .arg(version2)
+            .output()
+            .await?;
+
+        let status = out.status.code().unwrap_or(-1);
+        // 0 = empty
+        // 1 = some diff
+        if status != 0 && status != 1 {
+            return Err(eyre::eyre!(
+                "command failed!\nout:\n{}\nstderr:\n{}",
+                String::from_utf8(out.stdout).unwrap(),
+                String::from_utf8(out.stderr).unwrap()
+            ));
+        }
+
+        let diffstat = String::from_utf8(out.stdout)?;
+
+        let count = if diffstat.is_empty() {
+            0
+        } else {
+            // 3 files changed, 9 insertions(+), 3 deletions(-)
+            let mut parts = diffstat.split(',');
+            parts.next().unwrap(); // Discard files
+
+            fn parse_diffnum(part: Option<&str>) -> Option<u64> {
+                part?.trim().split_once(' ')?.0.parse().ok()
+            }
+
+            let added: u64 = parse_diffnum(parts.next()).unwrap_or(0);
+            let removed: u64 = parse_diffnum(parts.next()).unwrap_or(0);
+
+            // ERRORS: Arguably this should just be an error but it's more of a
+            // "have I completely misunderstood this format, if so let me know"
+            // panic, so the assert *is* what I want..?
+            assert_eq!(
+                parts.next(),
+                None,
+                "diffstat had more parts than expected? {}",
+                diffstat
+            );
+
+            added + removed
+        };
+
+        Ok(DiffStat {
+            raw: diffstat,
+            count,
+        })
+    }
+
+    #[tracing::instrument(skip(self, network), err)]
     pub async fn fetch_and_diffstat_package(
         &self,
         network: Option<&Network>,
@@ -622,7 +698,7 @@ impl Cache {
                 let to = self.fetch_package(network, package, &delta.to).await?;
 
                 // Have fetches, do a real diffstat
-                let diffstat = crate::diffstat_crate(&from, &to).await?;
+                let diffstat = self.diffstat_package(&from, &to).await?;
 
                 // Record the cache result in the diffcache
                 {
@@ -773,6 +849,7 @@ impl Cache {
     }
 }
 
+#[tracing::instrument(err)]
 fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
     // If we get here and the unpack_dir exists, this implies we had a previously failed fetch,
     // blast it away so we can have a clean slate!
