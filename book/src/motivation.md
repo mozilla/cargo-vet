@@ -1,7 +1,7 @@
-# Rationale & Design
+# Motivation
 
-The discussion below covers the high-level rationale and design behind this approach. If you're just
-interested in how to use it, you can skip to the next section.
+The discussion below covers the high-level motivation behind this approach. If
+you're just interested in how it works, you can skip to the next section.
 
 ### Security Risks of Third-Party Code
 Low-friction reuse of third-party components — via systems like crates.io or npm — is

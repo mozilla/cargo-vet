@@ -1,7 +1,9 @@
 # Summary
 
 - [Introduction](./index.md)
-  - [Rationale & Design](./rationale.md)
+  - [Motivation](./motivation.md)
+  - [How it Works](./how-it-works.md)
+- [Tutorial](./tutorial.md)
   - [Installation](./install.md)
   - [Setup](./setup.md)
   - [Audit Criteria](./audit-criteria.md)
