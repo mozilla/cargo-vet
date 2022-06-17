@@ -1,52 +1,64 @@
 use std::{
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     fs::{self, File, OpenOptions},
     io::{self, BufReader, Read, Seek, Write},
     mem,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
+    time::{Duration, SystemTime},
 };
 
 use cargo_metadata::Version;
 use crates_index::Index;
-use eyre::Context;
+use eyre::{eyre, Context};
 use flate2::read::GzDecoder;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
-use tracing::{error, log::warn, trace, trace_span};
+use tracing::{error, info, log::warn};
 
 use crate::{
     flock::{FileLock, Filesystem},
     format::{
-        AuditsFile, CommandHistory, ConfigFile, Delta, DiffCache, DiffStat, ImportsFile,
-        MetaConfig, PackageName, PackageStr, SortedMap, SortedSet,
+        AuditsFile, CommandHistory, ConfigFile, Delta, DiffCache, DiffStat, FastMap, FetchCommand,
+        ImportsFile, MetaConfig, PackageStr, SortedMap, SuggestedAudit,
     },
     network::Network,
-    resolver::{self, DiffRecommendation},
+    resolver,
     serialization::to_formatted_toml,
     Config, PartialConfig, VetError,
 };
 
 // tmp cache for various shenanigans
-static TEMP_DIFF_CACHE: &str = "diff-cache.toml";
-static TEMP_COMMAND_HISTORY: &str = "command-history.json";
-static TEMP_EMPTY_PACKAGE: &str = "empty";
-static TEMP_REGISTRY_SRC: &str = "src";
-static TEMP_REGISTRY_CACHE: &str = "cache";
-static TEMP_VET_LOCK: &str = ".vet-lock";
+const CACHE_DIFF_CACHE: &str = "diff-cache.toml";
+const CACHE_COMMAND_HISTORY: &str = "command-history.json";
+const CACHE_EMPTY_PACKAGE: &str = "empty";
+const CACHE_REGISTRY_SRC: &str = "src";
+const CACHE_REGISTRY_CACHE: &str = "cache";
+const CACHE_VET_LOCK: &str = ".vet-lock";
+
+// Files which are allowed to appear in the root of the cache directory, and
+// will not be GC'd
+const CACHE_ALLOWED_FILES: &[&str] = &[
+    CACHE_DIFF_CACHE,
+    CACHE_COMMAND_HISTORY,
+    CACHE_EMPTY_PACKAGE,
+    CACHE_REGISTRY_SRC,
+    CACHE_REGISTRY_CACHE,
+    CACHE_VET_LOCK,
+];
 
 // Various cargo values
-static CARGO_REGISTRY_SRC: &str = "src";
-static CARGO_REGISTRY_CACHE: &str = "cache";
-static CARGO_OK_FILE: &str = ".cargo-ok";
-static CARGO_OK_BODY: &str = "ok";
+const CARGO_REGISTRY_SRC: &str = "src";
+const CARGO_REGISTRY_CACHE: &str = "cache";
+const CARGO_OK_FILE: &str = ".cargo-ok";
+const CARGO_OK_BODY: &str = "ok";
 
-pub static DEFAULT_STORE: &str = "supply-chain";
+pub const DEFAULT_STORE: &str = "supply-chain";
 
-static AUDITS_TOML: &str = "audits.toml";
-static CONFIG_TOML: &str = "config.toml";
-static IMPORTS_LOCK: &str = "imports.lock";
+const AUDITS_TOML: &str = "audits.toml";
+const CONFIG_TOML: &str = "config.toml";
+const IMPORTS_LOCK: &str = "imports.lock";
 
 struct StoreLock {
     config: FileLock,
@@ -277,6 +289,17 @@ impl CargoRegistry {
     // Could also include the index, not reason to do that yet
 }
 
+struct CacheState {
+    /// The loaded DiffCache, will be written back on Drop
+    diff_cache: DiffCache,
+    /// Command history to provide some persistent magic smarts
+    command_history: CommandHistory,
+    /// Paths for unpacked packages from this version.
+    fetched_packages: FastMap<(String, Version), Arc<tokio::sync::OnceCell<PathBuf>>>,
+    /// Computed diffstats from this version.
+    diffed: FastMap<(String, Delta), Arc<tokio::sync::OnceCell<DiffStat>>>,
+}
+
 /// The cache where we store globally shared artifacts like fetched packages and diffstats
 ///
 /// All access to this directory should be managed by this type to avoid races.
@@ -289,22 +312,22 @@ pub struct Cache {
     cargo_registry: Option<CargoRegistry>,
     /// Path to the DiffCache (for when we want to save it back)
     diff_cache_path: Option<PathBuf>,
-    /// The loaded DiffCache, will be written back on Drop
-    pub diff_cache: DiffCache,
     /// Path to the CommandHistory (for when we want to save it back)
     command_history_path: Option<PathBuf>,
-    /// Command history to provide some persistent magic smarts
-    pub command_history: CommandHistory,
+    /// Common mutable state for the cache which can be mutated concurrently
+    /// from multiple tasks.
+    state: Mutex<CacheState>,
 }
 
 impl Drop for Cache {
     fn drop(&mut self) {
+        let state = self.state.get_mut().unwrap();
         if let Some(diff_cache_path) = &self.diff_cache_path {
             // Write back the diff_cache
             if let Err(err) = || -> Result<(), VetError> {
                 store_diff_cache(
                     File::create(diff_cache_path)?,
-                    mem::take(&mut self.diff_cache),
+                    mem::take(&mut state.diff_cache),
                 )?;
                 Ok(())
             }() {
@@ -316,7 +339,7 @@ impl Drop for Cache {
             if let Err(err) = || -> Result<(), VetError> {
                 store_command_history(
                     File::create(command_history_path)?,
-                    mem::take(&mut self.command_history),
+                    mem::take(&mut state.command_history),
                 )?;
                 Ok(())
             }() {
@@ -329,42 +352,46 @@ impl Drop for Cache {
 
 impl Cache {
     /// Acquire the cache
-    pub fn acquire(cfg: &PartialConfig) -> Result<Self, VetError> {
+    pub fn acquire(cfg: &PartialConfig) -> Result<Arc<Self>, VetError> {
         if cfg.mock_cache {
             // We're in unit tests, everything should be mocked and not touch real caches
-            return Ok(Cache {
+            return Ok(Arc::new(Cache {
                 _lock: None,
                 root: None,
                 cargo_registry: None,
                 diff_cache_path: None,
-                diff_cache: DiffCache::new(),
                 command_history_path: None,
-                command_history: CommandHistory::default(),
-            });
+                state: Mutex::new(CacheState {
+                    diff_cache: DiffCache::new(),
+                    command_history: CommandHistory::default(),
+                    fetched_packages: FastMap::new(),
+                    diffed: FastMap::new(),
+                }),
+            }));
         }
 
         // Make sure the cache directory exists, and acquire an exclusive lock on it.
-        let root = cfg.tmp.clone();
+        let root = cfg.cache_dir.clone();
         fs::create_dir_all(&root)
             .wrap_err_with(|| format!("failed to create cache directory `{}`", root.display()))?;
 
-        let lock = Filesystem::new(root.clone()).open_rw(TEMP_VET_LOCK, "cache lock")?;
+        let lock = Filesystem::new(root.clone()).open_rw(CACHE_VET_LOCK, "cache lock")?;
 
-        let empty = root.join(TEMP_EMPTY_PACKAGE);
+        let empty = root.join(CACHE_EMPTY_PACKAGE);
         fs::create_dir_all(&empty).wrap_err_with(|| {
             format!(
                 "failed to create cache empty directory `{}`",
                 empty.display()
             )
         })?;
-        let packages_src = root.join(TEMP_REGISTRY_SRC);
+        let packages_src = root.join(CACHE_REGISTRY_SRC);
         fs::create_dir_all(&packages_src).wrap_err_with(|| {
             format!(
                 "failed to create package src directory `{}`",
                 packages_src.display()
             )
         })?;
-        let packages_cache = root.join(TEMP_REGISTRY_CACHE);
+        let packages_cache = root.join(CACHE_REGISTRY_CACHE);
         fs::create_dir_all(&packages_cache).wrap_err_with(|| {
             format!(
                 "failed to create package cache directory `{}`",
@@ -377,14 +404,14 @@ impl Cache {
             .cli
             .diff_cache
             .clone()
-            .unwrap_or_else(|| root.join(TEMP_DIFF_CACHE));
+            .unwrap_or_else(|| root.join(CACHE_DIFF_CACHE));
         let diff_cache: DiffCache = File::open(&diff_cache_path)
             .ok()
             .and_then(|f| load_toml(f).ok())
             .unwrap_or_default();
 
         // Setup the command_history.
-        let command_history_path = root.join(TEMP_COMMAND_HISTORY);
+        let command_history_path = root.join(CACHE_COMMAND_HISTORY);
         let command_history: CommandHistory = File::open(&command_history_path)
             .ok()
             .and_then(|f| load_json(f).ok())
@@ -397,15 +424,19 @@ impl Cache {
             warn!("Couldn't find cargo registry: {e}");
         }
 
-        Ok(Self {
+        Ok(Arc::new(Self {
             _lock: Some(lock),
             root: Some(root),
             diff_cache_path: Some(diff_cache_path),
-            diff_cache,
             command_history_path: Some(command_history_path),
-            command_history,
             cargo_registry: cargo_registry.ok(),
-        })
+            state: Mutex::new(CacheState {
+                diff_cache,
+                command_history,
+                fetched_packages: FastMap::new(),
+                diffed: FastMap::new(),
+            }),
+        }))
     }
 
     /// Gets any information the crates.io index has on this package, locally
@@ -419,200 +450,330 @@ impl Cache {
         reg.index.crate_(name)
     }
 
-    pub fn fetch_packages<'a>(
-        &mut self,
-        network: Option<Arc<Network>>,
-        packages: &[(PackageStr<'a>, &'a Version)],
-    ) -> Result<SortedMap<PackageStr<'a>, SortedMap<&'a Version, PathBuf>>, VetError> {
-        let _span = trace_span!("fetch-packages").entered();
-        // Don't do anything if we're mocked, or there is no work to do
-        if self.root.is_none() || packages.is_empty() {
-            return Ok(SortedMap::new());
-        }
+    #[tracing::instrument(skip(self, network))]
+    pub async fn fetch_package(
+        &self,
+        network: &Option<Arc<Network>>,
+        package: PackageStr<'_>,
+        version: &Version,
+    ) -> Result<PathBuf, VetError> {
+        // Lock the mutex to extract a reference to the OnceCell which we'll use
+        // to asynchronously synchronize on and fetch the package only once in a
+        // single execution.
+        let once_cell = {
+            // NOTE: Don't .await while this is held, or we might deadlock!
+            let mut guard = self.state.lock().unwrap();
+            guard
+                .fetched_packages
+                .entry((package.to_owned(), version.clone()))
+                .or_default()
+                .clone()
+        };
 
-        let root = self.root.as_ref().unwrap();
-        let package_src_dir = root.join(TEMP_REGISTRY_SRC);
-        let package_cache_dir = root.join(TEMP_REGISTRY_CACHE);
-        let cargo_registry = self.cargo_registry.as_ref();
+        let path = once_cell
+            .get_or_try_init(|| async {
+                let root = self.root.as_ref().unwrap();
 
-        let mut paths = SortedMap::<PackageStr, SortedMap<&Version, PathBuf>>::new();
-        let mut to_download = Vec::new();
-
-        // Get all the cached things / find out what needs to be downloaded.
-        for (name, version) in packages {
-            let path = if **version == resolver::ROOT_VERSION {
-                // Empty package
-                root.join(TEMP_EMPTY_PACKAGE)
-            } else {
-                // First try to get a cached copy from cargo's register or our own
-                let dir_name = format!("{}-{}", name, version);
-
-                let fetched_src = cargo_registry
-                    .map(|reg| reg.src().join(&dir_name))
-                    .filter(|path| fetch_is_ok(path))
-                    .unwrap_or_else(|| package_src_dir.join(&dir_name));
-
-                if !fetch_is_ok(&fetched_src) {
-                    // If we don't have a cached copy, push this to the download queue
-                    let crate_name = format!("{}.crate", dir_name);
-                    let fetched_package = package_cache_dir.join(crate_name);
-                    to_download.push((name, version, fetched_package, fetched_src.clone()));
+                if *version == resolver::ROOT_VERSION {
+                    return Ok(root.join(CACHE_EMPTY_PACKAGE));
                 }
 
-                // Either this path exists or we'll download it, either way, it's right
-                fetched_src
-            };
+                let dir_name = format!("{}-{}", package, version);
 
-            paths.entry(name).or_default().insert(version, path);
-        }
+                // First try to get a cached copy from cargo's registry.
+                if let Some(reg) = self.cargo_registry.as_ref() {
+                    let fetched_src = reg.src().join(&dir_name);
+                    if fetch_is_ok(&fetched_src).await {
+                        return Ok(fetched_src);
+                    }
+                }
 
-        // If there is anything to download, do it
-        if !to_download.is_empty() {
-            // ERRORS: this could arguably be swallowed but this will mostly come up in tests
-            let network = network.expect("running as --frozen but needed fetches!");
-            trace!("downloading {} packages", to_download.len());
-            let runtime = tokio::runtime::Handle::current();
-            let mut handles = vec![];
+                // Paths for the fetched package and checkout in our local cache.
+                let fetched_package = root
+                    .join(CACHE_REGISTRY_CACHE)
+                    .join(format!("{}.crate", dir_name));
+                let fetched_src = root.join(CACHE_REGISTRY_SRC).join(&dir_name);
 
-            for (name, version, download_to, unpack_to) in to_download {
-                trace!(
-                    "  downloading {}:{} to {}",
-                    name,
-                    version,
-                    download_to.display()
-                );
-                handles.push(runtime.spawn(download_package(
-                    network.clone(),
-                    name.to_string(),
-                    (*version).clone(),
-                    download_to,
-                    unpack_to,
-                )));
-            }
+                // Check if the resource is already available in our local cache.
+                let fetched_package_ = fetched_package.clone();
+                let cached_file = tokio::task::spawn_blocking(move || {
+                    File::open(&fetched_package_).map(|file| {
+                        // Update the atime and mtime for this crate to ensure it isn't
+                        // collected by the gc.
+                        let now = filetime::FileTime::now();
+                        if let Err(err) =
+                            filetime::set_file_handle_times(&file, Some(now), Some(now))
+                        {
+                            warn!(
+                                "failed to update mtime for {}, gc may not function correctly: {}",
+                                fetched_package_.display(),
+                                err
+                            );
+                        }
+                        file
+                    })
+                })
+                .await?;
 
-            for handle in handles {
-                let res = runtime.block_on(handle)?;
-                res?;
-            }
-        }
+                // If the file isn't in our local cache, make sure to download it.
+                let file = match cached_file {
+                    Ok(file) => file,
+                    Err(_) => {
+                        let network = network.as_ref().ok_or_else(|| {
+                            eyre!("running as --frozen but needed to fetch {package}:{version}")
+                        })?;
 
-        trace!("all fetched!");
+                        // We don't have it, so download it
+                        let url = Url::parse(&format!(
+                            "https://crates.io/api/v1/crates/{package}/{version}/download"
+                        ))?;
+                        info!(
+                            "downloading package {}:{} from {} to {}",
+                            package,
+                            version,
+                            url,
+                            fetched_package.display()
+                        );
+                        network.download_and_persist(url, &fetched_package).await?;
 
-        Ok(paths)
+                        let fetched_package_ = fetched_package.clone();
+                        tokio::task::spawn_blocking(move || File::open(&fetched_package_)).await??
+                    }
+                };
+
+                // TODO(#116): take the SHA2 of the bytes and compare it to what the registry says
+
+                if fetch_is_ok(&fetched_src).await {
+                    Ok(fetched_src)
+                } else {
+                    info!(
+                        "unpacking package {}:{} from {} to {}",
+                        package,
+                        version,
+                        fetched_package.display(),
+                        fetched_src.display()
+                    );
+                    // The tarball needs to be unpacked, so do so.
+                    tokio::task::spawn_blocking(move || {
+                        unpack_package(&file, &fetched_src)
+                            .map(|_| fetched_src)
+                            .wrap_err_with(|| {
+                                format!("error unpacking {}", fetched_package.display())
+                            })
+                    })
+                    .await?
+                }
+            })
+            .await?;
+        Ok(path.to_owned())
     }
 
-    pub fn fetch_and_diffstat_all(
-        &mut self,
-        network: Option<Arc<Network>>,
-        package: PackageStr,
-        diffs: &SortedSet<Delta>,
-    ) -> Result<DiffRecommendation, VetError> {
-        let _span = trace_span!("diffstat-all").entered();
-        // If there's no registry path setup, assume we're in tests and mocking.
-        let mut all_versions = SortedSet::new();
+    #[tracing::instrument(skip(self, network))]
+    pub async fn fetch_and_diffstat_package(
+        &self,
+        network: &Option<Arc<Network>>,
+        package: PackageStr<'_>,
+        delta: &Delta,
+    ) -> Result<DiffStat, VetError> {
+        // Lock the mutex to extract a reference to the OnceCell which we'll use
+        // to asynchronously synchronize on and diff the package only once in a
+        // single execution.
+        //
+        // While we have the mutex locked, we'll also check the DiffStat cache
+        // to return without any async steps if possible.
+        let once_cell = {
+            // NOTE: Don't .await while this is held, or we might deadlock!
+            let mut guard = self.state.lock().unwrap();
 
-        for delta in diffs {
-            let is_cached = self
+            // Check if the value has already been cached.
+            if let Some(cached) = guard
                 .diff_cache
                 .get(package)
                 .and_then(|cache| cache.get(delta))
-                .is_some();
-            if !is_cached {
-                all_versions.insert(&delta.from);
-                all_versions.insert(&delta.to);
+                .cloned()
+            {
+                return Ok(cached);
             }
-        }
 
-        let mut best_rec: Option<DiffRecommendation> = None;
-        let to_fetch = all_versions
-            .iter()
-            .map(|v| (package, *v))
-            .collect::<Vec<_>>();
-        let fetches = self.fetch_packages(network, &to_fetch)?;
+            if self.root.is_none() {
+                // If we don't have a root, assume we want mocked results
+                // ERRORS: this warning really rides the line, I'm not sure if the user can/should care
+                warn!("Missing root, assuming we're in tests and mocking");
 
-        for delta in diffs {
-            let cached = self
-                .diff_cache
-                .get(package)
-                .and_then(|cache| cache.get(delta))
-                .cloned();
+                let from_len = delta.from.major * delta.from.major;
+                let to_len: u64 = delta.to.major * delta.to.major;
+                let diff = to_len as i64 - from_len as i64;
+                let count = diff.unsigned_abs();
+                let raw = if diff < 0 {
+                    format!("-{}", count)
+                } else {
+                    format!("+{}", count)
+                };
+                return Ok(DiffStat { raw, count });
+            }
 
-            let diffstat = if let Some(cached) = cached {
-                // Hooray, we have the cached result!
-                cached
-            } else {
-                let from = fetches.get(package).and_then(|m| m.get(&delta.from));
-                let to = fetches.get(package).and_then(|m| m.get(&delta.to));
+            guard
+                .diffed
+                .entry((package.to_owned(), delta.clone()))
+                .or_default()
+                .clone()
+        };
 
-                if let (Some(from), Some(to)) = (from, to) {
-                    // Have fetches, do a real diffstat
-                    let diffstat = crate::diffstat_crate(from, to)?;
-                    self.diff_cache
+        let diffstat = once_cell
+            .get_or_try_init(|| async {
+                let from = self.fetch_package(network, package, &delta.from).await?;
+                let to = self.fetch_package(network, package, &delta.to).await?;
+
+                // Have fetches, do a real diffstat
+                let diffstat = crate::diffstat_crate(&from, &to).await?;
+
+                // Record the cache result in the diffcache
+                {
+                    let mut guard = self.state.lock().unwrap();
+                    guard
+                        .diff_cache
                         .entry(package.to_string())
                         .or_insert(SortedMap::new())
                         .insert(delta.clone(), diffstat.clone());
-                    diffstat
-                } else {
-                    // If we don't have fetches, assume we want mocked results
-                    // ERRORS: this warning really rides the line, I'm not sure if the user can/should care
-                    warn!("Missing fetches, assuming we're in tests and mocking");
-
-                    let from_len = delta.from.major * delta.from.major;
-                    let to_len: u64 = delta.to.major * delta.to.major;
-                    let diff = to_len as i64 - from_len as i64;
-                    let count = diff.unsigned_abs();
-                    let raw = if diff < 0 {
-                        format!("-{}", count)
-                    } else {
-                        format!("+{}", count)
-                    };
-                    DiffStat { raw, count }
                 }
-            };
 
-            let rec = DiffRecommendation {
-                from: delta.from.clone(),
-                to: delta.to.clone(),
-                diffstat,
-            };
+                Ok::<_, VetError>(diffstat)
+            })
+            .await?;
+        Ok(diffstat.clone())
+    }
 
-            if let Some(best) = best_rec.as_ref() {
-                if best.diffstat.count > rec.diffstat.count {
-                    best_rec = Some(rec);
-                }
+    /// Run a garbage-collection pass over the cache, removing any files which
+    /// aren't supposed to be there, or which haven't been touched for an
+    /// extended period of time.
+    pub async fn gc(&self, max_package_age: Duration) {
+        if self.root.is_none() {
+            return;
+        }
+
+        let (root_rv, empty_rv, packages_rv) = tokio::join!(
+            self.gc_root(),
+            self.gc_empty(),
+            self.gc_packages(max_package_age)
+        );
+        if let Err(err) = root_rv {
+            error!("gc: performing gc on the cache root failed: {err}");
+        }
+        if let Err(err) = empty_rv {
+            error!("gc: performing gc on the empty package failed: {err}");
+        }
+        if let Err(err) = packages_rv {
+            error!("gc: performing gc on the package cache failed: {err}");
+        }
+    }
+
+    /// Sync version of `gc`
+    pub fn gc_sync(&self, max_package_age: Duration) {
+        tokio::runtime::Handle::current().block_on(self.gc(max_package_age));
+    }
+
+    /// Remove any unrecognized files from the root of the cargo-vet cache
+    /// directory.
+    async fn gc_root(&self) -> Result<(), VetError> {
+        let root = self.root.as_ref().unwrap();
+        let mut root_entries = tokio::fs::read_dir(root).await?;
+        while let Some(entry) = root_entries.next_entry().await? {
+            if !entry
+                .file_name()
+                .to_str()
+                .map_or(false, |name| CACHE_ALLOWED_FILES.contains(&name))
+            {
+                remove_dir_entry(&entry).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Remove all files located in the `cargo-vet/empty` directory, as it
+    /// should be empty.
+    async fn gc_empty(&self) -> Result<(), VetError> {
+        let empty = self.root.as_ref().unwrap().join(CACHE_EMPTY_PACKAGE);
+        let mut empty_entries = tokio::fs::read_dir(&empty).await?;
+        while let Some(entry) = empty_entries.next_entry().await? {
+            remove_dir_entry(&entry).await?;
+        }
+        Ok(())
+    }
+
+    /// Remove any non '.crate' files from the registry cache, '.crate' files
+    /// which are older than `max_package_age`, and any source directories from
+    /// the registry src which no longer have a corresponding .crate.
+    async fn gc_packages(&self, max_package_age: Duration) -> Result<(), VetError> {
+        let cache = self.root.as_ref().unwrap().join(CACHE_REGISTRY_CACHE);
+        let src = self.root.as_ref().unwrap().join(CACHE_REGISTRY_SRC);
+
+        let mut kept_packages = Vec::new();
+
+        let mut cache_entries = tokio::fs::read_dir(&cache).await?;
+        while let Some(entry) = cache_entries.next_entry().await? {
+            if let Some(to_keep) = should_keep_package(&entry, max_package_age).await {
+                kept_packages.push(to_keep);
             } else {
-                best_rec = Some(rec);
+                remove_dir_entry(&entry).await?;
             }
         }
 
-        Ok(best_rec.unwrap())
+        let mut src_entries = tokio::fs::read_dir(&src).await?;
+        while let Some(entry) = src_entries.next_entry().await? {
+            if !kept_packages.contains(&entry.file_name()) || !fetch_is_ok(&entry.path()).await {
+                remove_dir_entry(&entry).await?;
+            }
+        }
+        Ok(())
     }
-}
 
-async fn download_package(
-    network: Arc<Network>,
-    package: PackageName,
-    version: Version,
-    download_to: PathBuf,
-    unpack_to: PathBuf,
-) -> Result<(), VetError> {
-    // If we already have the downloaded .crate, then use it
-    let file = if let Ok(file) = File::open(&download_to) {
-        file
-    } else {
-        // We don't have it, so download it
-        let url = Url::parse(&format!(
-            "https://crates.io/api/v1/crates/{package}/{version}/download"
-        ))?;
-        let file = network.download_and_persist(url, &download_to).await?;
-        // TODO(#116): take the SHA2 of the bytes and compare it to what the registry says
-        file
-    };
+    /// Delete every file in the cache directory other than the cache lock, and
+    /// clear out the command history and diff cache files.
+    ///
+    /// NOTE: The diff_cache and command_history files will be re-created when
+    /// the cache is unlocked, however they will be empty.
+    pub async fn clean(&self) -> Result<(), VetError> {
+        let root = self
+            .root
+            .as_ref()
+            .ok_or_else(|| eyre!("cannot clean a mocked cache"))?;
 
-    // Now unpack it
-    unpack_package(&file, &unpack_to)?;
+        // Make sure we don't write back the command history and diff cache when
+        // dropping.
+        {
+            let mut guard = self.state.lock().unwrap();
+            guard.command_history = Default::default();
+            guard.diff_cache = Default::default();
+        }
 
-    Ok(())
+        let mut root_entries = tokio::fs::read_dir(&root).await?;
+        while let Some(entry) = root_entries.next_entry().await? {
+            if entry.file_name() != Path::new(CACHE_VET_LOCK) {
+                remove_dir_entry(&entry).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Sync version of `clean`
+    pub fn clean_sync(&self) -> Result<(), VetError> {
+        tokio::runtime::Handle::current().block_on(self.clean())
+    }
+
+    pub fn get_command_history(&self) -> CommandHistory {
+        let guard = self.state.lock().unwrap();
+        guard.command_history.clone()
+    }
+
+    pub fn set_last_fetch(&self, last_fetch: FetchCommand) {
+        let mut guard = self.state.lock().unwrap();
+        guard.command_history.last_fetch = Some(last_fetch);
+    }
+
+    pub fn set_last_suggest(&self, last_suggest: Vec<SuggestedAudit>) {
+        let mut guard = self.state.lock().unwrap();
+        guard.command_history.last_suggest = last_suggest;
+    }
 }
 
 fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
@@ -668,22 +829,51 @@ fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
     Ok(())
 }
 
-fn fetch_is_ok(fetch: &Path) -> bool {
-    if !fetch.exists() || !fetch.is_dir() {
-        return false;
+async fn fetch_is_ok(fetch: &Path) -> bool {
+    match tokio::fs::read_to_string(fetch.join(CARGO_OK_FILE)).await {
+        Ok(ok) => ok == CARGO_OK_BODY,
+        Err(_) => false,
+    }
+}
+
+/// Based on the type of file for an entry, either recursively remove the
+/// directory, or remove the file. This is intended to be roughly equivalent to
+/// `rm -r`.
+async fn remove_dir_entry(entry: &tokio::fs::DirEntry) -> Result<(), VetError> {
+    info!("gc: removing {}", entry.path().display());
+    let file_type = entry.file_type().await?;
+    if file_type.is_dir() {
+        tokio::fs::remove_dir_all(entry.path()).await?;
+    } else {
+        tokio::fs::remove_file(entry.path()).await?;
+    }
+    Ok(())
+}
+
+/// Given a directory entry for a file, returns how old it is. If there is an
+/// issue (e.g. mtime >= now), will return `None` instead.
+async fn get_file_age(entry: &tokio::fs::DirEntry) -> Option<Duration> {
+    let now = SystemTime::now();
+    let meta = entry.metadata().await.ok()?;
+    now.duration_since(meta.modified().ok()?).ok()
+}
+
+/// Returns tne name of the crate if it should be preserved, or `None` if it shouldn't.
+async fn should_keep_package(
+    entry: &tokio::fs::DirEntry,
+    max_package_age: Duration,
+) -> Option<OsString> {
+    // Get the stem and extension from the directory entry's path, and
+    // immediately remove it if something goes wrong.
+    let path = entry.path();
+    let stem = path.file_stem()?;
+    if path.extension()? != OsStr::new("crate") {
+        return None;
     }
 
-    let ok_contents = || -> Result<String, std::io::Error> {
-        let mut ok_file = File::open(fetch.join(CARGO_OK_FILE))?;
-        let mut contents = String::new();
-        ok_file.read_to_string(&mut contents)?;
-        Ok(contents)
-    };
-
-    if let Ok(ok) = ok_contents() {
-        ok == CARGO_OK_BODY
-    } else {
-        false
+    match get_file_age(entry).await {
+        Some(age) if age > max_package_age => None,
+        _ => Some(stem.to_owned()),
     }
 }
 

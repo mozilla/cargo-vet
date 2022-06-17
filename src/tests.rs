@@ -18,6 +18,11 @@ use crate::{
 const DEFAULT_VER: u64 = 10;
 const DEFAULT_CRIT: CriteriaStr = "reviewed";
 
+lazy_static::lazy_static! {
+    static ref TEST_RUNTIME: tokio::runtime::Runtime =
+        tokio::runtime::Runtime::new().unwrap();
+}
+
 struct MockMetadata {
     packages: Vec<MockPackage>,
     pkgids: Vec<String>,
@@ -861,7 +866,7 @@ fn mock_cfg(metadata: &Metadata) -> Config {
         metadata: metadata.clone(),
         _rest: PartialConfig {
             cli: Cli::mock(),
-            tmp: PathBuf::new(),
+            cache_dir: PathBuf::new(),
             mock_cache: true,
         },
     }
@@ -897,6 +902,7 @@ fn _init_trace_logger() {
 fn mock_simple_init() {
     // (Pass) Should look the same as a fresh 'vet init'.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -912,6 +918,7 @@ fn mock_simple_init() {
 fn mock_simple_no_unaudited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -928,6 +935,7 @@ fn mock_simple_no_unaudited() {
 fn mock_simple_full_audited() {
     // (Pass) All entries have direct full audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -944,6 +952,7 @@ fn mock_simple_full_audited() {
 fn builtin_simple_init() {
     // (Pass) Should look the same as a fresh 'vet init'.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -959,6 +968,7 @@ fn builtin_simple_init() {
 fn builtin_simple_no_unaudited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -975,6 +985,7 @@ fn builtin_simple_no_unaudited() {
 fn builtin_simple_full_audited() {
     // (Pass) All entries have direct full audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -991,6 +1002,7 @@ fn builtin_simple_full_audited() {
 fn mock_simple_violation_cur_unaudited() {
     // (Fail) All marked 'unaudited' but a 'violation' entry matches a current version.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1014,6 +1026,7 @@ fn mock_simple_violation_cur_unaudited() {
 fn mock_simple_violation_cur_full_audit() {
     // (Fail) All full audited but a 'violation' entry matches a current version.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1039,6 +1052,7 @@ fn mock_simple_violation_cur_full_audit() {
 fn mock_simple_violation_delta() {
     // (Fail) A 'violation' matches a delta but not the cur version
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1066,6 +1080,7 @@ fn mock_simple_violation_delta() {
 fn mock_simple_violation_full_audit() {
     // (Fail) A 'violation' matches a full audit but not the cur version
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1093,6 +1108,7 @@ fn mock_simple_violation_full_audit() {
 fn mock_simple_violation_wildcard() {
     // (Fail) A 'violation' matches a full audit but not the cur version
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1118,6 +1134,7 @@ fn mock_simple_violation_wildcard() {
 fn mock_simple_missing_transitive() {
     // (Fail) Missing an audit for a transitive dep
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1140,6 +1157,7 @@ fn mock_simple_missing_transitive() {
 fn mock_simple_missing_direct_internal() {
     // (Fail) Missing an audit for a direct dep that has children
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1158,6 +1176,7 @@ fn mock_simple_missing_direct_internal() {
 fn mock_simple_missing_direct_leaf() {
     // (Fail) Missing an entry for direct dep that has no children
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1176,6 +1195,7 @@ fn mock_simple_missing_direct_leaf() {
 fn mock_simple_missing_leaves() {
     // (Fail) Missing all leaf audits (but not the internal)
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1199,6 +1219,7 @@ fn mock_simple_missing_leaves() {
 fn mock_simple_weaker_transitive_req() {
     // (Pass) A third-party dep with weaker requirements on a child dep
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1228,6 +1249,7 @@ fn mock_simple_weaker_transitive_req_using_implies() {
     // (Pass) A third-party dep with weaker requirements on a child dep
     // but the child dep actually has *super* reqs, to check that implies works
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1256,6 +1278,7 @@ fn mock_simple_weaker_transitive_req_using_implies() {
 fn mock_simple_lower_version_review() {
     // (Fail) A dep that has a review but for a lower version.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1276,6 +1299,7 @@ fn mock_simple_lower_version_review() {
 fn mock_simple_higher_version_review() {
     // (Fail) A dep that has a review but for a higher version.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1298,6 +1322,7 @@ fn mock_simple_higher_and_lower_version_review() {
     // Once I mock out fake diffs it should prefer the lower one because the
     // system will make application size grow quadratically.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1319,6 +1344,7 @@ fn mock_simple_higher_and_lower_version_review() {
 fn mock_simple_reviewed_too_weakly() {
     // (Fail) A dep has a review but the criteria is too weak
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1339,6 +1365,7 @@ fn mock_simple_reviewed_too_weakly() {
 fn mock_simple_delta_to_unaudited() {
     // (Pass) A dep has a delta to an unaudited entry
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1369,6 +1396,7 @@ fn mock_simple_delta_to_unaudited() {
 fn mock_simple_delta_to_unaudited_overshoot() {
     // (Fail) A dep has a delta but it overshoots the unaudited entry.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1399,6 +1427,7 @@ fn mock_simple_delta_to_unaudited_overshoot() {
 fn mock_simple_delta_to_unaudited_undershoot() {
     // (Fail) A dep has a delta but it undershoots the unaudited entry.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1429,6 +1458,7 @@ fn mock_simple_delta_to_unaudited_undershoot() {
 fn mock_simple_delta_to_full_audit() {
     // (Pass) A dep has a delta to a fully audited entry
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1454,6 +1484,7 @@ fn mock_simple_delta_to_full_audit() {
 fn mock_simple_delta_to_full_audit_overshoot() {
     // (Fail) A dep has a delta to a fully audited entry but overshoots
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1479,6 +1510,7 @@ fn mock_simple_delta_to_full_audit_overshoot() {
 fn mock_simple_delta_to_full_audit_undershoot() {
     // (Fail) A dep has a delta to a fully audited entry but undershoots
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1504,6 +1536,7 @@ fn mock_simple_delta_to_full_audit_undershoot() {
 fn mock_simple_reverse_delta_to_full_audit() {
     // (Pass) A dep has a *reverse* delta to a fully audited entry
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1529,6 +1562,7 @@ fn mock_simple_reverse_delta_to_full_audit() {
 fn mock_simple_reverse_delta_to_unaudited() {
     // (Pass) A dep has a *reverse* delta to an unaudited entry
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1559,6 +1593,7 @@ fn mock_simple_reverse_delta_to_unaudited() {
 fn mock_simple_wrongly_reversed_delta_to_unaudited() {
     // (Fail) A dep has a *reverse* delta to an unaudited entry but they needed a normal one
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1589,6 +1624,7 @@ fn mock_simple_wrongly_reversed_delta_to_unaudited() {
 fn mock_simple_wrongly_reversed_delta_to_full_audit() {
     // (Fail) A dep has a *reverse* delta to a fully audited entry but they needed a normal one
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1614,6 +1650,7 @@ fn mock_simple_wrongly_reversed_delta_to_full_audit() {
 fn mock_simple_needed_reversed_delta_to_unaudited() {
     // (Fail) A dep has a delta to an unaudited entry but they needed a reversed one
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1644,6 +1681,7 @@ fn mock_simple_needed_reversed_delta_to_unaudited() {
 fn mock_simple_delta_to_unaudited_too_weak() {
     // (Fail) A dep has a delta to an unaudited entry but it's too weak
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1674,6 +1712,7 @@ fn mock_simple_delta_to_unaudited_too_weak() {
 fn mock_simple_delta_to_full_audit_too_weak() {
     // (Fail) A dep has a delta to a fully audited entry but it's too weak
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1699,6 +1738,7 @@ fn mock_simple_delta_to_full_audit_too_weak() {
 fn mock_simple_delta_to_too_weak_full_audit() {
     // (Fail) A dep has a delta to a fully audited entry but it's too weak
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -1724,6 +1764,7 @@ fn mock_simple_delta_to_too_weak_full_audit() {
 fn mock_complex_inited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, audits, imports) = files_inited(&metadata);
@@ -1738,6 +1779,7 @@ fn mock_complex_inited() {
 fn mock_complex_no_unaudited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, audits, imports) = files_no_unaudited(&metadata);
@@ -1752,6 +1794,7 @@ fn mock_complex_no_unaudited() {
 fn mock_complex_full_audited() {
     // (Pass) All entries have direct full audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, audits, imports) = files_full_audited(&metadata);
@@ -1766,6 +1809,7 @@ fn mock_complex_full_audited() {
 fn builtin_complex_inited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, audits, imports) = builtin_files_inited(&metadata);
@@ -1780,6 +1824,7 @@ fn builtin_complex_inited() {
 fn builtin_complex_no_unaudited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
@@ -1794,6 +1839,7 @@ fn builtin_complex_no_unaudited() {
 fn builtin_complex_full_audited() {
     // (Pass) All entries have direct full audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, audits, imports) = builtin_files_full_audited(&metadata);
@@ -1808,6 +1854,7 @@ fn builtin_complex_full_audited() {
 fn builtin_complex_minimal_audited() {
     // (Pass) All entries have direct full audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, audits, imports) = builtin_files_minimal_audited(&metadata);
@@ -1822,6 +1869,7 @@ fn builtin_complex_minimal_audited() {
 fn mock_complex_missing_core5() {
     // (Fail) Missing an audit for the v5 version of third-core
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
@@ -1841,6 +1889,7 @@ fn mock_complex_missing_core5() {
 fn mock_complex_missing_core10() {
     // (Fail) Missing an audit for the v10 version of third-core
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
@@ -1860,6 +1909,7 @@ fn mock_complex_missing_core10() {
 fn mock_complex_core10_too_weak() {
     // (Fail) Criteria for core10 is too weak
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
@@ -1882,6 +1932,7 @@ fn mock_complex_core10_too_weak() {
 fn mock_complex_core10_partially_too_weak() {
     // (Fail) Criteria for core10 is too weak for thirdA but not thirdA and thirdAB (full)
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
@@ -1916,6 +1967,7 @@ fn mock_complex_core10_partially_too_weak() {
 fn mock_complex_core10_partially_too_weak_via_weak_delta() {
     // (Fail) Criteria for core10 is too weak for thirdA but not thirdA and thirdAB (weak delta)
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (config, mut audits, imports) = files_full_audited(&metadata);
@@ -1954,6 +2006,7 @@ fn mock_complex_core10_partially_too_weak_via_strong_delta() {
     // (Fail) Criteria for core10 is too weak for thirdA but not thirdA and thirdAB
     // because there's a strong delta from 5->10 but 0->5 is still weak!
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
@@ -1996,6 +2049,7 @@ fn mock_complex_core10_partially_too_weak_via_strong_delta() {
 fn mock_simple_policy_root_too_strong() {
     // (Fail) Root policy is too strong
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, audits, imports) = files_full_audited(&metadata);
@@ -2014,6 +2068,7 @@ fn mock_simple_policy_root_too_strong() {
 fn mock_simple_policy_root_weaker() {
     // (Pass) Root policy weaker than necessary
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, audits, imports) = files_full_audited(&metadata);
@@ -2032,6 +2087,7 @@ fn mock_simple_policy_root_weaker() {
 fn mock_simple_policy_first_too_strong() {
     // (Fail) First-party policy is too strong
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, audits, imports) = files_full_audited(&metadata);
@@ -2050,6 +2106,7 @@ fn mock_simple_policy_first_too_strong() {
 fn mock_simple_policy_first_weaker() {
     // (Pass) First-party policy weaker than necessary
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, audits, imports) = files_full_audited(&metadata);
@@ -2068,6 +2125,7 @@ fn mock_simple_policy_first_weaker() {
 fn mock_simple_policy_root_dep_weaker() {
     // (Pass) root->first-party policy weaker than necessary
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, audits, imports) = files_full_audited(&metadata);
@@ -2087,6 +2145,7 @@ fn mock_simple_policy_root_dep_weaker() {
 fn mock_simple_policy_root_dep_too_strong() {
     // (Pass) root->first-party policy stronger than necessary
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, audits, imports) = files_full_audited(&metadata);
@@ -2106,6 +2165,7 @@ fn mock_simple_policy_root_dep_too_strong() {
 fn mock_simple_policy_first_dep_weaker() {
     // (Pass) first-party->third-party policy weaker than necessary
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, audits, imports) = files_full_audited(&metadata);
@@ -2125,6 +2185,7 @@ fn mock_simple_policy_first_dep_weaker() {
 fn mock_simple_policy_first_dep_too_strong() {
     // (Pass) first-party->third-party policy too strong
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, audits, imports) = files_full_audited(&metadata);
@@ -2144,6 +2205,7 @@ fn mock_simple_policy_first_dep_too_strong() {
 fn mock_simple_policy_first_dep_stronger() {
     // (Pass) first-party->third-party policy stronger but satisfied
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
@@ -2168,6 +2230,7 @@ fn mock_simple_policy_first_dep_stronger() {
 fn mock_simple_policy_first_dep_weaker_needed() {
     // (Pass) first-party->third-party policy weaker out of necessity
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
@@ -2192,6 +2255,7 @@ fn mock_simple_policy_first_dep_weaker_needed() {
 fn mock_simple_policy_first_dep_extra() {
     // (Pass) first-party->third-party policy has extra satisfied criteria
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
@@ -2219,6 +2283,7 @@ fn mock_simple_policy_first_dep_extra() {
 fn mock_simple_policy_first_dep_extra_missing() {
     // (Fail) first-party->third-party policy has extra unsatisfied criteria
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
@@ -2243,6 +2308,7 @@ fn mock_simple_policy_first_dep_extra_missing() {
 fn mock_simple_policy_first_extra_partially_missing() {
     // (Fail) first-party policy has extra unsatisfied criteria
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, mut audits, imports) = files_full_audited(&metadata);
@@ -2270,6 +2336,7 @@ fn mock_simple_policy_first_extra_partially_missing() {
 fn mock_simple_first_policy_redundant() {
     // (Pass) first-party policy has redundant implied things
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (mut config, audits, imports) = files_full_audited(&metadata);
@@ -2288,6 +2355,7 @@ fn mock_simple_first_policy_redundant() {
 #[test]
 fn builtin_simple_deps_inited() {
     // (Pass) Should look the same as a fresh 'vet init'.
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
 
     let metadata = mock.metadata();
@@ -2303,6 +2371,7 @@ fn builtin_simple_deps_inited() {
 fn builtin_simple_deps_no_unaudited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
 
     let metadata = mock.metadata();
@@ -2319,6 +2388,7 @@ fn builtin_simple_deps_no_unaudited() {
 fn builtin_simple_deps_full_audited() {
     // (Pass) All entries have direct full audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
 
     let metadata = mock.metadata();
@@ -2335,6 +2405,7 @@ fn builtin_simple_deps_full_audited() {
 fn builtin_simple_deps_minimal_audited() {
     // (Pass) All entries have direct full audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
 
     let metadata = mock.metadata();
@@ -2350,6 +2421,7 @@ fn builtin_simple_deps_minimal_audited() {
 #[test]
 fn builtin_no_deps() {
     // (Pass) No actual deps
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::new(vec![MockPackage {
         name: "root-package",
         is_root: true,
@@ -2371,6 +2443,7 @@ fn builtin_no_deps() {
 #[test]
 fn builtin_only_first_deps() {
     // (Pass) No actual deps
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::new(vec![
         MockPackage {
             name: "root-package",
@@ -2400,6 +2473,7 @@ fn builtin_only_first_deps() {
 #[test]
 fn builtin_cycle_inited() {
     // (Pass) Should look the same as a fresh 'vet init'.
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::cycle();
 
     let metadata = mock.metadata();
@@ -2415,6 +2489,7 @@ fn builtin_cycle_inited() {
 fn builtin_cycle_unaudited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::cycle();
 
     let metadata = mock.metadata();
@@ -2431,6 +2506,7 @@ fn builtin_cycle_unaudited() {
 fn builtin_cycle_full_audited() {
     // (Pass) All entries have direct full audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::cycle();
 
     let metadata = mock.metadata();
@@ -2447,6 +2523,7 @@ fn builtin_cycle_full_audited() {
 fn builtin_cycle_minimal_audited() {
     // (Pass) All entries have direct full audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::cycle();
 
     let metadata = mock.metadata();
@@ -2464,6 +2541,7 @@ fn builtin_dev_detection() {
     // (Pass) Check that we properly identify things that are or aren't only dev-deps,
     // even when they're indirect or used in both contexts.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
@@ -2504,6 +2582,7 @@ fn builtin_dev_detection() {
 fn builtin_dev_detection_empty() {
     // (Fail) same as above but without any audits to confirm expectations
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
@@ -2520,6 +2599,7 @@ fn builtin_dev_detection_empty() {
 fn builtin_dev_detection_empty_deeper() {
     // (Fail) same as above but deeper
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
@@ -2537,6 +2617,7 @@ fn builtin_simple_unaudited_extra() {
     // (Warn) there's an extra unused unaudited entry, but the other is needed
     // BUSTED: this test is broken (doesn't emit warning)
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -2564,6 +2645,7 @@ fn builtin_simple_unaudited_extra_regenerate() {
     // (Pass) there's an extra unused unaudited entry, but the other is needed.
     // Should result in only the v10 unaudited entry remaining.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -2592,6 +2674,7 @@ fn builtin_simple_unaudited_not_a_real_dep() {
     // (Warn) there's an unaudited entry for a package that isn't in our tree at all.
     // BUSTED: this test is broken (doesn't emit warning)
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -2614,6 +2697,7 @@ fn builtin_simple_unaudited_not_a_real_dep_regenerate() {
     // (Pass) there's an unaudited entry for a package that isn't in our tree at all.
     // Should strip the result and produce an empty unaudited file.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -2637,6 +2721,7 @@ fn builtin_simple_deps_unaudited_overbroad() {
     // (Warn) the unaudited entry is needed but it's overbroad
     // BUSTED: this test is broken (doesn't emit warning)
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
 
     let metadata = mock.metadata();
@@ -2661,6 +2746,7 @@ fn builtin_simple_deps_unaudited_overbroad_regenerate() {
     // (Pass) the unaudited entry is needed but it's overbroad
     // Should downgrade from safe-to-deploy to safe-to-run
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
 
     let metadata = mock.metadata();
@@ -2685,6 +2771,7 @@ fn builtin_simple_deps_unaudited_overbroad_regenerate() {
 fn builtin_complex_unaudited_twins() {
     // (Pass) two versions of a crate exist and both are unaudited and they're needed
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
 
     let metadata = mock.metadata();
@@ -2712,6 +2799,7 @@ fn builtin_complex_unaudited_twins_regenerate() {
     // (Pass) two versions of a crate exist and both are unaudited and they're needed
     // Should be a no-op and both entries should remain
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
 
     let metadata = mock.metadata();
@@ -2739,6 +2827,7 @@ fn builtin_complex_unaudited_twins_regenerate() {
 fn builtin_complex_unaudited_partial_twins() {
     // (Pass) two versions of a crate exist and one is unaudited and one is audited
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
 
     let metadata = mock.metadata();
@@ -2766,6 +2855,7 @@ fn builtin_complex_unaudited_partial_twins_regenerate() {
     // (Pass) two versions of a crate exist and one is unaudited and one is audited
     // Should be a no-op and both entries should remain
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
 
     let metadata = mock.metadata();
@@ -2797,6 +2887,7 @@ fn builtin_simple_unaudited_in_delta() {
     // (Warn) An audited entry overlaps a delta and isn't needed
     // BUSTED: this test is broken (doesn't emit warning)
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -2828,6 +2919,7 @@ fn builtin_simple_unaudited_in_delta_regenerate() {
     // (Pass) An audited entry overlaps a delta and isn't needed
     // Should emit an empty unaudited file
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -2860,6 +2952,7 @@ fn builtin_simple_unaudited_in_full() {
     // (Warn) An audited entry overlaps a full audit and isn't needed
     // BUSTED: this test is broken (doesn't emit warning)
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -2891,6 +2984,7 @@ fn builtin_simple_unaudited_in_full_regenerate() {
     // (Pass) An audited entry overlaps a full audit and isn't needed
     // Should emit an empty unaudited file
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -2922,6 +3016,7 @@ fn builtin_simple_unaudited_in_full_regenerate() {
 fn builtin_simple_unaudited_in_direct_full() {
     // (Warn) An audited entry overlaps a full audit which is the cur version and isn't needed
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -2949,6 +3044,7 @@ fn builtin_simple_unaudited_in_direct_full_regnerate() {
     // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
     // Should produce an empty unaudited
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -2980,6 +3076,7 @@ fn builtin_simple_unaudited_nested_weaker_req() {
     // (Pass) A dep that has weaker requirements on its dep
     // including dependency_criteria on an unaudited entry
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3036,6 +3133,7 @@ fn builtin_simple_unaudited_nested_weaker_req_needs_dep_criteria() {
     // (Fail) A dep that has weaker requirements on its dep
     // but the unaudited entry is missing that so the whole thing fails
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3091,6 +3189,7 @@ fn builtin_simple_unaudited_nested_weaker_req_regnerate() {
     // (Pass) A dep that has weaker requirements on its dep
     // BUSTED: doesn't emit dependency-criteria for third-party1's 'unaudited'
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3150,6 +3249,7 @@ fn builtin_simple_unaudited_nested_weaker_req_regnerate() {
 fn builtin_simple_unaudited_nested_stronger_req() {
     // (Pass) A dep that has stronger requirements on its dep
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3207,6 +3307,7 @@ fn builtin_simple_unaudited_nested_stronger_req_regnerate() {
     // (Pass) A dep that has stronger requirements on its dep
     // BUSTED: should emit safe-to-deploy for transitive-third-party1
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3268,6 +3369,7 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria() {
     // (Warn) An audited entry overlaps a full audit which is the cur version and isn't needed
     // BUSTED: this test is broken (doesn't emit warning)
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
 
     let metadata = mock.metadata();
@@ -3300,6 +3402,7 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria_regenerate() {
     // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
     // Should produce an empty unaudited
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
 
     let metadata = mock.metadata();
@@ -3334,6 +3437,7 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
     // BUSTED: this test is broken (doesn't emit warning)
     // TODO: or is this test wrong? should the delta apply?
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
@@ -3367,6 +3471,7 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect_regenerate() {
     // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
     // Should result in an empty unaudited file
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
@@ -3406,6 +3511,7 @@ fn builtin_dev_detection_cursed_full() {
     //
     // This test is "cursed" because it caused some crashes in glitched out the blame system.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
@@ -3431,6 +3537,7 @@ fn builtin_dev_detection_cursed_full() {
 fn builtin_dev_detection_cursed_minimal() {
     // (Pass): the same as the full cursed one, but without the cursed part.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
@@ -3456,6 +3563,7 @@ fn builtin_dev_detection_cursed_minimal() {
 fn builtin_simple_delta_cycle() {
     // (Pass) simple delta cycle
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3484,6 +3592,7 @@ fn builtin_simple_noop_delta() {
     // (Warn) completely pointless noop delta
     // BUSTED: fails to warn about a 5->5 delta
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3511,6 +3620,7 @@ fn builtin_simple_noop_delta() {
 fn builtin_simple_delta_double_cycle() {
     // (Pass) double delta cycle
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3542,6 +3652,7 @@ fn builtin_simple_delta_double_cycle() {
 fn builtin_simple_delta_broken_double_cycle() {
     // (Fail) double delta cycle that's broken
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3573,6 +3684,7 @@ fn builtin_simple_delta_broken_double_cycle() {
 fn builtin_simple_delta_broken_cycle() {
     // (Fail) simple delta cycle that's broken
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3601,6 +3713,7 @@ fn builtin_simple_delta_broken_cycle() {
 fn builtin_simple_long_cycle() {
     // (Pass) long delta cycle
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3629,6 +3742,7 @@ fn builtin_simple_long_cycle() {
 fn builtin_simple_useless_long_cycle() {
     // (Pass) useless long delta cycle
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
@@ -3657,6 +3771,7 @@ fn builtin_simple_useless_long_cycle() {
 fn builtin_haunted_init() {
     // (Pass) Should look the same as a fresh 'vet init'.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::haunted_tree();
 
     let metadata = mock.metadata();
@@ -3672,6 +3787,7 @@ fn builtin_haunted_init() {
 fn builtin_haunted_no_unaudited() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::haunted_tree();
 
     let metadata = mock.metadata();
@@ -3688,6 +3804,7 @@ fn builtin_haunted_no_unaudited() {
 fn builtin_haunted_no_unaudited_deeper() {
     // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::haunted_tree();
 
     let metadata = mock.metadata();
@@ -3704,6 +3821,7 @@ fn builtin_haunted_no_unaudited_deeper() {
 fn builtin_haunted_full_audited() {
     // (Pass) All entries have direct full audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::haunted_tree();
 
     let metadata = mock.metadata();
@@ -3720,6 +3838,7 @@ fn builtin_haunted_full_audited() {
 fn builtin_haunted_minimal_audited() {
     // (Pass) All entries have direct minimal audits.
 
+    let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::haunted_tree();
 
     let metadata = mock.metadata();

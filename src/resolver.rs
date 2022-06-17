@@ -61,6 +61,7 @@
 use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
 use console::{style, Style};
 use core::fmt;
+use futures_util::future::join_all;
 use serde::Serialize;
 use serde_json::json;
 use std::io::Write;
@@ -2321,129 +2322,156 @@ impl<'a> ResolveReport<'a> {
             return Ok(None);
         };
 
-        let mut cache = Cache::acquire(cfg)?;
-        let mut suggestions = vec![];
-        let mut total_lines: u64 = 0;
-        for (&failure_idx, audit_failure) in &fail.failures {
-            let package = &self.graph.nodes[failure_idx];
-            let result = &self.results[failure_idx];
+        let cache = Cache::acquire(cfg)?;
 
-            // Precompute some "notable" parents
-            let notable_parents = {
-                let mut reverse_deps = self.graph.nodes[failure_idx]
-                    .reverse_deps
-                    .iter()
-                    .map(|&parent| self.graph.nodes[parent].name.to_string())
-                    .collect::<Vec<_>>();
+        let mut suggestions = tokio::runtime::Handle::current()
+            .block_on(join_all(fail.failures.iter().map(
+                |(failure_idx, audit_failure)| async {
+                    let failure_idx = *failure_idx;
+                    let package = &self.graph.nodes[failure_idx];
+                    let result = &self.results[failure_idx];
 
-                // To keep the display compact, sort by name length and truncate long lists.
-                // We first sort by name because rust defaults to a stable sort and this will
-                // have by-name as the tie breaker.
-                reverse_deps.sort();
-                reverse_deps.sort_by_key(|item| item.len());
-                let cutoff_index = reverse_deps
-                    .iter()
-                    .scan(0, |sum, s| {
-                        *sum += s.len();
-                        Some(*sum)
-                    })
-                    .position(|count| count > 20);
-                let remainder = cutoff_index.map(|i| reverse_deps.len() - i).unwrap_or(0);
-                if remainder > 1 {
-                    reverse_deps.truncate(cutoff_index.unwrap());
-                    reverse_deps.push(format!("and {} others", remainder));
-                }
-                reverse_deps.join(", ")
-            };
+                    // Precompute some "notable" parents
+                    let notable_parents = {
+                        let mut reverse_deps = self.graph.nodes[failure_idx]
+                            .reverse_deps
+                            .iter()
+                            .map(|&parent| self.graph.nodes[parent].name.to_string())
+                            .collect::<Vec<_>>();
 
-            // Collect up the details of how we failed
-            let mut from_root = None::<SortedSet<&Version>>;
-            let mut from_target = None::<SortedSet<&Version>>;
-            for criteria_idx in audit_failure.criteria_failures.all().indices() {
-                let search_result = &result.search_results[criteria_idx];
-                if let SearchResult::Disconnected {
-                    reachable_from_root,
-                    reachable_from_target,
-                } = search_result
-                {
-                    if let (Some(from_root), Some(from_target)) =
-                        (from_root.as_mut(), from_target.as_mut())
-                    {
-                        // FIXME: this is horrible but I'm tired and this avoids false-positives
-                        // and duplicates. This does the right thing in the common cases, by
-                        // restricting ourselves to the reachable nodes that are common to all
-                        // failures, so that we can suggest just one change that will fix
-                        // everything.
-                        *from_root = &*from_root & reachable_from_root;
-                        *from_target = &*from_target & reachable_from_target;
-                    } else {
-                        from_root = Some(reachable_from_root.clone());
-                        from_target = Some(reachable_from_target.clone());
-                    }
-                } else {
-                    unreachable!("messed up suggest...");
-                }
-            }
+                        // To keep the display compact, sort by name length and truncate long lists.
+                        // We first sort by name because rust defaults to a stable sort and this will
+                        // have by-name as the tie breaker.
+                        reverse_deps.sort();
+                        reverse_deps.sort_by_key(|item| item.len());
+                        let cutoff_index = reverse_deps
+                            .iter()
+                            .scan(0, |sum, s| {
+                                *sum += s.len();
+                                Some(*sum)
+                            })
+                            .position(|count| count > 20);
+                        let remainder = cutoff_index.map(|i| reverse_deps.len() - i).unwrap_or(0);
+                        if remainder > 1 {
+                            reverse_deps.truncate(cutoff_index.unwrap());
+                            reverse_deps.push(format!("and {} others", remainder));
+                        }
+                        reverse_deps.join(", ")
+                    };
 
-            // Now suggest solutions of those failures
-            let mut candidates = SortedSet::new();
-            if allow_deltas {
-                // If we're allowed deltas than try to find a bridge from src and dest
-                for &dest in from_target.as_ref().unwrap() {
-                    let mut closest_above = None;
-                    let mut closest_below = None;
-                    for &src in from_root.as_ref().unwrap() {
-                        if src < dest {
-                            if let Some(closest) = closest_below {
-                                if src > closest {
-                                    closest_below = Some(src);
-                                }
+                    // Collect up the details of how we failed
+                    let mut from_root = None::<SortedSet<&Version>>;
+                    let mut from_target = None::<SortedSet<&Version>>;
+                    for criteria_idx in audit_failure.criteria_failures.all().indices() {
+                        let search_result = &result.search_results[criteria_idx];
+                        if let SearchResult::Disconnected {
+                            reachable_from_root,
+                            reachable_from_target,
+                        } = search_result
+                        {
+                            if let (Some(from_root), Some(from_target)) =
+                                (from_root.as_mut(), from_target.as_mut())
+                            {
+                                // FIXME: this is horrible but I'm tired and this avoids false-positives
+                                // and duplicates. This does the right thing in the common cases, by
+                                // restricting ourselves to the reachable nodes that are common to all
+                                // failures, so that we can suggest just one change that will fix
+                                // everything.
+                                *from_root = &*from_root & reachable_from_root;
+                                *from_target = &*from_target & reachable_from_target;
                             } else {
-                                closest_below = Some(src);
-                            }
-                        } else if let Some(closest) = closest_above {
-                            if src < closest {
-                                closest_above = Some(src);
+                                from_root = Some(reachable_from_root.clone());
+                                from_target = Some(reachable_from_target.clone());
                             }
                         } else {
-                            closest_above = Some(src);
+                            unreachable!("messed up suggest...");
                         }
                     }
 
-                    for closest in closest_below.into_iter().chain(closest_above) {
-                        candidates.insert(Delta {
-                            from: closest.clone(),
-                            to: dest.clone(),
-                        });
-                    }
-                }
-            } else {
-                // If we're not allowing deltas, just try everything reachable from the target
-                for &dest in from_target.as_ref().unwrap() {
-                    candidates.insert(Delta {
-                        from: ROOT_VERSION.clone(),
-                        to: dest.clone(),
-                    });
-                }
-            }
+                    // Now suggest solutions of those failures
+                    let mut candidates = SortedSet::new();
+                    if allow_deltas {
+                        // If we're allowed deltas than try to find a bridge from src and dest
+                        for &dest in from_target.as_ref().unwrap() {
+                            let mut closest_above = None;
+                            let mut closest_below = None;
+                            for &src in from_root.as_ref().unwrap() {
+                                if src < dest {
+                                    if let Some(closest) = closest_below {
+                                        if src > closest {
+                                            closest_below = Some(src);
+                                        }
+                                    } else {
+                                        closest_below = Some(src);
+                                    }
+                                } else if let Some(closest) = closest_above {
+                                    if src < closest {
+                                        closest_above = Some(src);
+                                    }
+                                } else {
+                                    closest_above = Some(src);
+                                }
+                            }
 
-            match cache.fetch_and_diffstat_all(network.clone(), package.name, &candidates) {
-                Ok(suggested_diff) => {
-                    total_lines += suggested_diff.diffstat.count;
-                    suggestions.push(SuggestItem {
+                            for closest in closest_below.into_iter().chain(closest_above) {
+                                candidates.insert(Delta {
+                                    from: closest.clone(),
+                                    to: dest.clone(),
+                                });
+                            }
+                        }
+                    } else {
+                        // If we're not allowing deltas, just try everything reachable from the target
+                        for &dest in from_target.as_ref().unwrap() {
+                            candidates.insert(Delta {
+                                from: ROOT_VERSION.clone(),
+                                to: dest.clone(),
+                            });
+                        }
+                    }
+
+                    let diffstats = join_all(candidates.iter().map(|delta| async {
+                        match cache
+                            .fetch_and_diffstat_package(&network, package.name, delta)
+                            .await
+                        {
+                            Ok(diffstat) => Some(DiffRecommendation {
+                                diffstat,
+                                from: delta.from.clone(),
+                                to: delta.to.clone(),
+                            }),
+                            Err(err) => {
+                                // We don't want to actually error out completely here,
+                                // as other packages might still successfully diff!
+                                error!(
+                                    "error diffing {}:{} {}",
+                                    package.name, package.version, err
+                                );
+                                None
+                            }
+                        }
+                    }))
+                    .await;
+
+                    Some(SuggestItem {
                         package: failure_idx,
-                        suggested_diff,
+                        suggested_diff: diffstats
+                            .into_iter()
+                            .flatten()
+                            .min_by_key(|diff| diff.diffstat.count)?,
                         suggested_criteria: audit_failure.criteria_failures.clone(),
                         notable_parents,
-                    });
-                }
-                Err(err) => {
-                    // We don't want to actually error out completely here since other packages
-                    // might still successfully diff!
-                    error!("error diffing {}:{} {}", package.name, package.version, err);
-                }
-            }
-        }
+                    })
+                },
+            )))
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        let total_lines = suggestions
+            .iter()
+            .map(|s| s.suggested_diff.diffstat.count)
+            .sum();
 
         suggestions.sort_by_key(|item| self.graph.nodes[item.package].version);
         suggestions.sort_by_key(|item| self.graph.nodes[item.package].name);
@@ -2486,7 +2514,7 @@ impl<'a> ResolveReport<'a> {
                 .collect::<Vec<_>>();
             last_suggest.push(SuggestedAudit { command, criteria });
         }
-        cache.command_history.last_suggest = last_suggest;
+        cache.set_last_suggest(last_suggest);
 
         Ok(Some(Suggest {
             suggestions,
