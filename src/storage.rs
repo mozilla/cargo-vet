@@ -9,7 +9,7 @@ use std::{
 };
 
 use cargo_metadata::Version;
-use crates_index::Index;
+use crates_index::{Index, IndexConfig};
 use eyre::{eyre, Context};
 use flate2::read::GzDecoder;
 use futures_util::future::try_join_all;
@@ -22,7 +22,7 @@ use crate::{
     flock::{FileLock, Filesystem},
     format::{
         AuditsFile, CommandHistory, ConfigFile, Delta, DiffCache, DiffStat, FastMap, FetchCommand,
-        ImportsFile, MetaConfig, PackageStr, SortedMap, SuggestedAudit,
+        ImportsFile, MetaConfig, PackageName, PackageStr, SortedMap, SuggestedAudit,
     },
     network::Network,
     resolver,
@@ -257,7 +257,7 @@ async fn fetch_foreign_audit(
     let parsed_url =
         Url::parse(url).wrap_err_with(|| format!("Invalid url for audit {name} @ {url}"))?;
     let audit_bytes = network
-        .download(parsed_url)
+        .download(&parsed_url)
         .await
         .wrap_err_with(|| format!("Could not import audit {name} @ {url}"))?;
     let audit_file: AuditsFile = toml_edit::de::from_slice(&audit_bytes)
@@ -268,7 +268,14 @@ async fn fetch_foreign_audit(
 /// A Registry in CARGO_HOME (usually the crates.io one)
 pub struct CargoRegistry {
     /// The queryable index
-    index: Index,
+    ///
+    /// The index is wrapped behind a tokio Mutex as it is `!Sync`, and needs to
+    /// be used asynchronously for blocking I/O. Code will wait for the mutex
+    /// async, and then `spawn_blocking` while holding the mutex to perform the
+    /// sync operation.
+    index: Arc<tokio::sync::Mutex<Index>>,
+    /// Configuration options for interacting with the registry
+    config: IndexConfig,
     /// The base path all registries share (`$CARGO_HOME/registry`)
     base_dir: PathBuf,
     /// The name of the registry (`github.com-1ecc6299db9ec823`)
@@ -289,15 +296,19 @@ impl CargoRegistry {
     // Could also include the index, not reason to do that yet
 }
 
+type CacheMap<K, V> = FastMap<K, Arc<tokio::sync::OnceCell<V>>>;
+
 struct CacheState {
     /// The loaded DiffCache, will be written back on Drop
     diff_cache: DiffCache,
     /// Command history to provide some persistent magic smarts
     command_history: CommandHistory,
     /// Paths for unpacked packages from this version.
-    fetched_packages: FastMap<(String, Version), Arc<tokio::sync::OnceCell<PathBuf>>>,
+    fetched_packages: CacheMap<(PackageName, Version), PathBuf>,
     /// Computed diffstats from this version.
-    diffed: FastMap<(String, Delta), Arc<tokio::sync::OnceCell<DiffStat>>>,
+    diffed: CacheMap<(PackageName, Delta), DiffStat>,
+    /// Previously fetched crates.io index metadata for each package.
+    crates_index_cache: CacheMap<PackageName, Option<Arc<crates_index::Crate>>>,
 }
 
 /// The cache where we store globally shared artifacts like fetched packages and diffstats
@@ -369,6 +380,7 @@ impl Cache {
                     command_history: CommandHistory::default(),
                     fetched_packages: FastMap::new(),
                     diffed: FastMap::new(),
+                    crates_index_cache: FastMap::new(),
                 }),
             });
         }
@@ -439,6 +451,7 @@ impl Cache {
                 command_history,
                 fetched_packages: FastMap::new(),
                 diffed: FastMap::new(),
+                crates_index_cache: FastMap::new(),
             }),
         })
     }
@@ -449,9 +462,98 @@ impl Cache {
     ///
     /// However this may do some expensive disk i/o, so ideally we should do
     /// some bulk processing of this later. For now let's get it working...
-    pub fn query_package_from_index(&self, name: PackageStr) -> Option<crates_index::Crate> {
-        let reg = self.cargo_registry.as_ref()?;
-        reg.index.crate_(name)
+    pub async fn query_package_from_index(
+        &self,
+        name: PackageStr<'_>,
+    ) -> Option<Arc<crates_index::Crate>> {
+        let cargo_registry = self.cargo_registry.as_ref()?;
+
+        // Lock the mutex to extract a reference to the OnceCell which we'll use
+        // to asynchronously synchronize on and query the index only once
+        // per-package in a single execution.
+        let once_cell = {
+            let mut guard = self.state.lock().unwrap();
+            guard
+                .crates_index_cache
+                .entry(name.to_owned())
+                .or_default()
+                .clone()
+        };
+
+        once_cell
+            .get_or_init(|| async {
+                info!("querying index for {name}");
+                let name = name.to_owned();
+                let index_lock = cargo_registry.index.clone().lock_owned().await;
+                tokio::task::spawn_blocking(move || index_lock.crate_(&name))
+                    .await
+                    .ok()?
+                    .map(Arc::new)
+            })
+            .await
+            .clone()
+    }
+
+    pub async fn query_version_from_index(
+        &self,
+        name: PackageStr<'_>,
+        version_str: &str,
+    ) -> Option<crates_index::Version> {
+        self.query_package_from_index(name)
+            .await?
+            .versions()
+            .iter()
+            .find(|v| v.version() == version_str)
+            .cloned()
+    }
+
+    /// Fetch the checksum for the given package from the Index.
+    async fn get_package_checksum(
+        &self,
+        package: PackageStr<'_>,
+        version_str: &str,
+    ) -> Result<[u8; 32], VetError> {
+        let crate_ = self
+            .query_package_from_index(package)
+            .await
+            .ok_or_else(|| eyre!("checksum for {package} not found in crates.io index"))?;
+        let ver = crate_
+            .versions()
+            .iter()
+            .find(|p| p.version() == version_str)
+            .ok_or_else(|| {
+                eyre!("checksum for {package}:{version_str} not found in crates.io index")
+            })?;
+        Ok(*ver.checksum())
+    }
+
+    /// Directly download a package from the cargo registry
+    async fn download_package(
+        &self,
+        network: &Network,
+        config: &IndexConfig,
+        package: PackageStr<'_>,
+        version: &Version,
+        download_to: &Path,
+    ) -> Result<(), VetError> {
+        let version_str = version.to_string();
+        let url = &config.download_url(package, &version_str).ok_or_else(|| {
+            eyre!("unable to determine download URL for crate {package}:{version}")
+        })?;
+        info!(
+            "downloading package {}:{} from {} to {}",
+            package,
+            version,
+            url,
+            download_to.display()
+        );
+        network
+            .download_and_persist(
+                &Url::parse(url)?,
+                download_to,
+                self.get_package_checksum(package, &version_str),
+            )
+            .await
     }
 
     #[tracing::instrument(skip(self, network), err)]
@@ -526,26 +628,27 @@ impl Cache {
                         let network = network.ok_or_else(|| {
                             eyre!("running as --frozen but needed to fetch {package}:{version}")
                         })?;
+                        let cargo_registry = self.cargo_registry.as_ref().ok_or_else(|| {
+                            eyre!(
+                                "cargo registry config missing and crate not cached, \
+                                    unable to download package {package}:{version}"
+                            )
+                        })?;
 
                         // We don't have it, so download it
-                        let url = Url::parse(&format!(
-                            "https://crates.io/api/v1/crates/{package}/{version}/download"
-                        ))?;
-                        info!(
-                            "downloading package {}:{} from {} to {}",
+                        self.download_package(
+                            network,
+                            &cargo_registry.config,
                             package,
                             version,
-                            url,
-                            fetched_package.display()
-                        );
-                        network.download_and_persist(url, &fetched_package).await?;
+                            &fetched_package,
+                        )
+                        .await?;
 
                         let fetched_package_ = fetched_package.clone();
                         tokio::task::spawn_blocking(move || File::open(&fetched_package_)).await??
                     }
                 };
-
-                // TODO(#116): take the SHA2 of the bytes and compare it to what the registry says
 
                 if fetch_is_ok(&fetched_src).await {
                     Ok(fetched_src)
@@ -957,11 +1060,14 @@ fn find_cargo_registry() -> Result<CargoRegistry, VetError> {
 
     let index = Index::new_cargo_default()?;
 
+    let config = index.index_config()?;
+
     let base_dir = index.path().parent().unwrap().parent().unwrap().to_owned();
     let registry = index.path().file_name().unwrap().to_owned();
 
     Ok(CargoRegistry {
-        index,
+        index: Arc::new(tokio::sync::Mutex::new(index)),
+        config,
         base_dir,
         registry,
     })

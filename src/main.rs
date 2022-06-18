@@ -1253,22 +1253,24 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 
         // Check if any of our first-parties are on crates.io and not explicitly noted as such
         let cache = Cache::acquire(cfg)?;
-        let mut needs_audit_as_entry = vec![];
-        for package in first_party_packages(&cfg.metadata, &store.config) {
-            if !store.config.audit_as_crates_io.contains_key(&package.name) {
-                if let Some(index_entry) = cache.query_package_from_index(&package.name) {
-                    for index_version in index_entry.versions() {
-                        if let Ok(parsed_version) =
-                            index_version.version().parse::<cargo_metadata::Version>()
-                        {
-                            if parsed_version == package.version {
-                                needs_audit_as_entry.push(package);
-                            }
-                        }
+        let needs_audit_as_entry = tokio::runtime::Handle::current()
+            .block_on(join_all(
+                first_party_packages(&cfg.metadata, &store.config).map(|package| async {
+                    if store.config.audit_as_crates_io.contains_key(&package.name) {
+                        return None;
                     }
-                }
-            }
-        }
+                    let index_entry = cache.query_package_from_index(&package.name).await?;
+                    let version_str = package.version.to_string();
+                    index_entry
+                        .versions()
+                        .iter()
+                        .find(|v| v.version() == version_str)
+                        .map(|_| &package.name)
+                }),
+            ))
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
         if !needs_audit_as_entry.is_empty() {
             writeln!(
@@ -1278,7 +1280,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             writeln!(out)?;
             writeln!(out, "  [audit-as-crates-io]")?;
             for package in needs_audit_as_entry {
-                writeln!(out, "  {} = false", package.name)?;
+                writeln!(out, "  {} = false", package)?;
             }
             writeln!(out)?;
             writeln!(
@@ -1645,7 +1647,7 @@ async fn eula_for_criteria(
     let url = Url::parse(criteria_entry.description_url.as_ref().unwrap()).unwrap();
     if let Some(network) = network {
         if let Ok(eula) = network
-            .download(url.clone())
+            .download(&url)
             .await
             .and_then(|bytes| Ok(String::from_utf8(bytes)?))
         {
