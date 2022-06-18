@@ -132,7 +132,6 @@ impl Store {
                 imports: SortedMap::new(),
                 policy: SortedMap::new(),
                 unaudited: SortedMap::new(),
-                audit_as_crates_io: SortedMap::new(),
             },
             imports: ImportsFile {
                 audits: SortedMap::new(),

@@ -10,7 +10,7 @@ use cargo_metadata::{Metadata, Package};
 use clap::{CommandFactory, Parser};
 use console::{style, Term};
 use eyre::{eyre, WrapErr};
-use format::{CriteriaName, CriteriaStr, PackageName};
+use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::join_all;
 use network::Network;
 use reqwest::Url;
@@ -70,12 +70,15 @@ impl Deref for Config {
 }
 
 pub trait PackageExt {
-    fn is_third_party(&self, audit_as_crates_io: &SortedMap<PackageName, bool>) -> bool;
+    fn is_third_party(&self, policy: &SortedMap<PackageName, PolicyEntry>) -> bool;
 }
 
 impl PackageExt for Package {
-    fn is_third_party(&self, audit_as_crates_io: &SortedMap<PackageName, bool>) -> bool {
-        let forced_third_party = *audit_as_crates_io.get(&self.name).unwrap_or(&false);
+    fn is_third_party(&self, policy: &SortedMap<PackageName, PolicyEntry>) -> bool {
+        let forced_third_party = policy
+            .get(&self.name)
+            .and_then(|policy| policy.audit_as_crates_io)
+            .unwrap_or(false);
         let is_crates_io = self
             .source
             .as_ref()
@@ -451,7 +454,6 @@ pub fn init_files(
             imports: SortedMap::new(),
             unaudited: dependencies,
             policy: SortedMap::new(),
-            audit_as_crates_io: SortedMap::new(),
         }
     };
 
@@ -1251,42 +1253,8 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
             tokio::runtime::Handle::current().block_on(store.fetch_foreign_audits(network))?;
         }
 
-        // Check if any of our first-parties are on crates.io and not explicitly noted as such
-        let cache = Cache::acquire(cfg)?;
-        let mut needs_audit_as_entry = vec![];
-        for package in first_party_packages(&cfg.metadata, &store.config) {
-            if !store.config.audit_as_crates_io.contains_key(&package.name) {
-                if let Some(index_entry) = cache.query_package_from_index(&package.name) {
-                    for index_version in index_entry.versions() {
-                        if let Ok(parsed_version) =
-                            index_version.version().parse::<cargo_metadata::Version>()
-                        {
-                            if parsed_version == package.version {
-                                needs_audit_as_entry.push(package);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if !needs_audit_as_entry.is_empty() {
-            writeln!(
-                out,
-                "error: some first-party packages match published crates.io versions"
-            )?;
-            writeln!(out)?;
-            writeln!(out, "  [audit-as-crates-io]")?;
-            for package in needs_audit_as_entry {
-                writeln!(out, "  {} = false", package.name)?;
-            }
-            writeln!(out)?;
-            writeln!(
-                out,
-                "add these entries to config.toml to silence this error"
-            )?;
-            panic_any(ExitPanic(-1));
-        }
+        // Check if any of our first-parties are in the crates.io registry
+        check_audit_as_crates_io(out, cfg, &store)?;
     }
 
     // DO THE THING!!!!
@@ -1657,6 +1625,7 @@ async fn eula_for_criteria(
     format!("Could not download criteria description, it should be available at {url}")
 }
 
+/// All third-party packages, with the audit-as-crates-io policy applied
 fn foreign_packages<'a>(
     metadata: &'a Metadata,
     config: &'a ConfigFile,
@@ -1665,10 +1634,12 @@ fn foreign_packages<'a>(
     metadata
         .packages
         .iter()
-        .filter(|package| package.is_third_party(&config.audit_as_crates_io))
+        .filter(|package| package.is_third_party(&config.policy))
 }
 
-fn first_party_packages<'a>(
+/// All first-party packages, **without** the audit-as-crates-io policy applied
+/// (because it's used for validating that field's value).
+fn first_party_packages_strict<'a>(
     metadata: &'a Metadata,
     config: &'a ConfigFile,
 ) -> impl Iterator<Item = &'a Package> + 'a {
@@ -1676,5 +1647,85 @@ fn first_party_packages<'a>(
     metadata
         .packages
         .iter()
-        .filter(|package| !package.is_third_party(&config.audit_as_crates_io))
+        .filter(|package| !package.is_third_party(&config.policy))
+}
+
+fn check_audit_as_crates_io(
+    out: &mut dyn Write,
+    cfg: &Config,
+    store: &Store,
+) -> Result<(), VetError> {
+    let cache = Cache::acquire(cfg)?;
+    let mut needs_audit_as_entry = vec![];
+    let mut shouldnt_be_audit_as = vec![];
+
+    'packages: for package in first_party_packages_strict(&cfg.metadata, &store.config) {
+        let audit_policy = store
+            .config
+            .policy
+            .get(&package.name)
+            .and_then(|policy| policy.audit_as_crates_io);
+        if audit_policy == Some(false) {
+            // They've explicitly said this is first-party so we don't care about what's in the registry
+            continue;
+        }
+
+        if let Some(index_entry) = cache.query_package_from_index(&package.name) {
+            for index_version in index_entry.versions() {
+                if let Ok(index_ver) = index_version.version().parse::<cargo_metadata::Version>() {
+                    if index_ver == package.version {
+                        // We found a version of this package in the registry!
+                        if audit_policy == None {
+                            // At this point, having no policy is an error
+                            needs_audit_as_entry.push(package);
+                        }
+                        // Now that we've found a version match, we're done with this package
+                        continue 'packages;
+                    }
+                }
+            }
+        }
+
+        // If we reach this point, then we couldn't find a matching package in the registry,
+        // So any `audit-as-crates-io = true` is an error that should be corrected
+        if audit_policy == Some(true) {
+            shouldnt_be_audit_as.push(package);
+        }
+    }
+
+    // ERRORS: these are all fatal diagnostics, but they are batched
+    if !needs_audit_as_entry.is_empty() {
+        writeln!(
+            out,
+            "error: some first-party packages match published crates.io versions"
+        )?;
+        for package in &needs_audit_as_entry {
+            writeln!(out, "  {}:{}", package.name, package.version)?;
+        }
+        writeln!(out)?;
+        writeln!(
+            out,
+            "All of these must have a policy.*.audit-as-crates-io entry"
+        )?;
+    }
+
+    if !shouldnt_be_audit_as.is_empty() {
+        writeln!(
+            out,
+            "error: some audit-as-crates-io packages don't match published crates.io versions"
+        )?;
+        for package in &shouldnt_be_audit_as {
+            writeln!(out, "  {}:{}", package.name, package.version)?;
+        }
+        writeln!(
+            out,
+            "Either remove audit-as-crates-io from their policies or set it to false"
+        )?;
+    }
+
+    if !shouldnt_be_audit_as.is_empty() || !needs_audit_as_entry.is_empty() {
+        panic_any(ExitPanic(-1));
+    }
+
+    Ok(())
 }

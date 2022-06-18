@@ -261,6 +261,7 @@ fn violation_m(
 
 fn default_policy() -> PolicyEntry {
     PolicyEntry {
+        audit_as_crates_io: None,
         criteria: None,
         dev_criteria: None,
         dependency_criteria: SortedMap::new(),
@@ -765,6 +766,7 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                 config.policy.insert(
                     package.name.clone(),
                     PolicyEntry {
+                        audit_as_crates_io: None,
                         criteria: Some(vec![DEFAULT_CRIT.to_string()]),
                         dev_criteria: Some(vec![DEFAULT_CRIT.to_string()]),
                         dependency_criteria: DependencyCriteria::new(),
@@ -803,7 +805,7 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
 
     let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
-        if package.is_third_party(&config.audit_as_crates_io) {
+        if package.is_third_party(&config.policy) {
             audited
                 .entry(package.name.clone())
                 .or_insert(vec![])
@@ -832,7 +834,7 @@ fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
 
     let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
-        if package.is_third_party(&config.audit_as_crates_io) {
+        if package.is_third_party(&config.policy) {
             audited
                 .entry(package.name.clone())
                 .or_insert(vec![])

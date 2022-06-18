@@ -5,7 +5,6 @@ expression: format_outputs(&output)
 stdout:
 [
   {
-    "build_type": "normal",
     "package_id": "atty 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "atty",
     "version": "0.2.14",
@@ -16,6 +15,11 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      24,
+      38,
+      100
+    ],
     "all_deps": [
       24,
       38,
@@ -30,13 +34,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "autocfg 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "autocfg",
     "version": "1.1.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       32,
@@ -48,13 +52,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "base64 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "base64",
     "version": "0.13.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       60
@@ -65,13 +69,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "bitflags 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "bitflags",
     "version": "1.3.2",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       8,
@@ -85,13 +89,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "bumpalo 3.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "bumpalo",
     "version": "3.9.1",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       94
@@ -102,13 +106,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "bytes 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "bytes",
     "version": "1.1.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       22,
@@ -126,13 +130,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "cc 1.0.73 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "cc",
     "version": "1.0.73",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       50
@@ -143,13 +147,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "cfg-if 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "cfg-if",
     "version": "1.0.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       11,
@@ -167,7 +171,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "clap 3.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "clap",
     "version": "3.1.8",
@@ -182,6 +185,15 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      0,
+      3,
+      32,
+      51,
+      70,
+      73,
+      75
+    ],
     "all_deps": [
       0,
       3,
@@ -200,7 +212,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "core-foundation 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "core-foundation",
     "version": "0.9.3",
@@ -210,6 +221,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      10,
+      38
+    ],
     "all_deps": [
       10,
       38
@@ -223,13 +238,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "core-foundation-sys 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "core-foundation-sys",
     "version": "0.8.3",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       9,
@@ -242,7 +257,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "encoding_rs 0.8.31 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "encoding_rs",
     "version": "0.8.31",
@@ -251,6 +265,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      7
+    ],
     "all_deps": [
       7
     ],
@@ -263,7 +280,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "fastrand 1.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "fastrand",
     "version": "1.7.0",
@@ -272,6 +288,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      33
+    ],
     "all_deps": [
       33
     ],
@@ -284,13 +303,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "fnv 1.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "fnv",
     "version": "1.0.7",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       22,
@@ -302,7 +321,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "foreign-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "foreign-types",
     "version": "0.3.2",
@@ -311,6 +329,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      15
+    ],
     "all_deps": [
       15
     ],
@@ -323,13 +344,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "foreign-types-shared 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "foreign-types-shared",
     "version": "0.1.1",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       14
@@ -340,7 +361,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "form_urlencoded 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "form_urlencoded",
     "version": "1.0.1",
@@ -350,6 +370,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      40,
+      52
+    ],
     "all_deps": [
       40,
       52
@@ -364,7 +388,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "futures-channel 0.3.21 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "futures-channel",
     "version": "0.3.21",
@@ -373,6 +396,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      18
+    ],
     "all_deps": [
       18
     ],
@@ -385,13 +411,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "futures-core 0.3.21 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "futures-core",
     "version": "0.3.21",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       17,
@@ -407,13 +433,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "futures-sink 0.3.21 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "futures-sink",
     "version": "0.3.21",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       22,
@@ -425,13 +451,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "futures-task 0.3.21 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "futures-task",
     "version": "0.3.21",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       21
@@ -442,7 +468,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "futures-util 0.3.21 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "futures-util",
     "version": "0.3.21",
@@ -454,6 +479,12 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      18,
+      20,
+      53,
+      54
+    ],
     "all_deps": [
       18,
       20,
@@ -471,7 +502,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "h2 0.3.13 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "h2",
     "version": "0.3.13",
@@ -490,6 +520,19 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      5,
+      13,
+      18,
+      19,
+      21,
+      25,
+      32,
+      68,
+      78,
+      80,
+      82
+    ],
     "all_deps": [
       5,
       13,
@@ -513,13 +556,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "hashbrown 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "hashbrown",
     "version": "0.11.2",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       32
@@ -530,7 +573,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "hermit-abi 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "hermit-abi",
     "version": "0.1.19",
@@ -539,6 +581,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      38
+    ],
     "all_deps": [
       38
     ],
@@ -551,7 +596,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "http 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "http",
     "version": "0.2.6",
@@ -562,6 +606,11 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      5,
+      13,
+      35
+    ],
     "all_deps": [
       5,
       13,
@@ -579,7 +628,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "http-body 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "http-body",
     "version": "0.4.4",
@@ -590,6 +638,11 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      5,
+      25,
+      53
+    ],
     "all_deps": [
       5,
       25,
@@ -605,13 +658,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "httparse 1.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "httparse",
     "version": "1.7.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       29
@@ -622,13 +675,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "httpdate 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "httpdate",
     "version": "1.0.2",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       29
@@ -639,7 +692,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "hyper 0.14.18 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "hyper",
     "version": "0.14.18",
@@ -663,6 +715,24 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      5,
+      17,
+      18,
+      21,
+      22,
+      25,
+      26,
+      27,
+      28,
+      35,
+      53,
+      69,
+      78,
+      81,
+      82,
+      91
+    ],
     "all_deps": [
       5,
       17,
@@ -691,7 +761,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "hyper-tls 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "hyper-tls",
     "version": "0.5.0",
@@ -704,6 +773,13 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      5,
+      29,
+      45,
+      78,
+      79
+    ],
     "all_deps": [
       5,
       29,
@@ -720,7 +796,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "idna 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "idna",
     "version": "0.2.3",
@@ -731,6 +806,11 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      40,
+      86,
+      87
+    ],
     "all_deps": [
       40,
       86,
@@ -745,7 +825,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "indexmap 1.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "indexmap",
     "version": "1.8.1",
@@ -756,6 +835,10 @@ stdout:
       1
     ],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      1,
+      23
+    ],
     "all_deps": [
       1,
       23
@@ -770,7 +853,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "instant 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "instant",
     "version": "0.1.12",
@@ -779,6 +861,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      7
+    ],
     "all_deps": [
       7
     ],
@@ -791,13 +876,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "ipnet 2.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "ipnet",
     "version": "2.4.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       60
@@ -808,13 +893,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "itoa 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "itoa",
     "version": "1.0.1",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       25,
@@ -828,7 +913,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "js-sys 0.3.57 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "js-sys",
     "version": "0.3.57",
@@ -837,6 +921,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      93
+    ],
     "all_deps": [
       93
     ],
@@ -851,13 +938,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "lazy_static",
     "version": "1.4.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       45,
@@ -872,13 +959,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "libc 0.2.123 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "libc",
     "version": "0.2.123",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       0,
@@ -900,7 +987,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "log 0.4.16 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "log",
     "version": "0.4.16",
@@ -909,6 +995,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      7
+    ],
     "all_deps": [
       7
     ],
@@ -925,13 +1014,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "matches 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "matches",
     "version": "0.1.9",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       16,
@@ -944,13 +1033,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "memchr 2.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "memchr",
     "version": "2.4.1",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       51,
@@ -962,13 +1051,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "mime 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "mime",
     "version": "0.3.16",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       60
@@ -979,7 +1068,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "mio 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "mio",
     "version": "0.8.2",
@@ -993,6 +1081,14 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      38,
+      39,
+      44,
+      46,
+      92,
+      100
+    ],
     "all_deps": [
       38,
       39,
@@ -1010,7 +1106,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "miow 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "miow",
     "version": "0.3.7",
@@ -1019,6 +1114,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      100
+    ],
     "all_deps": [
       100
     ],
@@ -1031,7 +1129,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "native-tls 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "native-tls",
     "version": "0.2.10",
@@ -1049,6 +1146,18 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      37,
+      38,
+      39,
+      48,
+      49,
+      50,
+      62,
+      63,
+      64,
+      72
+    ],
     "all_deps": [
       37,
       38,
@@ -1072,7 +1181,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "ntapi 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "ntapi",
     "version": "0.3.7",
@@ -1081,6 +1189,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      100
+    ],
     "all_deps": [
       100
     ],
@@ -1093,13 +1204,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "once_cell 1.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "once_cell",
     "version": "1.10.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       48
@@ -1110,7 +1221,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "openssl 0.10.38 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "openssl",
     "version": "0.10.38",
@@ -1124,6 +1234,14 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      3,
+      7,
+      14,
+      38,
+      47,
+      50
+    ],
     "all_deps": [
       3,
       7,
@@ -1141,13 +1259,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "openssl-probe 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "openssl-probe",
     "version": "0.1.5",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       45
@@ -1158,7 +1276,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "openssl-sys 0.9.72 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "openssl-sys",
     "version": "0.9.72",
@@ -1172,6 +1289,13 @@ stdout:
       90
     ],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      1,
+      6,
+      38,
+      55,
+      90
+    ],
     "all_deps": [
       1,
       6,
@@ -1189,7 +1313,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "os_str_bytes 6.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "os_str_bytes",
     "version": "6.0.0",
@@ -1198,6 +1321,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      41
+    ],
     "all_deps": [
       41
     ],
@@ -1210,13 +1336,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "percent-encoding 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "percent-encoding",
     "version": "2.1.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       16,
@@ -1229,13 +1355,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "pin-project-lite 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "pin-project-lite",
     "version": "0.2.8",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       21,
@@ -1252,13 +1378,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "pin-utils 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "pin-utils",
     "version": "0.1.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       21
@@ -1269,13 +1395,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "pkg-config 0.3.25 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "pkg-config",
     "version": "0.3.25",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       50
@@ -1286,7 +1412,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "proc-macro2 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "proc-macro2",
     "version": "1.0.37",
@@ -1295,6 +1420,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      88
+    ],
     "all_deps": [
       88
     ],
@@ -1311,7 +1439,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "quote 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "quote",
     "version": "1.0.18",
@@ -1320,6 +1447,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      56
+    ],
     "all_deps": [
       56
     ],
@@ -1336,7 +1466,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "redox_syscall 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "redox_syscall",
     "version": "0.2.13",
@@ -1345,6 +1474,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      3
+    ],
     "all_deps": [
       3
     ],
@@ -1357,7 +1489,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "remove_dir_all 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "remove_dir_all",
     "version": "0.5.3",
@@ -1366,6 +1497,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      100
+    ],
     "all_deps": [
       100
     ],
@@ -1378,7 +1512,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "reqwest 0.11.10 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "reqwest",
     "version": "0.11.10",
@@ -1414,6 +1547,36 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      2,
+      5,
+      11,
+      18,
+      21,
+      22,
+      25,
+      26,
+      29,
+      30,
+      34,
+      36,
+      37,
+      39,
+      42,
+      45,
+      52,
+      53,
+      65,
+      66,
+      67,
+      78,
+      79,
+      89,
+      93,
+      95,
+      99,
+      104
+    ],
     "all_deps": [
       2,
       5,
@@ -1453,13 +1616,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "ryu 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "ryu",
     "version": "1.0.9",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       66,
@@ -1471,7 +1634,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "schannel 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "schannel",
     "version": "0.1.19",
@@ -1481,6 +1643,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      37,
+      100
+    ],
     "all_deps": [
       37,
       100
@@ -1494,7 +1660,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "security-framework 2.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "security-framework",
     "version": "2.6.1",
@@ -1507,6 +1672,13 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      3,
+      9,
+      10,
+      38,
+      64
+    ],
     "all_deps": [
       3,
       9,
@@ -1523,7 +1695,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "security-framework-sys 2.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "security-framework-sys",
     "version": "2.6.1",
@@ -1533,6 +1704,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      10,
+      38
+    ],
     "all_deps": [
       10,
       38
@@ -1547,13 +1722,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "serde 1.0.136 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "serde",
     "version": "1.0.136",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       60,
@@ -1566,7 +1741,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "serde_json 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "serde_json",
     "version": "1.0.79",
@@ -1577,6 +1751,11 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      35,
+      61,
+      65
+    ],
     "all_deps": [
       35,
       61,
@@ -1592,7 +1771,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "serde_urlencoded 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "serde_urlencoded",
     "version": "0.7.1",
@@ -1604,6 +1782,12 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      16,
+      35,
+      61,
+      65
+    ],
     "all_deps": [
       16,
       35,
@@ -1619,13 +1803,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "slab 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "slab",
     "version": "0.4.6",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       22
@@ -1636,7 +1820,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "socket2 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "socket2",
     "version": "0.4.4",
@@ -1646,6 +1829,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      38,
+      100
+    ],
     "all_deps": [
       38,
       100
@@ -1660,13 +1847,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "strsim 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "strsim",
     "version": "0.10.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       8
@@ -1677,7 +1864,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "syn 1.0.91 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "syn",
     "version": "1.0.91",
@@ -1688,6 +1874,11 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      56,
+      57,
+      88
+    ],
     "all_deps": [
       56,
       57,
@@ -1704,7 +1895,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "tempfile 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "tempfile",
     "version": "3.3.0",
@@ -1718,6 +1908,14 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      7,
+      12,
+      38,
+      58,
+      59,
+      100
+    ],
     "all_deps": [
       7,
       12,
@@ -1735,7 +1933,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "termcolor 1.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "termcolor",
     "version": "1.1.3",
@@ -1744,6 +1941,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      102
+    ],
     "all_deps": [
       102
     ],
@@ -1756,7 +1956,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "name": "test-project",
     "version": "0.1.0",
     "normal_deps": [
@@ -1767,6 +1966,12 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      8,
+      60,
+      66,
+      78
+    ],
     "all_deps": [
       8,
       60,
@@ -1780,13 +1985,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "textwrap 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "textwrap",
     "version": "0.15.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       8
@@ -1797,7 +2002,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "tinyvec 1.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "tinyvec",
     "version": "1.5.1",
@@ -1806,6 +2010,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      77
+    ],
     "all_deps": [
       77
     ],
@@ -1818,13 +2025,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "tinyvec_macros 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "tinyvec_macros",
     "version": "0.1.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       76
@@ -1835,7 +2042,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "tokio 1.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "tokio",
     "version": "1.17.0",
@@ -1850,6 +2056,15 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      5,
+      38,
+      41,
+      43,
+      53,
+      69,
+      100
+    ],
     "all_deps": [
       5,
       38,
@@ -1874,7 +2089,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "tokio-native-tls 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "tokio-native-tls",
     "version": "0.3.0",
@@ -1884,6 +2098,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      45,
+      78
+    ],
     "all_deps": [
       45,
       78
@@ -1898,7 +2116,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "tokio-util 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "tokio-util",
     "version": "0.7.1",
@@ -1912,6 +2129,14 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      5,
+      18,
+      19,
+      53,
+      78,
+      82
+    ],
     "all_deps": [
       5,
       18,
@@ -1929,13 +2154,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "tower-service 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "tower-service",
     "version": "0.3.1",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       29
@@ -1946,7 +2171,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "tracing 0.1.33 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "tracing",
     "version": "0.1.33",
@@ -1958,6 +2182,12 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      7,
+      53,
+      83,
+      84
+    ],
     "all_deps": [
       7,
       53,
@@ -1975,7 +2205,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "tracing-attributes 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "tracing-attributes",
     "version": "0.1.20",
@@ -1986,6 +2215,11 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      56,
+      57,
+      71
+    ],
     "all_deps": [
       56,
       57,
@@ -2000,7 +2234,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "tracing-core 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "tracing-core",
     "version": "0.1.25",
@@ -2009,6 +2242,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      37
+    ],
     "all_deps": [
       37
     ],
@@ -2021,13 +2257,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "try-lock 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "try-lock",
     "version": "0.2.3",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       91
@@ -2038,13 +2274,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "unicode-bidi 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "unicode-bidi",
     "version": "0.3.7",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       31
@@ -2055,7 +2291,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "unicode-normalization 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "unicode-normalization",
     "version": "0.1.19",
@@ -2064,6 +2299,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      76
+    ],
     "all_deps": [
       76
     ],
@@ -2076,13 +2314,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "unicode-xid 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "unicode-xid",
     "version": "0.2.2",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       56,
@@ -2094,7 +2332,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "url 2.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "url",
     "version": "2.2.2",
@@ -2106,6 +2343,12 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      16,
+      31,
+      40,
+      52
+    ],
     "all_deps": [
       16,
       31,
@@ -2121,13 +2364,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "vcpkg 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "vcpkg",
     "version": "0.2.15",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       50
@@ -2138,7 +2381,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "want 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "want",
     "version": "0.3.0",
@@ -2148,6 +2390,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      39,
+      85
+    ],
     "all_deps": [
       39,
       85
@@ -2161,13 +2407,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "wasi 0.11.0+wasi-snapshot-preview1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "wasi",
     "version": "0.11.0+wasi-snapshot-preview1",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       43
@@ -2178,7 +2424,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "wasm-bindgen 0.2.80 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "wasm-bindgen",
     "version": "0.2.80",
@@ -2188,6 +2433,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      7,
+      96
+    ],
     "all_deps": [
       7,
       96
@@ -2204,7 +2453,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "wasm-bindgen-backend 0.2.80 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "wasm-bindgen-backend",
     "version": "0.2.80",
@@ -2219,6 +2467,15 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      4,
+      37,
+      39,
+      56,
+      57,
+      71,
+      98
+    ],
     "all_deps": [
       4,
       37,
@@ -2237,7 +2494,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "wasm-bindgen-futures 0.4.30 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "wasm-bindgen-futures",
     "version": "0.4.30",
@@ -2249,6 +2505,12 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      7,
+      36,
+      93,
+      99
+    ],
     "all_deps": [
       7,
       36,
@@ -2264,7 +2526,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "wasm-bindgen-macro 0.2.80 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "wasm-bindgen-macro",
     "version": "0.2.80",
@@ -2274,6 +2535,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      57,
+      97
+    ],
     "all_deps": [
       57,
       97
@@ -2287,7 +2552,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "wasm-bindgen-macro-support 0.2.80 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "wasm-bindgen-macro-support",
     "version": "0.2.80",
@@ -2300,6 +2564,13 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      56,
+      57,
+      71,
+      94,
+      98
+    ],
     "all_deps": [
       56,
       57,
@@ -2316,13 +2587,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "wasm-bindgen-shared 0.2.80 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "wasm-bindgen-shared",
     "version": "0.2.80",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       94,
@@ -2334,7 +2605,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "web-sys 0.3.57 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "web-sys",
     "version": "0.3.57",
@@ -2344,6 +2614,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      36,
+      93
+    ],
     "all_deps": [
       36,
       93
@@ -2358,7 +2632,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "winapi 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "winapi",
     "version": "0.3.9",
@@ -2368,6 +2641,10 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      101,
+      103
+    ],
     "all_deps": [
       101,
       103
@@ -2391,13 +2668,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "winapi-i686-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "winapi-i686-pc-windows-gnu",
     "version": "0.4.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       100
@@ -2408,7 +2685,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "winapi-util 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "winapi-util",
     "version": "0.1.5",
@@ -2417,6 +2693,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      100
+    ],
     "all_deps": [
       100
     ],
@@ -2429,13 +2708,13 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "winapi-x86_64-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "winapi-x86_64-pc-windows-gnu",
     "version": "0.4.0",
     "normal_deps": [],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
       100
@@ -2446,7 +2725,6 @@ stdout:
     "is_dev_only": false
   },
   {
-    "build_type": "normal",
     "package_id": "winreg 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
     "name": "winreg",
     "version": "0.10.1",
@@ -2455,6 +2733,9 @@ stdout:
     ],
     "build_deps": [],
     "dev_deps": [],
+    "normal_and_build_deps": [
+      100
+    ],
     "all_deps": [
       100
     ],
