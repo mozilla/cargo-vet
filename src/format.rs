@@ -290,12 +290,6 @@ pub struct ConfigFile {
     #[serde(default)]
     pub policy: SortedMap<PackageName, PolicyEntry>,
 
-    /// Whether any first party crates with this name should be treated as if they're
-    /// crates.io deps (as long as they match something published to crates.io)
-    #[serde(rename = "audit-as-crates-io")]
-    #[serde(default)]
-    pub audit_as_crates_io: SortedMap<PackageName, bool>,
-
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
@@ -331,6 +325,29 @@ fn is_default_criteria(val: &CriteriaName) -> bool {
 /// default criteria in audits.toml".
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct PolicyEntry {
+    /// Whether this nominally-first-party crate should actually be subject to audits
+    /// as-if it was third-party, based on matches to crates.io packages with the same
+    /// name and version. This field is optional for any package that *doesn't* have
+    /// such a match, and mandatory for all others (None == Some(false)).
+    ///
+    /// If true, this package will be handled like a third-party package and require
+    /// audits. If the package is not in the crates.io registry, it will be an error
+    /// and you should either make sure the current version is published or flip
+    /// this back to false.
+    ///
+    /// Setting this value to true is intended for actual externally developed projects
+    /// that you are importing into your project in a weird way with minimal modifications.
+    /// For instance, if you manually vendor the package in, or maintain a small patchset
+    /// on top of the currently published version.
+    ///
+    /// It should not be used for packages that are directly developed in this project
+    /// (a project shouldn't publish audits for its own code) or for non-trivial forks.
+    ///
+    /// Audits you *do* perform should be for the actual version published to crates.io,
+    /// which are the versions `cargo vet diff` and `cargo vet inspect` will fetch.
+    #[serde(rename = "audit-as-crates-io")]
+    pub audit_as_crates_io: Option<bool>,
+
     /// Default criteria that must be satisfied by all *direct* third-party (foreign)
     /// dependencies of first-party crates. If satisfied, the first-party crate is
     /// set to satisfying all criteria.

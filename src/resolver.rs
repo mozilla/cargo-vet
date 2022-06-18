@@ -69,7 +69,7 @@ use tracing::{error, trace, trace_span, warn};
 
 use crate::format::{
     self, AuditKind, CriteriaName, CriteriaStr, Delta, DiffStat, FetchCommand, ImportName,
-    PackageName, PackageStr, SuggestedAudit, UnauditedDependency,
+    PackageName, PackageStr, PolicyEntry, SuggestedAudit, UnauditedDependency,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
@@ -203,15 +203,26 @@ pub type PackageIdx = usize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PackageNode<'a> {
-    pub build_type: DependencyKind,
     #[serde(skip_serializing_if = "pkgid_unstable")]
+    /// The PackageId that cargo uses to uniquely identify this package
+    ///
+    /// Prefer using a [`DepGraph`] and its memoized [`PackageIdx`]'s.
     pub package_id: &'a PackageId,
+    /// The name of the package
     pub name: PackageStr<'a>,
+    /// The version of this package
     pub version: &'a Version,
+    /// All normal deps (shipped in the project or a proc-macro it uses)
     pub normal_deps: Vec<PackageIdx>,
+    /// All build deps (used for build.rs)
     pub build_deps: Vec<PackageIdx>,
+    /// All dev deps (used for tests/benches)
     pub dev_deps: Vec<PackageIdx>,
+    /// Just the normal and build deps (deduplicated)
+    pub normal_and_build_deps: Vec<PackageIdx>,
+    /// All deps combined (deduplicated)
     pub all_deps: Vec<PackageIdx>,
+    /// All reverse-deps (mostly just used for contextualizing what uses it)
     pub reverse_deps: SortedSet<PackageIdx>,
     /// Whether this package is a workspace member (can have dev-deps)
     pub is_workspace_member: bool,
@@ -646,10 +657,10 @@ impl<'a> DepGraph<'a> {
     pub fn new(
         metadata: &'a Metadata,
         filter_graph: Option<&Vec<GraphFilter>>,
-        audit_as_crates_io: Option<&SortedMap<PackageName, bool>>,
+        policy: Option<&SortedMap<PackageName, PolicyEntry>>,
     ) -> Self {
         let empty_override = SortedMap::new();
-        let audit_as_crates_io = audit_as_crates_io.unwrap_or(&empty_override);
+        let policy = policy.unwrap_or(&empty_override);
         let package_list = &*metadata.packages;
         let resolve_list = &*metadata
             .resolve
@@ -678,15 +689,15 @@ impl<'a> DepGraph<'a> {
         for resolve_node in resolve_list {
             let package = &package_list[package_index_by_pkgid[&resolve_node.id]];
             nodes.push(PackageNode {
-                build_type: DependencyKind::Normal,
                 package_id: &resolve_node.id,
                 name: &package.name,
                 version: &package.version,
-                is_third_party: package.is_third_party(audit_as_crates_io),
+                is_third_party: package.is_third_party(policy),
                 // These will get (re)computed later
                 normal_deps: vec![],
                 build_deps: vec![],
                 dev_deps: vec![],
+                normal_and_build_deps: vec![],
                 all_deps: vec![],
                 reverse_deps: SortedSet::new(),
                 is_workspace_member: false,
@@ -754,7 +765,7 @@ impl<'a> DepGraph<'a> {
                 let resolve_node = &resolve_list[resolve_index_by_pkgid[pkgid]];
                 let dev_deps = deps(
                     resolve_node,
-                    DependencyKind::Development,
+                    &[DependencyKind::Development],
                     &interner_by_pkgid,
                 );
 
@@ -798,11 +809,18 @@ impl<'a> DepGraph<'a> {
                         .iter()
                         .map(|pkgid| interner_by_pkgid[pkgid])
                         .collect::<Vec<_>>();
-                    let build_deps = deps(resolve_node, DependencyKind::Build, interner_by_pkgid);
-                    let normal_deps = deps(resolve_node, DependencyKind::Normal, interner_by_pkgid);
+                    let build_deps =
+                        deps(resolve_node, &[DependencyKind::Build], interner_by_pkgid);
+                    let normal_deps =
+                        deps(resolve_node, &[DependencyKind::Normal], interner_by_pkgid);
+                    let normal_and_build_deps = deps(
+                        resolve_node,
+                        &[DependencyKind::Normal, DependencyKind::Build],
+                        interner_by_pkgid,
+                    );
 
-                    // Now visit all the build deps
-                    for &child in &build_deps {
+                    // Now visit all the normal and build deps
+                    for &child in &normal_and_build_deps {
                         visit_node(
                             nodes,
                             topo_index,
@@ -815,27 +833,14 @@ impl<'a> DepGraph<'a> {
                         nodes[child].reverse_deps.insert(normal_idx);
                     }
 
-                    // Now visit all the normal deps
-                    for &child in &normal_deps {
-                        visit_node(
-                            nodes,
-                            topo_index,
-                            visited,
-                            interner_by_pkgid,
-                            resolve_index_by_pkgid,
-                            resolve_list,
-                            child,
-                        );
-                        nodes[child].reverse_deps.insert(normal_idx);
-                    }
-
-                    // Now visit the node itself
+                    // Now visit this node itself
                     topo_index.push(normal_idx);
 
                     // Now commit all the deps
                     let cur_node = &mut nodes[normal_idx];
                     cur_node.build_deps = build_deps;
                     cur_node.normal_deps = normal_deps;
+                    cur_node.normal_and_build_deps = normal_and_build_deps;
                     cur_node.all_deps = all_deps;
 
                     // dev-deps will be handled in a second pass
@@ -843,7 +848,7 @@ impl<'a> DepGraph<'a> {
             }
             fn deps(
                 resolve_node: &Node,
-                kind: DependencyKind,
+                kinds: &[DependencyKind],
                 interner_by_pkgid: &SortedMap<&PackageId, PackageIdx>,
             ) -> Vec<PackageIdx> {
                 // Note that dep_kinds has target cfg info. If we want to handle targets
@@ -852,7 +857,11 @@ impl<'a> DepGraph<'a> {
                 resolve_node
                     .deps
                     .iter()
-                    .filter(|dep| dep.dep_kinds.iter().any(|dep_kind| dep_kind.kind == kind))
+                    .filter(|dep| {
+                        dep.dep_kinds
+                            .iter()
+                            .any(|dep_kind| kinds.contains(&dep_kind.kind))
+                    })
                     .map(|dep| interner_by_pkgid[&dep.pkg])
                     .collect()
             }
@@ -954,13 +963,13 @@ impl<'a> DepGraph<'a> {
             let new_idx = nodes.len();
             old_to_new.insert(old_idx, new_idx);
             nodes.push(PackageNode {
-                build_type: package.build_type,
                 package_id: package.package_id,
                 name: package.name,
                 version: package.version,
                 normal_deps: vec![],
                 build_deps: vec![],
                 dev_deps: vec![],
+                normal_and_build_deps: vec![],
                 all_deps: vec![],
                 reverse_deps: SortedSet::new(),
                 is_workspace_member: package.is_workspace_member,
@@ -982,11 +991,6 @@ impl<'a> DepGraph<'a> {
         for (old_idx, old_package) in self.nodes.iter().enumerate() {
             if let Some(&new_idx) = old_to_new.get(&old_idx) {
                 let new_package = &mut nodes[new_idx];
-                for old_dep in &old_package.all_deps {
-                    if let Some(&new_dep) = old_to_new.get(old_dep) {
-                        new_package.all_deps.push(new_dep);
-                    }
-                }
                 for old_dep in &old_package.normal_deps {
                     if let Some(&new_dep) = old_to_new.get(old_dep) {
                         new_package.normal_deps.push(new_dep);
@@ -1000,6 +1004,16 @@ impl<'a> DepGraph<'a> {
                 for old_dep in &old_package.dev_deps {
                     if let Some(&new_dep) = old_to_new.get(old_dep) {
                         new_package.dev_deps.push(new_dep);
+                    }
+                }
+                for old_dep in &old_package.normal_and_build_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.normal_and_build_deps.push(new_dep);
+                    }
+                }
+                for old_dep in &old_package.all_deps {
+                    if let Some(&new_dep) = old_to_new.get(old_dep) {
+                        new_package.all_deps.push(new_dep);
                     }
                 }
                 for old_dep in &old_package.reverse_deps {
@@ -1133,11 +1147,7 @@ pub fn resolve<'a>(
     let _resolve_span = trace_span!("validate").entered();
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
-    let graph = DepGraph::new(
-        metadata,
-        filter_graph,
-        Some(&store.config.audit_as_crates_io),
-    );
+    let graph = DepGraph::new(metadata, filter_graph, Some(&store.config.policy));
     // trace!("built DepGraph: {:#?}", graph);
     trace!("built DepGraph!");
 
@@ -1833,7 +1843,7 @@ fn search_for_path<'a>(
 
                     // Deltas should only apply if dependencies satisfy dep_criteria
                     let mut deps_satisfied = true;
-                    for &dependency in &package.all_deps {
+                    for &dependency in &package.normal_and_build_deps {
                         let dep_package = &dep_graph.nodes[dependency];
                         let dep_vet_result = &mut results[dependency];
 
@@ -1939,7 +1949,7 @@ fn resolve_first_party<'a>(
     for criteria in criteria_mapper.all_criteria_iter() {
         // Find any build/normal dependencies that don't satisfy this criteria
         let mut failed_deps = SortedMap::new();
-        for &depidx in package.normal_deps.iter().chain(&package.build_deps) {
+        for &depidx in &package.normal_and_build_deps {
             // If we have an explicit policy for dependency, that's all that matters.
             // Otherwise just use the current criteria to "inherit" the results of our deps.
             let dep_name = graph.nodes[depidx].name;
@@ -2256,7 +2266,12 @@ fn visit_failures<'a, T>(
                         if resolve_depth != ResolveDepth::Shallow {
                             // Try to Guess Deeper by blaming our children for all |self| failures
                             // by assuming we would need them to conform to our own criteria too.
-                            for &dep_idx in &package.all_deps {
+                            //
+                            // Dev-deps should never be chased here because any issues with those show
+                            // up as root_failures and have already been pushed into the search-stack.
+                            // All recursive blaming is about deps for a "normal" build, which requires
+                            // only these two kinds of deps.
+                            for &dep_idx in &package.normal_and_build_deps {
                                 let dep_result = &results[dep_idx];
                                 if !dep_result.validated_criteria.has_criteria(criteria_idx) {
                                     dep_faults
