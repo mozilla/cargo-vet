@@ -1,0 +1,53 @@
+---
+source: src/tests/certify.rs
+expression: output
+---
+full audit (0.0.0 -> 10.0.0)
+  third-party1: ["strong-reviewed"]
+  third-party2: ["reviewed"]
+from weak-reviewed (2.0.0 -> 10.0.0)
+  third-party1: ["weak-reviewed"]
+  third-party2: ["weak-reviewed"]
+from reviewed (3.0.0 -> 10.0.0)
+  third-party1: ["reviewed"]
+  third-party2: ["reviewed"]
+from strong-reviewed (4.0.0 -> 10.0.0)
+  third-party1: ["strong-reviewed"]
+  third-party2: ["reviewed"]
+to strong-reviewed (0.0.0 -> 6.0.0)
+  third-party1: ["strong-reviewed"]
+  third-party2: ["reviewed"]
+to reviewed (0.0.0 -> 7.0.0)
+  third-party1: ["reviewed"]
+  third-party2: ["reviewed"]
+to weak-reviewed (0.0.0 -> 8.0.0)
+  third-party1: ["weak-reviewed"]
+  third-party2: ["weak-reviewed"]
+from weak-reviewed to strong-reviewed (2.0.0 -> 6.0.0)
+  third-party1: ["weak-reviewed"]
+  third-party2: ["weak-reviewed"]
+from weak-reviewed to reviewed (2.0.0 -> 7.0.0)
+  third-party1: ["weak-reviewed"]
+  third-party2: ["weak-reviewed"]
+from weak-reviewed to weak-reviewed (2.0.0 -> 8.0.0)
+  third-party1: ["weak-reviewed"]
+  third-party2: ["weak-reviewed"]
+from reviewed to strong-reviewed (3.0.0 -> 6.0.0)
+  third-party1: ["reviewed"]
+  third-party2: ["reviewed"]
+from reviewed to reviewed (3.0.0 -> 7.0.0)
+  third-party1: ["reviewed"]
+  third-party2: ["reviewed"]
+from reviewed to weak-reviewed (3.0.0 -> 8.0.0)
+  third-party1: ["weak-reviewed"]
+  third-party2: ["weak-reviewed"]
+from strong-reviewed to strong-reviewed (4.0.0 -> 6.0.0)
+  third-party1: ["strong-reviewed"]
+  third-party2: ["reviewed"]
+from strong-reviewed to reviewed (4.0.0 -> 7.0.0)
+  third-party1: ["reviewed"]
+  third-party2: ["reviewed"]
+from strong-reviewed to weak-reviewed (4.0.0 -> 8.0.0)
+  third-party1: ["weak-reviewed"]
+  third-party2: ["weak-reviewed"]
+

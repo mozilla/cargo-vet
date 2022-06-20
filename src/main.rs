@@ -10,7 +10,7 @@ use cargo_metadata::{Metadata, Package};
 use clap::{CommandFactory, Parser};
 use console::{style, Term};
 use eyre::{eyre, WrapErr};
-use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
+use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry, SuggestedAudit};
 use futures_util::future::join_all;
 use network::Network;
 use reqwest::Url;
@@ -560,7 +560,6 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         dep_criteria
     };
 
-    let mut criteria_guess = None;
     let kind = if let Some(v1) = &sub_args.version1 {
         // If explicit versions were provided, use those
         if let Some(v2) = &sub_args.version2 {
@@ -596,82 +595,12 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                 dependency_criteria,
             },
         }
-    } else if let Some(unaudited_list) = store.config.unaudited.get(&package) {
-        // Otherwise, if we have an unaudited entry for this package, use that version
-        if unaudited_list.len() > 1 {
-            // ERRORS: immediate fatal diagnostic
-            writeln!(
-                out,
-                "error: couldn't guess what version to certify, you have multiple 'unaudited' entries for {}:",
-                package
-            )?;
-            for entry in unaudited_list {
-                writeln!(out, "  {}", entry.version)?;
-            }
-            panic_any(ExitPanic(-1));
-        }
-        let entry = &unaudited_list[0];
-        criteria_guess = Some(entry.criteria.clone());
-        // FIXME: this should arguably use entry.dependency_criteria unless the cli specified,
-        // should probably have a more coherent "strategy picking" right at the start instead
-        // of individually sourcing each piece of information
-        AuditKind::Full {
-            version: entry.version.clone(),
-            dependency_criteria,
-        }
-    } else if !command_history.last_suggest.is_empty() {
-        // Otherwise, if we suggested a fetch for this package, use that version
-        let relevant_suggestions = command_history
-            .last_suggest
-            .iter()
-            .filter(|s| s.command.package() == package)
-            .collect::<Vec<_>>();
-        if relevant_suggestions.is_empty() {
-            // ERRORS: immediate fatal diagnostic
-            writeln!(
-                out,
-                "error: couldn't guess what version to certify, please specify"
-            )?;
-            panic_any(ExitPanic(-1));
-        }
-        if relevant_suggestions.len() > 1 {
-            // ERRORS: immediate fatal diagnostic
-            writeln!(
-                out,
-                "error: couldn't guess what version to certify, you have multiple suggestions for {}:",
-                package
-            )?;
-            for entry in relevant_suggestions {
-                match &entry.command {
-                    FetchCommand::Inspect { version, .. } => writeln!(out, "inspect {}", version)?,
-                    FetchCommand::Diff {
-                        version1, version2, ..
-                    } => writeln!(out, "diff {} {}", version1, version2)?,
-                }
-            }
-            panic_any(ExitPanic(-1));
-        }
-        criteria_guess = Some(relevant_suggestions[0].criteria.clone());
-        match &relevant_suggestions[0].command {
-            FetchCommand::Inspect { version, .. } => AuditKind::Full {
-                version: version.clone(),
-                dependency_criteria,
-            },
-            FetchCommand::Diff {
-                version1, version2, ..
-            } => AuditKind::Delta {
-                delta: Delta {
-                    from: version1.clone(),
-                    to: version2.clone(),
-                },
-                dependency_criteria,
-            },
-        }
     } else {
         // ERRORS: immediate fatal diagnostic
         writeln!(
             out,
-            "error: couldn't guess what version to certify, please specify"
+            "error: couldn't guess what version of '{}' to certify, please specify",
+            package
         )?;
         panic_any(ExitPanic(-1));
     };
@@ -689,33 +618,15 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     let criteria_names = if sub_args.criteria.is_empty() {
         // If we don't have explicit cli criteria, guess the criteria
         //
-        // * If any previous operation resulted in a guess, use that
-        // * Otherwise check for a suggest on this exact audit
+        // * If a previous suggest matches this exact audit, use that
+        // * Otherwise check if there's an unaudited entry for this version
+        // * Otherwise check what would cause `cargo vet` to encounter fewer errors
+        // * Otherwise check what would cause `cargo vet suggest` to suggest fewer audits
         // * Otherwise guess nothing
         //
         // Regardless of the guess, prompt the user to confirm (just needs to mash enter)
-        let mut chosen_criteria = criteria_guess
-            .or_else(|| {
-                command_history
-                    .last_suggest
-                    .into_iter()
-                    .filter(|s| s.command.package() == package)
-                    .find(|v| match (&kind, &v.command) {
-                        (
-                            AuditKind::Full { version: lhs, .. },
-                            FetchCommand::Inspect { version: rhs, .. },
-                        ) => lhs == rhs,
-                        (
-                            AuditKind::Delta { delta, .. },
-                            FetchCommand::Diff {
-                                version1, version2, ..
-                            },
-                        ) => &delta.from == version1 && &delta.to == version2,
-                        _ => false,
-                    })
-                    .map(|s| s.criteria)
-            })
-            .unwrap_or_default();
+        let mut chosen_criteria =
+            guess_audit_criteria(cfg, &store, &command_history.last_suggest, &package, &kind);
 
         // Prompt for criteria
         loop {
@@ -921,6 +832,99 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     store.commit()?;
 
     Ok(())
+}
+
+/// Attempt to guess which criteria are being certified for a given package and
+/// audit kind.
+///
+/// The logic which this method uses to guess the criteria to use is as follows:
+///
+/// * If a previous suggest matches this exact audit, use that
+/// * Otherwise check if there's an unaudited entry for this version
+/// * Otherwise check what would cause `cargo vet` to encounter fewer errors
+/// * Otherwise check what would cause `cargo vet suggest` to suggest fewer audits
+/// * Otherwise guess nothing
+fn guess_audit_criteria(
+    cfg: &Config,
+    store: &Store,
+    last_suggest: &[SuggestedAudit],
+    package: PackageStr<'_>,
+    kind: &AuditKind,
+) -> Vec<String> {
+    // Check if we were given a relevant suggestion in a previous `cargo vet` or
+    // `cargo vet suggest` command.
+    if let Some(suggest) = last_suggest
+        .iter()
+        .filter(|s| s.command.package() == package)
+        .find(|v| match (kind, &v.command) {
+            (AuditKind::Full { version: lhs, .. }, FetchCommand::Inspect { version: rhs, .. }) => {
+                lhs == rhs
+            }
+            (
+                AuditKind::Delta { delta, .. },
+                FetchCommand::Diff {
+                    version1, version2, ..
+                },
+            ) => &delta.from == version1 && &delta.to == version2,
+            _ => false,
+        })
+    {
+        return suggest.criteria.clone();
+    }
+
+    // If doing a full audit with an `unaudited` entry for the version we're
+    // certifying, guess the audit criteria from that entry.
+    //
+    // We don't try to do this for partial audits, as we don't know what
+    // criteria our `from` revision satisfies without running the resolver,
+    // which we'll do if this fails.
+    if let AuditKind::Full { version, .. } = kind {
+        if let Some(criteria) = store
+            .config
+            .unaudited
+            .get(package)
+            .and_then(|versions| versions.iter().find(|dep| &dep.version == version))
+            .map(|dep| dep.criteria.clone())
+        {
+            return criteria;
+        }
+    }
+
+    // Convert the audit to a normalized delta to run against the resolver.
+    let delta = match kind {
+        AuditKind::Full { version, .. } => Delta {
+            from: resolver::ROOT_VERSION.clone(),
+            to: version.clone(),
+        },
+        AuditKind::Delta { delta, .. } => delta.clone(),
+        _ => return Vec::new(),
+    };
+
+    // Attempt to resolve a normal `cargo vet`, and try to find criteria which
+    // would heal some errors in that result if it fails.
+    let criteria = resolver::resolve(
+        &cfg.metadata,
+        cfg.cli.filter_graph.as_ref(),
+        store,
+        ResolveDepth::Deep,
+    )
+    .compute_suggested_criteria(package, &delta);
+    if !criteria.is_empty() {
+        return criteria;
+    }
+
+    // If a normal `cargo vet` failed to turn up any criteria, try a more
+    // aggressive `cargo vet suggest`.
+    //
+    // This is as much as we can do, so just return the result whether or not we
+    // find anything.
+    resolver::resolve(
+        &cfg.metadata,
+        cfg.cli.filter_graph.as_ref(),
+        &store.clone_for_suggest(),
+        ResolveDepth::Deep,
+    )
+    .compute_suggested_criteria(package, &delta)
 }
 
 fn cmd_record_violation(
