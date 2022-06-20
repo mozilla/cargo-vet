@@ -40,7 +40,7 @@ Specifies the relevant criteria for this audit. This field is required.
 ## `who`
 
 A string identifying the auditor. When invoking `cargo vet certify`, the
-value is auto-populated from the global git config.
+value is auto-populated from the git config.
 
 This field is optional, but encouraged for two reasons:
 * It makes it easier to attribute audits at a glance, particularly for
