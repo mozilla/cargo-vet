@@ -186,6 +186,29 @@ impl Store {
         }
     }
 
+    /// Create a clone of the store for use to resolve `suggest`.
+    ///
+    /// This cloned store will not contain `unaudited` entries from the config,
+    /// unless they're marked as `suggest = false`, such that the resolver will
+    /// identify these missing audits when generating a report.
+    ///
+    /// Unlike the primary store created with `Store::acquire` or
+    /// `Store::create`, this store will not hold the store lock, and cannot be
+    /// committed to disk by calling `commit()`.
+    pub fn clone_for_suggest(&self) -> Self {
+        let mut clone = Self {
+            lock: None,
+            config: self.config.clone(),
+            imports: self.imports.clone(),
+            audits: self.audits.clone(),
+        };
+        // Delete all unaudited entries except those that are suggest=false
+        for versions in &mut clone.config.unaudited.values_mut() {
+            versions.retain(|e| !e.suggest);
+        }
+        clone
+    }
+
     /// Commit the store's contents back to disk
     pub fn commit(self) -> Result<(), VetError> {
         // TODO: make this truly transactional?
