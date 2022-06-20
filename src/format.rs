@@ -126,7 +126,7 @@ impl MetaConfig {
 pub type AuditedDependencies = SortedMap<PackageName, Vec<AuditEntry>>;
 
 /// audits.toml
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct AuditsFile {
     /// A map of criteria_name to details on that criteria.
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
@@ -271,7 +271,7 @@ impl Serialize for Delta {
 ////////////////////////////////////////////////////////////////////////////////////
 
 /// config.toml
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ConfigFile {
     /// This top-level key specifies the default criteria that cargo vet certify will use
     /// when recording audits. If unspecified, this defaults to "safe-to-deploy".
@@ -323,7 +323,7 @@ fn is_default_criteria(val: &CriteriaName) -> bool {
 /// If this sounds overwhelming, don't worry, everything defaults to "nothing special"
 /// and an empty PolicyTable basically just means "everything should satisfy the
 /// default criteria in audits.toml".
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct PolicyEntry {
     /// Whether this nominally-first-party crate should actually be subject to audits
     /// as-if it was third-party, based on matches to crates.io packages with the same
@@ -388,7 +388,7 @@ pub static DEFAULT_POLICY_CRITERIA: CriteriaStr = SAFE_TO_DEPLOY;
 pub static DEFAULT_POLICY_DEV_CRITERIA: CriteriaStr = SAFE_TO_RUN;
 
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct RemoteImport {
     /// URL of the foreign audits.toml
     pub url: String,
@@ -398,7 +398,7 @@ pub struct RemoteImport {
 }
 
 /// Translations of foreign criteria to local criteria.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct CriteriaMapping {
     /// This local criteria is implied...
     pub ours: CriteriaName,
@@ -454,7 +454,7 @@ fn is_default_unaudited_suggest(val: &bool) -> bool {
 ////////////////////////////////////////////////////////////////////////////////////
 
 /// imports.lock, not sure what I want to put in here yet.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ImportsFile {
     pub audits: SortedMap<ImportName, AuditsFile>,
 }

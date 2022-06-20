@@ -1055,19 +1055,14 @@ fn cmd_add_unaudited(
 fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
-    let mut store = Store::acquire(cfg)?;
+    let suggest_store = Store::acquire(cfg)?.clone_for_suggest();
     let network = Network::acquire(cfg);
-
-    // Delete all unaudited entries except those that are suggest=false
-    for versions in &mut store.config.unaudited.values_mut() {
-        versions.retain(|e| !e.suggest);
-    }
 
     // DO THE THING!!!!
     let report = resolver::resolve(
         &cfg.metadata,
         cfg.cli.filter_graph.as_ref(),
-        &store,
+        &suggest_store,
         if cfg.cli.shallow {
             ResolveDepth::Shallow
         } else {
@@ -1079,8 +1074,6 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
         OutputFormat::Human => report.print_suggest_human(out, cfg, suggest.as_ref())?,
         OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
     }
-
-    // Don't commit the store, because we purged the unaudited table above.
 
     Ok(())
 }
