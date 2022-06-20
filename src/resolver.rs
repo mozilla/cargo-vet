@@ -2537,6 +2537,56 @@ impl<'a> ResolveReport<'a> {
         }))
     }
 
+    /// Given a package name and a delta to be certified, determine the set of
+    /// additional criteria for that delta/version pair which would have a
+    /// healing impact on the audit graph.
+    ///
+    /// This is more reliable than running a suggest and looking for a matching
+    /// output, as it will also select criteria for non-suggested audits.
+    pub fn compute_suggested_criteria(
+        &self,
+        package_name: PackageStr<'_>,
+        delta: &Delta,
+    ) -> Vec<CriteriaName> {
+        let fail = if let Conclusion::FailForVet(fail) = &self.conclusion {
+            fail
+        } else {
+            return Vec::new();
+        };
+
+        let mut criteria = self.criteria_mapper.no_criteria();
+
+        // Enumerate over the recorded failures, adding any criteria for this
+        // delta which would connect that package version into the audit graph.
+        for (&failure_idx, audit_failure) in &fail.failures {
+            let package = &self.graph.nodes[failure_idx];
+            if package.name != package_name {
+                continue;
+            }
+
+            let result = &self.results[failure_idx];
+            for criteria_idx in audit_failure.criteria_failures.all().indices() {
+                let search_result = &result.search_results[criteria_idx];
+                if let SearchResult::Disconnected {
+                    reachable_from_root,
+                    reachable_from_target,
+                } = search_result
+                {
+                    if reachable_from_target.contains(&delta.to)
+                        && reachable_from_root.contains(&delta.from)
+                    {
+                        criteria.set_criteria(criteria_idx);
+                    }
+                }
+            }
+        }
+
+        self.criteria_mapper
+            .criteria_names(&criteria)
+            .map(str::to_owned)
+            .collect()
+    }
+
     /// Print a full human-readable report
     pub fn print_human(
         &self,

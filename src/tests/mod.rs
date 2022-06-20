@@ -15,6 +15,7 @@ use crate::{
 };
 
 mod audit_as_crates_io;
+mod certify;
 mod regenerate_unaudited;
 mod vet;
 mod violations;
