@@ -1254,7 +1254,9 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
         }
 
         // Check if any of our first-parties are in the crates.io registry
-        check_audit_as_crates_io(out, cfg, &store)?;
+        if check_audit_as_crates_io(out, cfg, &store).is_err() {
+            panic_any(ExitPanic(-1));
+        }
     }
 
     // DO THE THING!!!!
@@ -1721,8 +1723,8 @@ fn check_audit_as_crates_io(
     }
 
     if !shouldnt_be_audit_as.is_empty() || !needs_audit_as_entry.is_empty() {
-        panic_any(ExitPanic(-1));
+        Err(eyre!("temp error"))
+    } else {
+        Ok(())
     }
-
-    Ok(())
 }
