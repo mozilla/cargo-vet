@@ -10,7 +10,7 @@ use cargo_metadata::{Metadata, Package};
 use clap::{CommandFactory, Parser};
 use console::{style, Term};
 use eyre::{eyre, WrapErr};
-use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry, SuggestedAudit};
+use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::join_all;
 use network::Network;
 use reqwest::Url;
@@ -504,18 +504,18 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     // Certify that you have reviewed a crate's source for some version / delta
     let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
-    // Grab the command history and immediately drop the cache
-    let command_history = Cache::acquire(cfg)?.get_command_history();
+
+    // Grab the last fetch and immediately drop the cache
+    let last_fetch = Cache::acquire(cfg)?.get_last_fetch();
 
     let term = Term::stdout();
 
     // Before setting up magic, we need to agree on a package
-    let last_fetch_name = command_history.last_fetch.as_ref().map(|f| f.package());
     let package = if let Some(package) = &sub_args.package {
         package.clone()
-    } else if let Some(package) = last_fetch_name {
+    } else if let Some(last_fetch) = &last_fetch {
         // If we just fetched a package, assume we want to certify it
-        package.to_owned()
+        last_fetch.package().to_owned()
     } else {
         // ERRORS: immediate fatal diagnostic
         writeln!(
@@ -538,13 +538,6 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
         )?;
         panic_any(ExitPanic(-1));
     }
-
-    // If the package name now matches last_fetch, make it available for further magic
-    let last_fetch = if last_fetch_name == Some(&package) {
-        command_history.last_fetch.as_ref()
-    } else {
-        None
-    };
 
     let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
         // TODO: look at the current audits to infer this? prompt?
@@ -578,19 +571,19 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                 dependency_criteria,
             }
         }
-    } else if let Some(fetch) = last_fetch {
+    } else if let Some(fetch) = last_fetch.filter(|f| f.package() == package) {
         // Otherwise, is we just fetched this package, use the version(s) we fetched
         match fetch {
             FetchCommand::Inspect { version, .. } => AuditKind::Full {
-                version: version.clone(),
+                version,
                 dependency_criteria,
             },
             FetchCommand::Diff {
                 version1, version2, ..
             } => AuditKind::Delta {
                 delta: Delta {
-                    from: version1.clone(),
-                    to: version2.clone(),
+                    from: version1,
+                    to: version2,
                 },
                 dependency_criteria,
             },
@@ -618,15 +611,12 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
     let criteria_names = if sub_args.criteria.is_empty() {
         // If we don't have explicit cli criteria, guess the criteria
         //
-        // * If a previous suggest matches this exact audit, use that
-        // * Otherwise check if there's an unaudited entry for this version
-        // * Otherwise check what would cause `cargo vet` to encounter fewer errors
+        // * Check what would cause `cargo vet` to encounter fewer errors
         // * Otherwise check what would cause `cargo vet suggest` to suggest fewer audits
         // * Otherwise guess nothing
         //
         // Regardless of the guess, prompt the user to confirm (just needs to mash enter)
-        let mut chosen_criteria =
-            guess_audit_criteria(cfg, &store, &command_history.last_suggest, &package, &kind);
+        let mut chosen_criteria = guess_audit_criteria(cfg, &store, &package, &kind);
 
         // Prompt for criteria
         loop {
@@ -839,57 +829,15 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
 ///
 /// The logic which this method uses to guess the criteria to use is as follows:
 ///
-/// * If a previous suggest matches this exact audit, use that
-/// * Otherwise check if there's an unaudited entry for this version
-/// * Otherwise check what would cause `cargo vet` to encounter fewer errors
+/// * Check what would cause `cargo vet` to encounter fewer errors
 /// * Otherwise check what would cause `cargo vet suggest` to suggest fewer audits
 /// * Otherwise guess nothing
 fn guess_audit_criteria(
     cfg: &Config,
     store: &Store,
-    last_suggest: &[SuggestedAudit],
     package: PackageStr<'_>,
     kind: &AuditKind,
 ) -> Vec<String> {
-    // Check if we were given a relevant suggestion in a previous `cargo vet` or
-    // `cargo vet suggest` command.
-    if let Some(suggest) = last_suggest
-        .iter()
-        .filter(|s| s.command.package() == package)
-        .find(|v| match (kind, &v.command) {
-            (AuditKind::Full { version: lhs, .. }, FetchCommand::Inspect { version: rhs, .. }) => {
-                lhs == rhs
-            }
-            (
-                AuditKind::Delta { delta, .. },
-                FetchCommand::Diff {
-                    version1, version2, ..
-                },
-            ) => &delta.from == version1 && &delta.to == version2,
-            _ => false,
-        })
-    {
-        return suggest.criteria.clone();
-    }
-
-    // If doing a full audit with an `unaudited` entry for the version we're
-    // certifying, guess the audit criteria from that entry.
-    //
-    // We don't try to do this for partial audits, as we don't know what
-    // criteria our `from` revision satisfies without running the resolver,
-    // which we'll do if this fails.
-    if let AuditKind::Full { version, .. } = kind {
-        if let Some(criteria) = store
-            .config
-            .unaudited
-            .get(package)
-            .and_then(|versions| versions.iter().find(|dep| &dep.version == version))
-            .map(|dep| dep.criteria.clone())
-        {
-            return criteria;
-        }
-    }
-
     // Convert the audit to a normalized delta to run against the resolver.
     let delta = match kind {
         AuditKind::Full { version, .. } => Delta {

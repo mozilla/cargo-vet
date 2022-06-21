@@ -68,8 +68,8 @@ use std::io::Write;
 use tracing::{error, trace, trace_span, warn};
 
 use crate::format::{
-    self, AuditKind, CriteriaName, CriteriaStr, Delta, DiffStat, FetchCommand, ImportName,
-    PackageName, PackageStr, PolicyEntry, SuggestedAudit, UnauditedDependency,
+    self, AuditKind, CriteriaName, CriteriaStr, Delta, DiffStat, ImportName, PackageName,
+    PackageStr, PolicyEntry, UnauditedDependency,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
@@ -2505,30 +2505,6 @@ impl<'a> ResolveReport<'a> {
                 .or_default()
                 .push(s);
         }
-
-        let mut last_suggest = vec![];
-        for suggestion in &suggestions {
-            let package = self.graph.nodes[suggestion.package].name.to_string();
-            let command = if suggestion.suggested_diff.from == ROOT_VERSION {
-                FetchCommand::Inspect {
-                    package,
-                    version: suggestion.suggested_diff.to.clone(),
-                }
-            } else {
-                FetchCommand::Diff {
-                    package,
-                    version1: suggestion.suggested_diff.from.clone(),
-                    version2: suggestion.suggested_diff.to.clone(),
-                }
-            };
-            let criteria = self
-                .criteria_mapper
-                .all_criteria_names(&suggestion.suggested_criteria)
-                .map(CriteriaName::from)
-                .collect::<Vec<_>>();
-            last_suggest.push(SuggestedAudit { command, criteria });
-        }
-        cache.set_last_suggest(last_suggest);
 
         Ok(Some(Suggest {
             suggestions,
