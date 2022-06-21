@@ -848,6 +848,21 @@ impl Cache {
     }
 }
 
+/// Queries a package in the crates.io registry for a specific published version
+pub fn exact_version<'a>(
+    this: &'a crates_index::Crate,
+    target_version: &Version,
+) -> Option<&'a crates_index::Version> {
+    for index_version in this.versions() {
+        if let Ok(index_ver) = index_version.version().parse::<cargo_metadata::Version>() {
+            if &index_ver == target_version {
+                return Some(index_version);
+            }
+        }
+    }
+    None
+}
+
 #[tracing::instrument(err)]
 fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
     // If we get here and the unpack_dir exists, this implies we had a previously failed fetch,
