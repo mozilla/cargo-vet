@@ -22,7 +22,7 @@ use crate::{
     flock::{FileLock, Filesystem},
     format::{
         AuditsFile, CommandHistory, ConfigFile, Delta, DiffCache, DiffStat, FastMap, FetchCommand,
-        ImportsFile, MetaConfig, PackageStr, SortedMap, SuggestedAudit,
+        ImportsFile, MetaConfig, PackageStr, SortedMap,
     },
     network::Network,
     resolver,
@@ -865,19 +865,14 @@ impl Cache {
         tokio::runtime::Handle::current().block_on(self.clean())
     }
 
-    pub fn get_command_history(&self) -> CommandHistory {
+    pub fn get_last_fetch(&self) -> Option<FetchCommand> {
         let guard = self.state.lock().unwrap();
-        guard.command_history.clone()
+        guard.command_history.last_fetch.clone()
     }
 
     pub fn set_last_fetch(&self, last_fetch: FetchCommand) {
         let mut guard = self.state.lock().unwrap();
         guard.command_history.last_fetch = Some(last_fetch);
-    }
-
-    pub fn set_last_suggest(&self, last_suggest: Vec<SuggestedAudit>) {
-        let mut guard = self.state.lock().unwrap();
-        guard.command_history.last_suggest = last_suggest;
     }
 }
 

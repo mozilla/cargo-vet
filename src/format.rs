@@ -509,16 +509,8 @@ impl FetchCommand {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SuggestedAudit {
-    #[serde(flatten)]
-    pub command: FetchCommand,
-    pub criteria: Vec<CriteriaName>,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CommandHistory {
     #[serde(flatten)]
     pub last_fetch: Option<FetchCommand>,
-    pub last_suggest: Vec<SuggestedAudit>,
 }
