@@ -107,20 +107,22 @@ const LINE_ENDING: &str = "\r\n";
 #[cfg(not(windows))]
 const LINE_ENDING: &str = "\n";
 
-pub struct Editor {
+pub struct Editor<'a> {
     tempfile: NamedTempFile,
     comment_char: char,
+    run_editor: Box<dyn FnOnce(&Path) -> io::Result<bool> + 'a>,
 }
 
-impl Editor {
+impl<'a> Editor<'a> {
     /// Create a new editor for a temporary file.
-    pub fn new(name: &str) -> Result<Self, VetError> {
+    pub fn new(name: &str) -> io::Result<Self> {
         let tempfile = tempfile::Builder::new()
             .prefix(&format!("{}.", name))
             .tempfile()?;
         Ok(Editor {
             tempfile,
             comment_char: '#',
+            run_editor: Box::new(|p| run_editor(p).map(|s| s.success())),
         })
     }
 
@@ -147,6 +149,12 @@ impl Editor {
                 .find(|cc| *cc != '\0')
                 .expect("couldn't find a viable comment character"),
         );
+    }
+
+    #[cfg(test)]
+    /// Test-only method to mock out the actual invocation of the editor.
+    pub fn set_run_editor(&mut self, run_editor: impl FnOnce(&Path) -> io::Result<bool> + 'a) {
+        self.run_editor = Box::new(run_editor);
     }
 
     /// Add comment lines to the editor. Any newlines in the input will be
@@ -195,7 +203,7 @@ impl Editor {
         // Close our handle on the file to allow other programs like the editor
         // to modify it on Windows.
         let path = self.tempfile.into_temp_path();
-        run_editor(&path)?;
+        (self.run_editor)(&path)?;
 
         // Read in the result, filtering lines, and restoring unix line endings.
         // This is roughly based on git's logic for cleaning up commit message

@@ -1,14 +1,21 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    fmt, fs,
+    io::{self, Write as _},
+    path::PathBuf,
+};
 
 use cargo_metadata::{Metadata, Version};
 use serde_json::{json, Value};
 
 use crate::{
+    editor::Editor,
     format::{
         AuditKind, CriteriaName, CriteriaStr, Delta, DependencyCriteria, FastMap, MetaConfig,
         PackageName, PackageStr, PolicyEntry, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     init_files,
+    out::Out,
     resolver::{ResolveDepth, ResolveReport},
     AuditEntry, AuditsFile, Cli, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
     PartialConfig, SortedMap, Store, UnauditedDependency,
@@ -976,12 +983,87 @@ fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
     console::set_colors_enabled_stderr(false);
 
     let cfg = mock_cfg(metadata);
-    let mut output = Vec::new();
+    let mut output = BasicTestOutput::new();
     let suggest = report.compute_suggest(&cfg, None, true).unwrap();
     report
         .print_human(&mut output, &cfg, suggest.as_ref())
         .unwrap();
-    String::from_utf8(output).unwrap()
+    output.to_string()
+}
+
+struct BasicTestOutput<'a> {
+    output: Vec<u8>,
+    on_read_line: Option<Box<dyn FnMut(&str) -> io::Result<String> + 'a>>,
+    on_edit: Option<Box<dyn FnMut(String) -> io::Result<String> + 'a>>,
+}
+
+impl<'a> BasicTestOutput<'a> {
+    fn new() -> Self {
+        BasicTestOutput {
+            output: Vec::new(),
+            on_read_line: None,
+            on_edit: None,
+        }
+    }
+}
+
+impl<'a> fmt::Display for BasicTestOutput<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        std::str::from_utf8(&self.output).unwrap().fmt(f)
+    }
+}
+
+impl<'a> io::Write for BasicTestOutput<'a> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.output.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> Out for BasicTestOutput<'a> {
+    fn clear_screen(&mut self) -> io::Result<()> {
+        writeln!(self, "<<<CLEAR SCREEN>>>")?;
+        Ok(())
+    }
+
+    fn read_line_initial_text(&mut self, initial: &str) -> io::Result<String> {
+        write!(self, "{}", initial)?;
+        if let Some(on_read_line) = &mut self.on_read_line {
+            let response = on_read_line(initial)?;
+            writeln!(self, "{}", response)?;
+            Ok(response)
+        } else {
+            Err(io::ErrorKind::Unsupported.into())
+        }
+    }
+
+    fn editor<'b>(&'b mut self, name: &'b str) -> io::Result<Editor<'b>> {
+        if self.on_edit.is_some() {
+            let mut editor = Editor::new(name)?;
+            editor.set_run_editor(move |path| {
+                let original = fs::read_to_string(path)?;
+                writeln!(self, "<<<EDITING {}>>>\n{}", name, original)?;
+                match self.on_edit.as_mut().unwrap()(original) {
+                    Ok(contents) => {
+                        writeln!(self, "<<<EDIT OK>>>\n{}\n<<<END EDIT>>>", contents)?;
+                        fs::write(path, contents)?;
+                        Ok(true)
+                    }
+                    Err(err) => {
+                        writeln!(self, "<<<EDIT ERROR>>>")?;
+                        Err(err)
+                    }
+                }
+            });
+            Ok(editor)
+        } else {
+            panic!("Unexpected editor call without on_edit configured!");
+        }
+    }
 }
 
 fn _init_trace_logger() {

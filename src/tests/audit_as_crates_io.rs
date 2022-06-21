@@ -1,9 +1,9 @@
 use super::*;
 
 fn get_audit_as_crates_io(cfg: &Config, store: &Store) -> String {
-    let mut output = Vec::new();
+    let mut output = BasicTestOutput::new();
     let _res = crate::check_audit_as_crates_io(&mut output, cfg, store);
-    String::from_utf8(output).unwrap()
+    output.to_string()
 }
 
 #[test]
