@@ -1,0 +1,6 @@
+---
+source: src/tests/vet.rs
+expression: output
+---
+Vetting Succeeded (because you have no third-party dependencies)
+

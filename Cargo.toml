@@ -10,7 +10,7 @@ description = "Supply-chain security for Rust"
 exclude = [
   "book/*",
   "src/snapshots/*",
-  "src/tests.rs",
+  "src/tests/",
   "tests/",
 ]
 

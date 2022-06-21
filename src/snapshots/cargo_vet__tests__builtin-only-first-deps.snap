@@ -1,6 +1,0 @@
----
-source: src/tests.rs
-expression: stdout
----
-Vetting Succeeded (because you have no third-party dependencies)
-

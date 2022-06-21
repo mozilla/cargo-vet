@@ -1,6 +1,0 @@
----
-source: src/tests.rs
-expression: output
----
-Vetting Succeeded (6 fully audited)
-

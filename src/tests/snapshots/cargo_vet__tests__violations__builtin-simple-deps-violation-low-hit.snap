@@ -1,0 +1,12 @@
+---
+source: src/tests/violations.rs
+expression: output
+---
+Violations Found!
+  dev:10.0.0
+    the own audit 10.0.0
+      criteria: ["safe-to-run"]
+    conflicts with own violation against *
+      criteria: ["safe-to-run"]
+
+

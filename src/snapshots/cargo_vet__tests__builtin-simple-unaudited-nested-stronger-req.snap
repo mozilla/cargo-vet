@@ -1,6 +1,0 @@
----
-source: src/tests.rs
-expression: stdout
----
-Vetting Succeeded (1 fully audited, 2 partially audited)
-

@@ -1,0 +1,8 @@
+---
+source: src/tests/regenerate_unaudited.rs
+expression: unaudited
+---
+[[third-core]]
+version = "10.0.0"
+criteria = "safe-to-deploy"
+
