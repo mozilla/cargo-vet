@@ -5,8 +5,8 @@ use serde_json::{json, Value};
 
 use crate::{
     format::{
-        AuditKind, CriteriaName, CriteriaStr, Delta, DependencyCriteria, MetaConfig, PackageName,
-        PackageStr, PolicyEntry, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        AuditKind, CriteriaName, CriteriaStr, Delta, DependencyCriteria, FastMap, MetaConfig,
+        PackageName, PackageStr, PolicyEntry, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     init_files,
     resolver::{ResolveDepth, ResolveReport},
@@ -36,13 +36,103 @@ struct MockPackage {
     dev_deps: Vec<MockDependency>,
     build_deps: Vec<MockDependency>,
     targets: Vec<&'static str>,
-    is_root: bool,
+    is_workspace: bool,
     is_first_party: bool,
 }
 
 struct MockDependency {
     name: &'static str,
     version: Version,
+}
+
+pub struct MockRegistry {
+    packages: FastMap<PackageStr<'static>, Vec<MockRegistryVersion>>,
+}
+
+struct MockRegistryVersion {
+    version: Version,
+    /// Dependency info dummied out in case we ever want that
+    deps: Vec<()>,
+}
+
+fn reg_ver(pub_ver: u64) -> MockRegistryVersion {
+    MockRegistryVersion {
+        version: ver(pub_ver),
+        deps: vec![],
+    }
+}
+
+impl MockRegistry {
+    pub fn testing_cinematic_universe() -> Self {
+        Self {
+            packages: [
+                ("third-party1", vec![reg_ver(DEFAULT_VER)]),
+                ("first-party", vec![reg_ver(DEFAULT_VER)]),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+    pub fn package(&self, name: PackageStr) -> Option<crates_index::Crate> {
+        use std::io::Write;
+
+        let package_entry = self.packages.get(name)?;
+        let mut package_file = Vec::<u8>::new();
+        for package_version in package_entry {
+            // Dependencies dummied out in case we ever want them
+            let line = json!({
+                "name": name,
+                "vers": package_version.version,
+                // These fields are all dummied out here in case we ever want them
+                "deps": package_version.deps.iter().map(|_dep| json!({
+                    "name": "some_dep_name",
+                    "req": "^0.1.2",
+                    "features": [],
+                    "optional": false,
+                    "default_features": true,
+                    // The target platform for the dependency.
+                    // null if not a target dependency.
+                    // Otherwise, a string such as "cfg(windows)".
+                    "target": null,
+                    // The dependency kind.
+                    // "dev", "build", or "normal".
+                    // Note: this is a required field, but a small number of entries
+                    // exist in the crates.io index with either a missing or null
+                    // `kind` field due to implementation bugs.
+                    "kind": "normal",
+                    // The URL of the index of the registry where this dependency is
+                    // from as a string. If not specified or null, it is assumed the
+                    // dependency is in the current registry.
+                    "registry": null,
+                    // If the dependency is renamed, this is a string of the actual
+                    // package name. If not specified or null, this dependency is not
+                    // renamed.
+                    "package": null,
+                })).collect::<Vec<_>>(),
+                // A SHA256 checksum of the `.crate` file.
+                "cksum": "d867001db0e2b6e0496f9fac96930e2d42233ecd3ca0413e0753d4c7695d289c",
+                // Set of features defined for the package.
+                // Each feature maps to an array of features or dependencies it enables.
+                "features": {},
+                "yanked": false,
+                // The `links` string value from the package's manifest, or null if not
+                // specified. This field is optional and defaults to null.
+                "links": null,
+                // An unsigned 32-bit integer value indicating the schema version of this
+                // entry.
+                "v": 2u32,
+                // This optional field contains features with new, extended syntax.
+                // Specifically, namespaced features (`dep:`) and weak dependencies
+                // (`pkg?/feat`).
+                "features2": {},
+            });
+            serde_json::ser::to_writer(&mut package_file, &line).unwrap();
+            writeln!(&mut package_file).unwrap();
+        }
+        let result = crates_index::Crate::from_slice(&package_file)
+            .expect("failed to parse mock crates index file");
+        Some(result)
+    }
 }
 
 impl Default for MockPackage {
@@ -54,7 +144,7 @@ impl Default for MockPackage {
             dev_deps: vec![],
             build_deps: vec![],
             targets: vec!["lib"],
-            is_root: false,
+            is_workspace: false,
             is_first_party: false,
         }
     }
@@ -318,7 +408,7 @@ impl MockMetadata {
         MockMetadata::new(vec![
             MockPackage {
                 name: "root-package",
-                is_root: true,
+                is_workspace: true,
                 is_first_party: true,
                 deps: vec![dep("first-party")],
                 ..Default::default()
@@ -370,14 +460,14 @@ impl MockMetadata {
         MockMetadata::new(vec![
             MockPackage {
                 name: "rootA",
-                is_root: true,
+                is_workspace: true,
                 is_first_party: true,
                 deps: vec![dep("firstA"), dep("firstAB")],
                 ..Default::default()
             },
             MockPackage {
                 name: "rootB",
-                is_root: true,
+                is_workspace: true,
                 is_first_party: true,
                 deps: vec![dep("firstB"), dep("firstAB"), dep("firstB-nodeps")],
                 ..Default::default()
@@ -432,7 +522,7 @@ impl MockMetadata {
         MockMetadata::new(vec![
             MockPackage {
                 name: "root",
-                is_root: true,
+                is_workspace: true,
                 is_first_party: true,
                 deps: vec![dep("normal"), dep("proc-macro")],
                 dev_deps: vec![dep("dev"), dep("dev-proc-macro")],
@@ -474,7 +564,7 @@ impl MockMetadata {
         MockMetadata::new(vec![
             MockPackage {
                 name: "root",
-                is_root: true,
+                is_workspace: true,
                 is_first_party: true,
                 deps: vec![dep("normal")],
                 dev_deps: vec![dep("dev-cycle")],
@@ -496,7 +586,7 @@ impl MockMetadata {
         MockMetadata::new(vec![
             MockPackage {
                 name: "root",
-                is_root: true,
+                is_workspace: true,
                 is_first_party: true,
                 deps: vec![dep("normal"), dep("both")],
                 dev_deps: vec![dep("dev-cycle-direct"), dep("both"), dep("simple-dev")],
@@ -536,14 +626,14 @@ impl MockMetadata {
         MockMetadata::new(vec![
             MockPackage {
                 name: "root",
-                is_root: true,
+                is_workspace: true,
                 is_first_party: true,
                 deps: vec![dep("first")],
                 ..Default::default()
             },
             MockPackage {
                 name: "first",
-                is_root: true,
+                is_workspace: true,
                 is_first_party: true,
                 deps: vec![dep("third-normal")],
                 dev_deps: vec![dep("third-dev")],
@@ -669,7 +759,7 @@ impl MockMetadata {
                 "rust_version": null
             })).collect::<Vec<_>>(),
             "workspace_members": self.packages.iter().filter_map(|package| {
-                if package.is_root {
+                if package.is_workspace {
                     Some(self.pkgid(package))
                 } else {
                     None
@@ -2426,7 +2516,7 @@ fn builtin_no_deps() {
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::new(vec![MockPackage {
         name: "root-package",
-        is_root: true,
+        is_workspace: true,
         is_first_party: true,
         deps: vec![],
         ..Default::default()
@@ -2449,7 +2539,7 @@ fn builtin_only_first_deps() {
     let mock = MockMetadata::new(vec![
         MockPackage {
             name: "root-package",
-            is_root: true,
+            is_workspace: true,
             is_first_party: true,
             deps: vec![dep("first-party")],
             ..Default::default()
@@ -4001,6 +4091,24 @@ fn mock_simple_violation_hit_with_extra_junk() {
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("mock-simple-violation-hit-with-extra-junk", output);
+}
+
+fn get_audit_as_crates_io(cfg: &Config, store: &Store) -> String {
+    let mut output = Vec::new();
+    let _res = crate::check_audit_as_crates_io(&mut output, cfg, store);
+    String::from_utf8(output).unwrap()
+}
+
+#[test]
+fn simple_audit_as_crates_io() {
+    let mock = MockMetadata::simple();
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_full_audited(&metadata);
+    let store = Store::mock(config, audits, imports);
+    let cfg = mock_cfg(&metadata);
+
+    let output = get_audit_as_crates_io(&cfg, &store);
+    insta::assert_snapshot!("simple-audit-as-crates-io", output);
 }
 
 // TESTING BACKLOG:

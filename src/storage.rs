@@ -448,9 +448,19 @@ impl Cache {
     ///
     /// However this may do some expensive disk i/o, so ideally we should do
     /// some bulk processing of this later. For now let's get it working...
+    #[cfg(not(test))]
     pub fn query_package_from_index(&self, name: PackageStr) -> Option<crates_index::Crate> {
         let reg = self.cargo_registry.as_ref()?;
         reg.index.crate_(name)
+    }
+
+    #[cfg(test)]
+    pub fn query_package_from_index(&self, name: PackageStr) -> Option<crates_index::Crate> {
+        if let Some(reg) = self.cargo_registry.as_ref() {
+            reg.index.crate_(name)
+        } else {
+            crate::tests::MockRegistry::testing_cinematic_universe().package(name)
+        }
     }
 
     #[tracing::instrument(skip(self, network), err)]
