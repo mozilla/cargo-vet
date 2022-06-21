@@ -438,27 +438,6 @@ pub enum OutputFormat {
     Json,
 }
 
-impl Cli {
-    #[cfg(test)]
-    pub fn mock() -> Self {
-        Self {
-            command: None,
-            manifest: clap_cargo::Manifest::default(),
-            workspace: clap_cargo::Workspace::default(),
-            features: Features::default(),
-            locked: false,
-            frozen: false,
-            verbose: LevelFilter::OFF,
-            shallow: false,
-            output_file: None,
-            output_format: OutputFormat::Human,
-            log_file: None,
-            diff_cache: None,
-            filter_graph: None,
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub enum GraphFilter {
     Include(GraphFilterQuery),

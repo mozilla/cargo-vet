@@ -1,11 +1,13 @@
 use std::{
     collections::BTreeMap,
+    ffi::OsString,
     fmt, fs,
     io::{self, Write as _},
     path::PathBuf,
 };
 
 use cargo_metadata::{Metadata, Version};
+use clap::Parser;
 use serde_json::{json, Value};
 
 use crate::{
@@ -17,7 +19,7 @@ use crate::{
     init_files,
     out::Out,
     resolver::{ResolveDepth, ResolveReport},
-    AuditEntry, AuditsFile, Cli, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
+    AuditEntry, AuditsFile, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
     PartialConfig, SortedMap, Store, UnauditedDependency,
 };
 
@@ -966,11 +968,21 @@ fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile
 }
 
 fn mock_cfg(metadata: &Metadata) -> Config {
+    mock_cfg_args(metadata, ["cargo", "vet"])
+}
+
+fn mock_cfg_args<I, T>(metadata: &Metadata, itr: I) -> Config
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let crate::cli::FakeCli::Vet(cli) =
+        crate::cli::FakeCli::try_parse_from(itr).expect("Parsing arguments for mock_cfg failed!");
     Config {
         metacfg: MetaConfig(vec![]),
         metadata: metadata.clone(),
         _rest: PartialConfig {
-            cli: Cli::mock(),
+            cli,
             cache_dir: PathBuf::new(),
             mock_cache: true,
         },
