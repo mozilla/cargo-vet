@@ -4,11 +4,11 @@ use std::ops::Deref;
 use std::panic::panic_any;
 use std::path::Path;
 use std::time::Duration;
-use std::{fs::File, io::Write, panic, path::PathBuf};
+use std::{fs::File, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package};
 use clap::{CommandFactory, Parser};
-use console::{style, Term};
+use console::Term;
 use eyre::{eyre, WrapErr};
 use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::join_all;
@@ -18,12 +18,12 @@ use serde::de::Deserialize;
 use tracing::{error, info, trace};
 
 use crate::cli::*;
-use crate::editor::Editor;
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, Delta, DependencyCriteria,
     FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo,
     UnauditedDependency,
 };
+use crate::out::Out;
 use crate::resolver::{Conclusion, CriteriaMapper, DepGraph, ResolveDepth, SuggestItem};
 use crate::storage::{Cache, Store};
 
@@ -32,6 +32,7 @@ mod editor;
 mod flock;
 pub mod format;
 pub mod network;
+mod out;
 pub mod resolver;
 mod serialization;
 pub mod storage;
@@ -204,12 +205,12 @@ fn real_main() -> Result<(), VetError> {
     // Setup our output stream
     let mut stdout;
     let mut output_f;
-    let out: &mut dyn Write = if let Some(output_path) = &cli.output_file {
+    let out: &mut dyn Out = if let Some(output_path) = &cli.output_file {
         console::set_colors_enabled(false);
         output_f = File::create(output_path).unwrap();
         &mut output_f
     } else {
-        stdout = std::io::stdout();
+        stdout = Term::stdout();
         &mut stdout
     };
 
@@ -391,7 +392,7 @@ fn real_main() -> Result<(), VetError> {
     }
 }
 
-fn cmd_init(_out: &mut dyn Write, cfg: &Config, _sub_args: &InitArgs) -> Result<(), VetError> {
+fn cmd_init(_out: &mut dyn Out, cfg: &Config, _sub_args: &InitArgs) -> Result<(), VetError> {
     // Initialize vet
     trace!("initializing...");
 
@@ -461,7 +462,7 @@ pub fn init_files(
 }
 
 fn cmd_inspect(
-    out: &mut dyn Write,
+    out: &mut dyn Out,
     cfg: &PartialConfig,
     sub_args: &InspectArgs,
 ) -> Result<(), VetError> {
@@ -500,15 +501,13 @@ fn cmd_inspect(
     }
 }
 
-fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
+fn cmd_certify(out: &mut dyn Out, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
     // Certify that you have reviewed a crate's source for some version / delta
     let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
     // Grab the last fetch and immediately drop the cache
     let last_fetch = Cache::acquire(cfg)?.get_last_fetch();
-
-    let term = Term::stdout();
 
     // Before setting up magic, we need to agree on a package
     let package = if let Some(package) = &sub_args.package {
@@ -620,7 +619,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
 
         // Prompt for criteria
         loop {
-            term.clear_screen()?;
+            out.clear_screen()?;
             write!(out, "choose criteria to certify for {}", package)?;
             match &kind {
                 AuditKind::Full { version, .. } => write!(out, ":{}", version)?,
@@ -638,14 +637,14 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                         out,
                         "  {}. {}",
                         criteria_idx + 1,
-                        style(criteria_name).green()
+                        out.style().green().apply_to(criteria_name)
                     )?;
                 } else if implied_criteria.has_criteria(criteria_idx) {
                     writeln!(
                         out,
                         "  {}. {}",
                         criteria_idx + 1,
-                        style(criteria_name).yellow()
+                        out.style().yellow().apply_to(criteria_name)
                     )?;
                 } else {
                     writeln!(out, "  {}. {}", criteria_idx + 1, criteria_name)?;
@@ -661,7 +660,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
                     .collect::<Vec<_>>()
             )?;
             writeln!(out, "(press ENTER to accept the current criteria)")?;
-            let input = term.read_line()?;
+            let input = out.read_line_initial_text("> ")?;
             let input = input.trim();
             if input.is_empty() {
                 if chosen_criteria.is_empty() {
@@ -728,7 +727,7 @@ fn cmd_certify(out: &mut dyn Write, cfg: &Config, sub_args: &CertifyArgs) -> Res
             }),
         ));
 
-        let mut editor = Editor::new("VET_CERTIFY")?;
+        let mut editor = out.editor("VET_CERTIFY")?;
         if let Some(notes) = &notes {
             editor.select_comment_char(notes);
         }
@@ -876,7 +875,7 @@ fn guess_audit_criteria(
 }
 
 fn cmd_record_violation(
-    out: &mut dyn Write,
+    out: &mut dyn Out,
     cfg: &Config,
     sub_args: &RecordViolationArgs,
 ) -> Result<(), VetError> {
@@ -939,7 +938,7 @@ fn cmd_record_violation(
 }
 
 fn cmd_add_unaudited(
-    _out: &mut dyn Write,
+    _out: &mut dyn Out,
     cfg: &Config,
     sub_args: &AddUnauditedArgs,
 ) -> Result<(), VetError> {
@@ -1004,7 +1003,7 @@ fn cmd_add_unaudited(
     Ok(())
 }
 
-fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Result<(), VetError> {
+fn cmd_suggest(out: &mut dyn Out, cfg: &Config, _sub_args: &SuggestArgs) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
     let suggest_store = Store::acquire(cfg)?.clone_for_suggest();
@@ -1031,7 +1030,7 @@ fn cmd_suggest(out: &mut dyn Write, cfg: &Config, _sub_args: &SuggestArgs) -> Re
 }
 
 fn cmd_regenerate_unaudited(
-    _out: &mut dyn Write,
+    _out: &mut dyn Out,
     cfg: &Config,
     _sub_args: &RegenerateUnauditedArgs,
 ) -> Result<(), VetError> {
@@ -1153,7 +1152,7 @@ pub fn minimize_unaudited(
     Ok(())
 }
 
-fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Result<(), VetError> {
+fn cmd_diff(out: &mut dyn Out, cfg: &PartialConfig, sub_args: &DiffArgs) -> Result<(), VetError> {
     let cache = Cache::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
@@ -1185,7 +1184,7 @@ fn cmd_diff(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &DiffArgs) -> Re
     Ok(())
 }
 
-fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
+fn cmd_vet(out: &mut dyn Out, cfg: &Config) -> Result<(), VetError> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
@@ -1234,7 +1233,7 @@ fn cmd_vet(out: &mut dyn Write, cfg: &Config) -> Result<(), VetError> {
 }
 
 fn cmd_fetch_imports(
-    out: &mut dyn Write,
+    out: &mut dyn Out,
     cfg: &Config,
     _sub_args: &FetchImportsArgs,
 ) -> Result<(), VetError> {
@@ -1263,7 +1262,7 @@ fn cmd_fetch_imports(
 }
 
 fn cmd_dump_graph(
-    out: &mut dyn Write,
+    out: &mut dyn Out,
     cfg: &Config,
     sub_args: &DumpGraphArgs,
 ) -> Result<(), VetError> {
@@ -1279,7 +1278,7 @@ fn cmd_dump_graph(
     Ok(())
 }
 
-fn cmd_fmt(_out: &mut dyn Write, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), VetError> {
+fn cmd_fmt(_out: &mut dyn Out, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), VetError> {
     // Reformat all the files (just load and store them, formatting is implicit).
     trace!("formatting...");
     let store = Store::acquire(cfg)?;
@@ -1288,7 +1287,7 @@ fn cmd_fmt(_out: &mut dyn Write, cfg: &Config, _sub_args: &FmtArgs) -> Result<()
 }
 
 fn cmd_accept_criteria_change(
-    _out: &mut dyn Write,
+    _out: &mut dyn Out,
     _cfg: &Config,
     _sub_args: &AcceptCriteriaChangeArgs,
 ) -> Result<(), VetError> {
@@ -1300,7 +1299,7 @@ fn cmd_accept_criteria_change(
 
 /// Perform crimes on clap long_help to generate markdown docs
 fn cmd_help_md(
-    out: &mut dyn Write,
+    out: &mut dyn Out,
     _cfg: &PartialConfig,
     _sub_args: &HelpMarkdownArgs,
 ) -> Result<(), VetError> {
@@ -1407,7 +1406,7 @@ fn cmd_help_md(
     Ok(())
 }
 
-fn cmd_gc(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &GcArgs) -> Result<(), VetError> {
+fn cmd_gc(out: &mut dyn Out, cfg: &PartialConfig, sub_args: &GcArgs) -> Result<(), VetError> {
     let cache = Cache::acquire(cfg)?;
 
     if sub_args.clean {
@@ -1434,7 +1433,7 @@ fn cmd_gc(out: &mut dyn Write, cfg: &PartialConfig, sub_args: &GcArgs) -> Result
 // Utils
 
 fn diff_crate(
-    _out: &mut dyn Write,
+    _out: &mut dyn Out,
     _cfg: &PartialConfig,
     version1: &Path,
     version2: &Path,
@@ -1599,7 +1598,7 @@ fn first_party_packages_strict<'a>(
 }
 
 fn check_audit_as_crates_io(
-    out: &mut dyn Write,
+    out: &mut dyn Out,
     cfg: &Config,
     store: &Store,
 ) -> Result<(), VetError> {

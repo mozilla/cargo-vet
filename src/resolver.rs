@@ -59,12 +59,10 @@
 //!   (from search_for_path) to figure out which audits to recommend for which criteria
 
 use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
-use console::{style, Style};
 use core::fmt;
 use futures_util::future::join_all;
 use serde::Serialize;
 use serde_json::json;
-use std::io::Write;
 use tracing::{error, trace, trace_span, warn};
 
 use crate::format::{
@@ -73,6 +71,7 @@ use crate::format::{
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
+use crate::out::Out;
 use crate::{
     AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
     GraphFilterQuery, PackageExt, Store, VetError,
@@ -1034,7 +1033,7 @@ impl<'a> DepGraph<'a> {
 
     pub fn print_mermaid(
         &self,
-        out: &mut dyn Write,
+        out: &mut dyn Out,
         sub_args: &DumpGraphArgs,
     ) -> Result<(), VetError> {
         use crate::DumpGraphDepth::*;
@@ -2566,7 +2565,7 @@ impl<'a> ResolveReport<'a> {
     /// Print a full human-readable report
     pub fn print_human(
         &self,
-        out: &mut dyn Write,
+        out: &mut dyn Out,
         cfg: &Config,
         suggest: Option<&Suggest>,
     ) -> Result<(), VetError> {
@@ -2580,7 +2579,7 @@ impl<'a> ResolveReport<'a> {
     /// Print only the suggest portion of a human-readable report
     pub fn print_suggest_human(
         &self,
-        out: &mut dyn Write,
+        out: &mut dyn Out,
         _cfg: &Config,
         suggest: Option<&Suggest>,
     ) -> Result<(), VetError> {
@@ -2596,7 +2595,7 @@ impl<'a> ResolveReport<'a> {
     /// Print a full human-readable report
     pub fn print_json(
         &self,
-        out: &mut dyn Write,
+        out: &mut dyn Out,
         _cfg: &Config,
         suggest: Option<&Suggest>,
     ) -> Result<(), VetError> {
@@ -2664,7 +2663,7 @@ impl<'a> ResolveReport<'a> {
 impl Success {
     pub fn print_human(
         &self,
-        out: &mut dyn Write,
+        out: &mut dyn Out,
         report: &ResolveReport,
         _cfg: &Config,
     ) -> Result<(), VetError> {
@@ -2728,7 +2727,7 @@ impl Success {
 }
 
 impl Suggest {
-    pub fn print_human(&self, out: &mut dyn Write, report: &ResolveReport) -> Result<(), VetError> {
+    pub fn print_human(&self, out: &mut dyn Out, report: &ResolveReport) -> Result<(), VetError> {
         for (criteria, suggestions) in &self.suggestions_by_criteria {
             writeln!(out, "recommended audits for {}:", criteria)?;
 
@@ -2754,9 +2753,9 @@ impl Suggest {
                         format!("({})", item.suggested_diff.diffstat.raw.trim())
                     };
                     let style = if item.suggested_criteria.is_fully_unconfident() {
-                        Style::new().dim()
+                        out.style().dim()
                     } else {
-                        Style::new()
+                        out.style()
                     };
                     (cmd, parents, diffstat, style)
                 })
@@ -2800,7 +2799,7 @@ impl Suggest {
 impl FailForVet {
     fn print_human(
         &self,
-        out: &mut dyn Write,
+        out: &mut dyn Out,
         report: &ResolveReport,
         _cfg: &Config,
         suggest: Option<&Suggest>,
@@ -2834,7 +2833,7 @@ impl FailForVet {
                 writeln!(
                     out,
                     "{}",
-                    style(format_args!(
+                    out.style().dim().apply_to(format_args!(
                         "{} likely missing {:?}",
                         if confident_criteria.is_empty() {
                             label
@@ -2843,7 +2842,6 @@ impl FailForVet {
                         },
                         unconfident_criteria
                     ))
-                    .dim()
                 )?;
             }
         }
@@ -2861,7 +2859,7 @@ impl FailForVet {
 impl FailForViolationConflict {
     fn print_human(
         &self,
-        out: &mut dyn Write,
+        out: &mut dyn Out,
         report: &ResolveReport,
         _cfg: &Config,
     ) -> Result<(), VetError> {
@@ -2899,7 +2897,7 @@ impl FailForViolationConflict {
         }
 
         fn print_unaudited_entry(
-            out: &mut dyn Write,
+            out: &mut dyn Out,
             entry: &UnauditedDependency,
         ) -> Result<(), VetError> {
             writeln!(out, "unaudited {}", entry.version)?;
@@ -2911,7 +2909,7 @@ impl FailForViolationConflict {
         }
 
         fn print_entry(
-            out: &mut dyn Write,
+            out: &mut dyn Out,
             source: &AuditSource,
             entry: &AuditEntry,
         ) -> Result<(), VetError> {
