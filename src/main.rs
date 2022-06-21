@@ -1641,13 +1641,14 @@ fn foreign_packages<'a>(
 /// (because it's used for validating that field's value).
 fn first_party_packages_strict<'a>(
     metadata: &'a Metadata,
-    config: &'a ConfigFile,
+    _config: &'a ConfigFile,
 ) -> impl Iterator<Item = &'a Package> + 'a {
-    // Only analyze things from crates.io (no source = path-dep / workspace-member)
+    // Opposite of third-party, but with an empty `policy`
+    let empty_policy = SortedMap::new();
     metadata
         .packages
         .iter()
-        .filter(|package| !package.is_third_party(&config.policy))
+        .filter(move |package| !package.is_third_party(&empty_policy))
 }
 
 fn check_audit_as_crates_io(
@@ -1671,18 +1672,14 @@ fn check_audit_as_crates_io(
         }
 
         if let Some(index_entry) = cache.query_package_from_index(&package.name) {
-            for index_version in index_entry.versions() {
-                if let Ok(index_ver) = index_version.version().parse::<cargo_metadata::Version>() {
-                    if index_ver == package.version {
-                        // We found a version of this package in the registry!
-                        if audit_policy == None {
-                            // At this point, having no policy is an error
-                            needs_audit_as_entry.push(package);
-                        }
-                        // Now that we've found a version match, we're done with this package
-                        continue 'packages;
-                    }
+            if storage::exact_version(&index_entry, &package.version).is_some() {
+                // We found a version of this package in the registry!
+                if audit_policy == None {
+                    // At this point, having no policy is an error
+                    needs_audit_as_entry.push(package);
                 }
+                // Now that we've found a version match, we're done with this package
+                continue 'packages;
             }
         }
 
@@ -1705,7 +1702,7 @@ fn check_audit_as_crates_io(
         writeln!(out)?;
         writeln!(
             out,
-            "All of these must have a policy.*.audit-as-crates-io entry"
+            "All of these must have a `policy.*.audit-as-crates-io` entry"
         )?;
     }
 
