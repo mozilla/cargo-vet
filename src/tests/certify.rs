@@ -83,3 +83,54 @@ fn mock_simple_suggested_criteria() {
 
     insta::assert_snapshot!("mock-simple-suggested-criteria", output);
 }
+
+#[test]
+fn mock_simple_certify_flow() {
+    let mock = MockMetadata::simple();
+
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = mock.metadata();
+
+    let (config, audits, imports) = files_inited(&metadata);
+
+    let mut store = Store::mock(config, audits, imports);
+
+    let mut output = BasicTestOutput::new();
+    output.on_edit = Some(Box::new(|_| {
+        Ok("\
+            I, testing, certify that I have audited version 10.0.0 of third-party1 in accordance with the above criteria.\n\
+            \n\
+            These are testing notes. They contain some\n\
+            newlines. Trailing whitespace        \n    \
+            and leading whitespace\n\
+            \n".to_owned())
+    }));
+    output.on_read_line = Some(Box::new(|_| Ok("\n".to_owned())));
+
+    let cfg = mock_cfg_args(
+        &metadata,
+        [
+            "cargo",
+            "vet",
+            "certify",
+            "third-party1",
+            "10.0.0",
+            "--who",
+            "testing",
+        ],
+    );
+    let sub_args = if let Some(crate::cli::Commands::Certify(sub_args)) = &cfg.cli.command {
+        sub_args
+    } else {
+        unreachable!();
+    };
+
+    crate::do_cmd_certify(&mut output, &cfg, sub_args, &mut store, None, None)
+        .expect("do_cmd_certify failed");
+
+    let audits = crate::serialization::to_formatted_toml(&store.audits).unwrap();
+
+    let result = format!("OUTPUT:\n{}\nAUDITS:\n{}", output, audits);
+
+    insta::assert_snapshot!("mock-simple-certify-flow", result);
+}

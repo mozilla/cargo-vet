@@ -509,6 +509,20 @@ fn cmd_certify(out: &mut dyn Out, cfg: &Config, sub_args: &CertifyArgs) -> Resul
     // Grab the last fetch and immediately drop the cache
     let last_fetch = Cache::acquire(cfg)?.get_last_fetch();
 
+    do_cmd_certify(out, cfg, sub_args, &mut store, network.as_ref(), last_fetch)?;
+
+    store.commit()?;
+    Ok(())
+}
+
+fn do_cmd_certify(
+    out: &mut dyn Out,
+    cfg: &Config,
+    sub_args: &CertifyArgs,
+    store: &mut Store,
+    network: Option<&Network>,
+    last_fetch: Option<FetchCommand>,
+) -> Result<(), VetError> {
     // Before setting up magic, we need to agree on a package
     let package = if let Some(package) = &sub_args.package {
         package.clone()
@@ -615,7 +629,7 @@ fn cmd_certify(out: &mut dyn Out, cfg: &Config, sub_args: &CertifyArgs) -> Resul
         // * Otherwise guess nothing
         //
         // Regardless of the guess, prompt the user to confirm (just needs to mash enter)
-        let mut chosen_criteria = guess_audit_criteria(cfg, &store, &package, &kind);
+        let mut chosen_criteria = guess_audit_criteria(cfg, store, &package, &kind);
 
         // Prompt for criteria
         loop {
@@ -722,7 +736,7 @@ fn cmd_certify(out: &mut dyn Out, cfg: &Config, sub_args: &CertifyArgs) -> Resul
             criteria_names.iter().map(|criteria| async {
                 (
                     *criteria,
-                    eula_for_criteria(network.as_ref(), &store.audits.criteria, criteria).await,
+                    eula_for_criteria(network, &store.audits.criteria, criteria).await,
                 )
             }),
         ));
@@ -817,8 +831,6 @@ fn cmd_certify(out: &mut dyn Out, cfg: &Config, sub_args: &CertifyArgs) -> Resul
             }
         }
     }
-
-    store.commit()?;
 
     Ok(())
 }
