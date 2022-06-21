@@ -1,8 +1,0 @@
----
-source: src/tests.rs
-expression: unaudited
----
-[[dev]]
-version = "10.0.0"
-criteria = "safe-to-run"
-

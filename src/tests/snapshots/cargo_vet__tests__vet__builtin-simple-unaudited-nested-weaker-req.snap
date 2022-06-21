@@ -1,0 +1,6 @@
+---
+source: src/tests/vet.rs
+expression: output
+---
+Vetting Succeeded (1 fully audited, 2 partially audited)
+

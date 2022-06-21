@@ -1,0 +1,28 @@
+---
+source: src/tests/vet.rs
+expression: output
+---
+Vetting Failed!
+
+6 unvetted dependencies:
+  build:10.0.0 missing ["safe-to-deploy"]
+  build-proc-macro:10.0.0 missing ["safe-to-deploy"]
+  dev:10.0.0 missing ["safe-to-run"]
+  dev-proc-macro:10.0.0 missing ["safe-to-run"]
+  normal:10.0.0 missing ["safe-to-deploy"]
+  proc-macro:10.0.0 missing ["safe-to-deploy"]
+
+recommended audits for safe-to-deploy:
+    cargo vet inspect build 10.0.0             (used by root)  (100 lines)
+    cargo vet inspect build-proc-macro 10.0.0  (used by root)  (100 lines)
+    cargo vet inspect normal 10.0.0            (used by root)  (100 lines)
+    cargo vet inspect proc-macro 10.0.0        (used by root)  (100 lines)
+
+recommended audits for safe-to-run:
+    cargo vet inspect dev 10.0.0             (used by root)  (100 lines)
+    cargo vet inspect dev-proc-macro 10.0.0  (used by root)  (100 lines)
+
+estimated audit backlog: 600 lines
+
+Use |cargo vet certify| to record the audits.
+
