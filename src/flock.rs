@@ -10,10 +10,9 @@ use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Display, Path, PathBuf};
 
-use crate::VetError;
-use eyre::WrapErr;
-
 use sys::*;
+
+use crate::errors::FlockError;
 
 #[derive(Debug)]
 pub struct FileLock {
@@ -130,9 +129,10 @@ impl Filesystem {
     ///
     /// Handles errors where other processes are also attempting to concurrently
     /// create this directory.
-    pub fn create_dir(&self) -> Result<(), VetError> {
-        fs::create_dir_all(&self.root)
-            .wrap_err_with(|| format!("failed to create directory `{}`", self.display()))
+    pub fn create_dir(&self) -> Result<(), std::io::Error> {
+        fs::create_dir_all(&self.root)?;
+        Ok(())
+        //    .wrap_err_with(|| format!("failed to create directory `{}`", self.display()))
     }
 
     /// Returns an adaptor that can be used to print the path of this
@@ -151,7 +151,7 @@ impl Filesystem {
     ///
     /// The returned file can be accessed to look at the path and also has
     /// read/write access to the underlying file.
-    pub fn open_rw<P>(&self, path: P, msg: &str) -> Result<FileLock, VetError>
+    pub fn open_rw<P>(&self, path: P, msg: &str) -> Result<FileLock, FlockError>
     where
         P: AsRef<Path>,
     {
@@ -172,7 +172,7 @@ impl Filesystem {
     /// The returned file can be accessed to look at the path and also has read
     /// access to the underlying file. Any writes to the file will return an
     /// error.
-    pub fn open_ro<P>(&self, path: P, msg: &str) -> Result<FileLock, VetError>
+    pub fn open_ro<P>(&self, path: P, msg: &str) -> Result<FileLock, FlockError>
     where
         P: AsRef<Path>,
     {
@@ -190,26 +190,21 @@ impl Filesystem {
         opts: &OpenOptions,
         state: State,
         msg: &str,
-    ) -> Result<FileLock, VetError> {
+    ) -> Result<FileLock, FlockError> {
         let path = self.root.join(path);
 
         // If we want an exclusive lock then if we fail because of NotFound it's
         // likely because an intermediate directory didn't exist, so try to
         // create the directory and then continue.
-        let f = opts
-            .open(&path)
-            .or_else(|e| {
-                if e.kind() == io::ErrorKind::NotFound && state == State::Exclusive {
-                    let parent = path.parent().unwrap();
-                    fs::create_dir_all(parent).wrap_err_with(|| {
-                        format!("failed to create directory `{}`", parent.display())
-                    })?;
-                    Ok(opts.open(&path)?)
-                } else {
-                    Err(VetError::from(e))
-                }
-            })
-            .wrap_err_with(|| format!("failed to open: {}", path.display()))?;
+        let f = opts.open(&path).or_else(|e| {
+            if e.kind() == io::ErrorKind::NotFound && state == State::Exclusive {
+                let parent = path.parent().unwrap();
+                fs::create_dir_all(parent)?;
+                Ok(opts.open(&path)?)
+            } else {
+                Err(e)
+            }
+        })?;
         match state {
             State::Exclusive => {
                 acquire(msg, &path, &|| try_lock_exclusive(&f), &|| {
@@ -256,7 +251,7 @@ fn acquire(
     path: &Path,
     lock_try: &dyn Fn() -> io::Result<()>,
     lock_block: &dyn Fn() -> io::Result<()>,
-) -> Result<(), VetError> {
+) -> Result<(), std::io::Error> {
     // File locking on Unix is currently implemented via `flock`, which is known
     // to be broken on NFS. We could in theory just ignore errors that happen on
     // NFS, but apparently the failure mode [1] for `flock` on NFS is **blocking
@@ -281,13 +276,15 @@ fn acquire(
 
         Err(e) => {
             if !error_contended(&e) {
-                return Err(e).wrap_err(format!("failed to lock file: {}", path.display()));
+                // .wrap_err(format!("failed to lock file: {}", path.display()))
+                Err(e)?;
             }
         }
     }
     eprintln!("Blocking: waiting for file lock on {}", msg);
 
-    lock_block().wrap_err_with(|| format!("failed to lock file: {}", path.display()))?;
+    // format!("failed to lock file: {}", path.display())
+    lock_block()?;
     return Ok(());
 
     #[cfg(all(target_os = "linux", not(target_env = "musl")))]

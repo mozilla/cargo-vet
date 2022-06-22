@@ -9,15 +9,14 @@
 
 use std::{
     ffi::{OsStr, OsString},
-    path::Path,
+    path::{Path, PathBuf},
     time::Duration,
 };
 
-use eyre::Context;
 use reqwest::{Client, Url};
 use tokio::io::AsyncWriteExt;
 
-use crate::{PartialConfig, VetError};
+use crate::{errors::DownloadError, PartialConfig};
 
 pub struct Network {
     /// The HTTP client all requests go through
@@ -54,10 +53,22 @@ impl Network {
     }
 
     /// Download a file and persist it to disk
-    pub async fn download_and_persist(&self, url: Url, persist_to: &Path) -> Result<(), VetError> {
-        let download_tmp_path = OsString::from_iter([persist_to.as_os_str(), OsStr::new(".part")]);
+    pub async fn download_and_persist(
+        &self,
+        url: Url,
+        persist_to: &Path,
+    ) -> Result<(), DownloadError> {
+        let download_tmp_path = PathBuf::from(OsString::from_iter([
+            persist_to.as_os_str(),
+            OsStr::new(".part"),
+        ]));
         {
-            let _permit = self.connection_semaphore.acquire().await?;
+            let _permit = self.connection_semaphore.acquire().await.map_err(|error| {
+                DownloadError::DonwloadDenied {
+                    url: url.clone(),
+                    error,
+                }
+            })?;
 
             let mut res = self
                 .client
@@ -65,14 +76,34 @@ impl Network {
                 .send()
                 .await
                 .and_then(|res| res.error_for_status())
-                .wrap_err_with(|| format!("Failed to download {}", url))?;
+                .map_err(|error| DownloadError::FailedToStartDownload {
+                    url: url.clone(),
+                    error,
+                })?;
 
-            let mut download_tmp = tokio::fs::File::create(&download_tmp_path)
-                .await
-                .wrap_err("could not create tempfile for download")?;
-            while let Some(chunk) = res.chunk().await? {
+            let mut download_tmp =
+                tokio::fs::File::create(&download_tmp_path)
+                    .await
+                    .map_err(|error| DownloadError::FailedToCreateDownload {
+                        target: download_tmp_path.clone(),
+                        error,
+                    })?;
+            while let Some(chunk) =
+                res.chunk()
+                    .await
+                    .map_err(|error| DownloadError::FailedToReadDownload {
+                        url: url.clone(),
+                        error,
+                    })?
+            {
                 let network_bytes = &chunk[..];
-                download_tmp.write_all(network_bytes).await?;
+                download_tmp
+                    .write_all(network_bytes)
+                    .await
+                    .map_err(|error| DownloadError::FailedToWriteDownload {
+                        target: download_tmp_path.clone(),
+                        error,
+                    })?;
             }
         }
 
@@ -81,12 +112,10 @@ impl Network {
             Ok(()) => {}
             Err(err) => {
                 let _ = tokio::fs::remove_file(&download_tmp_path).await;
-                return Err(err).wrap_err_with(|| {
-                    format!(
-                        "Couldn't swap download into final location: {}",
-                        persist_to.display()
-                    )
-                });
+                return Err(err).map_err(|error| DownloadError::FailedToFinalizeDownload {
+                    target: persist_to.to_owned(),
+                    error,
+                })?;
             }
         }
 
@@ -94,8 +123,13 @@ impl Network {
     }
 
     /// Download a file into memory
-    pub async fn download(&self, url: Url) -> Result<Vec<u8>, VetError> {
-        let _permit = self.connection_semaphore.acquire().await?;
+    pub async fn download(&self, url: Url) -> Result<Vec<u8>, DownloadError> {
+        let _permit = self.connection_semaphore.acquire().await.map_err(|error| {
+            DownloadError::DonwloadDenied {
+                url: url.clone(),
+                error,
+            }
+        })?;
 
         let mut res = self
             .client
@@ -103,10 +137,20 @@ impl Network {
             .send()
             .await
             .and_then(|res| res.error_for_status())
-            .wrap_err_with(|| format!("Failed to download {}", url))?;
+            .map_err(|error| DownloadError::FailedToStartDownload {
+                url: url.clone(),
+                error,
+            })?;
 
         let mut output = vec![];
-        while let Some(chunk) = res.chunk().await? {
+        while let Some(chunk) =
+            res.chunk()
+                .await
+                .map_err(|error| DownloadError::FailedToReadDownload {
+                    url: url.clone(),
+                    error,
+                })?
+        {
             let network_bytes = &chunk[..];
             output.extend_from_slice(network_bytes);
         }

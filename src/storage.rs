@@ -10,7 +10,6 @@ use std::{
 
 use cargo_metadata::Version;
 use crates_index::Index;
-use eyre::{eyre, Context};
 use flate2::read::GzDecoder;
 use futures_util::future::try_join_all;
 use reqwest::Url;
@@ -19,6 +18,11 @@ use tar::Archive;
 use tracing::{error, info, log::warn, trace};
 
 use crate::{
+    errors::{
+        CacheAcquireError, CacheCommitError, CommandError, DiffError, FetchAndDiffError,
+        FetchAuditError, FetchError, FlockError, StoreAcquireError, StoreCommitError,
+        StoreCreateError, StoreValidateErrors, TomlParseError, UnpackError,
+    },
     flock::{FileLock, Filesystem},
     format::{
         AuditsFile, CommandHistory, ConfigFile, Delta, DiffCache, DiffStat, FastMap, FetchCommand,
@@ -27,7 +31,7 @@ use crate::{
     network::Network,
     resolver,
     serialization::to_formatted_toml,
-    Config, PartialConfig, VetError,
+    Config, PartialConfig,
 };
 
 // tmp cache for various shenanigans
@@ -69,7 +73,7 @@ struct StoreLock {
 }
 
 impl StoreLock {
-    fn new(store: &Filesystem) -> Result<Self, VetError> {
+    fn new(store: &Filesystem) -> Result<Self, FlockError> {
         Ok(StoreLock {
             config: store.open_rw(CONFIG_TOML, "vet store")?,
         })
@@ -119,9 +123,9 @@ pub struct Store {
 
 impl Store {
     /// Create a new store (files will be completely empty, must be committed for files to be created)
-    pub fn create(cfg: &Config) -> Result<Self, VetError> {
+    pub fn create(cfg: &Config) -> Result<Self, StoreCreateError> {
         let root = cfg.metacfg.store_path();
-        root.create_dir()?;
+        root.create_dir().map_err(StoreCreateError::CouldntCreate)?;
 
         let lock = StoreLock::new(&root)?;
 
@@ -149,7 +153,7 @@ impl Store {
     }
 
     /// Acquire an existing store
-    pub fn acquire(cfg: &Config) -> Result<Self, VetError> {
+    pub fn acquire(cfg: &Config) -> Result<Self, StoreAcquireError> {
         let root = cfg.metacfg.store_path();
 
         // Before we do anything else, acquire an exclusive lock on the
@@ -210,7 +214,7 @@ impl Store {
     }
 
     /// Commit the store's contents back to disk
-    pub fn commit(self) -> Result<(), VetError> {
+    pub fn commit(self) -> Result<(), StoreCommitError> {
         // TODO: make this truly transactional?
         // (With a dir rename? Does that work with the lock? Fine because it's already closed?)
         if let Some(lock) = self.lock {
@@ -225,7 +229,7 @@ impl Store {
     }
 
     /// Validate the store's integrity
-    pub fn validate(&self) -> Result<(), VetError> {
+    pub fn validate(&self) -> Result<(), StoreValidateErrors> {
         // ERRORS: ideally these are all gathered diagnostics, want to report as many errors
         // at once as possible!
 
@@ -249,11 +253,11 @@ impl Store {
     }
 
     /// Fetch foreign audits, only call this is we're not --locked
-    pub async fn fetch_foreign_audits(&mut self, network: &Network) -> Result<(), VetError> {
+    pub async fn fetch_foreign_audits(&mut self, network: &Network) -> Result<(), FetchAuditError> {
         let new_imports = ImportsFile {
             audits: try_join_all(self.config.imports.iter().map(|(name, import)| async {
                 let audit_file = fetch_foreign_audit(network, name, &import.url).await?;
-                Ok::<_, VetError>((name.clone(), audit_file))
+                Ok::<_, FetchAuditError>((name.clone(), audit_file))
             }))
             .await?
             .into_iter()
@@ -275,15 +279,15 @@ async fn fetch_foreign_audit(
     network: &Network,
     name: &str,
     url: &str,
-) -> Result<AuditsFile, VetError> {
-    let parsed_url =
-        Url::parse(url).wrap_err_with(|| format!("Invalid url for audit {name} @ {url}"))?;
-    let audit_bytes = network
-        .download(parsed_url)
-        .await
-        .wrap_err_with(|| format!("Could not import audit {name} @ {url}"))?;
-    let audit_file: AuditsFile = toml_edit::de::from_slice(&audit_bytes)
-        .wrap_err_with(|| format!("Could not parse {name} @ {url}"))?;
+) -> Result<AuditsFile, FetchAuditError> {
+    let parsed_url = Url::parse(url).map_err(|error| FetchAuditError::InvalidUrl {
+        import_url: url.to_owned(),
+        import_name: name.to_owned(),
+        error,
+    })?;
+    let audit_bytes = network.download(parsed_url).await?;
+    let audit_file: AuditsFile =
+        toml_edit::de::from_slice(&audit_bytes).map_err(|error| TomlParseError { error })?;
     Ok(audit_file)
 }
 
@@ -348,7 +352,7 @@ impl Drop for Cache {
         let state = self.state.get_mut().unwrap();
         if let Some(diff_cache_path) = &self.diff_cache_path {
             // Write back the diff_cache
-            if let Err(err) = || -> Result<(), VetError> {
+            if let Err(err) = || -> Result<(), CacheCommitError> {
                 store_diff_cache(
                     File::create(diff_cache_path)?,
                     mem::take(&mut state.diff_cache),
@@ -360,7 +364,7 @@ impl Drop for Cache {
         }
         if let Some(command_history_path) = &self.command_history_path {
             // Write back the command_history
-            if let Err(err) = || -> Result<(), VetError> {
+            if let Err(err) = || -> Result<(), CacheCommitError> {
                 store_command_history(
                     File::create(command_history_path)?,
                     mem::take(&mut state.command_history),
@@ -376,7 +380,7 @@ impl Drop for Cache {
 
 impl Cache {
     /// Acquire the cache
-    pub fn acquire(cfg: &PartialConfig) -> Result<Self, VetError> {
+    pub fn acquire(cfg: &PartialConfig) -> Result<Self, CacheAcquireError> {
         if cfg.mock_cache {
             // We're in unit tests, everything should be mocked and not touch real caches
             return Ok(Cache {
@@ -397,31 +401,29 @@ impl Cache {
 
         // Make sure the cache directory exists, and acquire an exclusive lock on it.
         let root = cfg.cache_dir.clone();
-        fs::create_dir_all(&root)
-            .wrap_err_with(|| format!("failed to create cache directory `{}`", root.display()))?;
+        fs::create_dir_all(&root).map_err(|error| CacheAcquireError::Root {
+            target: root.clone(),
+            error,
+        })?;
 
         let lock = Filesystem::new(root.clone()).open_rw(CACHE_VET_LOCK, "cache lock")?;
 
         let empty = root.join(CACHE_EMPTY_PACKAGE);
-        fs::create_dir_all(&empty).wrap_err_with(|| {
-            format!(
-                "failed to create cache empty directory `{}`",
-                empty.display()
-            )
+        fs::create_dir_all(&empty).map_err(|error| CacheAcquireError::Empty {
+            target: empty.clone(),
+            error,
         })?;
+
         let packages_src = root.join(CACHE_REGISTRY_SRC);
-        fs::create_dir_all(&packages_src).wrap_err_with(|| {
-            format!(
-                "failed to create package src directory `{}`",
-                packages_src.display()
-            )
+        fs::create_dir_all(&packages_src).map_err(|error| CacheAcquireError::Src {
+            target: empty.clone(),
+            error,
         })?;
+
         let packages_cache = root.join(CACHE_REGISTRY_CACHE);
-        fs::create_dir_all(&packages_cache).wrap_err_with(|| {
-            format!(
-                "failed to create package cache directory `{}`",
-                packages_cache.display()
-            )
+        fs::create_dir_all(&packages_cache).map_err(|error| CacheAcquireError::Cache {
+            target: packages_cache.clone(),
+            error,
         })?;
 
         // Setup the diff_cache.
@@ -492,7 +494,7 @@ impl Cache {
         network: Option<&Network>,
         package: PackageStr<'_>,
         version: &Version,
-    ) -> Result<PathBuf, VetError> {
+    ) -> Result<PathBuf, FetchError> {
         // Lock the mutex to extract a reference to the OnceCell which we'll use
         // to asynchronously synchronize on and fetch the package only once in a
         // single execution.
@@ -506,7 +508,7 @@ impl Cache {
                 .clone()
         };
 
-        let path = once_cell
+        let path_res: Result<_, FetchError> = once_cell
             .get_or_try_init(|| async {
                 let root = self.root.as_ref().unwrap();
 
@@ -549,20 +551,25 @@ impl Cache {
                         file
                     })
                 })
-                .await?;
+                .await
+                .expect("failed to join");
 
                 // If the file isn't in our local cache, make sure to download it.
                 let file = match cached_file {
                     Ok(file) => file,
                     Err(_) => {
-                        let network = network.ok_or_else(|| {
-                            eyre!("running as --frozen but needed to fetch {package}:{version}")
+                        let network = network.ok_or_else(|| FetchError::Frozen {
+                            package: package.to_owned(),
+                            version: version.clone(),
                         })?;
 
                         // We don't have it, so download it
-                        let url = Url::parse(&format!(
-                            "https://crates.io/api/v1/crates/{package}/{version}/download"
-                        ))?;
+                        let url =
+                            format!("https://crates.io/api/v1/crates/{package}/{version}/download");
+                        let url = Url::parse(&url).map_err(|error| FetchError::InvalidUrl {
+                            url: url.clone(),
+                            error,
+                        })?;
                         info!(
                             "downloading package {}:{} from {} to {}",
                             package,
@@ -573,7 +580,13 @@ impl Cache {
                         network.download_and_persist(url, &fetched_package).await?;
 
                         let fetched_package_ = fetched_package.clone();
-                        tokio::task::spawn_blocking(move || File::open(&fetched_package_)).await??
+                        tokio::task::spawn_blocking(move || File::open(&fetched_package_))
+                            .await
+                            .expect("failed to join")
+                            .map_err(|error| FetchError::OpenCached {
+                                target: fetched_package.clone(),
+                                error,
+                            })?
                     }
                 };
 
@@ -593,14 +606,17 @@ impl Cache {
                     tokio::task::spawn_blocking(move || {
                         unpack_package(&file, &fetched_src)
                             .map(|_| fetched_src)
-                            .wrap_err_with(|| {
-                                format!("error unpacking {}", fetched_package.display())
+                            .map_err(|error| FetchError::Unpack {
+                                src: fetched_package.clone(),
+                                error,
                             })
                     })
-                    .await?
+                    .await
+                    .expect("failed to join")
                 }
             })
-            .await?;
+            .await;
+        let path = path_res?;
         Ok(path.to_owned())
     }
 
@@ -609,7 +625,7 @@ impl Cache {
         &self,
         version1: &Path,
         version2: &Path,
-    ) -> Result<DiffStat, VetError> {
+    ) -> Result<DiffStat, DiffError> {
         let _permit = self.diff_semaphore.acquire().await?;
 
         // ERRORS: all of this is properly fallible internal workings, we can fail
@@ -625,20 +641,17 @@ impl Cache {
             .arg(version1)
             .arg(version2)
             .output()
-            .await?;
+            .await
+            .map_err(CommandError::CommandFailed)?;
 
         let status = out.status.code().unwrap_or(-1);
         // 0 = empty
         // 1 = some diff
         if status != 0 && status != 1 {
-            return Err(eyre::eyre!(
-                "command failed!\nout:\n{}\nstderr:\n{}",
-                String::from_utf8(out.stdout).unwrap(),
-                String::from_utf8(out.stderr).unwrap()
-            ));
+            Err(CommandError::BadStatus(status))?;
         }
 
-        let diffstat = String::from_utf8(out.stdout)?;
+        let diffstat = String::from_utf8(out.stdout).map_err(CommandError::BadOutput)?;
 
         let count = if diffstat.is_empty() {
             0
@@ -679,7 +692,7 @@ impl Cache {
         network: Option<&Network>,
         package: PackageStr<'_>,
         delta: &Delta,
-    ) -> Result<DiffStat, VetError> {
+    ) -> Result<DiffStat, FetchAndDiffError> {
         // Lock the mutex to extract a reference to the OnceCell which we'll use
         // to asynchronously synchronize on and diff the package only once in a
         // single execution.
@@ -742,7 +755,7 @@ impl Cache {
                         .insert(delta.clone(), diffstat.clone());
                 }
 
-                Ok::<_, VetError>(diffstat)
+                Ok::<_, FetchAndDiffError>(diffstat)
             })
             .await?;
         Ok(diffstat.clone())
@@ -779,7 +792,7 @@ impl Cache {
 
     /// Remove any unrecognized files from the root of the cargo-vet cache
     /// directory.
-    async fn gc_root(&self) -> Result<(), VetError> {
+    async fn gc_root(&self) -> Result<(), io::Error> {
         let root = self.root.as_ref().unwrap();
         let mut root_entries = tokio::fs::read_dir(root).await?;
         while let Some(entry) = root_entries.next_entry().await? {
@@ -796,7 +809,7 @@ impl Cache {
 
     /// Remove all files located in the `cargo-vet/empty` directory, as it
     /// should be empty.
-    async fn gc_empty(&self) -> Result<(), VetError> {
+    async fn gc_empty(&self) -> Result<(), std::io::Error> {
         let empty = self.root.as_ref().unwrap().join(CACHE_EMPTY_PACKAGE);
         let mut empty_entries = tokio::fs::read_dir(&empty).await?;
         while let Some(entry) = empty_entries.next_entry().await? {
@@ -808,7 +821,7 @@ impl Cache {
     /// Remove any non '.crate' files from the registry cache, '.crate' files
     /// which are older than `max_package_age`, and any source directories from
     /// the registry src which no longer have a corresponding .crate.
-    async fn gc_packages(&self, max_package_age: Duration) -> Result<(), VetError> {
+    async fn gc_packages(&self, max_package_age: Duration) -> Result<(), io::Error> {
         let cache = self.root.as_ref().unwrap().join(CACHE_REGISTRY_CACHE);
         let src = self.root.as_ref().unwrap().join(CACHE_REGISTRY_SRC);
 
@@ -837,11 +850,8 @@ impl Cache {
     ///
     /// NOTE: The diff_cache and command_history files will be re-created when
     /// the cache is unlocked, however they will be empty.
-    pub async fn clean(&self) -> Result<(), VetError> {
-        let root = self
-            .root
-            .as_ref()
-            .ok_or_else(|| eyre!("cannot clean a mocked cache"))?;
+    pub async fn clean(&self) -> Result<(), io::Error> {
+        let root = self.root.as_ref().expect("cannot clean a mocked cache");
 
         // Make sure we don't write back the command history and diff cache when
         // dropping.
@@ -861,7 +871,7 @@ impl Cache {
     }
 
     /// Sync version of `clean`
-    pub fn clean_sync(&self) -> Result<(), VetError> {
+    pub fn clean_sync(&self) -> Result<(), io::Error> {
         tokio::runtime::Handle::current().block_on(self.clean())
     }
 
@@ -892,7 +902,7 @@ pub fn exact_version<'a>(
 }
 
 #[tracing::instrument(err)]
-fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
+fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), UnpackError> {
     // If we get here and the unpack_dir exists, this implies we had a previously failed fetch,
     // blast it away so we can have a clean slate!
     if unpack_dir.exists() {
@@ -905,10 +915,10 @@ fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
     let prefix = unpack_dir.file_name().unwrap();
     let parent = unpack_dir.parent().unwrap();
     for entry in tar.entries()? {
-        let mut entry = entry.wrap_err("failed to iterate over archive")?;
+        let mut entry = entry.map_err(UnpackError::ArchiveIterate)?;
         let entry_path = entry
             .path()
-            .wrap_err("failed to read entry path")?
+            .map_err(UnpackError::ArchiveEntry)?
             .into_owned();
 
         // We're going to unpack this tarball into the global source
@@ -918,16 +928,18 @@ fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
         // crates.io should also block uploads with these sorts of tarballs,
         // but be extra sure by adding a check here as well.
         if !entry_path.starts_with(prefix) {
-            return Err(eyre::eyre!(
-                "invalid tarball downloaded, contains \
-                    a file at {} which isn't under {}",
-                entry_path.display(),
-                prefix.to_string_lossy()
-            ));
+            return Err(UnpackError::InvalidPaths {
+                entry_path,
+                prefix: prefix.to_owned(),
+            });
         }
-        // Unpacking failed
-        let result = entry.unpack_in(parent).map_err(VetError::from);
-        result.wrap_err_with(|| format!("failed to unpack entry at `{}`", entry_path.display()))?;
+
+        entry
+            .unpack_in(parent)
+            .map_err(|error| UnpackError::Unpack {
+                entry_path: entry_path.clone(),
+                error,
+            })?;
     }
 
     // The lock file is created after unpacking so we overwrite a lock file
@@ -937,10 +949,16 @@ fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), VetError> {
         .read(true)
         .write(true)
         .open(&lockfile)
-        .wrap_err_with(|| format!("failed to open `{}`", lockfile.display()))?;
+        .map_err(|error| UnpackError::LockCreate {
+            target: lockfile.clone(),
+            error,
+        })?;
 
     // Write to the lock file to indicate that unpacking was successful.
-    write!(ok, "ok")?;
+    write!(ok, "ok").map_err(|error| UnpackError::LockCreate {
+        target: lockfile.clone(),
+        error,
+    })?;
 
     Ok(())
 }
@@ -955,7 +973,7 @@ async fn fetch_is_ok(fetch: &Path) -> bool {
 /// Based on the type of file for an entry, either recursively remove the
 /// directory, or remove the file. This is intended to be roughly equivalent to
 /// `rm -r`.
-async fn remove_dir_entry(entry: &tokio::fs::DirEntry) -> Result<(), VetError> {
+async fn remove_dir_entry(entry: &tokio::fs::DirEntry) -> Result<(), io::Error> {
     info!("gc: removing {}", entry.path().display());
     let file_type = entry.file_type().await?;
     if file_type.is_dir() {
@@ -993,7 +1011,7 @@ async fn should_keep_package(
     }
 }
 
-fn find_cargo_registry() -> Result<CargoRegistry, VetError> {
+fn find_cargo_registry() -> Result<CargoRegistry, crates_index::Error> {
     // ERRORS: all of this is genuinely fallible internal workings
     // but if these path adjustments don't work then something is very fundamentally wrong
 
@@ -1009,46 +1027,46 @@ fn find_cargo_registry() -> Result<CargoRegistry, VetError> {
     })
 }
 
-fn load_toml<T>(reader: impl Read) -> Result<T, VetError>
+fn load_toml<T>(reader: impl Read) -> Result<T, std::io::Error>
 where
     T: for<'a> Deserialize<'a>,
 {
     let mut reader = BufReader::new(reader);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
-    let toml = toml_edit::de::from_str(&string)?;
+    let toml = toml_edit::de::from_str(&string).expect("TODO: make these proper errors");
     Ok(toml)
 }
-fn store_toml<T>(mut writer: impl Write, heading: &str, val: T) -> Result<(), VetError>
+fn store_toml<T>(mut writer: impl Write, heading: &str, val: T) -> Result<(), std::io::Error>
 where
     T: Serialize,
 {
     // FIXME: do this in a temp file and swap it into place to avoid corruption?
-    let toml_document = to_formatted_toml(val)?;
+    let toml_document = to_formatted_toml(val).expect("TODO: make these proper errors");
     writeln!(writer, "{}{}", heading, toml_document)?;
     Ok(())
 }
-fn load_json<T>(reader: impl Read) -> Result<T, VetError>
+fn load_json<T>(reader: impl Read) -> Result<T, std::io::Error>
 where
     T: for<'a> Deserialize<'a>,
 {
     let mut reader = BufReader::new(reader);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
-    let json = serde_json::from_str(&string)?;
+    let json = serde_json::from_str(&string).expect("TODO: make these proper errors");
     Ok(json)
 }
-fn store_json<T>(mut writer: impl Write, val: T) -> Result<(), VetError>
+fn store_json<T>(mut writer: impl Write, val: T) -> Result<(), std::io::Error>
 where
     T: Serialize,
 {
     // FIXME: do this in a temp file and swap it into place to avoid corruption?
-    let json_string = serde_json::to_string(&val)?;
+    let json_string = serde_json::to_string(&val).unwrap();
     writeln!(writer, "{}", json_string)?;
     Ok(())
 }
 
-fn store_audits(writer: impl Write, mut audits: AuditsFile) -> Result<(), VetError> {
+fn store_audits(writer: impl Write, mut audits: AuditsFile) -> Result<(), std::io::Error> {
     let heading = r###"
 # cargo-vet audits file
 "###;
@@ -1060,7 +1078,7 @@ fn store_audits(writer: impl Write, mut audits: AuditsFile) -> Result<(), VetErr
     store_toml(writer, heading, audits)?;
     Ok(())
 }
-fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), VetError> {
+fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), std::io::Error> {
     config
         .unaudited
         .values_mut()
@@ -1073,7 +1091,7 @@ fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), VetErr
     store_toml(writer, heading, config)?;
     Ok(())
 }
-fn store_imports(writer: impl Write, imports: ImportsFile) -> Result<(), VetError> {
+fn store_imports(writer: impl Write, imports: ImportsFile) -> Result<(), std::io::Error> {
     let heading = r###"
 # cargo-vet imports lock
 "###;
@@ -1081,7 +1099,7 @@ fn store_imports(writer: impl Write, imports: ImportsFile) -> Result<(), VetErro
     store_toml(writer, heading, imports)?;
     Ok(())
 }
-fn store_diff_cache(writer: impl Write, diff_cache: DiffCache) -> Result<(), VetError> {
+fn store_diff_cache(writer: impl Write, diff_cache: DiffCache) -> Result<(), std::io::Error> {
     let heading = "";
 
     store_toml(writer, heading, diff_cache)?;
@@ -1090,7 +1108,7 @@ fn store_diff_cache(writer: impl Write, diff_cache: DiffCache) -> Result<(), Vet
 fn store_command_history(
     writer: impl Write,
     command_history: CommandHistory,
-) -> Result<(), VetError> {
+) -> Result<(), std::io::Error> {
     store_json(writer, command_history)?;
     Ok(())
 }

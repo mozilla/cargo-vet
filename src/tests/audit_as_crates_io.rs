@@ -1,13 +1,17 @@
 use super::*;
 
 fn get_audit_as_crates_io(cfg: &Config, store: &Store) -> String {
-    let mut output = BasicTestOutput::new();
-    let _res = crate::check_audit_as_crates_io(&mut output, cfg, store);
-    output.to_string()
+    let res = crate::check_audit_as_crates_io(cfg, store);
+    match res {
+        Ok(()) => String::new(),
+        Err(e) => format!("{:?}", miette::Report::new(e)),
+    }
 }
 
 #[test]
 fn simple_audit_as_crates_io() {
+    let _enter = TEST_RUNTIME.enter();
+
     let mock = MockMetadata::simple();
     let metadata = mock.metadata();
     let (config, audits, imports) = builtin_files_full_audited(&metadata);

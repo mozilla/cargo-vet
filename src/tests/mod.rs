@@ -34,8 +34,33 @@ const DEFAULT_VER: u64 = 10;
 const DEFAULT_CRIT: CriteriaStr = "reviewed";
 
 lazy_static::lazy_static! {
-    static ref TEST_RUNTIME: tokio::runtime::Runtime =
-        tokio::runtime::Runtime::new().unwrap();
+    static ref TEST_RUNTIME: tokio::runtime::Runtime = {
+        let error_colors_enabled = false;
+        miette::set_hook(Box::new(move |_| {
+            let graphical_theme = if error_colors_enabled {
+                miette::GraphicalTheme::unicode()
+            } else {
+                miette::GraphicalTheme::unicode_nocolor()
+            };
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .graphical_theme(graphical_theme)
+                    .build()
+            )
+        })).expect("Failed to initialize error handler");
+
+        tracing_subscriber::fmt::fmt()
+            .with_max_level(tracing::level_filters::LevelFilter::OFF)
+            // Toggle this on for tracing in tests
+            // .with_max_level(tracing::level_filters::LevelFilter::TRACE)
+            .with_target(false)
+            .without_time()
+            .with_writer(std::io::stderr)
+            .init();
+
+        tokio::runtime::Runtime::new().unwrap()
+    };
+
 }
 
 struct MockMetadata {
@@ -817,7 +842,7 @@ impl MockMetadata {
 }
 
 fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
-    let (mut config, mut audits, imports) = init_files(metadata, None).unwrap();
+    let (mut config, mut audits, imports) = init_files(metadata, None);
 
     // Criteria hierarchy:
     //
@@ -923,7 +948,7 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
 }
 
 fn builtin_files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
-    init_files(metadata, None).unwrap()
+    init_files(metadata, None)
 }
 
 fn builtin_files_no_unaudited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
@@ -1076,14 +1101,6 @@ impl<'a> Out for BasicTestOutput<'a> {
             panic!("Unexpected editor call without on_edit configured!");
         }
     }
-}
-
-fn _init_trace_logger() {
-    tracing_subscriber::fmt::fmt()
-        .with_target(false)
-        .without_time()
-        .with_writer(std::io::stderr)
-        .init();
 }
 
 // TESTING BACKLOG:
