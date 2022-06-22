@@ -9,7 +9,7 @@ use std::str;
 use tempfile::NamedTempFile;
 use tracing::warn;
 
-use crate::VetError;
+use crate::errors::EditError;
 
 #[cfg(windows)]
 fn git_sh_path() -> Option<PathBuf> {
@@ -199,18 +199,18 @@ impl<'a> Editor<'a> {
 
     /// Run the editor, collecting and filtering the resulting file, and
     /// returning it as a string.
-    pub fn edit(self) -> Result<String, VetError> {
+    pub fn edit(self) -> Result<String, EditError> {
         // Close our handle on the file to allow other programs like the editor
         // to modify it on Windows.
         let path = self.tempfile.into_temp_path();
-        (self.run_editor)(&path)?;
+        (self.run_editor)(&path).map_err(EditError::CouldntLaunch)?;
 
         // Read in the result, filtering lines, and restoring unix line endings.
         // This is roughly based on git's logic for cleaning up commit message
         // files.
         let mut lines: Vec<String> = Vec::new();
-        for line in BufReader::new(File::open(&path)?).lines() {
-            let line = line?;
+        for line in BufReader::new(File::open(&path).map_err(EditError::CouldntOpen)?).lines() {
+            let line = line.map_err(EditError::CouldntRead)?;
             // Ignore lines starting with a comment character.
             if line.starts_with(self.comment_char) {
                 continue;

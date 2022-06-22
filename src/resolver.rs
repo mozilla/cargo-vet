@@ -61,10 +61,12 @@
 use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
 use core::fmt;
 use futures_util::future::join_all;
+use miette::IntoDiagnostic;
 use serde::Serialize;
 use serde_json::json;
 use tracing::{error, trace, trace_span, warn};
 
+use crate::errors::SuggestError;
 use crate::format::{
     self, AuditKind, CriteriaName, CriteriaStr, Delta, DiffStat, ImportName, PackageName,
     PackageStr, PolicyEntry, UnauditedDependency,
@@ -74,7 +76,7 @@ use crate::network::Network;
 use crate::out::Out;
 use crate::{
     AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
-    GraphFilterQuery, PackageExt, Store, VetError,
+    GraphFilterQuery, PackageExt, Store,
 };
 
 /// A report of the results of running `resolve`.
@@ -1035,7 +1037,7 @@ impl<'a> DepGraph<'a> {
         &self,
         out: &mut dyn Out,
         sub_args: &DumpGraphArgs,
-    ) -> Result<(), VetError> {
+    ) -> Result<(), std::io::Error> {
         use crate::DumpGraphDepth::*;
         let depth = sub_args.depth;
 
@@ -2326,7 +2328,7 @@ impl<'a> ResolveReport<'a> {
         cfg: &Config,
         network: Option<&Network>,
         allow_deltas: bool,
-    ) -> Result<Option<Suggest>, VetError> {
+    ) -> Result<Option<Suggest>, SuggestError> {
         let _suggest_span = trace_span!("suggest").entered();
         let fail = if let Conclusion::FailForVet(fail) = &self.conclusion {
             fail
@@ -2568,7 +2570,7 @@ impl<'a> ResolveReport<'a> {
         out: &mut dyn Out,
         cfg: &Config,
         suggest: Option<&Suggest>,
-    ) -> Result<(), VetError> {
+    ) -> Result<(), std::io::Error> {
         match &self.conclusion {
             Conclusion::Success(res) => res.print_human(out, self, cfg),
             Conclusion::FailForViolationConflict(res) => res.print_human(out, self, cfg),
@@ -2582,7 +2584,7 @@ impl<'a> ResolveReport<'a> {
         out: &mut dyn Out,
         _cfg: &Config,
         suggest: Option<&Suggest>,
-    ) -> Result<(), VetError> {
+    ) -> Result<(), std::io::Error> {
         if let Some(suggest) = suggest {
             suggest.print_human(out, self)?;
         } else {
@@ -2598,7 +2600,7 @@ impl<'a> ResolveReport<'a> {
         out: &mut dyn Out,
         _cfg: &Config,
         suggest: Option<&Suggest>,
-    ) -> Result<(), VetError> {
+    ) -> Result<(), miette::Report> {
         let result = match &self.conclusion {
             Conclusion::Success(success) => {
                 let json_package = |pkgidx: &PackageIdx| {
@@ -2654,7 +2656,7 @@ impl<'a> ResolveReport<'a> {
             }
         };
 
-        serde_json::to_writer_pretty(out, &result)?;
+        serde_json::to_writer_pretty(out, &result).into_diagnostic()?;
 
         Ok(())
     }
@@ -2666,7 +2668,7 @@ impl Success {
         out: &mut dyn Out,
         report: &ResolveReport,
         _cfg: &Config,
-    ) -> Result<(), VetError> {
+    ) -> Result<(), std::io::Error> {
         let fully_audited_count = self.vetted_fully.len();
         let partially_audited_count: usize = self.vetted_partially.len();
         let unaudited_count = self.vetted_with_unaudited.len();
@@ -2727,7 +2729,11 @@ impl Success {
 }
 
 impl Suggest {
-    pub fn print_human(&self, out: &mut dyn Out, report: &ResolveReport) -> Result<(), VetError> {
+    pub fn print_human(
+        &self,
+        out: &mut dyn Out,
+        report: &ResolveReport,
+    ) -> Result<(), std::io::Error> {
         for (criteria, suggestions) in &self.suggestions_by_criteria {
             writeln!(out, "recommended audits for {}:", criteria)?;
 
@@ -2803,7 +2809,7 @@ impl FailForVet {
         report: &ResolveReport,
         _cfg: &Config,
         suggest: Option<&Suggest>,
-    ) -> Result<(), VetError> {
+    ) -> Result<(), std::io::Error> {
         writeln!(out, "Vetting Failed!")?;
         writeln!(out)?;
         writeln!(out, "{} unvetted dependencies:", self.failures.len())?;
@@ -2862,7 +2868,7 @@ impl FailForViolationConflict {
         out: &mut dyn Out,
         report: &ResolveReport,
         _cfg: &Config,
-    ) -> Result<(), VetError> {
+    ) -> Result<(), std::io::Error> {
         writeln!(out, "Violations Found!")?;
 
         for (&pkgidx, violations) in &self.violations {
@@ -2899,7 +2905,7 @@ impl FailForViolationConflict {
         fn print_unaudited_entry(
             out: &mut dyn Out,
             entry: &UnauditedDependency,
-        ) -> Result<(), VetError> {
+        ) -> Result<(), std::io::Error> {
             writeln!(out, "unaudited {}", entry.version)?;
             writeln!(out, "      criteria: {:?}", entry.criteria)?;
             if let Some(notes) = &entry.notes {
@@ -2912,7 +2918,7 @@ impl FailForViolationConflict {
             out: &mut dyn Out,
             source: &AuditSource,
             entry: &AuditEntry,
-        ) -> Result<(), VetError> {
+        ) -> Result<(), std::io::Error> {
             match source {
                 AuditSource::OwnAudits => write!(out, "own ")?,
                 AuditSource::Foreign(name) => write!(out, "foreign ({name}) ")?,

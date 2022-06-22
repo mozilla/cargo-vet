@@ -9,15 +9,21 @@ use std::{fs::File, panic, path::PathBuf};
 use cargo_metadata::{Metadata, Package};
 use clap::{CommandFactory, Parser};
 use console::Term;
-use eyre::{eyre, WrapErr};
+use errors::{
+    AuditAsError, AuditAsErrors, CertifyError, DiffError, MinimizeUnauditedError,
+    NeedsAuditAsError, NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors,
+    UserInfoError,
+};
 use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::join_all;
+use miette::{miette, Context, IntoDiagnostic};
 use network::Network;
 use reqwest::Url;
 use serde::de::Deserialize;
 use tracing::{error, info, trace};
 
 use crate::cli::*;
+use crate::errors::{CommandError, DownloadError};
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, Delta, DependencyCriteria,
     FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo,
@@ -29,6 +35,7 @@ use crate::storage::{Cache, Store};
 
 mod cli;
 mod editor;
+pub mod errors;
 mod flock;
 pub mod format;
 pub mod network;
@@ -38,8 +45,6 @@ mod serialization;
 pub mod storage;
 #[cfg(test)]
 mod tests;
-
-pub type VetError = eyre::Report;
 
 /// Absolutely All The Global Configurations
 pub struct Config {
@@ -107,7 +112,7 @@ struct ExitPanic(i32);
 /// as our final act.
 struct ExecPanic(std::process::Command);
 
-fn main() -> Result<(), VetError> {
+fn main() -> Result<(), ()> {
     // NOTE: Limit the maximum number of blocking threads to 128, rather than
     // the default of 512.
     // This may limit concurrency in some cases, but cargo-vet isn't running a
@@ -122,8 +127,8 @@ fn main() -> Result<(), VetError> {
 
     // Wrap main up in a catch_panic so that we can use it to implement std::process::exit with
     // unwinding, allowing us to silently exit the program while still cleaning up.
-    let result = std::panic::catch_unwind(real_main);
-    match result {
+    let panic_result = std::panic::catch_unwind(real_main);
+    let main_result = match panic_result {
         Ok(main_result) => main_result,
         Err(mut e) => {
             if let Some(ExitPanic(code)) = e.downcast_ref::<ExitPanic>() {
@@ -142,10 +147,13 @@ fn main() -> Result<(), VetError> {
                 std::panic::resume_unwind(e);
             }
         }
-    }
+    };
+    main_result.map_err(|e| {
+        eprintln!("{:?}", e);
+    })
 }
 
-fn real_main() -> Result<(), VetError> {
+fn real_main() -> Result<(), miette::Report> {
     use cli::Commands::*;
 
     let fake_cli = cli::FakeCli::parse();
@@ -201,6 +209,22 @@ fn real_main() -> Result<(), VetError> {
             filename, line, cause
         );
     }));
+
+    // FIXME: we should have separate configs for errors but this works for now
+    let error_colors_enabled = cli.output_file.is_none();
+    miette::set_hook(Box::new(move |_| {
+        let graphical_theme = if error_colors_enabled {
+            miette::GraphicalTheme::unicode()
+        } else {
+            miette::GraphicalTheme::unicode_nocolor()
+        };
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                .graphical_theme(graphical_theme)
+                .build(),
+        )
+    }))
+    .expect("Failed to initialize error handler");
 
     // Setup our output stream
     let mut stdout;
@@ -287,6 +311,7 @@ fn real_main() -> Result<(), VetError> {
     // ERRORS: immediate fatal diagnostic
     let metadata = cmd
         .exec()
+        .into_diagnostic()
         .wrap_err("'cargo metadata' exited unsuccessfully")?;
 
     // trace!("Got Metadata! {:#?}", metadata);
@@ -315,6 +340,7 @@ fn real_main() -> Result<(), VetError> {
         .map(|cfg| {
             // ERRORS: immediate fatal diagnostic
             MetaConfigInstance::deserialize(cfg)
+                .into_diagnostic()
                 .wrap_err("Workspace had [{WORKSPACE_VET_CONFIG}] but it was malformed")
         })
         .transpose()?;
@@ -326,13 +352,14 @@ fn real_main() -> Result<(), VetError> {
         .map(|cfg| {
             // ERRORS: immediate fatal diagnostic
             MetaConfigInstance::deserialize(cfg)
+                .into_diagnostic()
                 .wrap_err("Root package had [{PACKAGE_VET_CONFIG}] but it was malformed")
         })
         .transpose()?;
 
     if workspace_metacfg.is_some() && package_metacfg.is_some() {
         // ERRORS: immediate fatal diagnostic
-        return Err(eyre!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!"));
+        return Err(miette!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!"));
     }
 
     let mut metacfgs = vec![default_config];
@@ -356,14 +383,14 @@ fn real_main() -> Result<(), VetError> {
     if matches!(cli.command, Some(Commands::Init { .. })) {
         if init {
             // ERRORS: immediate fatal diagnostic
-            return Err(eyre!(
+            return Err(miette!(
                 "'cargo vet' already initialized (store found at {})",
                 metacfg.store_path().display()
             ));
         }
     } else if !init {
         // ERRORS: immediate fatal diagnostic
-        return Err(eyre!(
+        return Err(miette!(
             "You must run 'cargo vet init' (store not found at {})",
             metacfg.store_path().display()
         ));
@@ -392,13 +419,13 @@ fn real_main() -> Result<(), VetError> {
     }
 }
 
-fn cmd_init(_out: &mut dyn Out, cfg: &Config, _sub_args: &InitArgs) -> Result<(), VetError> {
+fn cmd_init(_out: &mut dyn Out, cfg: &Config, _sub_args: &InitArgs) -> Result<(), miette::Report> {
     // Initialize vet
     trace!("initializing...");
 
     let mut store = Store::create(cfg)?;
 
-    let (config, audits, imports) = init_files(&cfg.metadata, cfg.cli.filter_graph.as_ref())?;
+    let (config, audits, imports) = init_files(&cfg.metadata, cfg.cli.filter_graph.as_ref());
     store.config = config;
     store.audits = audits;
     store.imports = imports;
@@ -411,7 +438,7 @@ fn cmd_init(_out: &mut dyn Out, cfg: &Config, _sub_args: &InitArgs) -> Result<()
 pub fn init_files(
     metadata: &Metadata,
     filter_graph: Option<&Vec<GraphFilter>>,
-) -> Result<(ConfigFile, AuditsFile, ImportsFile), VetError> {
+) -> (ConfigFile, AuditsFile, ImportsFile) {
     // Default audits file is empty
     let audits = AuditsFile {
         criteria: SortedMap::new(),
@@ -458,14 +485,14 @@ pub fn init_files(
         }
     };
 
-    Ok((config, audits, imports))
+    (config, audits, imports)
 }
 
 fn cmd_inspect(
     out: &mut dyn Out,
     cfg: &PartialConfig,
     sub_args: &InspectArgs,
-) -> Result<(), VetError> {
+) -> Result<(), miette::Report> {
     // Download a crate's source to a temp location for review
     let cache = Cache::acquire(cfg)?;
     let network = Network::acquire(cfg);
@@ -477,18 +504,16 @@ fn cmd_inspect(
 
     let package = &*sub_args.package;
 
-    let fetched = tokio::runtime::Handle::current().block_on(cache.fetch_package(
-        network.as_ref(),
-        package,
-        &sub_args.version,
-    ))?;
+    let fetched = tokio::runtime::Handle::current()
+        .block_on(cache.fetch_package(network.as_ref(), package, &sub_args.version))
+        .into_diagnostic()?;
 
     #[cfg(target_family = "unix")]
     {
         // Loosely borrowed from cargo crev.
         let shell = std::env::var_os("SHELL").unwrap();
-        writeln!(out, "Opening nested shell in: {:#?}", fetched)?;
-        writeln!(out, "Use `exit` or Ctrl-D to finish.",)?;
+        writeln!(out, "Opening nested shell in: {:#?}", fetched).into_diagnostic()?;
+        writeln!(out, "Use `exit` or Ctrl-D to finish.",).into_diagnostic()?;
         let mut command = std::process::Command::new(shell);
         command.current_dir(fetched.clone()).env("PWD", fetched);
         panic_any(ExecPanic(command));
@@ -496,12 +521,16 @@ fn cmd_inspect(
 
     #[cfg(not(target_family = "unix"))]
     {
-        writeln!(out, "  fetched to {:#?}", fetched)?;
+        writeln!(out, "  fetched to {:#?}", fetched).into_diagnostic()?;
         Ok(())
     }
 }
 
-fn cmd_certify(out: &mut dyn Out, cfg: &Config, sub_args: &CertifyArgs) -> Result<(), VetError> {
+fn cmd_certify(
+    out: &mut dyn Out,
+    cfg: &Config,
+    sub_args: &CertifyArgs,
+) -> Result<(), miette::Report> {
     // Certify that you have reviewed a crate's source for some version / delta
     let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
@@ -522,7 +551,7 @@ fn do_cmd_certify(
     store: &mut Store,
     network: Option<&Network>,
     last_fetch: Option<FetchCommand>,
-) -> Result<(), VetError> {
+) -> Result<(), CertifyError> {
     // Before setting up magic, we need to agree on a package
     let package = if let Some(package) = &sub_args.package {
         package.clone()
@@ -530,26 +559,12 @@ fn do_cmd_certify(
         // If we just fetched a package, assume we want to certify it
         last_fetch.package().to_owned()
     } else {
-        // ERRORS: immediate fatal diagnostic
-        writeln!(
-            out,
-            "error: couldn't guess what package to certify, please specify"
-        )?;
-        panic_any(ExitPanic(-1));
+        return Err(CertifyError::CouldntGuessPackage);
     };
 
     // FIXME: can/should we check if the version makes sense..?
     if !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == *package) {
-        // ERRORS: immediate fatal diagnostic? should we allow you to certify random packages?
-        // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
-        // useful audits whenever you update your dependencies! But this might be a useful guard
-        // against typosquatting or other weird issues?
-        writeln!(
-            out,
-            "error: '{}' isn't one of your foreign packages",
-            package
-        )?;
-        panic_any(ExitPanic(-1));
+        return Err(CertifyError::NotAPackage(package));
     }
 
     let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
@@ -602,13 +617,7 @@ fn do_cmd_certify(
             },
         }
     } else {
-        // ERRORS: immediate fatal diagnostic
-        writeln!(
-            out,
-            "error: couldn't guess what version of '{}' to certify, please specify",
-            package
-        )?;
-        panic_any(ExitPanic(-1));
+        return Err(CertifyError::CouldntGuessVersion(package));
     };
 
     let (username, who) = if let Some(who) = &sub_args.who {
@@ -678,8 +687,7 @@ fn do_cmd_certify(
             let input = input.trim();
             if input.is_empty() {
                 if chosen_criteria.is_empty() {
-                    writeln!(out, "no criteria chosen, aborting")?;
-                    panic_any(ExitPanic(-1));
+                    return Err(CertifyError::NoCriteriaChosen);
                 }
                 // User done selecting criteria
                 break;
@@ -781,8 +789,7 @@ fn do_cmd_certify(
                 // in and re-try the prompt if the user asks for it, in case
                 // they wrote some nice notes, but forgot to uncomment the
                 // statement.
-                writeln!(out, "error: Could not find uncommented certify statement")?;
-                panic_any(ExitPanic(-1));
+                return Err(CertifyError::CouldntFindCertifyStatement);
             }
         };
 
@@ -890,7 +897,7 @@ fn cmd_record_violation(
     out: &mut dyn Out,
     cfg: &Config,
     sub_args: &RecordViolationArgs,
-) -> Result<(), VetError> {
+) -> Result<(), miette::Report> {
     // Mark a package as a violation
     let mut store = Store::acquire(cfg)?;
 
@@ -921,7 +928,7 @@ fn cmd_record_violation(
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
         // useful audits whenever you update your dependencies! But this might be a useful guard
         // against typosquatting or other weird issues?
-        return Err(eyre!(
+        return Err(miette!(
             "'{}' isn't one of your foreign packages",
             sub_args.package
         ));
@@ -953,7 +960,7 @@ fn cmd_add_unaudited(
     _out: &mut dyn Out,
     cfg: &Config,
     sub_args: &AddUnauditedArgs,
-) -> Result<(), VetError> {
+) -> Result<(), miette::Report> {
     // Add an unaudited entry
     let mut store = Store::acquire(cfg)?;
 
@@ -988,7 +995,7 @@ fn cmd_add_unaudited(
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
         // useful audits whenever you update your dependencies! But this might be a useful guard
         // against typosquatting or other weird issues?
-        return Err(eyre!(
+        return Err(miette!(
             "'{}' isn't one of your foreign packages",
             sub_args.package
         ));
@@ -1015,7 +1022,11 @@ fn cmd_add_unaudited(
     Ok(())
 }
 
-fn cmd_suggest(out: &mut dyn Out, cfg: &Config, _sub_args: &SuggestArgs) -> Result<(), VetError> {
+fn cmd_suggest(
+    out: &mut dyn Out,
+    cfg: &Config,
+    _sub_args: &SuggestArgs,
+) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
     let suggest_store = Store::acquire(cfg)?.clone_for_suggest();
@@ -1034,7 +1045,9 @@ fn cmd_suggest(out: &mut dyn Out, cfg: &Config, _sub_args: &SuggestArgs) -> Resu
     );
     let suggest = report.compute_suggest(cfg, network.as_ref(), true)?;
     match cfg.cli.output_format {
-        OutputFormat::Human => report.print_suggest_human(out, cfg, suggest.as_ref())?,
+        OutputFormat::Human => report
+            .print_suggest_human(out, cfg, suggest.as_ref())
+            .into_diagnostic()?,
         OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
     }
 
@@ -1045,7 +1058,7 @@ fn cmd_regenerate_unaudited(
     _out: &mut dyn Out,
     cfg: &Config,
     _sub_args: &RegenerateUnauditedArgs,
-) -> Result<(), VetError> {
+) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("regenerating unaudited...");
     let mut store = Store::acquire(cfg)?;
@@ -1063,7 +1076,7 @@ pub fn minimize_unaudited(
     cfg: &Config,
     store: &mut Store,
     network: Option<&Network>,
-) -> Result<(), VetError> {
+) -> Result<(), MinimizeUnauditedError> {
     // Set the unaudited entries to nothing
     let old_unaudited = mem::take(&mut store.config.unaudited);
 
@@ -1152,10 +1165,7 @@ pub fn minimize_unaudited(
     } else if let Conclusion::Success(_) = report.conclusion {
         SortedMap::new()
     } else {
-        // ERRORS: immediate fatal diagnostic
-        return Err(eyre::eyre!(
-            "error: regenerate-unaudited failed for unknown reason"
-        ));
+        return Err(MinimizeUnauditedError::Unknown);
     };
 
     // Alright there's the new unaudited
@@ -1164,7 +1174,11 @@ pub fn minimize_unaudited(
     Ok(())
 }
 
-fn cmd_diff(out: &mut dyn Out, cfg: &PartialConfig, sub_args: &DiffArgs) -> Result<(), VetError> {
+fn cmd_diff(
+    out: &mut dyn Out,
+    cfg: &PartialConfig,
+    sub_args: &DiffArgs,
+) -> Result<(), miette::Report> {
     let cache = Cache::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
@@ -1180,23 +1194,26 @@ fn cmd_diff(out: &mut dyn Out, cfg: &PartialConfig, sub_args: &DiffArgs) -> Resu
         out,
         "fetching {} {} and {} ...",
         sub_args.package, sub_args.version1, sub_args.version2,
-    )?;
+    )
+    .into_diagnostic()?;
 
-    let (fetched1, fetched2) = tokio::runtime::Handle::current().block_on(async {
-        tokio::try_join!(
-            cache.fetch_package(network.as_ref(), package, &sub_args.version1),
-            cache.fetch_package(network.as_ref(), package, &sub_args.version2)
-        )
-    })?;
+    let (fetched1, fetched2) = tokio::runtime::Handle::current()
+        .block_on(async {
+            tokio::try_join!(
+                cache.fetch_package(network.as_ref(), package, &sub_args.version1),
+                cache.fetch_package(network.as_ref(), package, &sub_args.version2)
+            )
+        })
+        .into_diagnostic()?;
 
-    writeln!(out)?;
+    writeln!(out).into_diagnostic()?;
 
     diff_crate(out, cfg, &fetched1, &fetched2)?;
 
     Ok(())
 }
 
-fn cmd_vet(out: &mut dyn Out, cfg: &Config) -> Result<(), VetError> {
+fn cmd_vet(out: &mut dyn Out, cfg: &Config) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
@@ -1210,9 +1227,7 @@ fn cmd_vet(out: &mut dyn Out, cfg: &Config) -> Result<(), VetError> {
         }
 
         // Check if any of our first-parties are in the crates.io registry
-        if check_audit_as_crates_io(out, cfg, &store).is_err() {
-            panic_any(ExitPanic(-1));
-        }
+        check_audit_as_crates_io(cfg, &store)?;
     }
 
     // DO THE THING!!!!
@@ -1228,7 +1243,9 @@ fn cmd_vet(out: &mut dyn Out, cfg: &Config) -> Result<(), VetError> {
     );
     let suggest = report.compute_suggest(cfg, network.as_ref(), true)?;
     match cfg.cli.output_format {
-        OutputFormat::Human => report.print_human(out, cfg, suggest.as_ref())?,
+        OutputFormat::Human => report
+            .print_human(out, cfg, suggest.as_ref())
+            .into_diagnostic()?,
         OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
     }
 
@@ -1248,7 +1265,7 @@ fn cmd_fetch_imports(
     out: &mut dyn Out,
     cfg: &Config,
     _sub_args: &FetchImportsArgs,
-) -> Result<(), VetError> {
+) -> Result<(), miette::Report> {
     trace!("fetching imports...");
 
     let mut store = Store::acquire(cfg)?;
@@ -1268,7 +1285,8 @@ fn cmd_fetch_imports(
     writeln!(
         out,
         "warning: ran fetch-imports with --locked, this won't do anything!"
-    )?;
+    )
+    .into_diagnostic()?;
 
     Ok(())
 }
@@ -1277,20 +1295,20 @@ fn cmd_dump_graph(
     out: &mut dyn Out,
     cfg: &Config,
     sub_args: &DumpGraphArgs,
-) -> Result<(), VetError> {
+) -> Result<(), miette::Report> {
     // Dump a mermaid-js graph
     trace!("dumping...");
 
     let graph = resolver::DepGraph::new(&cfg.metadata, cfg.cli.filter_graph.as_ref(), None);
     match cfg.cli.output_format {
-        OutputFormat::Human => graph.print_mermaid(out, sub_args)?,
-        OutputFormat::Json => serde_json::to_writer_pretty(out, &graph.nodes)?,
+        OutputFormat::Human => graph.print_mermaid(out, sub_args).into_diagnostic()?,
+        OutputFormat::Json => serde_json::to_writer_pretty(out, &graph.nodes).into_diagnostic()?,
     }
 
     Ok(())
 }
 
-fn cmd_fmt(_out: &mut dyn Out, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), VetError> {
+fn cmd_fmt(_out: &mut dyn Out, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), miette::Report> {
     // Reformat all the files (just load and store them, formatting is implicit).
     trace!("formatting...");
     let store = Store::acquire(cfg)?;
@@ -1302,7 +1320,7 @@ fn cmd_accept_criteria_change(
     _out: &mut dyn Out,
     _cfg: &Config,
     _sub_args: &AcceptCriteriaChangeArgs,
-) -> Result<(), VetError> {
+) -> Result<(), miette::Report> {
     // Accept changes that a foreign audits.toml made to their criteria.
     trace!("accepting...");
 
@@ -1314,18 +1332,19 @@ fn cmd_help_md(
     out: &mut dyn Out,
     _cfg: &PartialConfig,
     _sub_args: &HelpMarkdownArgs,
-) -> Result<(), VetError> {
+) -> Result<(), miette::Report> {
     let app_name = "cargo-vet";
     let pretty_app_name = "cargo vet";
     // Make a new App to get the help message this time.
 
-    writeln!(out, "# {pretty_app_name} CLI manual")?;
-    writeln!(out)?;
+    writeln!(out, "# {pretty_app_name} CLI manual").into_diagnostic()?;
+    writeln!(out).into_diagnostic()?;
     writeln!(
         out,
         "> This manual can be regenerated with `{pretty_app_name} help-markdown`"
-    )?;
-    writeln!(out)?;
+    )
+    .into_diagnostic()?;
+    writeln!(out).into_diagnostic()?;
 
     let mut fake_cli = FakeCli::command();
     let full_command = fake_cli.get_subcommands_mut().next().unwrap();
@@ -1346,13 +1365,13 @@ fn cmd_help_md(
 
         if is_full_command {
             pretty_subcommand_name = String::new();
-            writeln!(out, "Version: `{version_line}`")?;
-            writeln!(out)?;
+            writeln!(out, "Version: `{version_line}`").into_diagnostic()?;
+            writeln!(out).into_diagnostic()?;
         } else {
             pretty_subcommand_name = format!("{pretty_app_name} {subcommand_name} ");
             // Give subcommands some breathing room
-            writeln!(out, "<br><br><br>")?;
-            writeln!(out, "## {pretty_subcommand_name}")?;
+            writeln!(out, "<br><br><br>").into_diagnostic()?;
+            writeln!(out, "## {pretty_subcommand_name}").into_diagnostic()?;
         }
 
         let mut in_subcommands_listing = false;
@@ -1366,9 +1385,9 @@ fn cmd_help_md(
                         in_subcommands_listing = heading == "SUBCOMMANDS";
                         in_usage = heading == "USAGE";
 
-                        writeln!(out, "### {pretty_subcommand_name}{heading}")?;
+                        writeln!(out, "### {pretty_subcommand_name}{heading}").into_diagnostic()?;
                     } else {
-                        writeln!(out, "### {heading}")?;
+                        writeln!(out, "### {heading}").into_diagnostic()?;
                     }
                     continue;
                 }
@@ -1380,7 +1399,8 @@ fn cmd_help_md(
                 write!(
                     out,
                     "* [{own_subcommand_name}](#{app_name}-{own_subcommand_name}): "
-                )?;
+                )
+                .into_diagnostic()?;
                 continue;
             }
             // The rest is indented, get rid of that
@@ -1388,28 +1408,28 @@ fn cmd_help_md(
 
             // Usage strings get wrapped in full code blocks
             if in_usage && line.starts_with(pretty_app_name) {
-                writeln!(out, "```")?;
-                writeln!(out, "{line}")?;
-                writeln!(out, "```")?;
+                writeln!(out, "```").into_diagnostic()?;
+                writeln!(out, "{line}").into_diagnostic()?;
+                writeln!(out, "```").into_diagnostic()?;
                 continue;
             }
 
             // argument names are subheadings
             if line.starts_with('-') || line.starts_with('<') {
-                writeln!(out, "#### `{line}`")?;
+                writeln!(out, "#### `{line}`").into_diagnostic()?;
                 continue;
             }
 
             // escape default/value strings
             if line.starts_with('[') {
-                writeln!(out, "\\{line}  ")?;
+                writeln!(out, "\\{line}  ").into_diagnostic()?;
                 continue;
             }
 
             // Normal paragraph text
-            writeln!(out, "{line}")?;
+            writeln!(out, "{line}").into_diagnostic()?;
         }
-        writeln!(out)?;
+        writeln!(out).into_diagnostic()?;
 
         todo.extend(command.get_subcommands_mut());
         is_full_command = false;
@@ -1418,7 +1438,7 @@ fn cmd_help_md(
     Ok(())
 }
 
-fn cmd_gc(out: &mut dyn Out, cfg: &PartialConfig, sub_args: &GcArgs) -> Result<(), VetError> {
+fn cmd_gc(out: &mut dyn Out, cfg: &PartialConfig, sub_args: &GcArgs) -> Result<(), miette::Report> {
     let cache = Cache::acquire(cfg)?;
 
     if sub_args.clean {
@@ -1426,16 +1446,17 @@ fn cmd_gc(out: &mut dyn Out, cfg: &PartialConfig, sub_args: &GcArgs) -> Result<(
             out,
             "cleaning entire contents of cache directory: {}",
             cfg.cache_dir.display()
-        )?;
-        cache.clean_sync()?;
+        )
+        .into_diagnostic()?;
+        cache.clean_sync().into_diagnostic()?;
         return Ok(());
     }
 
     if sub_args.max_package_age_days.is_nan() {
-        return Err(eyre!("max package age cannot be NaN"));
+        return Err(miette!("max package age cannot be NaN"));
     }
     if sub_args.max_package_age_days < 0.0 {
-        return Err(eyre!("max package age cannot be negative"));
+        return Err(miette!("max package age cannot be negative"));
     }
 
     cache.gc_sync(DURATION_DAY.mul_f64(sub_args.max_package_age_days));
@@ -1449,7 +1470,7 @@ fn diff_crate(
     _cfg: &PartialConfig,
     version1: &Path,
     version2: &Path,
-) -> Result<(), VetError> {
+) -> Result<(), DiffError> {
     // ERRORS: arguably this is all proper fallible, but it would be fatal to
     // `cargo vet diff`, the primary consumer, to not be able to diff
 
@@ -1461,14 +1482,15 @@ fn diff_crate(
         .arg("--no-index")
         .arg(version1)
         .arg(version2)
-        .status()?;
+        .status()
+        .map_err(CommandError::CommandFailed)?;
 
     let status = status.code().unwrap();
 
     // 0 = empty
     // 1 = some diff
     if status != 0 && status != 1 {
-        return Err(eyre::eyre!("git diff failed!\n {}", status));
+        Err(CommandError::BadStatus(status))?;
     }
 
     Ok(())
@@ -1479,47 +1501,27 @@ struct UserInfo {
     email: String,
 }
 
-fn get_user_info() -> Result<UserInfo, VetError> {
-    // ERRORS: this is all properly fallible internal workings
-    let username = {
+fn get_user_info() -> Result<UserInfo, UserInfoError> {
+    fn get_git_value(value_name: &str) -> Result<String, CommandError> {
         let out = std::process::Command::new("git")
             .arg("config")
             .arg("--get")
-            .arg("user.name")
-            .output()?;
+            .arg(value_name)
+            .output()
+            .map_err(CommandError::CommandFailed)?;
 
         if !out.status.success() {
-            return Err(eyre::eyre!(
-                "could not get user.name from git!\nout:\n{}\nstderr:\n{}",
-                String::from_utf8(out.stdout).unwrap(),
-                String::from_utf8(out.stderr).unwrap()
-            ));
+            return Err(CommandError::BadStatus(out.status.code().unwrap()));
         }
-        String::from_utf8(out.stdout)?
-    };
+        String::from_utf8(out.stdout)
+            .map(|s| s.trim().to_string())
+            .map_err(CommandError::BadOutput)
+    }
 
-    let email = {
-        let out = std::process::Command::new("git")
-            .arg("config")
-            .arg("--get")
-            .arg("user.email")
-            .output()?;
+    let username = get_git_value("user.name").map_err(UserInfoError::UserCommandFailed)?;
+    let email = get_git_value("user.email").map_err(UserInfoError::EmailCommandFailed)?;
 
-        if !out.status.success() {
-            return Err(eyre::eyre!(
-                "could not get user.email from git!\nout:\n{}\nstderr:\n{}",
-                String::from_utf8(out.stdout).unwrap(),
-                String::from_utf8(out.stderr).unwrap()
-            ));
-        }
-
-        String::from_utf8(out.stdout)?
-    };
-
-    Ok(UserInfo {
-        username: username.trim().to_string(),
-        email: email.trim().to_string(),
-    })
+    Ok(UserInfo { username, email })
 }
 
 async fn eula_for_criteria(
@@ -1570,11 +1572,12 @@ async fn eula_for_criteria(
     // If we get here then there must be a URL, try to fetch it. If it fails, just print the URL
     let url = Url::parse(criteria_entry.description_url.as_ref().unwrap()).unwrap();
     if let Some(network) = network {
-        if let Ok(eula) = network
-            .download(url.clone())
-            .await
-            .and_then(|bytes| Ok(String::from_utf8(bytes)?))
-        {
+        if let Ok(eula) = network.download(url.clone()).await.and_then(|bytes| {
+            String::from_utf8(bytes).map_err(|error| DownloadError::InvalidText {
+                url: url.clone(),
+                error,
+            })
+        }) {
             return eula;
         }
     }
@@ -1609,12 +1612,10 @@ fn first_party_packages_strict<'a>(
         .filter(move |package| !package.is_third_party(&empty_policy))
 }
 
-fn check_audit_as_crates_io(
-    out: &mut dyn Out,
-    cfg: &Config,
-    store: &Store,
-) -> Result<(), VetError> {
-    let cache = Cache::acquire(cfg)?;
+fn check_audit_as_crates_io(cfg: &Config, store: &Store) -> Result<(), AuditAsErrors> {
+    let cache = Cache::acquire(cfg).map_err(|e| AuditAsErrors {
+        errors: vec![AuditAsError::CacheAcquire(e)],
+    })?;
     let mut needs_audit_as_entry = vec![];
     let mut shouldnt_be_audit_as = vec![];
 
@@ -1634,7 +1635,10 @@ fn check_audit_as_crates_io(
                 // We found a version of this package in the registry!
                 if audit_policy == None {
                     // At this point, having no policy is an error
-                    needs_audit_as_entry.push(package);
+                    needs_audit_as_entry.push(NeedsAuditAsError {
+                        package: package.name.clone(),
+                        version: package.version.clone(),
+                    });
                 }
                 // Now that we've found a version match, we're done with this package
                 continue 'packages;
@@ -1644,43 +1648,27 @@ fn check_audit_as_crates_io(
         // If we reach this point, then we couldn't find a matching package in the registry,
         // So any `audit-as-crates-io = true` is an error that should be corrected
         if audit_policy == Some(true) {
-            shouldnt_be_audit_as.push(package);
+            shouldnt_be_audit_as.push(ShouldntBeAuditAsError {
+                package: package.name.clone(),
+                version: package.version.clone(),
+            });
         }
     }
 
-    // ERRORS: these are all fatal diagnostics, but they are batched
-    if !needs_audit_as_entry.is_empty() {
-        writeln!(
-            out,
-            "error: some non-crates.io-fetched packages match published crates.io versions"
-        )?;
-        for package in &needs_audit_as_entry {
-            writeln!(out, "  {}:{}", package.name, package.version)?;
+    if !needs_audit_as_entry.is_empty() || !shouldnt_be_audit_as.is_empty() {
+        let mut errors = vec![];
+        if !needs_audit_as_entry.is_empty() {
+            errors.push(AuditAsError::NeedsAuditAs(NeedsAuditAsErrors {
+                errors: needs_audit_as_entry,
+            }));
         }
-        writeln!(out)?;
-        writeln!(
-            out,
-            "All of these must have a `policy.*.audit-as-crates-io` entry"
-        )?;
+        if !shouldnt_be_audit_as.is_empty() {
+            errors.push(AuditAsError::ShouldntBeAuditAs(ShouldntBeAuditAsErrors {
+                errors: shouldnt_be_audit_as,
+            }));
+        }
+        return Err(AuditAsErrors { errors });
     }
 
-    if !shouldnt_be_audit_as.is_empty() {
-        writeln!(
-            out,
-            "error: some audit-as-crates-io packages don't match published crates.io versions"
-        )?;
-        for package in &shouldnt_be_audit_as {
-            writeln!(out, "  {}:{}", package.name, package.version)?;
-        }
-        writeln!(
-            out,
-            "Either remove audit-as-crates-io from their policies or set it to false"
-        )?;
-    }
-
-    if !shouldnt_be_audit_as.is_empty() || !needs_audit_as_entry.is_empty() {
-        Err(eyre!("temp error"))
-    } else {
-        Ok(())
-    }
+    Ok(())
 }
