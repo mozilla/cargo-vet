@@ -1652,7 +1652,7 @@ fn check_audit_as_crates_io(
     if !needs_audit_as_entry.is_empty() {
         writeln!(
             out,
-            "error: some first-party packages match published crates.io versions"
+            "error: some non-crates.io-fetched packages match published crates.io versions"
         )?;
         for package in &needs_audit_as_entry {
             writeln!(out, "  {}:{}", package.name, package.version)?;

@@ -2,7 +2,7 @@
 source: src/tests/audit_as_crates_io.rs
 expression: output
 ---
-error: some first-party packages match published crates.io versions
+error: some non-crates.io-fetched packages match published crates.io versions
   first-party:10.0.0
 
 All of these must have a `policy.*.audit-as-crates-io` entry
