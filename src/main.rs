@@ -150,6 +150,7 @@ fn main() -> Result<(), ()> {
     };
     main_result.map_err(|e| {
         eprintln!("{:?}", e);
+        std::process::exit(-1);
     })
 }
 
