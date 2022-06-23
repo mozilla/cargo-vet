@@ -474,7 +474,7 @@ fn builtin_simple_audit_as_weaker_root_regenerate() {
     config.policy.insert(
         "root-package".to_string(),
         PolicyEntry {
-            criteria: Some(vec![SAFE_TO_RUN.to_string()]),
+            criteria: Some(vec![SAFE_TO_RUN.to_string().into()]),
             ..audit_as_policy(Some(true))
         },
     );

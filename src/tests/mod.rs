@@ -26,6 +26,7 @@ use crate::{
 mod audit_as_crates_io;
 mod certify;
 mod regenerate_unaudited;
+mod store_parsing;
 mod vet;
 mod violations;
 
@@ -239,7 +240,7 @@ fn dep_ver(name: &'static str, version: u64) -> MockDependency {
 fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependency {
     UnauditedDependency {
         version,
-        criteria: vec![config.default_criteria.clone()],
+        criteria: vec![config.default_criteria.clone().into()],
         dependency_criteria: DependencyCriteria::new(),
         notes: None,
         suggest: true,
@@ -248,7 +249,7 @@ fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependen
 fn unaudited(version: Version, criteria: CriteriaStr) -> UnauditedDependency {
     UnauditedDependency {
         version,
-        criteria: vec![criteria.to_string()],
+        criteria: vec![criteria.to_string().into()],
         dependency_criteria: DependencyCriteria::new(),
         notes: None,
         suggest: true,
@@ -267,7 +268,7 @@ fn unaudited_dep(
 ) -> UnauditedDependency {
     UnauditedDependency {
         version,
-        criteria: vec![criteria.to_string()],
+        criteria: vec![criteria.to_string().into()],
         notes: None,
         suggest: true,
         dependency_criteria: dependency_criteria
@@ -275,7 +276,7 @@ fn unaudited_dep(
             .map(|(k, v)| {
                 (
                     k.into(),
-                    v.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                    v.into_iter().map(|s| s.into().into()).collect::<Vec<_>>(),
                 )
             })
             .collect(),
@@ -287,7 +288,7 @@ fn delta_audit(from: Version, to: Version, criteria: CriteriaStr) -> AuditEntry 
     AuditEntry {
         who: None,
         notes: None,
-        criteria: vec![criteria.to_string()],
+        criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Delta {
             delta,
             dependency_criteria: DependencyCriteria::default(),
@@ -311,7 +312,7 @@ fn delta_audit_dep(
     AuditEntry {
         who: None,
         notes: None,
-        criteria: vec![criteria.to_string()],
+        criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Delta {
             delta,
             dependency_criteria: dependency_criteria
@@ -319,7 +320,7 @@ fn delta_audit_dep(
                 .map(|(k, v)| {
                     (
                         k.into(),
-                        v.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                        v.into_iter().map(|s| s.into().into()).collect::<Vec<_>>(),
                     )
                 })
                 .collect(),
@@ -331,7 +332,7 @@ fn full_audit(version: Version, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
         who: None,
         notes: None,
-        criteria: vec![criteria.to_string()],
+        criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Full {
             version,
             dependency_criteria: DependencyCriteria::default(),
@@ -346,7 +347,7 @@ fn full_audit_m(
     AuditEntry {
         who: None,
         notes: None,
-        criteria: criteria.into_iter().map(|s| s.into()).collect(),
+        criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         kind: AuditKind::Full {
             version,
             dependency_criteria: DependencyCriteria::default(),
@@ -367,7 +368,7 @@ fn full_audit_dep(
     AuditEntry {
         who: None,
         notes: None,
-        criteria: vec![criteria.to_string()],
+        criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Full {
             version,
             dependency_criteria: dependency_criteria
@@ -375,7 +376,7 @@ fn full_audit_dep(
                 .map(|(k, v)| {
                     (
                         k.into(),
-                        v.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                        v.into_iter().map(|s| s.into().into()).collect::<Vec<_>>(),
                     )
                 })
                 .collect(),
@@ -387,7 +388,7 @@ fn violation_hard(version: VersionReq) -> AuditEntry {
     AuditEntry {
         who: None,
         notes: None,
-        criteria: vec![SAFE_TO_RUN.to_string()],
+        criteria: vec![SAFE_TO_RUN.to_string().into()],
         kind: AuditKind::Violation { violation: version },
     }
 }
@@ -396,7 +397,7 @@ fn violation(version: VersionReq, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
         who: None,
         notes: None,
-        criteria: vec![criteria.to_string()],
+        criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Violation { violation: version },
     }
 }
@@ -408,7 +409,7 @@ fn violation_m(
     AuditEntry {
         who: None,
         notes: None,
-        criteria: criteria.into_iter().map(|s| s.into()).collect(),
+        criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         kind: AuditKind::Violation { violation: version },
     }
 }
@@ -434,7 +435,7 @@ fn audit_as_policy(audit_as_crates_io: Option<bool>) -> PolicyEntry {
 
 fn self_policy(criteria: impl IntoIterator<Item = impl Into<CriteriaName>>) -> PolicyEntry {
     PolicyEntry {
-        criteria: Some(criteria.into_iter().map(|s| s.into()).collect()),
+        criteria: Some(criteria.into_iter().map(|s| s.into().into()).collect()),
         ..default_policy()
     }
 }
@@ -453,7 +454,7 @@ fn dep_policy(
             .map(|(k, v)| {
                 (
                     k.into(),
-                    v.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                    v.into_iter().map(|s| s.into().into()).collect::<Vec<_>>(),
                 )
             })
             .collect(),
@@ -889,7 +890,7 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
         (
             "strong-reviewed".to_string(),
             CriteriaEntry {
-                implies: vec!["reviewed".to_string()],
+                implies: vec!["reviewed".to_string().into()],
                 description: Some("strongly reviewed".to_string()),
                 description_url: None,
             },
@@ -897,7 +898,7 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
         (
             "reviewed".to_string(),
             CriteriaEntry {
-                implies: vec!["weak-reviewed".to_string()],
+                implies: vec!["weak-reviewed".to_string().into()],
                 description: Some("reviewed".to_string()),
                 description_url: None,
             },
@@ -928,8 +929,8 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                     package.name.clone(),
                     PolicyEntry {
                         audit_as_crates_io: None,
-                        criteria: Some(vec![DEFAULT_CRIT.to_string()]),
-                        dev_criteria: Some(vec![DEFAULT_CRIT.to_string()]),
+                        criteria: Some(vec![DEFAULT_CRIT.to_string().into()]),
+                        dev_criteria: Some(vec![DEFAULT_CRIT.to_string().into()]),
                         dependency_criteria: DependencyCriteria::new(),
                         targets: None,
                         dev_targets: None,
@@ -944,8 +945,8 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     // Rewrite the default used by init
     for unaudited in &mut config.unaudited {
         for entry in unaudited.1 {
-            assert_eq!(&*entry.criteria, &["safe-to-deploy"]);
-            entry.criteria = vec![DEFAULT_CRIT.to_string()];
+            assert_eq!(&*entry.criteria, &["safe-to-deploy".to_string()]);
+            entry.criteria = vec![DEFAULT_CRIT.to_string().into()];
         }
     }
 
@@ -1015,7 +1016,10 @@ fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile
             audited
                 .entry(name.clone())
                 .or_insert(vec![])
-                .push(full_audit_m(entry.version, &entry.criteria));
+                .push(full_audit_m(
+                    entry.version,
+                    entry.criteria.iter().map(|s| &**s).collect::<Vec<_>>(),
+                ));
         }
     }
     audits.audits = audited;

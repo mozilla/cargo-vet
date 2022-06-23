@@ -1,7 +1,7 @@
 use std::{ffi::OsString, fmt::Display, path::PathBuf, string::FromUtf8Error, sync::Arc};
 
 use cargo_metadata::Version;
-use miette::{Diagnostic, NamedSource};
+use miette::{Diagnostic, NamedSource, SourceOffset, SourceSpan};
 use thiserror::Error;
 
 use crate::format::{ImportName, PackageName};
@@ -114,11 +114,11 @@ pub enum CertifyError {
 #[non_exhaustive]
 pub enum EditError {
     #[error("Failed to launch editor")]
-    CouldntLaunch(#[diagnostic(cause)] std::io::Error),
+    CouldntLaunch(#[source] std::io::Error),
     #[error("Failed to open result of editor")]
-    CouldntOpen(#[diagnostic(cause)] std::io::Error),
+    CouldntOpen(#[source] std::io::Error),
     #[error("Failed to read result of editor")]
-    CouldntRead(#[diagnostic(cause)] std::io::Error),
+    CouldntRead(#[source] std::io::Error),
 }
 
 ///////////////////////////////////////////////////////////
@@ -129,8 +129,8 @@ pub enum EditError {
 #[error("Failed to initialize the cargo-vet store (supply-chain)")]
 #[non_exhaustive]
 pub enum InitError {
-    StoreCreate(#[diagnostic(cause)] StoreCreateError),
-    StoreCommit(#[diagnostic(cause)] StoreCommitError),
+    StoreCreate(#[source] StoreCreateError),
+    StoreCommit(#[source] StoreCommitError),
 }
 
 //////////////////////////////////////////////////////////
@@ -155,10 +155,10 @@ pub enum MinimizeUnauditedError {
 #[non_exhaustive]
 #[error("Couldn't create the store (supply-chain)")]
 pub enum StoreCreateError {
-    CouldntCreate(#[diagnostic(cause)] std::io::Error),
+    CouldntCreate(#[source] std::io::Error),
     CouldntAcquire(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         FlockError,
     ),
 }
@@ -169,19 +169,16 @@ pub enum StoreAcquireError {
     #[error("Couldn't acquire the store's (supply-chain's) lock")]
     CouldntLock(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         FlockError,
     ),
     #[error(transparent)]
-    LoadToml(
-        #[from]
-        #[diagnostic(cause)]
-        LoadTomlError,
-    ),
-    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadToml(#[from] LoadTomlError),
+    #[error("Couldn't acquire the store")]
     IoError(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         std::io::Error,
     ),
     #[error(transparent)]
@@ -190,30 +187,50 @@ pub enum StoreAcquireError {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("Your cargo-vet store (supply-chain) has consistency errors")]
-pub struct StoreValidateErrors {
-    #[related]
-    errors: Vec<StoreValidateError>,
-}
-
-#[derive(Debug, Error, Diagnostic)]
-#[non_exhaustive]
-pub enum StoreValidateError {}
-
-#[derive(Debug, Error, Diagnostic)]
 #[non_exhaustive]
 #[error("Failed to commit store")]
 pub enum StoreCommitError {
     IoError(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         std::io::Error,
     ),
     StoreToml(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         StoreTomlError,
     ),
+}
+
+////////////////////////////////////////////////////////////
+// StoreValidateErrors
+////////////////////////////////////////////////////////////
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("Your cargo-vet store (supply-chain) has consistency errors")]
+pub struct StoreValidateErrors {
+    #[related]
+    pub errors: Vec<StoreValidateError>,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum StoreValidateError {
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    InvalidCriteria(InvalidCriteriaError),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("'{invalid}' is not a valid criteria name")]
+#[diagnostic(help("the possible criteria are {:?}", valid_names))]
+pub struct InvalidCriteriaError {
+    #[source_code]
+    pub source_code: SourceFile,
+    #[label]
+    pub span: SourceSpan,
+    pub invalid: String,
+    pub valid_names: Arc<Vec<String>>,
 }
 
 //////////////////////////////////////////////////////////
@@ -223,40 +240,40 @@ pub enum StoreCommitError {
 #[derive(Debug, Error, Diagnostic)]
 #[non_exhaustive]
 pub enum CacheAcquireError {
-    #[error(transparent)]
+    #[error("Couldn't acquire cache")]
     IoError(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         std::io::Error,
     ),
     #[error("Failed to create cache root dir: {}", target.display())]
     Root {
         target: PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: std::io::Error,
     },
     #[error("Failed to create cache src dir: {}", target.display())]
     Src {
         target: PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: std::io::Error,
     },
     #[error("Failed to create cache empty dir: {}", target.display())]
     Empty {
         target: PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: std::io::Error,
     },
     #[error("Failed to create cache package dir: {}", target.display())]
     Cache {
         target: PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: std::io::Error,
     },
     #[error("Couldn't acquire the cache's lock")]
     CouldntLock(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         FlockError,
     ),
 }
@@ -267,17 +284,17 @@ pub enum CacheAcquireError {
 pub enum CacheCommitError {
     IoError(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         std::io::Error,
     ),
     StoreToml(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         StoreTomlError,
     ),
     StoreJson(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         StoreJsonError,
     ),
 }
@@ -290,11 +307,11 @@ pub enum CacheCommitError {
 #[non_exhaustive]
 pub enum CommandError {
     #[error("Command failed")]
-    CommandFailed(#[diagnostic(cause)] std::io::Error),
+    CommandFailed(#[source] std::io::Error),
     #[error("Bad status {0}")]
     BadStatus(i32),
     #[error("Wasn't UTF-8")]
-    BadOutput(#[diagnostic(cause)] FromUtf8Error),
+    BadOutput(#[source] FromUtf8Error),
 }
 
 //////////////////////////////////////////////////////////
@@ -322,7 +339,7 @@ pub enum DiffError {
     #[error("Failed to diff package")]
     CommandError(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         CommandError,
     ),
 }
@@ -335,9 +352,9 @@ pub enum DiffError {
 #[non_exhaustive]
 pub enum UserInfoError {
     #[error("Failed to get user.name")]
-    UserCommandFailed(#[diagnostic(cause)] CommandError),
+    UserCommandFailed(#[source] CommandError),
     #[error("Failed to get user.email")]
-    EmailCommandFailed(#[diagnostic(cause)] CommandError),
+    EmailCommandFailed(#[source] CommandError),
 }
 
 //////////////////////////////////////////////////////////
@@ -350,7 +367,7 @@ pub enum FetchError {
     #[error("Invalid URL for package: {url}")]
     InvalidUrl {
         url: String,
-        #[diagnostic(cause)]
+        #[source]
         error: url::ParseError,
     },
     #[error("Running as --frozen but needed to fetch {package}:{version}")]
@@ -361,13 +378,13 @@ pub enum FetchError {
     #[error("Failed to unpack .crate at {}", src.display())]
     Unpack {
         src: PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: UnpackError,
     },
     #[error("failed to open cached .crate at {}", target.display())]
     OpenCached {
         target: std::path::PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: std::io::Error,
     },
     #[error(transparent)]
@@ -379,9 +396,9 @@ pub enum FetchError {
 #[non_exhaustive]
 pub enum UnpackError {
     #[error("Failed to iterate archive")]
-    ArchiveIterate(#[diagnostic(cause)] std::io::Error),
+    ArchiveIterate(#[source] std::io::Error),
     #[error("Failed to read archive entry")]
-    ArchiveEntry(#[diagnostic(cause)] std::io::Error),
+    ArchiveEntry(#[source] std::io::Error),
     #[error("Invalid archive, {} wasn't under {}", entry_path.display(), prefix.to_string_lossy())]
     InvalidPaths {
         entry_path: PathBuf,
@@ -390,13 +407,13 @@ pub enum UnpackError {
     #[error("Failed to unpack archive entry {}", entry_path.display())]
     Unpack {
         entry_path: PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: std::io::Error,
     },
     #[error("Failed to finalize unpack to {}", target.display())]
     LockCreate {
         target: std::path::PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: std::io::Error,
     },
     #[error(transparent)]
@@ -415,7 +432,7 @@ pub enum FetchAuditError {
     InvalidUrl {
         import_name: ImportName,
         import_url: String,
-        #[diagnostic(cause)]
+        #[source]
         error: url::ParseError,
     },
     #[diagnostic(transparent)]
@@ -423,7 +440,7 @@ pub enum FetchAuditError {
     Download(#[from] DownloadError),
     #[diagnostic(transparent)]
     #[error(transparent)]
-    Toml(#[from] TomlParseError),
+    Toml(#[from] LoadTomlError),
     #[diagnostic(transparent)]
     #[error(transparent)]
     Validate(#[from] StoreValidateErrors),
@@ -439,37 +456,37 @@ pub enum DownloadError {
     #[error("failed to start download of {url}")]
     FailedToStartDownload {
         url: reqwest::Url,
-        #[diagnostic(cause)]
+        #[source]
         error: reqwest::Error,
     },
     #[error("failed to create file for download to {}", target.display())]
     FailedToCreateDownload {
         target: std::path::PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: std::io::Error,
     },
     #[error("failed to read download from {url}")]
     FailedToReadDownload {
         url: reqwest::Url,
-        #[diagnostic(cause)]
+        #[source]
         error: reqwest::Error,
     },
     #[error("failed to write download to {}", target.display())]
     FailedToWriteDownload {
         target: std::path::PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: std::io::Error,
     },
     #[error("failed to rename download to final location {}", target.display())]
     FailedToFinalizeDownload {
         target: std::path::PathBuf,
-        #[diagnostic(cause)]
+        #[source]
         error: std::io::Error,
     },
     #[error("Download wasn't valid utf8: {url}")]
     InvalidText {
         url: reqwest::Url,
-        #[diagnostic(cause)]
+        #[source]
         error: FromUtf8Error,
     },
 }
@@ -493,10 +510,10 @@ pub enum SuggestError {
 #[derive(Debug, Error, Diagnostic)]
 #[non_exhaustive]
 pub enum FlockError {
-    #[error(transparent)]
+    #[error("couldn't acquire file lock")]
     IoError(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         std::io::Error,
     ),
 }
@@ -508,12 +525,12 @@ pub enum FlockError {
 #[derive(Debug, Error, Diagnostic)]
 #[error("Failed to parse toml file")]
 pub struct TomlParseError {
-    // #[source_code]
-    // input: SourceFile,
-    // #[label("here")]
-    // span: SourceOffset,
-    #[diagnostic(cause)]
-    pub error: toml_edit::de::Error,
+    #[source_code]
+    pub source_code: SourceFile,
+    #[label("here")]
+    pub span: SourceOffset,
+    #[source]
+    pub error: toml::de::Error,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -523,7 +540,7 @@ pub struct JsonParseError {
     // input: SourceFile,
     // #[label("here")]
     // span: SourceOffset,
-    #[diagnostic(cause)]
+    #[source]
     pub error: serde_json::Error,
 }
 
@@ -533,10 +550,18 @@ pub enum LoadTomlError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     TomlParse(#[from] TomlParseError),
-    #[error(transparent)]
+
+    #[error("TOML wasn't valid utf8")]
+    InvalidText {
+        #[source]
+        #[from]
+        error: FromUtf8Error,
+    },
+
+    #[error("couldn't load toml")]
     IoError(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         std::io::Error,
     ),
 }
@@ -547,10 +572,10 @@ pub enum LoadJsonError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     JsonParse(#[from] JsonParseError),
-    #[error(transparent)]
+    #[error("couldn't load json")]
     IoError(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         std::io::Error,
     ),
 }
@@ -560,10 +585,10 @@ pub enum LoadJsonError {
 pub enum StoreJsonError {
     #[error(transparent)]
     JsonSerialize(#[from] serde_json::Error),
-    #[error(transparent)]
+    #[error("couldn't store json")]
     IoError(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         std::io::Error,
     ),
 }
@@ -573,10 +598,10 @@ pub enum StoreJsonError {
 pub enum StoreTomlError {
     #[error(transparent)]
     TomlSerialize(#[from] toml_edit::ser::Error),
-    #[error(transparent)]
+    #[error("couldn't store toml")]
     IoError(
         #[from]
-        #[diagnostic(cause)]
+        #[source]
         std::io::Error,
     ),
 }

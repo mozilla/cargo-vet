@@ -77,6 +77,7 @@ use crate::format::{
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
 use crate::out::Out;
+use crate::serialization::spanned::Spanned;
 use crate::{
     AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
     GraphFilterQuery, PackageExt, Store,
@@ -362,7 +363,7 @@ fn builtin_criteria() -> SortedMap<CriteriaName, CriteriaEntry> {
             CriteriaEntry {
                 description: Some("safe to deploy to production".to_string()),
                 description_url: None,
-                implies: vec!["safe-to-run".to_string()],
+                implies: vec!["safe-to-run".to_string().into()],
             },
         ),
     ]
@@ -395,7 +396,7 @@ impl CriteriaMapper {
 
             fn recursive_implies(
                 result: &mut CriteriaSet,
-                implies: &[CriteriaName],
+                implies: &[Spanned<CriteriaName>],
                 index: &FastMap<CriteriaName, usize>,
                 list: &[(CriteriaName, CriteriaEntry)],
             ) {

@@ -468,9 +468,9 @@ pub fn init_files(
                 continue;
             }
             let criteria = if package.is_dev_only {
-                vec![format::DEFAULT_POLICY_DEV_CRITERIA.to_string()]
+                vec![format::DEFAULT_POLICY_DEV_CRITERIA.to_string().into()]
             } else {
-                vec![format::DEFAULT_POLICY_CRITERIA.to_string()]
+                vec![format::DEFAULT_POLICY_CRITERIA.to_string().into()]
             };
             // NOTE: May have multiple copies of a package!
             let item = UnauditedDependency {
@@ -584,7 +584,7 @@ fn do_cmd_certify(
             dep_criteria
                 .entry(arg.dependency.clone())
                 .or_insert_with(Vec::new)
-                .push(arg.criteria.clone());
+                .push(arg.criteria.clone().into());
         }
         dep_criteria
     };
@@ -816,7 +816,10 @@ fn do_cmd_certify(
 
     let new_entry = AuditEntry {
         kind: kind.clone(),
-        criteria: criteria_names.iter().map(|s| s.to_string()).collect(),
+        criteria: criteria_names
+            .iter()
+            .map(|s| s.to_string().into())
+            .collect(),
         who,
         notes,
     };
@@ -925,9 +928,13 @@ fn cmd_record_violation(
 
     let criteria = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
-        vec![store.config.default_criteria.clone()]
+        vec![store.config.default_criteria.clone().into()]
     } else {
-        sub_args.criteria.clone()
+        sub_args
+            .criteria
+            .iter()
+            .map(|s| s.to_owned().into())
+            .collect()
     };
 
     // FIXME: can/should we check if the version makes sense..?
@@ -981,7 +988,7 @@ fn cmd_add_unaudited(
             dep_criteria
                 .entry(arg.dependency.clone())
                 .or_insert_with(Vec::new)
-                .push(arg.criteria.clone());
+                .push(arg.criteria.clone().into());
         }
         dep_criteria
     };
@@ -990,9 +997,13 @@ fn cmd_add_unaudited(
 
     let criteria = if sub_args.criteria.is_empty() {
         // TODO: provide an interactive prompt for this
-        vec![store.config.default_criteria.clone()]
+        vec![store.config.default_criteria.clone().into()]
     } else {
-        sub_args.criteria.clone()
+        sub_args
+            .criteria
+            .iter()
+            .map(|s| s.to_owned().into())
+            .collect()
     };
 
     let suggest = !sub_args.no_suggest;
@@ -1161,7 +1172,7 @@ pub fn minimize_unaudited(
                     .or_insert(Vec::new())
                     .push(UnauditedDependency {
                         version: item.suggested_diff.to.clone(),
-                        criteria: criteria_names,
+                        criteria: criteria_names.iter().map(|s| s.to_owned().into()).collect(),
                         dependency_criteria: DependencyCriteria::new(),
                         notes: None,
                         suggest: true,

@@ -1,0 +1,106 @@
+---
+source: src/tests/store_parsing.rs
+expression: acquire_errors
+---
+
+  × Your cargo-vet store (supply-chain) has consistency errors
+
+Error: 
+  × 'bad-imply' is not a valid criteria name
+   ╭─[audits.toml:3:1]
+ 3 │ description = "great"
+ 4 │ implies = ["safe-to-deploy", "bad-imply"]
+   ·                              ───────────
+ 5 │ 
+   ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+Error: 
+  × 'bad' is not a valid criteria name
+   ╭─[audits.toml:7:1]
+ 7 │ version = "1.0.0"
+ 8 │ criteria = "bad"
+   ·            ─────
+ 9 │ dependency-criteria = { toml = "bad-dep", serde_derive = ["bad1", "good", "bad2"] }
+   ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+Error: 
+  × 'bad1' is not a valid criteria name
+    ╭─[audits.toml:8:1]
+  8 │ criteria = "bad"
+  9 │ dependency-criteria = { toml = "bad-dep", serde_derive = ["bad1", "good", "bad2"] }
+    ·                                                           ──────
+ 10 │ 
+    ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+Error: 
+  × 'bad2' is not a valid criteria name
+    ╭─[audits.toml:8:1]
+  8 │ criteria = "bad"
+  9 │ dependency-criteria = { toml = "bad-dep", serde_derive = ["bad1", "good", "bad2"] }
+    ·                                                                           ──────
+ 10 │ 
+    ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+Error: 
+  × 'bad-dep' is not a valid criteria name
+    ╭─[audits.toml:8:1]
+  8 │ criteria = "bad"
+  9 │ dependency-criteria = { toml = "bad-dep", serde_derive = ["bad1", "good", "bad2"] }
+    ·                                ─────────
+ 10 │ 
+    ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+Error: 
+  × 'dang' is not a valid criteria name
+    ╭─[audits.toml:12:1]
+ 12 │ delta = "1.0.0 -> 1.1.0"
+ 13 │ criteria = ["safe-to-run", "dang"]
+    ·                            ──────
+ 14 │ dependency-criteria = {}
+    ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+Error: 
+  × 'oops' is not a valid criteria name
+    ╭─[audits.toml:17:1]
+ 17 │ delta = "1.0.0 -> 1.1.0"
+ 18 │ criteria = "oops"
+    ·            ──────
+ 19 │ dependency-criteria = { "nope" = "nah" }
+    ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+Error: 
+  × 'nah' is not a valid criteria name
+    ╭─[audits.toml:18:1]
+ 18 │ criteria = "oops"
+ 19 │ dependency-criteria = { "nope" = "nah" }
+    ·                                  ─────
+ 20 │ 
+    ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+Error: 
+  × 'safe-to-jog' is not a valid criteria name
+    ╭─[audits.toml:22:1]
+ 22 │ version = "2.0.0"
+ 23 │ criteria = "safe-to-jog"
+    ·            ─────────────
+ 24 │ dependency-criteria = { toml = ["unsafe-to-destroy"] }
+    ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+Error: 
+  × 'unsafe-to-destroy' is not a valid criteria name
+    ╭─[audits.toml:23:1]
+ 23 │ criteria = "safe-to-jog"
+ 24 │ dependency-criteria = { toml = ["unsafe-to-destroy"] }
+    ·                                ─────────────────────
+ 25 │ 
+    ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+Error: 
+  × 'no-good-bad-bad' is not a valid criteria name
+    ╭─[audits.toml:27:1]
+ 27 │ violation = "5.0.0 "
+ 28 │ criteria = "no-good-bad-bad"
+    ·            ─────────────────
+    ╰────
+  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
+
