@@ -1584,8 +1584,8 @@ fn builtin_dev_detection_empty_deeper() {
 
 #[test]
 fn builtin_simple_unaudited_extra() {
-    // (Warn) there's an extra unused unaudited entry, but the other is needed
-    // BUSTED: this test is broken (doesn't emit warning)
+    // (Pass) there's an extra unused unaudited entry, but the other is needed
+    // (This test could warn if we try to detect "useless unaudited" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1612,8 +1612,8 @@ fn builtin_simple_unaudited_extra() {
 
 #[test]
 fn builtin_simple_unaudited_not_a_real_dep() {
-    // (Warn) there's an unaudited entry for a package that isn't in our tree at all.
-    // BUSTED: this test is broken (doesn't emit warning)
+    // (Pass) there's an unaudited entry for a package that isn't in our tree at all.
+    // (This test could warn if we try to detect "useless unaudited" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1635,8 +1635,8 @@ fn builtin_simple_unaudited_not_a_real_dep() {
 
 #[test]
 fn builtin_simple_deps_unaudited_overbroad() {
-    // (Warn) the unaudited entry is needed but it's overbroad
-    // BUSTED: this test is broken (doesn't emit warning)
+    // (Pass) the unaudited entry is needed but it's overbroad
+    // (This test could warn if we try to detect "useless unaudited" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
@@ -1714,8 +1714,8 @@ fn builtin_complex_unaudited_partial_twins() {
 
 #[test]
 fn builtin_simple_unaudited_in_delta() {
-    // (Warn) An audited entry overlaps a delta and isn't needed
-    // BUSTED: this test is broken (doesn't emit warning)
+    // (Pass) An audited entry overlaps a delta and isn't needed
+    // (This test could warn if we try to detect "useless unaudited" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1746,8 +1746,8 @@ fn builtin_simple_unaudited_in_delta() {
 
 #[test]
 fn builtin_simple_unaudited_in_full() {
-    // (Warn) An audited entry overlaps a full audit and isn't needed
-    // BUSTED: this test is broken (doesn't emit warning)
+    // (Pass) An audited entry overlaps a full audit and isn't needed
+    // (This test could warn if we try to detect "useless unaudited" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1778,7 +1778,8 @@ fn builtin_simple_unaudited_in_full() {
 
 #[test]
 fn builtin_simple_unaudited_in_direct_full() {
-    // (Warn) An audited entry overlaps a full audit which is the cur version and isn't needed
+    // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
+    // (This test used to warn when we tried to detect "useless unaudited" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1975,8 +1976,8 @@ fn builtin_simple_unaudited_nested_stronger_req() {
 
 #[test]
 fn builtin_simple_deps_unaudited_adds_uneeded_criteria() {
-    // (Warn) An audited entry overlaps a full audit which is the cur version and isn't needed
-    // BUSTED: this test is broken (doesn't emit warning)
+    // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
+    // (This test could warn if we try to detect "useless unaudited" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
@@ -2008,9 +2009,8 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria() {
 
 #[test]
 fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
-    // (Warn) An audited entry overlaps a full audit which is the cur version and isn't needed
-    // BUSTED: this test is broken (doesn't emit warning)
-    // TODO: or is this test wrong? should the delta apply?
+    // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
+    // (This test could warn if we try to detect "useless unaudited" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::dev_detection();
@@ -2128,8 +2128,8 @@ fn builtin_simple_delta_cycle() {
 
 #[test]
 fn builtin_simple_noop_delta() {
-    // (Warn) completely pointless noop delta
-    // BUSTED: fails to warn about a 5->5 delta
+    // (Pass) completely pointless noop delta
+    // (This test could warn if we try to detect "useless deltas")
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();

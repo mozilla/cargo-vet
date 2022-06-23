@@ -115,8 +115,6 @@ pub struct Success {
     pub vetted_partially: Vec<PackageIdx>,
     /// Third-party packages that were successfully vetted using only 'audits'
     pub vetted_fully: Vec<PackageIdx>,
-    /// Third-party packages that have an unaudited entry that can be removed.
-    pub useless_unaudited: Vec<PackageIdx>,
 }
 
 #[derive(Debug, Clone)]
@@ -1325,7 +1323,6 @@ pub fn resolve<'a>(
     let mut vetted_with_unaudited = vec![];
     let mut vetted_partially = vec![];
     let mut vetted_fully = vec![];
-    let mut useless_unaudited = vec![];
     for &pkgidx in &graph.topo_index {
         let package = &graph.nodes[pkgidx];
         if !package.is_third_party {
@@ -1341,10 +1338,6 @@ pub fn resolve<'a>(
         } else {
             vetted_partially.push(pkgidx);
         }
-
-        if result.directly_unaudited && !result.needed_unaudited {
-            useless_unaudited.push(pkgidx);
-        }
     }
 
     ResolveReport {
@@ -1355,7 +1348,6 @@ pub fn resolve<'a>(
             vetted_with_unaudited,
             vetted_partially,
             vetted_fully,
-            useless_unaudited,
         }),
     }
 }
@@ -2362,13 +2354,7 @@ impl<'a> ResolveReport<'a> {
     }
 
     pub fn _has_warnings(&self) -> bool {
-        if let Conclusion::Success(success) = &self.conclusion {
-            // If there are useless_unaudited, we'll warn about those
-            !success.useless_unaudited.is_empty()
-        } else {
-            // Errors aren't warnings
-            false
-        }
+        false
     }
 
     pub fn compute_suggest(
@@ -2663,7 +2649,6 @@ impl<'a> ResolveReport<'a> {
                     "vetted_fully": success.vetted_fully.iter().map(json_package).collect::<Vec<_>>(),
                     "vetted_partially": success.vetted_partially.iter().map(json_package).collect::<Vec<_>>(),
                     "vetted_with_unaudited": success.vetted_with_unaudited.iter().map(json_package).collect::<Vec<_>>(),
-                    "useless_unaudited": success.useless_unaudited.iter().map(json_package).collect::<Vec<_>>(),
                 })
             }
             Conclusion::FailForViolationConflict(fail) => json!({
@@ -2714,7 +2699,7 @@ impl Success {
     pub fn print_human(
         &self,
         out: &mut dyn Out,
-        report: &ResolveReport,
+        _report: &ResolveReport,
         _cfg: &Config,
     ) -> Result<(), std::io::Error> {
         let fully_audited_count = self.vetted_fully.len();
@@ -2759,19 +2744,6 @@ impl Success {
 
             writeln!(out, ")")?;
         }
-
-        // Warn about useless unaudited entries
-        if !self.useless_unaudited.is_empty() {
-            writeln!(
-                out,
-                "  warning: some dependencies are listed in unaudited, but didn't need it:"
-            )?;
-            for &pkgidx in &self.useless_unaudited {
-                let package = &report.graph.nodes[pkgidx];
-                writeln!(out, "    {}:{}", package.name, package.version)?;
-            }
-        }
-
         Ok(())
     }
 }
