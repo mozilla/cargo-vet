@@ -1358,10 +1358,6 @@ fn resolve_third_party<'a>(
     pkgidx: PackageIdx,
 ) {
     let package = &graph.nodes[pkgidx];
-    assert!(
-        package.dev_deps.is_empty(),
-        "third-party packages shouldn't have dev-deps!"
-    );
     let unaudited = store.config.unaudited.get(package.name);
 
     let own_audits = store.audits.audits.get(package.name).unwrap_or(&NO_AUDITS);
