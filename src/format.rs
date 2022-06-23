@@ -1,5 +1,6 @@
 //! Details of the file formats used by cargo vet
 
+use crate::serialization::spanned::Spanned;
 use crate::{flock::Filesystem, serialization};
 use core::{cmp, fmt};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -149,17 +150,16 @@ pub struct CriteriaEntry {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec")]
-    pub implies: Vec<CriteriaName>,
+    pub implies: Vec<Spanned<CriteriaName>>,
 }
 
 /// This is conceptually an enum
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(try_from = "serialization::audit::AuditEntryAll")]
+#[serde(into = "serialization::audit::AuditEntryAll")]
 pub struct AuditEntry {
     pub who: Option<String>,
-    #[serde(default)]
-    #[serde(with = "serialization::string_or_vec")]
-    pub criteria: Vec<CriteriaName>,
-    #[serde(flatten)]
+    pub criteria: Vec<Spanned<CriteriaName>>,
     pub kind: AuditKind,
     pub notes: Option<String>,
 }
@@ -179,23 +179,14 @@ impl cmp::Ord for AuditEntry {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum AuditKind {
     Full {
         version: Version,
-        #[serde(rename = "dependency-criteria")]
-        #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
-        #[serde(with = "serialization::dependency_criteria")]
-        #[serde(default)]
         dependency_criteria: DependencyCriteria,
     },
     Delta {
         delta: Delta,
-        #[serde(rename = "dependency-criteria")]
-        #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
-        #[serde(with = "serialization::dependency_criteria")]
-        #[serde(default)]
         dependency_criteria: DependencyCriteria,
     },
     Violation {
@@ -211,7 +202,7 @@ pub enum AuditKind {
 /// ```toml
 /// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
 /// ```
-pub type DependencyCriteria = SortedMap<PackageName, Vec<CriteriaName>>;
+pub type DependencyCriteria = SortedMap<PackageName, Vec<Spanned<CriteriaName>>>;
 
 /// A "VERSION -> VERSION"
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -355,14 +346,14 @@ pub struct PolicyEntry {
     /// If not present, this defaults to the default criteria in the audits table.
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec_or_none")]
-    pub criteria: Option<Vec<CriteriaName>>,
+    pub criteria: Option<Vec<Spanned<CriteriaName>>>,
 
     /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
     /// used as dev-dependencies.
     #[serde(rename = "dev-criteria")]
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec_or_none")]
-    pub dev_criteria: Option<Vec<CriteriaName>>,
+    pub dev_criteria: Option<Vec<Spanned<CriteriaName>>>,
 
     /// TODO: figure this out
     pub targets: Option<Vec<String>>,
@@ -404,7 +395,7 @@ pub struct CriteriaMapping {
     pub ours: CriteriaName,
     /// If all of these foreign criteria apply
     #[serde(with = "serialization::string_or_vec")]
-    pub theirs: Vec<ForeignCriteriaName>,
+    pub theirs: Vec<Spanned<ForeignCriteriaName>>,
 }
 
 /// Semantically identical to a 'full audit' entry, but private to our project
@@ -418,7 +409,7 @@ pub struct UnauditedDependency {
     /// pick a "good" initial value.
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec")]
-    pub criteria: Vec<CriteriaName>,
+    pub criteria: Vec<Spanned<CriteriaName>>,
     /// Whether 'suggest' should bother mentioning this (defaults true).
     #[serde(default = "get_default_unaudited_suggest")]
     #[serde(skip_serializing_if = "is_default_unaudited_suggest")]

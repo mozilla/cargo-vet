@@ -12,6 +12,7 @@ use cargo_metadata::Version;
 use crates_index::Index;
 use flate2::read::GzDecoder;
 use futures_util::future::try_join_all;
+use miette::{NamedSource, SourceOffset};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
@@ -20,18 +21,19 @@ use tracing::{error, info, log::warn, trace};
 use crate::{
     errors::{
         CacheAcquireError, CacheCommitError, CommandError, DiffError, FetchAndDiffError,
-        FetchAuditError, FetchError, FlockError, JsonParseError, LoadJsonError, LoadTomlError,
-        StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError,
-        StoreValidateErrors, TomlParseError, UnpackError,
+        FetchAuditError, FetchError, FlockError, InvalidCriteriaError, JsonParseError,
+        LoadJsonError, LoadTomlError, SourceFile, StoreAcquireError, StoreCommitError,
+        StoreCreateError, StoreJsonError, StoreTomlError, StoreValidateError, StoreValidateErrors,
+        TomlParseError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
-        AuditsFile, CommandHistory, ConfigFile, Delta, DiffCache, DiffStat, FastMap, FetchCommand,
-        ImportsFile, MetaConfig, PackageStr, SortedMap,
+        AuditsFile, CommandHistory, ConfigFile, CriteriaName, Delta, DiffCache, DiffStat, FastMap,
+        FetchCommand, ImportsFile, MetaConfig, PackageStr, SortedMap, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     resolver,
-    serialization::to_formatted_toml,
+    serialization::{spanned::Spanned, to_formatted_toml},
     Config, PartialConfig,
 };
 
@@ -120,6 +122,10 @@ pub struct Store {
     pub config: ConfigFile,
     pub imports: ImportsFile,
     pub audits: AuditsFile,
+
+    pub config_src: SourceFile,
+    pub imports_src: SourceFile,
+    pub audits_src: SourceFile,
 }
 
 impl Store {
@@ -145,6 +151,9 @@ impl Store {
                 criteria: SortedMap::new(),
                 audits: SortedMap::new(),
             },
+            config_src: Arc::new(NamedSource::new(CONFIG_TOML, "")),
+            audits_src: Arc::new(NamedSource::new(AUDITS_TOML, "")),
+            imports_src: Arc::new(NamedSource::new(IMPORTS_LOCK, "")),
         })
     }
 
@@ -163,15 +172,19 @@ impl Store {
         // exclusive one isn't needed.
         let lock = StoreLock::new(&root)?;
 
-        let config: ConfigFile = load_toml(lock.read_config()?)?;
-        let audits: AuditsFile = load_toml(lock.read_audits()?)?;
-        let imports: ImportsFile = load_toml(lock.read_imports()?)?;
+        let (config_src, config): (_, ConfigFile) = load_toml(CONFIG_TOML, lock.read_config()?)?;
+        let (audits_src, audits): (_, AuditsFile) = load_toml(AUDITS_TOML, lock.read_audits()?)?;
+        let (imports_src, imports): (_, ImportsFile) =
+            load_toml(IMPORTS_LOCK, lock.read_imports()?)?;
 
         let store = Self {
             lock: Some(lock),
             config,
             audits,
             imports,
+            config_src,
+            audits_src,
+            imports_src,
         };
 
         // Check that the store isn't corrupt
@@ -188,7 +201,35 @@ impl Store {
             config,
             imports,
             audits,
+            config_src: Arc::new(NamedSource::new(CONFIG_TOML, "")),
+            audits_src: Arc::new(NamedSource::new(AUDITS_TOML, "")),
+            imports_src: Arc::new(NamedSource::new(IMPORTS_LOCK, "")),
         }
+    }
+
+    #[cfg(test)]
+    pub fn mock_acquire(
+        config: &str,
+        audits: &str,
+        imports: &str,
+    ) -> Result<Self, StoreAcquireError> {
+        let (config_src, config): (_, ConfigFile) = load_toml(CONFIG_TOML, config.as_bytes())?;
+        let (audits_src, audits): (_, AuditsFile) = load_toml(AUDITS_TOML, audits.as_bytes())?;
+        let (imports_src, imports): (_, ImportsFile) = load_toml(IMPORTS_LOCK, imports.as_bytes())?;
+
+        let store = Self {
+            lock: None,
+            config,
+            imports,
+            audits,
+            config_src,
+            audits_src,
+            imports_src,
+        };
+
+        store.validate()?;
+
+        Ok(store)
     }
 
     /// Create a clone of the store for use to resolve `suggest`.
@@ -206,6 +247,9 @@ impl Store {
             config: self.config.clone(),
             imports: self.imports.clone(),
             audits: self.audits.clone(),
+            config_src: self.config_src.clone(),
+            audits_src: self.audits_src.clone(),
+            imports_src: self.imports_src.clone(),
         };
         // Delete all unaudited entries except those that are suggest=false
         for versions in &mut clone.config.unaudited.values_mut() {
@@ -230,26 +274,155 @@ impl Store {
     }
 
     /// Validate the store's integrity
+    #[allow(clippy::for_kv_map)]
     pub fn validate(&self) -> Result<(), StoreValidateErrors> {
         // ERRORS: ideally these are all gathered diagnostics, want to report as many errors
         // at once as possible!
 
         // TODO(#66): implement validation
         //
-        // * check that policy entries are only first-party
+        // * check that policy entries are only first-party?
+        //   * (we currently allow policy.criteria on third-parties for audit-as-crates-io)
         // * check that unaudited entries are for things that exist?
         // * check that lockfile and imports aren't desync'd (catch new/removed import urls)
         //
         // * check that each CriteriaEntry has 'description' or 'description_url'
         // * check that no one is trying to shadow builtin criteria (safe-to-run, safe-to-deploy)
-        // * check that all criteria are valid in:
-        //   * CriteriaEntry::implies
-        //   * AuditEntry::criteria
-        //   * DependencyCriteria
         // * check that all 'audits' entries are well-formed
         // * check that all package names are valid (with crates.io...?)
         // * check that all reviews have a 'who' (currently an Option to stub it out)
         // * catch no-op deltas?
+        // * nested check imports, complicated because of namespaces
+
+        fn check_criteria(
+            source_code: &SourceFile,
+            valid: &Arc<Vec<CriteriaName>>,
+            errors: &mut Vec<InvalidCriteriaError>,
+            criteria: &[Spanned<CriteriaName>],
+        ) {
+            for criteria in criteria {
+                if !valid.contains(criteria) {
+                    errors.push(InvalidCriteriaError {
+                        source_code: source_code.clone(),
+                        span: Spanned::span(criteria),
+                        invalid: criteria.to_string(),
+                        valid_names: valid.clone(),
+                    })
+                }
+            }
+        }
+
+        // Fixme: this should probably be a Map...? Sorted? Stable?
+        let valid_criteria = Arc::new(
+            self.audits
+                .criteria
+                .iter()
+                .map(|(c, _)| &**c)
+                .chain([SAFE_TO_RUN, SAFE_TO_DEPLOY])
+                .map(|name| name.to_string())
+                .collect::<Vec<_>>(),
+        );
+        let no_criteria = vec![];
+        let mut invalid_criteria_errors = vec![];
+
+        for (_package, entries) in &self.config.unaudited {
+            for entry in entries {
+                check_criteria(
+                    &self.config_src,
+                    &valid_criteria,
+                    &mut invalid_criteria_errors,
+                    &entry.criteria,
+                );
+                for (_dep_package, dep_criteria) in &entry.dependency_criteria {
+                    check_criteria(
+                        &self.config_src,
+                        &valid_criteria,
+                        &mut invalid_criteria_errors,
+                        dep_criteria,
+                    );
+                }
+            }
+        }
+        for (_package, policy) in &self.config.policy {
+            check_criteria(
+                &self.config_src,
+                &valid_criteria,
+                &mut invalid_criteria_errors,
+                policy.criteria.as_ref().unwrap_or(&no_criteria),
+            );
+            check_criteria(
+                &self.config_src,
+                &valid_criteria,
+                &mut invalid_criteria_errors,
+                policy.dev_criteria.as_ref().unwrap_or(&no_criteria),
+            );
+            for (_dep_package, dep_criteria) in &policy.dependency_criteria {
+                check_criteria(
+                    &self.config_src,
+                    &valid_criteria,
+                    &mut invalid_criteria_errors,
+                    dep_criteria,
+                );
+            }
+        }
+        for (_new_criteria, entry) in &self.audits.criteria {
+            // TODO: check that new_criteria isn't shadowing a builtin criteria
+            check_criteria(
+                &self.audits_src,
+                &valid_criteria,
+                &mut invalid_criteria_errors,
+                &entry.implies,
+            );
+        }
+        for (_package, entries) in &self.audits.audits {
+            for entry in entries {
+                // TODO: check that new_criteria isn't shadowing a builtin criteria
+                check_criteria(
+                    &self.audits_src,
+                    &valid_criteria,
+                    &mut invalid_criteria_errors,
+                    &entry.criteria,
+                );
+                match &entry.kind {
+                    crate::format::AuditKind::Full {
+                        dependency_criteria,
+                        ..
+                    } => {
+                        for (_dep_package, dep_criteria) in dependency_criteria {
+                            check_criteria(
+                                &self.audits_src,
+                                &valid_criteria,
+                                &mut invalid_criteria_errors,
+                                dep_criteria,
+                            );
+                        }
+                    }
+                    crate::format::AuditKind::Delta {
+                        dependency_criteria,
+                        ..
+                    } => {
+                        for (_dep_package, dep_criteria) in dependency_criteria {
+                            check_criteria(
+                                &self.audits_src,
+                                &valid_criteria,
+                                &mut invalid_criteria_errors,
+                                dep_criteria,
+                            );
+                        }
+                    }
+                    crate::format::AuditKind::Violation { .. } => {}
+                }
+            }
+        }
+
+        let errors = invalid_criteria_errors
+            .into_iter()
+            .map(StoreValidateError::InvalidCriteria)
+            .collect::<Vec<_>>();
+        if !errors.is_empty() {
+            return Err(StoreValidateErrors { errors });
+        }
+
         Ok(())
     }
 
@@ -287,8 +460,18 @@ async fn fetch_foreign_audit(
         error,
     })?;
     let audit_bytes = network.download(parsed_url).await?;
-    let audit_file: AuditsFile =
-        toml_edit::de::from_slice(&audit_bytes).map_err(|error| TomlParseError { error })?;
+    let audit_string = String::from_utf8(audit_bytes).map_err(LoadTomlError::from)?;
+    let audit_source = Arc::new(NamedSource::new(name, audit_string.clone()));
+    let audit_file: AuditsFile = toml::de::from_str(&audit_string)
+        .map_err(|error| {
+            let (line, col) = error.line_col().unwrap_or((0, 0));
+            TomlParseError {
+                source_code: audit_source,
+                span: SourceOffset::from_location(&audit_string, line + 1, col + 1),
+                error,
+            }
+        })
+        .map_err(LoadTomlError::from)?;
     Ok(audit_file)
 }
 
@@ -435,7 +618,7 @@ impl Cache {
             .unwrap_or_else(|| root.join(CACHE_DIFF_CACHE));
         let diff_cache: DiffCache = File::open(&diff_cache_path)
             .ok()
-            .and_then(|f| load_toml(f).ok())
+            .and_then(|f| load_toml(CACHE_DIFF_CACHE, f).map(|v| v.1).ok())
             .unwrap_or_default();
 
         // Setup the command_history.
@@ -1032,15 +1215,23 @@ fn find_cargo_registry() -> Result<CargoRegistry, crates_index::Error> {
     })
 }
 
-fn load_toml<T>(reader: impl Read) -> Result<T, LoadTomlError>
+fn load_toml<T>(file_name: &str, reader: impl Read) -> Result<(SourceFile, T), LoadTomlError>
 where
     T: for<'a> Deserialize<'a>,
 {
     let mut reader = BufReader::new(reader);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
-    let toml = toml_edit::de::from_str(&string).map_err(|error| TomlParseError { error })?;
-    Ok(toml)
+    let audit_source = Arc::new(NamedSource::new(file_name, string.clone()));
+    let toml = toml::de::from_str(&string).map_err(|error| {
+        let (line, col) = error.line_col().unwrap_or((0, 0));
+        TomlParseError {
+            source_code: audit_source.clone(),
+            span: SourceOffset::from_location(&string, line + 1, col + 1),
+            error,
+        }
+    })?;
+    Ok((audit_source, toml))
 }
 fn store_toml<T>(mut writer: impl Write, heading: &str, val: T) -> Result<(), StoreTomlError>
 where
