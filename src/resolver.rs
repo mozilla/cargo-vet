@@ -33,12 +33,15 @@
 //!         * as with third-parties, this is done per-criteria so we can granularly blame deps
 //!     * if there is a policy.dependency_criteria, then that dep isn't inherited normally
 //!       and is instead effectively no_criteria or all_criteria based on whether it passes or not
-//!     * if there is a policy.criteria (or it's a root), then we check our inherited criteria
-//!       against that policy and then set ourselves to all_criteria or no_criteria
-//!         * **This is the check that matters!** Anything that fails this check is registered
-//!           as a "root (policy) failure" and will be fed into the blame phase.
 //!
-//! * resolve_first_party_dev: same as above, but check dev-deps and dev-policies
+//! * resolve_self_policy: if there is a policy.criteria (or it's a root), then we check
+//!   the resolved criteria against that policy
+//!     * on success, we set ourselves to all_criteria
+//!     * on failure, we set ourselves to no_criteria
+//!     * **This is the check that matters!** Anything that fails this check is registered
+//!       as a "root (policy) failure" and will be fed into the blame phase.
+//!
+//! * resolve_dev: same as above, but check dev-deps and dev-policies
 //!     * this must be done as a second pass because dev-deps can introduce cycles. by doing
 //!       all other analysis first, we can guarantee all dev-deps are fully resolved, as you
 //!       cannot actually depend on the "dev" build of a package.
@@ -1167,7 +1170,6 @@ pub fn resolve<'a>(
 
         if package.is_third_party {
             resolve_third_party(
-                metadata,
                 store,
                 &graph,
                 &criteria_mapper,
@@ -1178,7 +1180,6 @@ pub fn resolve<'a>(
             );
         } else {
             resolve_first_party(
-                metadata,
                 store,
                 &graph,
                 &criteria_mapper,
@@ -1188,6 +1189,17 @@ pub fn resolve<'a>(
                 pkgidx,
             );
         }
+
+        // Check that any policy on our resolved value is satisfied
+        resolve_self_policy(
+            store,
+            &graph,
+            &criteria_mapper,
+            &mut results,
+            &mut violations,
+            &mut root_failures,
+            pkgidx,
+        );
     }
 
     // Now that we've processed the "normal" graph we need to check the dev (test/bench) builds.
@@ -1219,7 +1231,6 @@ pub fn resolve<'a>(
         let package = &graph.nodes[pkgidx];
         if package.is_workspace_member {
             resolve_dev(
-                metadata,
                 store,
                 &graph,
                 &criteria_mapper,
@@ -1346,9 +1357,7 @@ pub fn resolve<'a>(
     }
 }
 
-#[allow(clippy::too_many_arguments, clippy::ptr_arg)]
 fn resolve_third_party<'a>(
-    _metadata: &'a Metadata,
     store: &'a Store,
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
@@ -1909,15 +1918,13 @@ fn search_for_path<'a>(
     }
 }
 
-#[allow(clippy::too_many_arguments, clippy::ptr_arg)]
 fn resolve_first_party<'a>(
-    _metadata: &'a Metadata,
     store: &'a Store,
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
     results: &mut [ResolveResult<'a>],
     _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
-    root_failures: &mut RootFailures,
+    _root_failures: &mut RootFailures,
     pkgidx: PackageIdx,
 ) {
     // Check the build-deps and normal-deps of this package. dev-deps are checking in `resolve_dep`
@@ -1978,9 +1985,22 @@ fn resolve_first_party<'a>(
             .criteria_names(&validated_criteria)
             .collect::<Vec<_>>()
     );
+
     // Save the results
     results[pkgidx].search_results = search_results;
     results[pkgidx].validated_criteria = validated_criteria;
+}
+
+fn resolve_self_policy<'a>(
+    store: &'a Store,
+    graph: &DepGraph<'a>,
+    criteria_mapper: &CriteriaMapper,
+    results: &mut [ResolveResult<'a>],
+    _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
+    root_failures: &mut RootFailures,
+    pkgidx: PackageIdx,
+) {
+    let package = &graph.nodes[pkgidx];
 
     // Now check that we pass our own policy
     let entry = store.config.policy.get(package.name);
@@ -2022,9 +2042,7 @@ fn resolve_first_party<'a>(
     }
 }
 
-#[allow(clippy::too_many_arguments, clippy::ptr_arg)]
 fn resolve_dev<'a>(
-    _metadata: &'a Metadata,
     store: &'a Store,
     graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
