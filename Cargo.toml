@@ -54,5 +54,5 @@ features = [
 ]
 
 [dev-dependencies]
-insta = "1.13.0"
+insta = "1.15.0"
 lazy_static = "1.4.0"
