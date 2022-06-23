@@ -1503,7 +1503,7 @@ struct UserInfo {
 }
 
 fn get_user_info() -> Result<UserInfo, UserInfoError> {
-    fn get_git_value(value_name: &str) -> Result<String, CommandError> {
+    fn get_git_config(value_name: &str) -> Result<String, CommandError> {
         let out = std::process::Command::new("git")
             .arg("config")
             .arg("--get")
@@ -1519,8 +1519,8 @@ fn get_user_info() -> Result<UserInfo, UserInfoError> {
             .map_err(CommandError::BadOutput)
     }
 
-    let username = get_git_value("user.name").map_err(UserInfoError::UserCommandFailed)?;
-    let email = get_git_value("user.email").map_err(UserInfoError::EmailCommandFailed)?;
+    let username = get_git_config("user.name").map_err(UserInfoError::UserCommandFailed)?;
+    let email = get_git_config("user.email").map_err(UserInfoError::EmailCommandFailed)?;
 
     Ok(UserInfo { username, email })
 }

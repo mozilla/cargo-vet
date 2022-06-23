@@ -173,6 +173,12 @@ pub enum StoreAcquireError {
         FlockError,
     ),
     #[error(transparent)]
+    LoadToml(
+        #[from]
+        #[diagnostic(cause)]
+        LoadTomlError,
+    ),
+    #[error(transparent)]
     IoError(
         #[from]
         #[diagnostic(cause)]
@@ -202,6 +208,11 @@ pub enum StoreCommitError {
         #[from]
         #[diagnostic(cause)]
         std::io::Error,
+    ),
+    StoreToml(
+        #[from]
+        #[diagnostic(cause)]
+        StoreTomlError,
     ),
 }
 
@@ -259,6 +270,16 @@ pub enum CacheCommitError {
         #[diagnostic(cause)]
         std::io::Error,
     ),
+    StoreToml(
+        #[from]
+        #[diagnostic(cause)]
+        StoreTomlError,
+    ),
+    StoreJson(
+        #[from]
+        #[diagnostic(cause)]
+        StoreJsonError,
+    ),
 }
 
 //////////////////////////////////////////////////////////
@@ -303,12 +324,6 @@ pub enum DiffError {
         #[from]
         #[diagnostic(cause)]
         CommandError,
-    ),
-    #[error("failed to acquire permission to diff")]
-    DiffDenied(
-        #[from]
-        #[diagnostic(cause)]
-        tokio::sync::AcquireError,
     ),
 }
 
@@ -421,12 +436,6 @@ pub enum FetchAuditError {
 #[derive(Debug, Error, Diagnostic)]
 #[non_exhaustive]
 pub enum DownloadError {
-    #[error("failed to acquire permission to download {url}")]
-    DonwloadDenied {
-        url: reqwest::Url,
-        #[diagnostic(cause)]
-        error: tokio::sync::AcquireError,
-    },
     #[error("failed to start download of {url}")]
     FailedToStartDownload {
         url: reqwest::Url,
@@ -493,7 +502,7 @@ pub enum FlockError {
 }
 
 //////////////////////////////////////////////////////////
-// TomlParseError
+// TomlError/JsonError
 //////////////////////////////////////////////////////////
 
 #[derive(Debug, Error, Diagnostic)]
@@ -505,4 +514,69 @@ pub struct TomlParseError {
     // span: SourceOffset,
     #[diagnostic(cause)]
     pub error: toml_edit::de::Error,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("Failed to parse json file")]
+pub struct JsonParseError {
+    // #[source_code]
+    // input: SourceFile,
+    // #[label("here")]
+    // span: SourceOffset,
+    #[diagnostic(cause)]
+    pub error: serde_json::Error,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum LoadTomlError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TomlParse(#[from] TomlParseError),
+    #[error(transparent)]
+    IoError(
+        #[from]
+        #[diagnostic(cause)]
+        std::io::Error,
+    ),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum LoadJsonError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    JsonParse(#[from] JsonParseError),
+    #[error(transparent)]
+    IoError(
+        #[from]
+        #[diagnostic(cause)]
+        std::io::Error,
+    ),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum StoreJsonError {
+    #[error(transparent)]
+    JsonSerialize(#[from] serde_json::Error),
+    #[error(transparent)]
+    IoError(
+        #[from]
+        #[diagnostic(cause)]
+        std::io::Error,
+    ),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum StoreTomlError {
+    #[error(transparent)]
+    TomlSerialize(#[from] toml_edit::ser::Error),
+    #[error(transparent)]
+    IoError(
+        #[from]
+        #[diagnostic(cause)]
+        std::io::Error,
+    ),
 }

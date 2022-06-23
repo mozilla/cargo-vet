@@ -130,9 +130,7 @@ impl Filesystem {
     /// Handles errors where other processes are also attempting to concurrently
     /// create this directory.
     pub fn create_dir(&self) -> Result<(), std::io::Error> {
-        fs::create_dir_all(&self.root)?;
-        Ok(())
-        //    .wrap_err_with(|| format!("failed to create directory `{}`", self.display()))
+        fs::create_dir_all(&self.root)
     }
 
     /// Returns an adaptor that can be used to print the path of this
@@ -251,7 +249,7 @@ fn acquire(
     path: &Path,
     lock_try: &dyn Fn() -> io::Result<()>,
     lock_block: &dyn Fn() -> io::Result<()>,
-) -> Result<(), std::io::Error> {
+) -> Result<(), FlockError> {
     // File locking on Unix is currently implemented via `flock`, which is known
     // to be broken on NFS. We could in theory just ignore errors that happen on
     // NFS, but apparently the failure mode [1] for `flock` on NFS is **blocking
@@ -276,14 +274,12 @@ fn acquire(
 
         Err(e) => {
             if !error_contended(&e) {
-                // .wrap_err(format!("failed to lock file: {}", path.display()))
                 Err(e)?;
             }
         }
     }
     eprintln!("Blocking: waiting for file lock on {}", msg);
 
-    // format!("failed to lock file: {}", path.display())
     lock_block()?;
     return Ok(());
 
