@@ -5,7 +5,6 @@ expression: format_outputs(&output)
 stdout:
 {
   "conclusion": "success",
-  "useless_unaudited": [],
   "vetted_fully": [
     {
       "name": "atty",

@@ -3,6 +3,4 @@ source: src/tests/vet.rs
 expression: output
 ---
 Vetting Succeeded (1 fully audited, 3 unaudited)
-  warning: some dependencies are listed in unaudited, but didn't need it:
-    root-package:10.0.0
 
