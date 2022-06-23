@@ -434,3 +434,59 @@ fn builtin_simple_unaudited_nested_stronger_req_regenerate() {
         unaudited
     );
 }
+
+#[test]
+fn builtin_simple_audit_as_default_root_regenerate() {
+    // (Pass) the root is audit-as-crates-io with a default root policy
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_inited(&metadata);
+
+    config
+        .policy
+        .insert("root-package".to_string(), audit_as_policy(Some(true)));
+    config.unaudited.insert(
+        "root-package".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+
+    let mut store = Store::mock(config, audits, imports);
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+
+    let unaudited = get_unaudited(&store);
+    insta::assert_snapshot!("builtin-simple-audit-as-default-root-regenerate", unaudited);
+}
+
+#[test]
+fn builtin_simple_audit_as_weaker_root_regenerate() {
+    // (Pass) the root is audit-as-crates-io with an explicit root policy
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_inited(&metadata);
+
+    config.policy.insert(
+        "root-package".to_string(),
+        PolicyEntry {
+            criteria: Some(vec![SAFE_TO_RUN.to_string()]),
+            ..audit_as_policy(Some(true))
+        },
+    );
+    config.unaudited.insert(
+        "root-package".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+
+    let mut store = Store::mock(config, audits, imports);
+    let cfg = mock_cfg(&metadata);
+    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+
+    let unaudited = get_unaudited(&store);
+    insta::assert_snapshot!("builtin-simple-audit-as-weaker-root-regenerate", unaudited);
+}
