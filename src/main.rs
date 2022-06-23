@@ -684,7 +684,8 @@ fn do_cmd_certify(
                     .collect::<Vec<_>>()
             )?;
             writeln!(out, "(press ENTER to accept the current criteria)")?;
-            let input = out.read_line_initial_text("> ")?;
+            let input = out.read_line_with_prompt("> ")?;
+            dbg!(&input);
             let input = input.trim();
             if input.is_empty() {
                 if chosen_criteria.is_empty() {

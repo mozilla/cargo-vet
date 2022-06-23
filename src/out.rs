@@ -25,7 +25,7 @@ pub trait Out: io::Write {
 
     /// Ask the user a question, and read in a line with the user's response. If
     /// there's no user able to respond, `None` will be returned instead.
-    fn read_line_initial_text(&mut self, _initial: &str) -> io::Result<String> {
+    fn read_line_with_prompt(&mut self, _prompt: &str) -> io::Result<String> {
         Err(io::ErrorKind::Unsupported.into())
     }
 
@@ -53,8 +53,10 @@ impl Out for Term {
         (&*self).clear_screen()
     }
 
-    fn read_line_initial_text(&mut self, initial: &str) -> io::Result<String> {
-        (&*self).read_line_initial_text(initial)
+    fn read_line_with_prompt(&mut self, prompt: &str) -> io::Result<String> {
+        self.write_str(prompt)?;
+        self.flush()?;
+        (&*self).read_line()
     }
 
     fn style(&self) -> Style {

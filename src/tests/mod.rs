@@ -1098,7 +1098,7 @@ impl<'a> Out for BasicTestOutput<'a> {
         Ok(())
     }
 
-    fn read_line_initial_text(&mut self, initial: &str) -> io::Result<String> {
+    fn read_line_with_prompt(&mut self, initial: &str) -> io::Result<String> {
         write!(self, "{}", initial)?;
         if let Some(on_read_line) = &mut self.on_read_line {
             let response = on_read_line(initial)?;
