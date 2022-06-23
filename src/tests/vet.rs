@@ -2389,3 +2389,103 @@ fn builtin_haunted_minimal_audited() {
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-haunted-minimal-audited", output);
 }
+
+#[test]
+fn builtin_simple_audit_as_default_root_no_audit() {
+    // (Fail) the root is audit-as-crates-io but has no audits
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_inited(&metadata);
+
+    config
+        .policy
+        .insert("root-package".to_string(), audit_as_policy(Some(true)));
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-audit-as-default-root-no-audit", output);
+}
+
+#[test]
+fn builtin_simple_audit_as_default_root() {
+    // (Pass) the root is audit-as-crates-io and only needs to be safe-to-run
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_inited(&metadata);
+
+    config
+        .policy
+        .insert("root-package".to_string(), audit_as_policy(Some(true)));
+    config.unaudited.insert(
+        "root-package".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-audit-as-default-root", output);
+}
+
+#[test]
+fn builtin_simple_audit_as_default_root_too_weak() {
+    // (Fail) the root is audit-as-crates-io but is only safe-to-run
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_inited(&metadata);
+
+    config
+        .policy
+        .insert("root-package".to_string(), audit_as_policy(Some(true)));
+    config.unaudited.insert(
+        "root-package".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_RUN)],
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-audit-as-default-root-too-weak", output);
+}
+
+#[test]
+fn builtin_simple_audit_as_weaker_root() {
+    // (Pass) the root is audit-as-crates-io and only needs to be safe-to-run
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_inited(&metadata);
+
+    config.policy.insert(
+        "root-package".to_string(),
+        PolicyEntry {
+            criteria: Some(vec![SAFE_TO_RUN.to_string()]),
+            ..audit_as_policy(Some(true))
+        },
+    );
+    config.unaudited.insert(
+        "root-package".to_string(),
+        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_RUN)],
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!("builtin-simple-audit-as-weaker-root", output);
+}

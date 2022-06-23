@@ -106,8 +106,32 @@ impl MockRegistry {
     pub fn testing_cinematic_universe() -> Self {
         Self {
             packages: [
+                ("root-package", vec![reg_ver(DEFAULT_VER)]),
                 ("third-party1", vec![reg_ver(DEFAULT_VER)]),
+                ("third-party2", vec![reg_ver(DEFAULT_VER)]),
+                ("transitive-third-party1", vec![reg_ver(DEFAULT_VER)]),
                 ("first-party", vec![reg_ver(DEFAULT_VER)]),
+                ("firstA", vec![reg_ver(DEFAULT_VER)]),
+                ("firstAB", vec![reg_ver(DEFAULT_VER)]),
+                ("firstB", vec![reg_ver(DEFAULT_VER)]),
+                ("firstB-nodeps", vec![reg_ver(DEFAULT_VER)]),
+                ("thirdA", vec![reg_ver(DEFAULT_VER)]),
+                ("thirdAB", vec![reg_ver(DEFAULT_VER)]),
+                ("third-core", vec![reg_ver(DEFAULT_VER), reg_ver(5)]),
+                ("normal", vec![reg_ver(DEFAULT_VER)]),
+                ("dev", vec![reg_ver(DEFAULT_VER)]),
+                ("build", vec![reg_ver(DEFAULT_VER)]),
+                ("proc-macro", vec![reg_ver(DEFAULT_VER)]),
+                ("dev-proc-macro", vec![reg_ver(DEFAULT_VER)]),
+                ("build-proc-macro", vec![reg_ver(DEFAULT_VER)]),
+                ("dev-cycle", vec![reg_ver(DEFAULT_VER)]),
+                ("both", vec![reg_ver(DEFAULT_VER)]),
+                ("simple-dev", vec![reg_ver(DEFAULT_VER)]),
+                ("simple-dev-indirect", vec![reg_ver(DEFAULT_VER)]),
+                ("dev-cycle-direct", vec![reg_ver(DEFAULT_VER)]),
+                ("dev-cycle-indirect", vec![reg_ver(DEFAULT_VER)]),
+                ("third-normal", vec![reg_ver(DEFAULT_VER)]),
+                ("third-dev", vec![reg_ver(DEFAULT_VER)]),
             ]
             .into_iter()
             .collect(),
@@ -398,6 +422,13 @@ fn default_policy() -> PolicyEntry {
         targets: None,
         dev_targets: None,
         notes: None,
+    }
+}
+
+fn audit_as_policy(audit_as_crates_io: Option<bool>) -> PolicyEntry {
+    PolicyEntry {
+        audit_as_crates_io,
+        ..default_policy()
     }
 }
 
