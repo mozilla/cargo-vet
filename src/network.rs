@@ -63,12 +63,11 @@ impl Network {
             OsStr::new(".part"),
         ]));
         {
-            let _permit = self.connection_semaphore.acquire().await.map_err(|error| {
-                DownloadError::DonwloadDenied {
-                    url: url.clone(),
-                    error,
-                }
-            })?;
+            let _permit = self
+                .connection_semaphore
+                .acquire()
+                .await
+                .expect("Semaphore dropped?!");
 
             let mut res = self
                 .client
@@ -124,12 +123,11 @@ impl Network {
 
     /// Download a file into memory
     pub async fn download(&self, url: Url) -> Result<Vec<u8>, DownloadError> {
-        let _permit = self.connection_semaphore.acquire().await.map_err(|error| {
-            DownloadError::DonwloadDenied {
-                url: url.clone(),
-                error,
-            }
-        })?;
+        let _permit = self
+            .connection_semaphore
+            .acquire()
+            .await
+            .expect("Semaphore dropped?!");
 
         let mut res = self
             .client

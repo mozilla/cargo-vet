@@ -20,8 +20,9 @@ use tracing::{error, info, log::warn, trace};
 use crate::{
     errors::{
         CacheAcquireError, CacheCommitError, CommandError, DiffError, FetchAndDiffError,
-        FetchAuditError, FetchError, FlockError, StoreAcquireError, StoreCommitError,
-        StoreCreateError, StoreValidateErrors, TomlParseError, UnpackError,
+        FetchAuditError, FetchError, FlockError, JsonParseError, LoadJsonError, LoadTomlError,
+        StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError,
+        StoreValidateErrors, TomlParseError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
@@ -626,7 +627,11 @@ impl Cache {
         version1: &Path,
         version2: &Path,
     ) -> Result<DiffStat, DiffError> {
-        let _permit = self.diff_semaphore.acquire().await?;
+        let _permit = self
+            .diff_semaphore
+            .acquire()
+            .await
+            .expect("Semaphore dropped?!");
 
         // ERRORS: all of this is properly fallible internal workings, we can fail
         // to diffstat some packages and still produce some useful output
@@ -1027,46 +1032,46 @@ fn find_cargo_registry() -> Result<CargoRegistry, crates_index::Error> {
     })
 }
 
-fn load_toml<T>(reader: impl Read) -> Result<T, std::io::Error>
+fn load_toml<T>(reader: impl Read) -> Result<T, LoadTomlError>
 where
     T: for<'a> Deserialize<'a>,
 {
     let mut reader = BufReader::new(reader);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
-    let toml = toml_edit::de::from_str(&string).expect("TODO: make these proper errors");
+    let toml = toml_edit::de::from_str(&string).map_err(|error| TomlParseError { error })?;
     Ok(toml)
 }
-fn store_toml<T>(mut writer: impl Write, heading: &str, val: T) -> Result<(), std::io::Error>
+fn store_toml<T>(mut writer: impl Write, heading: &str, val: T) -> Result<(), StoreTomlError>
 where
     T: Serialize,
 {
     // FIXME: do this in a temp file and swap it into place to avoid corruption?
-    let toml_document = to_formatted_toml(val).expect("TODO: make these proper errors");
+    let toml_document = to_formatted_toml(val)?;
     writeln!(writer, "{}{}", heading, toml_document)?;
     Ok(())
 }
-fn load_json<T>(reader: impl Read) -> Result<T, std::io::Error>
+fn load_json<T>(reader: impl Read) -> Result<T, LoadJsonError>
 where
     T: for<'a> Deserialize<'a>,
 {
     let mut reader = BufReader::new(reader);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
-    let json = serde_json::from_str(&string).expect("TODO: make these proper errors");
+    let json = serde_json::from_str(&string).map_err(|error| JsonParseError { error })?;
     Ok(json)
 }
-fn store_json<T>(mut writer: impl Write, val: T) -> Result<(), std::io::Error>
+fn store_json<T>(mut writer: impl Write, val: T) -> Result<(), StoreJsonError>
 where
     T: Serialize,
 {
     // FIXME: do this in a temp file and swap it into place to avoid corruption?
-    let json_string = serde_json::to_string(&val).unwrap();
+    let json_string = serde_json::to_string(&val)?;
     writeln!(writer, "{}", json_string)?;
     Ok(())
 }
 
-fn store_audits(writer: impl Write, mut audits: AuditsFile) -> Result<(), std::io::Error> {
+fn store_audits(writer: impl Write, mut audits: AuditsFile) -> Result<(), StoreTomlError> {
     let heading = r###"
 # cargo-vet audits file
 "###;
@@ -1078,7 +1083,7 @@ fn store_audits(writer: impl Write, mut audits: AuditsFile) -> Result<(), std::i
     store_toml(writer, heading, audits)?;
     Ok(())
 }
-fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), std::io::Error> {
+fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), StoreTomlError> {
     config
         .unaudited
         .values_mut()
@@ -1091,7 +1096,7 @@ fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), std::i
     store_toml(writer, heading, config)?;
     Ok(())
 }
-fn store_imports(writer: impl Write, imports: ImportsFile) -> Result<(), std::io::Error> {
+fn store_imports(writer: impl Write, imports: ImportsFile) -> Result<(), StoreTomlError> {
     let heading = r###"
 # cargo-vet imports lock
 "###;
@@ -1099,7 +1104,7 @@ fn store_imports(writer: impl Write, imports: ImportsFile) -> Result<(), std::io
     store_toml(writer, heading, imports)?;
     Ok(())
 }
-fn store_diff_cache(writer: impl Write, diff_cache: DiffCache) -> Result<(), std::io::Error> {
+fn store_diff_cache(writer: impl Write, diff_cache: DiffCache) -> Result<(), StoreTomlError> {
     let heading = "";
 
     store_toml(writer, heading, diff_cache)?;
@@ -1108,7 +1113,7 @@ fn store_diff_cache(writer: impl Write, diff_cache: DiffCache) -> Result<(), std
 fn store_command_history(
     writer: impl Write,
     command_history: CommandHistory,
-) -> Result<(), std::io::Error> {
+) -> Result<(), StoreJsonError> {
     store_json(writer, command_history)?;
     Ok(())
 }
