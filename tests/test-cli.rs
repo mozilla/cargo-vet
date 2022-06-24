@@ -32,7 +32,8 @@ fn format_outputs(output: &Output) -> String {
         .unwrap()
         .lines()
         .filter(|line| !line.starts_with("Blocking: waiting for file lock"))
-        .collect::<String>();
+        .collect::<Vec<_>>()
+        .join("\n");
     format!("stdout:\n{stdout}\nstderr:\n{stderr}")
 }
 
@@ -295,4 +296,49 @@ fn test_project_dump_graph_full() {
 
     insta::assert_snapshot!("test-project-dump-graph-full", format_outputs(&output));
     assert!(output.status.success(), "{}", output.status);
+}
+
+#[test]
+fn test_project_bad_certify_human() {
+    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-project");
+    let bin = env!("CARGO_BIN_EXE_cargo-vet");
+    let output = Command::new(bin)
+        .current_dir(&project)
+        .arg("vet")
+        .arg("--manifest-path")
+        .arg("Cargo.toml")
+        .arg("certify")
+        .arg("asdfsdfs")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .unwrap();
+
+    insta::assert_snapshot!("test-project-bad-certify-human", format_outputs(&output));
+    assert!(!output.status.success(), "{}", output.status);
+}
+
+#[test]
+fn test_project_bad_certify_json() {
+    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-project");
+    let bin = env!("CARGO_BIN_EXE_cargo-vet");
+    let output = Command::new(bin)
+        .current_dir(&project)
+        .arg("vet")
+        .arg("--output-format=json")
+        .arg("--manifest-path")
+        .arg("Cargo.toml")
+        .arg("certify")
+        .arg("asdfsdfs")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .unwrap();
+
+    insta::assert_snapshot!("test-project-bad-certify-json", format_outputs(&output));
+    assert!(!output.status.success(), "{}", output.status);
 }
