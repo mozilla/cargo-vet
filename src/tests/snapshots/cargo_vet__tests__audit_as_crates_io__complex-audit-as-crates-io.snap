@@ -6,7 +6,7 @@ expression: output
   × There are some issues with your policy.audit-as-crates-io entries
 
 Error: 
-  × Some first-party packages match published crates.io versions
+  × Some non-crates.io-fetched packages match published crates.io versions
   │   firstA:10.0.0
   │   firstAB:10.0.0
   │   firstB:10.0.0

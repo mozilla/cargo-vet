@@ -43,7 +43,7 @@ pub struct NeedsAuditAsErrors {
 
 impl Display for NeedsAuditAsErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Some first-party packages match published crates.io versions")?;
+        f.write_str("Some non-crates.io-fetched packages match published crates.io versions")?;
         for e in &self.errors {
             f.write_fmt(format_args!("\n  {}", e))?
         }
