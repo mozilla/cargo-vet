@@ -149,7 +149,8 @@ fn main() -> Result<(), ()> {
         }
     };
     main_result.map_err(|e| {
-        eprintln!("{:?}", e);
+        let out: &mut dyn Out = &mut Term::stderr();
+        writeln!(out, "{:?}", e).unwrap();
         std::process::exit(-1);
     })
 }
@@ -212,18 +213,24 @@ fn real_main() -> Result<(), miette::Report> {
     }));
 
     // FIXME: we should have separate configs for errors but this works for now
-    let error_colors_enabled = cli.output_file.is_none();
+    let error_colors_enabled = cli.output_file.is_none() && console::colors_enabled_stderr();
+    let output_json = cli.output_format == OutputFormat::Json;
     miette::set_hook(Box::new(move |_| {
-        let graphical_theme = if error_colors_enabled {
-            miette::GraphicalTheme::unicode()
+        if output_json {
+            let json_handler = miette::JSONReportHandler;
+            Box::new(json_handler)
         } else {
-            miette::GraphicalTheme::unicode_nocolor()
-        };
-        Box::new(
-            miette::MietteHandlerOpts::new()
-                .graphical_theme(graphical_theme)
-                .build(),
-        )
+            let graphical_theme = if error_colors_enabled {
+                miette::GraphicalTheme::unicode()
+            } else {
+                miette::GraphicalTheme::unicode_nocolor()
+            };
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .graphical_theme(graphical_theme)
+                    .build(),
+            )
+        }
     }))
     .expect("Failed to initialize error handler");
 
