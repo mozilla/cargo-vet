@@ -8,6 +8,19 @@ fn get_audit_as_crates_io(cfg: &Config, store: &Store) -> String {
     }
 }
 
+fn get_audit_as_crates_io_json(cfg: &Config, store: &Store) -> String {
+    let res = crate::check_audit_as_crates_io(cfg, store);
+    match res {
+        Ok(()) => String::new(),
+        Err(e) => {
+            let handler = miette::JSONReportHandler::new();
+            let mut output = String::new();
+            handler.render_report(&mut output, &e).unwrap();
+            output
+        }
+    }
+}
+
 #[test]
 fn simple_audit_as_crates_io() {
     let _enter = TEST_RUNTIME.enter();
@@ -140,6 +153,28 @@ fn complex_audit_as_crates_io_max_wrong() {
 
     let output = get_audit_as_crates_io(&cfg, &store);
     insta::assert_snapshot!("complex-audit-as-crates-io-max-wrong", output);
+}
+
+#[test]
+fn complex_audit_as_crates_io_max_wrong_json() {
+    let _enter = TEST_RUNTIME.enter();
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    config
+        .policy
+        .insert("rootA".to_owned(), audit_as_policy(Some(true)));
+    config
+        .policy
+        .insert("rootB".to_owned(), audit_as_policy(Some(true)));
+
+    let store = Store::mock(config, audits, imports);
+    let cfg = mock_cfg(&metadata);
+
+    let output = get_audit_as_crates_io_json(&cfg, &store);
+    insta::assert_snapshot!("complex-audit-as-crates-io-max-wrong-json", output);
 }
 
 #[test]
