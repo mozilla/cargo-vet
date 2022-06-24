@@ -1242,7 +1242,14 @@ fn cmd_vet(out: &mut dyn Out, cfg: &Config) -> Result<(), miette::Report> {
             ResolveDepth::Deep
         },
     );
-    let suggest = report.compute_suggest(cfg, network.as_ref(), true)?;
+
+    // Bare `cargo vet` shouldn't suggest in CI
+    let suggest = if !cfg.cli.locked {
+        report.compute_suggest(cfg, network.as_ref(), true)?
+    } else {
+        None
+    };
+
     match cfg.cli.output_format {
         OutputFormat::Human => report
             .print_human(out, cfg, suggest.as_ref())
