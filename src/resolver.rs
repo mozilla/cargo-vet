@@ -246,7 +246,6 @@ fn pkgid_unstable(pkgid: &PackageId) -> bool {
 pub struct DepGraph<'a> {
     pub nodes: Vec<PackageNode<'a>>,
     pub interner_by_pkgid: SortedMap<&'a PackageId, PackageIdx>,
-    pub interner_by_name_and_ver: SortedMap<PackageStr<'a>, SortedMap<&'a Version, PackageIdx>>,
     pub topo_index: Vec<PackageIdx>,
 }
 
@@ -683,8 +682,6 @@ impl<'a> DepGraph<'a> {
         // Do a first-pass where we populate skeletons of the primary nodes
         // and setup the interners, which will only ever refer to these nodes
         let mut interner_by_pkgid = SortedMap::<&PackageId, PackageIdx>::new();
-        let mut interner_by_name_and_ver =
-            SortedMap::<PackageStr, SortedMap<&Version, PackageIdx>>::new();
         let mut nodes = vec![];
 
         // Stub out the initial state of all the nodes
@@ -715,11 +712,6 @@ impl<'a> DepGraph<'a> {
         // Populate the interners based on the new ordering
         for (idx, node) in nodes.iter_mut().enumerate() {
             assert!(interner_by_pkgid.insert(node.package_id, idx).is_none());
-            assert!(interner_by_name_and_ver
-                .entry(node.name)
-                .or_default()
-                .insert(node.version, idx)
-                .is_none());
         }
 
         // Do topological sort: just recursively visit all of a node's children, and only add it
@@ -871,7 +863,6 @@ impl<'a> DepGraph<'a> {
 
         let result = Self {
             interner_by_pkgid,
-            interner_by_name_and_ver,
             nodes,
             topo_index,
         };
@@ -956,7 +947,6 @@ impl<'a> DepGraph<'a> {
         let mut old_to_new = FastMap::new();
         let mut nodes = Vec::new();
         let mut interner_by_pkgid = SortedMap::new();
-        let mut interner_by_name_and_ver = SortedMap::<_, SortedMap<_, _>>::new();
         let mut topo_index = Vec::new();
         for (old_idx, package) in self.nodes.iter().enumerate() {
             if !reachable.contains_key(&old_idx) {
@@ -980,10 +970,6 @@ impl<'a> DepGraph<'a> {
                 is_dev_only: package.is_dev_only,
             });
             interner_by_pkgid.insert(package.package_id, new_idx);
-            interner_by_name_and_ver
-                .entry(package.name)
-                .or_default()
-                .insert(package.version, new_idx);
         }
         for old_idx in &self.topo_index {
             if let Some(&new_idx) = old_to_new.get(old_idx) {
@@ -1029,7 +1015,6 @@ impl<'a> DepGraph<'a> {
         Self {
             nodes,
             interner_by_pkgid,
-            interner_by_name_and_ver,
             topo_index,
         }
     }
