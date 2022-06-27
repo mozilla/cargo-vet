@@ -42,41 +42,46 @@ fn mock_simple_suggested_criteria() {
 
     let mut output = String::new();
     for (from, to, descr) in [
-        (0, DEFAULT_VER, "full audit"),
+        (None, DEFAULT_VER, "full audit"),
         // from existing audit
-        (2, DEFAULT_VER, "from weak-reviewed"),
-        (3, DEFAULT_VER, "from reviewed"),
-        (4, DEFAULT_VER, "from strong-reviewed"),
+        (Some(2), DEFAULT_VER, "from weak-reviewed"),
+        (Some(3), DEFAULT_VER, "from reviewed"),
+        (Some(4), DEFAULT_VER, "from strong-reviewed"),
         // to existing audit
-        (0, 6, "to strong-reviewed"),
-        (0, 7, "to reviewed"),
-        (0, 8, "to weak-reviewed"),
+        (None, 6, "to strong-reviewed"),
+        (None, 7, "to reviewed"),
+        (None, 8, "to weak-reviewed"),
         // bridge existing audits
-        (2, 6, "from weak-reviewed to strong-reviewed"),
-        (2, 7, "from weak-reviewed to reviewed"),
-        (2, 8, "from weak-reviewed to weak-reviewed"),
-        (3, 6, "from reviewed to strong-reviewed"),
-        (3, 7, "from reviewed to reviewed"),
-        (3, 8, "from reviewed to weak-reviewed"),
-        (4, 6, "from strong-reviewed to strong-reviewed"),
-        (4, 7, "from strong-reviewed to reviewed"),
-        (4, 8, "from strong-reviewed to weak-reviewed"),
+        (Some(2), 6, "from weak-reviewed to strong-reviewed"),
+        (Some(2), 7, "from weak-reviewed to reviewed"),
+        (Some(2), 8, "from weak-reviewed to weak-reviewed"),
+        (Some(3), 6, "from reviewed to strong-reviewed"),
+        (Some(3), 7, "from reviewed to reviewed"),
+        (Some(3), 8, "from reviewed to weak-reviewed"),
+        (Some(4), 6, "from strong-reviewed to strong-reviewed"),
+        (Some(4), 7, "from strong-reviewed to reviewed"),
+        (Some(4), 8, "from strong-reviewed to weak-reviewed"),
     ] {
-        let delta = Delta {
-            from: ver(from),
-            to: ver(to),
-        };
-        writeln!(output, "{} ({} -> {})", descr, delta.from, delta.to).unwrap();
+        let from = from.map(ver);
+        let to = ver(to);
+        writeln!(
+            output,
+            "{} ({} -> {})",
+            descr,
+            from.as_ref().map_or("root".to_owned(), |v| v.to_string()),
+            to
+        )
+        .unwrap();
         writeln!(
             output,
             "  third-party1: {:?}",
-            report.compute_suggested_criteria("third-party1", &delta)
+            report.compute_suggested_criteria("third-party1", from.as_ref(), &to)
         )
         .unwrap();
         writeln!(
             output,
             "  third-party2: {:?}",
-            report.compute_suggested_criteria("third-party2", &delta)
+            report.compute_suggested_criteria("third-party2", from.as_ref(), &to)
         )
         .unwrap();
     }

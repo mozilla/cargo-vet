@@ -94,18 +94,18 @@ recommended audits for safe-to-deploy:
     cargo vet inspect futures-util 0.3.21                 (used by h2, hyper, reqwest)                                (25074 lines)
     cargo vet inspect hyper 0.14.18                       (used by reqwest, hyper-tls)                                (25617 lines)
     cargo vet inspect h2 0.3.13                           (used by hyper, reqwest)                                    (26066 lines)
+    cargo vet diff syn 1.0.0 1.0.91                       (used by tracing-attributes, and 2 others)                  (93 files changed, 21776 insertions(+), 6701 deletions(-))
     cargo vet inspect unicode-normalization 0.1.19        (used by idna)                                              (28628 lines)
     cargo vet inspect openssl 0.10.38                     (used by native-tls)                                        (28634 lines)
     cargo vet inspect idna 0.2.3                          (used by url)                                               (32538 lines)
     cargo vet inspect vcpkg 0.2.15                        (used by openssl-sys)                                       (42648 lines)
-    cargo vet inspect syn 1.0.91                          (used by tracing-attributes, and 2 others)                  (57175 lines)
     cargo vet inspect web-sys 0.3.57                      (used by reqwest, wasm-bindgen-futures)                     (197014 lines)
     cargo vet inspect encoding_rs 0.8.31                  (used by reqwest)                                           (507252 lines)
 
 recommended audits for safe-to-run:
     cargo vet inspect hermit-abi 0.1.19  (used by atty)  (938 lines)
 
-estimated audit backlog: 1771316 lines
+estimated audit backlog: 1742618 lines
 
 Use |cargo vet certify| to record the audits.
 

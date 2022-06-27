@@ -70,6 +70,11 @@ version = "3.1.8"
 dependency-criteria = { atty = "safe-to-run", bitflags = ["audited", "fuzzed"] }
 notes = "test for custom criteria (low-grade and high-grade)"
 
+[[audits.syn]]
+criteria = "safe-to-deploy"
+version = "1.0.0"
+notes = "test for partial delta criteria"
+
 [[audits.unicode-bidi]]
 criteria = "safe-to-deploy"
 delta = "0.2.0 -> 0.3.7"
