@@ -367,21 +367,14 @@ pub mod spanned {
     };
 
     use miette::SourceSpan;
-    use serde::{de, ser};
-
-    pub(crate) const NAME: &str = "$__toml_private_Spanned";
-    pub(crate) const START: &str = "$__toml_private_start";
-    pub(crate) const END: &str = "$__toml_private_end";
-    pub(crate) const VALUE: &str = "$__toml_private_value";
+    use serde::{ser, Deserialize};
 
     /// A spanned value, indicating the range at which it is defined in the source.
-    #[derive(Clone, Default)]
+    #[derive(Clone, Default, Deserialize)]
+    #[serde(from = "toml::Spanned<T>")]
     pub struct Spanned<T> {
-        /// The start range.
         start: usize,
-        /// The end range (exclusive).
         end: usize,
-        /// The spanned value.
         value: T,
     }
 
@@ -540,56 +533,13 @@ pub mod spanned {
         }
     }
 
-    impl<'de, T> de::Deserialize<'de> for Spanned<T>
-    where
-        T: de::Deserialize<'de>,
-    {
-        fn deserialize<D>(deserializer: D) -> Result<Spanned<T>, D::Error>
-        where
-            D: de::Deserializer<'de>,
-        {
-            struct SpannedVisitor<T>(::std::marker::PhantomData<T>);
-
-            impl<'de, T> de::Visitor<'de> for SpannedVisitor<T>
-            where
-                T: de::Deserialize<'de>,
-            {
-                type Value = Spanned<T>;
-
-                fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    formatter.write_str("a TOML spanned")
-                }
-
-                fn visit_map<V>(self, mut visitor: V) -> Result<Spanned<T>, V::Error>
-                where
-                    V: de::MapAccess<'de>,
-                {
-                    if visitor.next_key()? != Some(START) {
-                        return Err(de::Error::custom("spanned start key not found"));
-                    }
-
-                    let start: usize = visitor.next_value()?;
-
-                    if visitor.next_key()? != Some(END) {
-                        return Err(de::Error::custom("spanned end key not found"));
-                    }
-
-                    let end: usize = visitor.next_value()?;
-
-                    if visitor.next_key()? != Some(VALUE) {
-                        return Err(de::Error::custom("spanned value key not found"));
-                    }
-
-                    let value: T = visitor.next_value()?;
-
-                    Ok(Spanned { start, end, value })
-                }
+    impl<T> From<toml::Spanned<T>> for Spanned<T> {
+        fn from(value: toml::Spanned<T>) -> Self {
+            Self {
+                start: value.start(),
+                end: value.end(),
+                value: value.into_inner(),
             }
-
-            let visitor = SpannedVisitor(::std::marker::PhantomData);
-
-            static FIELDS: [&str; 3] = [START, END, VALUE];
-            deserializer.deserialize_struct(NAME, &FIELDS, visitor)
         }
     }
 
