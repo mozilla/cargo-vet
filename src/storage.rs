@@ -1222,16 +1222,21 @@ where
     let mut reader = BufReader::new(reader);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
-    let audit_source = Arc::new(NamedSource::new(file_name, string.clone()));
-    let toml = toml::de::from_str(&string).map_err(|error| {
-        let (line, col) = error.line_col().unwrap_or((0, 0));
-        TomlParseError {
-            source_code: audit_source.clone(),
-            span: SourceOffset::from_location(&string, line + 1, col + 1),
-            error,
+    let result = toml::de::from_str(&string);
+    // We defer the NamedSource creation into each branch because the error path wants to
+    // have access to the input string, but NamedSource consumes and erases it.
+    match result {
+        Ok(toml) => Ok((Arc::new(NamedSource::new(file_name, string)), toml)),
+        Err(error) => {
+            let (line, col) = error.line_col().unwrap_or((0, 0));
+            let span = SourceOffset::from_location(&string, line + 1, col);
+            Err(TomlParseError {
+                source_code: Arc::new(NamedSource::new(file_name, string)),
+                span,
+                error,
+            })?
         }
-    })?;
-    Ok((audit_source, toml))
+    }
 }
 fn store_toml<T>(mut writer: impl Write, heading: &str, val: T) -> Result<(), StoreTomlError>
 where
