@@ -225,7 +225,7 @@ pub mod audit {
                     }
                 }
                 _ => Err(
-                    "audit entires must have exactly one of 'version', 'delta' and 'violation'"
+                    "audit entires must have exactly one of 'version', 'delta', and 'violation'"
                         .to_string(),
                 ),
             };
