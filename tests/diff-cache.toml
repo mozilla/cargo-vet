@@ -1397,6 +1397,12 @@ raw = """
 """
 count = 57175
 
+[syn."1.0.0 -> 1.0.91"]
+raw = """
+ 93 files changed, 21776 insertions(+), 6701 deletions(-)
+"""
+count = 28477
+
 [synstructure."0.0.0 -> 0.12.6"]
 raw = """
  8 files changed, 2991 insertions(+)

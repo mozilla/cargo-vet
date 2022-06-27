@@ -2047,6 +2047,21 @@ stdout:
           }
         },
         {
+          "name": "syn",
+          "notable_parents": "tracing-attributes, and 2 others",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 28477,
+              "raw": " 93 files changed, 21776 insertions(+), 6701 deletions(-)\n"
+            },
+            "from": "1.0.0",
+            "to": "1.0.91"
+          }
+        },
+        {
           "name": "unicode-normalization",
           "notable_parents": "idna",
           "suggested_criteria": [
@@ -2104,21 +2119,6 @@ stdout:
             },
             "from": "0.0.0",
             "to": "0.2.15"
-          }
-        },
-        {
-          "name": "syn",
-          "notable_parents": "tracing-attributes, and 2 others",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "diffstat": {
-              "count": 57175,
-              "raw": " 98 files changed, 57175 insertions(+)\n"
-            },
-            "from": "0.0.0",
-            "to": "1.0.91"
           }
         },
         {
@@ -3537,6 +3537,21 @@ stdout:
         }
       },
       {
+        "name": "syn",
+        "notable_parents": "tracing-attributes, and 2 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 28477,
+            "raw": " 93 files changed, 21776 insertions(+), 6701 deletions(-)\n"
+          },
+          "from": "1.0.0",
+          "to": "1.0.91"
+        }
+      },
+      {
         "name": "unicode-normalization",
         "notable_parents": "idna",
         "suggested_criteria": [
@@ -3597,21 +3612,6 @@ stdout:
         }
       },
       {
-        "name": "syn",
-        "notable_parents": "tracing-attributes, and 2 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 57175,
-            "raw": " 98 files changed, 57175 insertions(+)\n"
-          },
-          "from": "0.0.0",
-          "to": "1.0.91"
-        }
-      },
-      {
         "name": "web-sys",
         "notable_parents": "reqwest, wasm-bindgen-futures",
         "suggested_criteria": [
@@ -3642,7 +3642,7 @@ stdout:
         }
       }
     ],
-    "total_lines": 1771316
+    "total_lines": 1742618
   }
 }
 stderr:

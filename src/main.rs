@@ -1,18 +1,15 @@
 use std::collections::HashMap;
-use std::mem;
 use std::ops::Deref;
 use std::panic::panic_any;
-use std::path::Path;
 use std::time::Duration;
-use std::{fs::File, panic, path::PathBuf};
+use std::{fs::File, io, mem, panic, path::PathBuf};
 
-use cargo_metadata::{Metadata, Package};
+use cargo_metadata::{Metadata, Package, Version};
 use clap::{CommandFactory, Parser};
 use console::Term;
 use errors::{
-    AuditAsError, AuditAsErrors, CertifyError, DiffError, MinimizeUnauditedError,
-    NeedsAuditAsError, NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors,
-    UserInfoError,
+    AuditAsError, AuditAsErrors, CertifyError, MinimizeUnauditedError, NeedsAuditAsError,
+    NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors, UserInfoError,
 };
 use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::join_all;
@@ -20,7 +17,7 @@ use miette::{miette, Context, IntoDiagnostic};
 use network::Network;
 use reqwest::Url;
 use serde::de::Deserialize;
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
 use crate::errors::{CommandError, DownloadError};
@@ -261,8 +258,6 @@ fn real_main() -> Result<(), miette::Report> {
     };
 
     match &partial_cfg.cli.command {
-        Some(Inspect(sub_args)) => return cmd_inspect(out, &partial_cfg, sub_args),
-        Some(Diff(sub_args)) => return cmd_diff(out, &partial_cfg, sub_args),
         Some(HelpMarkdown(sub_args)) => return cmd_help_md(out, &partial_cfg, sub_args),
         Some(Gc(sub_args)) => return cmd_gc(out, &partial_cfg, sub_args),
         _ => {
@@ -422,8 +417,9 @@ fn real_main() -> Result<(), miette::Report> {
         Some(FetchImports(sub_args)) => cmd_fetch_imports(out, &cfg, sub_args),
         Some(RegenerateUnaudited(sub_args)) => cmd_regenerate_unaudited(out, &cfg, sub_args),
         Some(DumpGraph(sub_args)) => cmd_dump_graph(out, &cfg, sub_args),
-        // Need to be non-exhaustive because freestanding commands were handled earlier
-        _ => unreachable!("did you add a new command and forget to implement it?"),
+        Some(Inspect(sub_args)) => cmd_inspect(out, &cfg, sub_args),
+        Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
+        Some(HelpMarkdown(_)) | Some(Gc(_)) => unreachable!("handled earlier"),
     }
 }
 
@@ -498,23 +494,30 @@ pub fn init_files(
 
 fn cmd_inspect(
     out: &mut dyn Out,
-    cfg: &PartialConfig,
+    cfg: &Config,
     sub_args: &InspectArgs,
 ) -> Result<(), miette::Report> {
-    // Download a crate's source to a temp location for review
+    let store = Store::acquire(cfg)?;
     let cache = Cache::acquire(cfg)?;
     let network = Network::acquire(cfg);
-    // Record this command for magic in `vet certify`
-    cache.set_last_fetch(FetchCommand::Inspect {
-        package: sub_args.package.clone(),
-        version: sub_args.version.clone(),
-    });
 
+    let version = &sub_args.version;
     let package = &*sub_args.package;
 
-    let fetched = tokio::runtime::Handle::current()
-        .block_on(cache.fetch_package(network.as_ref(), package, &sub_args.version))
-        .into_diagnostic()?;
+    // Record this command for magic in `vet certify`
+    cache.set_last_fetch(FetchCommand::Inspect {
+        package: package.to_owned(),
+        version: version.clone(),
+    });
+
+    let fetched = tokio::runtime::Handle::current().block_on(async {
+        let (pkg, eulas) = tokio::join!(
+            cache.fetch_package(network.as_ref(), package, version),
+            prompt_criteria_eulas(out, cfg, network.as_ref(), &store, package, None, version),
+        );
+        eulas.into_diagnostic()?;
+        pkg.into_diagnostic()
+    })?;
 
     #[cfg(target_family = "unix")]
     {
@@ -639,6 +642,12 @@ fn do_cmd_certify(
     let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
 
     let criteria_names = if sub_args.criteria.is_empty() {
+        let (from, to) = match &kind {
+            AuditKind::Full { version, .. } => (None, version),
+            AuditKind::Delta { delta, .. } => (Some(&delta.from), &delta.to),
+            _ => unreachable!(),
+        };
+
         // If we don't have explicit cli criteria, guess the criteria
         //
         // * Check what would cause `cargo vet` to encounter fewer errors
@@ -646,7 +655,7 @@ fn do_cmd_certify(
         // * Otherwise guess nothing
         //
         // Regardless of the guess, prompt the user to confirm (just needs to mash enter)
-        let mut chosen_criteria = guess_audit_criteria(cfg, store, &package, &kind);
+        let mut chosen_criteria = guess_audit_criteria(cfg, store, &package, from, to);
 
         // Prompt for criteria
         loop {
@@ -865,18 +874,9 @@ fn guess_audit_criteria(
     cfg: &Config,
     store: &Store,
     package: PackageStr<'_>,
-    kind: &AuditKind,
+    from: Option<&Version>,
+    to: &Version,
 ) -> Vec<String> {
-    // Convert the audit to a normalized delta to run against the resolver.
-    let delta = match kind {
-        AuditKind::Full { version, .. } => Delta {
-            from: resolver::ROOT_VERSION.clone(),
-            to: version.clone(),
-        },
-        AuditKind::Delta { delta, .. } => delta.clone(),
-        _ => return Vec::new(),
-    };
-
     // Attempt to resolve a normal `cargo vet`, and try to find criteria which
     // would heal some errors in that result if it fails.
     let criteria = resolver::resolve(
@@ -885,7 +885,7 @@ fn guess_audit_criteria(
         store,
         ResolveDepth::Deep,
     )
-    .compute_suggested_criteria(package, &delta);
+    .compute_suggested_criteria(package, from, to);
     if !criteria.is_empty() {
         return criteria;
     }
@@ -901,7 +901,86 @@ fn guess_audit_criteria(
         &store.clone_for_suggest(),
         ResolveDepth::Deep,
     )
-    .compute_suggested_criteria(package, &delta)
+    .compute_suggested_criteria(package, from, to)
+}
+
+/// Prompt the user to read the EULAs for the expected criteria which they will
+/// be certifying for with this diff or inspect command.
+///
+/// This method is async so it can be performed concurrently with waiting for
+/// the downloads to complete.
+async fn prompt_criteria_eulas(
+    out: &mut dyn Out,
+    cfg: &Config,
+    network: Option<&Network>,
+    store: &Store,
+    package: PackageStr<'_>,
+    from: Option<&Version>,
+    to: &Version,
+) -> Result<(), io::Error> {
+    let description = if let Some(from) = from {
+        format!(
+            "You are about to diff versions {} and {} of '{}'",
+            from, to, package
+        )
+    } else {
+        format!("You are about to inspect version {} of '{}'", to, package)
+    };
+
+    // Guess which criteria the user is going to be auditing the package for.
+    let criteria_names = guess_audit_criteria(cfg, store, package, from, to);
+
+    // FIXME: These `writeln` calls can do blocking I/O, but they hopefully
+    // shouldn't block long enough for it interfere with downloading packages in
+    // the background. We do the `read_line_with_prompt` call async.
+    if criteria_names.is_empty() {
+        writeln!(out, "{}", out.style().bold().apply_to(description))?;
+        warn!("unable to determine likely criteria, this may not be a relevant audit for this project.");
+    } else {
+        let eulas = join_all(criteria_names.iter().map(|criteria| async {
+            (
+                &criteria[..],
+                eula_for_criteria(network, &store.audits.criteria, criteria).await,
+            )
+        }))
+        .await;
+
+        for (idx, (criteria, eula)) in eulas.into_iter().enumerate() {
+            let prompt = if idx == 0 {
+                format!(
+                    "{}, likely to certify it for {:?}, which means:",
+                    description, criteria
+                )
+            } else {
+                format!("... and for {:?}, which means:", criteria)
+            };
+            writeln!(
+                out,
+                "{}\n\n  {}",
+                out.style().bold().apply_to(prompt),
+                eula.replace('\n', "\n  "),
+            )?;
+        }
+
+        writeln!(
+            out,
+            "{}",
+            out.style().bold().apply_to(
+                "Please read the above criteria and consider them when performing the audit."
+            )
+        )?;
+    }
+
+    writeln!(
+        out,
+        "{}",
+        out.style().bold().apply_to(
+            "Other software projects may rely on this audit. Ask for help if you're not sure."
+        )
+    )?;
+    out.read_line_with_prompt_async("(press ENTER to continue...)")
+        .await?;
+    Ok(())
 }
 
 fn cmd_record_violation(
@@ -1193,41 +1272,59 @@ pub fn minimize_unaudited(
     Ok(())
 }
 
-fn cmd_diff(
-    out: &mut dyn Out,
-    cfg: &PartialConfig,
-    sub_args: &DiffArgs,
-) -> Result<(), miette::Report> {
+fn cmd_diff(out: &mut dyn Out, cfg: &Config, sub_args: &DiffArgs) -> Result<(), miette::Report> {
+    let store = Store::acquire(cfg)?;
     let cache = Cache::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
-    cache.set_last_fetch(FetchCommand::Diff {
-        package: sub_args.package.clone(),
-        version1: sub_args.version1.clone(),
-        version2: sub_args.version2.clone(),
-    });
-
+    let version1 = &sub_args.version1;
+    let version2 = &sub_args.version2;
     let package = &*sub_args.package;
 
-    writeln!(
-        out,
-        "fetching {} {} and {} ...",
-        sub_args.package, sub_args.version1, sub_args.version2,
-    )
-    .into_diagnostic()?;
+    // Record this command for magic in `vet certify`
+    cache.set_last_fetch(FetchCommand::Diff {
+        package: package.to_owned(),
+        version1: version1.clone(),
+        version2: version2.clone(),
+    });
 
-    let (fetched1, fetched2) = tokio::runtime::Handle::current()
-        .block_on(async {
-            tokio::try_join!(
-                cache.fetch_package(network.as_ref(), package, &sub_args.version1),
-                cache.fetch_package(network.as_ref(), package, &sub_args.version2)
+    let (fetched1, fetched2) = tokio::runtime::Handle::current().block_on(async {
+        // NOTE: don't `try_join` everything as we don't want to abort the
+        // prompt to the user if the download fails while it is being shown, as
+        // that could be disorienting.
+        let (pkgs, eulas) = tokio::join!(
+            async {
+                tokio::try_join!(
+                    cache.fetch_package(network.as_ref(), package, version1),
+                    cache.fetch_package(network.as_ref(), package, version2)
+                )
+            },
+            prompt_criteria_eulas(
+                out,
+                cfg,
+                network.as_ref(),
+                &store,
+                package,
+                Some(version1),
+                version2,
             )
-        })
-        .into_diagnostic()?;
+        );
+        eulas.into_diagnostic()?;
+        pkgs.into_diagnostic()
+    })?;
 
     writeln!(out).into_diagnostic()?;
 
-    diff_crate(out, cfg, &fetched1, &fetched2)?;
+    // FIXME: mask out .cargo_vcs_info.json
+
+    std::process::Command::new("git")
+        .arg("diff")
+        .arg("--no-index")
+        .arg(&fetched1)
+        .arg(&fetched2)
+        .status()
+        .map_err(CommandError::CommandFailed)
+        .into_diagnostic()?;
 
     Ok(())
 }
@@ -1490,37 +1587,6 @@ fn cmd_gc(out: &mut dyn Out, cfg: &PartialConfig, sub_args: &GcArgs) -> Result<(
 }
 
 // Utils
-
-fn diff_crate(
-    _out: &mut dyn Out,
-    _cfg: &PartialConfig,
-    version1: &Path,
-    version2: &Path,
-) -> Result<(), DiffError> {
-    // ERRORS: arguably this is all proper fallible, but it would be fatal to
-    // `cargo vet diff`, the primary consumer, to not be able to diff
-
-    // FIXME: mask out .cargo_vcs_info.json
-    // FIXME: look into libgit2 vs just calling git
-
-    let status = std::process::Command::new("git")
-        .arg("diff")
-        .arg("--no-index")
-        .arg(version1)
-        .arg(version2)
-        .status()
-        .map_err(CommandError::CommandFailed)?;
-
-    let status = status.code().unwrap();
-
-    // 0 = empty
-    // 1 = some diff
-    if status != 0 && status != 1 {
-        Err(CommandError::BadStatus(status))?;
-    }
-
-    Ok(())
-}
 
 struct UserInfo {
     username: String,

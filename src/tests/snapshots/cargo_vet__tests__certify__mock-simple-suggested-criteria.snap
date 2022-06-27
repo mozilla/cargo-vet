@@ -2,7 +2,7 @@
 source: src/tests/certify.rs
 expression: output
 ---
-full audit (0.0.0 -> 10.0.0)
+full audit (root -> 10.0.0)
   third-party1: ["strong-reviewed"]
   third-party2: ["reviewed"]
 from weak-reviewed (2.0.0 -> 10.0.0)
@@ -14,13 +14,13 @@ from reviewed (3.0.0 -> 10.0.0)
 from strong-reviewed (4.0.0 -> 10.0.0)
   third-party1: ["strong-reviewed"]
   third-party2: ["reviewed"]
-to strong-reviewed (0.0.0 -> 6.0.0)
+to strong-reviewed (root -> 6.0.0)
   third-party1: ["strong-reviewed"]
   third-party2: ["reviewed"]
-to reviewed (0.0.0 -> 7.0.0)
+to reviewed (root -> 7.0.0)
   third-party1: ["reviewed"]
   third-party2: ["reviewed"]
-to weak-reviewed (0.0.0 -> 8.0.0)
+to weak-reviewed (root -> 8.0.0)
   third-party1: ["weak-reviewed"]
   third-party2: ["weak-reviewed"]
 from weak-reviewed to strong-reviewed (2.0.0 -> 6.0.0)

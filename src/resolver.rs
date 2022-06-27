@@ -2543,7 +2543,8 @@ impl<'a> ResolveReport<'a> {
     pub fn compute_suggested_criteria(
         &self,
         package_name: PackageStr<'_>,
-        delta: &Delta,
+        from: Option<&Version>,
+        to: &Version,
     ) -> Vec<CriteriaName> {
         let fail = if let Conclusion::FailForVet(fail) = &self.conclusion {
             fail
@@ -2569,8 +2570,8 @@ impl<'a> ResolveReport<'a> {
                     reachable_from_target,
                 } = search_result
                 {
-                    if reachable_from_target.contains(&delta.to)
-                        && reachable_from_root.contains(&delta.from)
+                    if reachable_from_target.contains(to)
+                        && from.map_or(true, |v| reachable_from_root.contains(v))
                     {
                         criteria.set_criteria(criteria_idx);
                     }
