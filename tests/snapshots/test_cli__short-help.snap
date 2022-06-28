@@ -10,31 +10,10 @@ USAGE:
     cargo vet [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
-        --diff-cache <DIFF_CACHE>
-            Use the following path as the diff-cache
+    -h, --help       Print help information
+    -V, --version    Print version information
 
-        --exclude <SPEC>
-            Exclude packages from being processed
-
-        --features <FEATURES>
-            Space-separated list of features to activate
-
-        --filter-graph <FILTER_GRAPH>
-            Filter out different parts of the build graph and pretend that's the true graph
-
-        --frozen
-            Avoid the network entirely, requiring either that the cargo cache is populated or the
-            dependencies are vendored. Requires --locked
-
-    -h, --help
-            Print help information
-
-        --locked
-            Do not fetch new imported audits
-
-        --log-file <LOG_FILE>
-            Instead of stderr, write logs to this file (only used after successful CLI parsing)
-
+GLOBAL OPTIONS:
         --manifest-path <PATH>
             Path to Cargo.toml
 
@@ -44,45 +23,55 @@ OPTIONS:
         --no-default-features
             Do not activate the `default` feature
 
-        --output-file <OUTPUT_FILE>
-            Instead of stdout, write output to this file
+        --features <FEATURES>
+            Space-separated list of features to activate
 
-        --output-format <OUTPUT_FORMAT>
-            The format of the output [default: human] [possible values: human, json]
+        --locked
+            Do not fetch new imported audits
 
-    -p, --package <SPEC>
-            Package to process (see `cargo help pkgid`)
-
-        --shallow
-            Avoid suggesting audits for dependencies of unaudited dependencies
-
-    -V, --version
-            Print version information
+        --frozen
+            Avoid the network entirely, requiring either that the cargo cache is populated or the
+            dependencies are vendored. Requires --locked
 
         --verbose <VERBOSE>
             How verbose logging should be (log level) [default: warn] [possible values: off, error,
             warn, info, debug, trace]
 
-        --workspace
-            Process all packages in the workspace
+        --shallow
+            Avoid suggesting audits for dependencies of unaudited dependencies
+
+        --output-file <OUTPUT_FILE>
+            Instead of stdout, write output to this file
+
+        --log-file <LOG_FILE>
+            Instead of stderr, write logs to this file (only used after successful CLI parsing)
+
+        --output-format <OUTPUT_FORMAT>
+            The format of the output [default: human] [possible values: human, json]
+
+        --diff-cache <DIFF_CACHE>
+            Use the following path as the diff-cache
+
+        --filter-graph <FILTER_GRAPH>
+            Filter out different parts of the build graph and pretend that's the true graph
 
 SUBCOMMANDS:
-    accept-criteria-change    Accept changes that a foreign audits.toml made to their criteria
-    add-unaudited             Mark `$package $version` as unaudited
-    certify                   Mark `$package $version` as reviewed
-    diff                      Yield a diff against the last reviewed version
-    dump-graph                Print a mermaid-js visualization of the cargo build graph as
-                                  understood by cargo-vet
-    fetch-imports             Explicitly fetch the imports (foreign audit files)
-    fmt                       Reformat all of vet's files (in case you hand-edited them)
-    gc                        Clean up old packages from the vet cache
-    help                      Print this message or the help of the given subcommand(s)
     init                      initialize cargo-vet for your project
+    accept-criteria-change    Accept changes that a foreign audits.toml made to their criteria
     inspect                   Fetch the source of `$package $version`
+    diff                      Yield a diff against the last reviewed version
+    certify                   Mark `$package $version` as reviewed
+    add-unaudited             Mark `$package $version` as unaudited
     record-violation          Mark `$package $version` as a violation of policy
+    suggest                   Suggest some low-hanging fruit to review
+    fmt                       Reformat all of vet's files (in case you hand-edited them)
+    fetch-imports             Explicitly fetch the imports (foreign audit files)
     regenerate-unaudited      Regenerate the 'unaudited' entries to try to minimize them and
                                   make the vet pass
-    suggest                   Suggest some low-hanging fruit to review
+    dump-graph                Print a mermaid-js visualization of the cargo build graph as
+                                  understood by cargo-vet
+    gc                        Clean up old packages from the vet cache
+    help                      Print this message or the help of the given subcommand(s)
 
 stderr:
 

@@ -274,34 +274,21 @@ fn real_main() -> Result<(), miette::Report> {
 
     let mut cmd = cargo_metadata::MetadataCommand::new();
     cmd.cargo_path(cargo_path);
-    if let Some(manifest_path) = &cli.manifest.manifest_path {
+    if let Some(manifest_path) = &cli.manifest_path {
         cmd.manifest_path(manifest_path);
     }
-    if !cli.features.no_all_features {
+    if !cli.no_all_features {
         cmd.features(cargo_metadata::CargoOpt::AllFeatures);
     }
-    if cli.features.no_default_features {
+    if cli.no_default_features {
         cmd.features(cargo_metadata::CargoOpt::NoDefaultFeatures);
     }
-    if !cli.features.features.is_empty() {
-        cmd.features(cargo_metadata::CargoOpt::SomeFeatures(
-            cli.features.features.clone(),
-        ));
-    }
-    let mut other_options = Vec::new();
-    if cli.workspace.all || cli.workspace.workspace {
-        other_options.push("--workspace".to_string());
-    }
-    for package in &cli.workspace.package {
-        other_options.push("--package".to_string());
-        other_options.push(package.to_string());
-    }
-    for package in &cli.workspace.exclude {
-        other_options.push("--exclude".to_string());
-        other_options.push(package.to_string());
+    if !cli.features.is_empty() {
+        cmd.features(cargo_metadata::CargoOpt::SomeFeatures(cli.features.clone()));
     }
     // We never want cargo-vet to update the Cargo.lock.
     // For frozen runs we also don't want to touch the network.
+    let mut other_options = Vec::new();
     if cli.frozen {
         other_options.push("--frozen".to_string());
     } else {
@@ -1469,7 +1456,7 @@ fn cmd_help_md(
     .into_diagnostic()?;
     writeln!(out).into_diagnostic()?;
 
-    let mut fake_cli = FakeCli::command();
+    let mut fake_cli = FakeCli::command().term_width(0);
     let full_command = fake_cli.get_subcommands_mut().next().unwrap();
     full_command.build();
     let mut todo = vec![full_command];
@@ -1484,21 +1471,19 @@ fn cmd_help_md(
         let mut lines = help.lines();
         let version_line = lines.next().unwrap();
         let subcommand_name = command.get_name();
-        let pretty_subcommand_name;
 
         if is_full_command {
-            pretty_subcommand_name = String::new();
             writeln!(out, "Version: `{version_line}`").into_diagnostic()?;
             writeln!(out).into_diagnostic()?;
         } else {
-            pretty_subcommand_name = format!("{pretty_app_name} {subcommand_name} ");
             // Give subcommands some breathing room
             writeln!(out, "<br><br><br>").into_diagnostic()?;
-            writeln!(out, "## {pretty_subcommand_name}").into_diagnostic()?;
+            writeln!(out, "## {pretty_app_name} {subcommand_name}").into_diagnostic()?;
         }
 
         let mut in_subcommands_listing = false;
         let mut in_usage = false;
+        let mut in_global_options = false;
         for line in lines {
             // Use a trailing colon to indicate a heading
             if let Some(heading) = line.strip_suffix(':') {
@@ -1507,13 +1492,27 @@ fn cmd_help_md(
                     if heading.to_ascii_uppercase() == heading {
                         in_subcommands_listing = heading == "SUBCOMMANDS";
                         in_usage = heading == "USAGE";
+                        in_global_options = heading == "GLOBAL OPTIONS";
 
-                        writeln!(out, "### {pretty_subcommand_name}{heading}").into_diagnostic()?;
+                        writeln!(out, "### {heading}").into_diagnostic()?;
+
+                        if in_global_options && !is_full_command {
+                            writeln!(
+                                out,
+                                "This subcommand accepts all the [global options](#global-options)"
+                            )
+                            .into_diagnostic()?;
+                        }
                     } else {
                         writeln!(out, "### {heading}").into_diagnostic()?;
                     }
                     continue;
                 }
+            }
+
+            if in_global_options && !is_full_command {
+                // Skip global options for non-primary commands
+                continue;
             }
 
             if in_subcommands_listing && !line.starts_with("     ") {
@@ -1554,7 +1553,17 @@ fn cmd_help_md(
         }
         writeln!(out).into_diagnostic()?;
 
-        todo.extend(command.get_subcommands_mut());
+        // The todo list is a stack, and processed in reverse-order, append
+        // these commands to the end in reverse-order so the first command is
+        // processed first (i.e. at the end of the list).
+        todo.extend(
+            command
+                .get_subcommands_mut()
+                .filter(|cmd| !cmd.is_hide_set())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev(),
+        );
         is_full_command = false;
     }
 

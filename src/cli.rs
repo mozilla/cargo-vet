@@ -17,35 +17,54 @@ pub enum FakeCli {
 #[derive(clap::Args)]
 #[clap(version)]
 #[clap(bin_name = "cargo vet")]
+#[clap(global_setting(clap::AppSettings::DeriveDisplayOrder))]
 /// Supply-chain security for Rust
 pub struct Cli {
     /// Subcommands ("no subcommand" is its own subcommand)
     #[clap(subcommand)]
     pub command: Option<Commands>,
 
-    // Cargo flags we support and forward to e.g. 'cargo metadata'
-    #[clap(flatten)]
-    pub manifest: clap_cargo::Manifest,
-    #[clap(flatten)]
-    pub workspace: clap_cargo::Workspace,
-    #[clap(flatten)]
-    pub features: Features,
-
     // Top-level flags
+    /// Path to Cargo.toml
+    #[clap(long, name = "PATH", parse(from_os_str))]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    pub manifest_path: Option<PathBuf>,
+
+    /// Don't use --all-features
+    ///
+    /// We default to passing --all-features to `cargo metadata`
+    /// because we want to analyze your full dependency tree
+    #[clap(long, action)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    pub no_all_features: bool,
+
+    /// Do not activate the `default` feature
+    #[clap(long, action)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    pub no_default_features: bool,
+
+    /// Space-separated list of features to activate
+    #[clap(long, action, require_value_delimiter = true, value_delimiter = ' ')]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    pub features: Vec<String>,
+
     /// Do not fetch new imported audits.
     #[clap(long, action)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub locked: bool,
 
     /// Avoid the network entirely, requiring either that the cargo cache is
     /// populated or the dependencies are vendored. Requires --locked.
     #[clap(long, action)]
     #[clap(requires = "locked")]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub frozen: bool,
 
     /// How verbose logging should be (log level)
     #[clap(long, action)]
     #[clap(default_value_t = LevelFilter::WARN)]
     #[clap(possible_values = ["off", "error", "warn", "info", "debug", "trace"])]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub verbose: LevelFilter,
 
     /// Avoid suggesting audits for dependencies of unaudited dependencies.
@@ -55,19 +74,23 @@ pub struct Cli {
     /// This flag disables that behaviour, causing only suggestions which we're
     /// certain of the requirements for to be emitted.
     #[clap(long, action)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub shallow: bool,
 
     /// Instead of stdout, write output to this file
     #[clap(long, action)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub output_file: Option<PathBuf>,
 
     /// Instead of stderr, write logs to this file (only used after successful CLI parsing)
     #[clap(long, action)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub log_file: Option<PathBuf>,
 
     /// The format of the output
     #[clap(long, value_enum, action)]
     #[clap(default_value_t = OutputFormat::Human)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub output_format: OutputFormat,
 
     /// Use the following path as the diff-cache
@@ -78,6 +101,7 @@ pub struct Cli {
     ///
     /// This mostly exists for testing vet itself.
     #[clap(long, action)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub diff_cache: Option<PathBuf>,
 
     /// Filter out different parts of the build graph and pretend that's the true graph
@@ -123,6 +147,7 @@ pub struct Cli {
     /// * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original graph
     #[clap(long, action)]
     #[clap(verbatim_doc_comment)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub filter_graph: Option<Vec<GraphFilter>>,
 }
 
@@ -345,24 +370,6 @@ pub struct GcArgs {
     /// time you use cargo vet.
     #[clap(long, action)]
     pub clean: bool,
-}
-
-/// Cargo feature flags, copied from clap_cargo to change defaults.
-#[derive(Default, Clone, Debug, PartialEq, Eq, clap::Args)]
-#[non_exhaustive]
-pub struct Features {
-    #[clap(long, action)]
-    /// Don't use --all-features
-    ///
-    /// We default to passing --all-features to `cargo metadata`
-    /// because we want to analyze your full dependency tree
-    pub no_all_features: bool,
-    #[clap(long, action)]
-    /// Do not activate the `default` feature
-    pub no_default_features: bool,
-    #[clap(long, action, require_value_delimiter = true, value_delimiter = ' ')]
-    /// Space-separated list of features to activate
-    pub features: Vec<String>,
 }
 
 #[derive(clap::Args)]
