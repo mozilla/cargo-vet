@@ -17,10 +17,14 @@ pub enum FakeCli {
 #[derive(clap::Args)]
 #[clap(version)]
 #[clap(bin_name = "cargo vet")]
+#[clap(args_conflicts_with_subcommands = true)]
 #[clap(global_setting(clap::AppSettings::DeriveDisplayOrder))]
 /// Supply-chain security for Rust
+///
+/// When run without a subcommand, `cargo vet` will invoke the `check`
+/// subcommand. See `cargo vet help check` for more details.
 pub struct Cli {
-    /// Subcommands ("no subcommand" is its own subcommand)
+    /// Subcommands ("no subcommand" defaults to `check`)
     #[clap(subcommand)]
     pub command: Option<Commands>,
 
@@ -66,16 +70,6 @@ pub struct Cli {
     #[clap(possible_values = ["off", "error", "warn", "info", "debug", "trace"])]
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub verbose: LevelFilter,
-
-    /// Avoid suggesting audits for dependencies of unaudited dependencies.
-    ///
-    /// By default, if a dependency doesn't have sufficient audits for *itself*
-    /// then we try to speculate that its dependencies require the criteria.
-    /// This flag disables that behaviour, causing only suggestions which we're
-    /// certain of the requirements for to be emitted.
-    #[clap(long, action)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
-    pub shallow: bool,
 
     /// Instead of stdout, write output to this file
     #[clap(long, action)]
@@ -149,11 +143,24 @@ pub struct Cli {
     #[clap(verbatim_doc_comment)]
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub filter_graph: Option<Vec<GraphFilter>>,
+
+    // Args for `Check` when the subcommand is not explicitly specified.
+    //
+    // These are exclusive with specifying a subcommand due to
+    // `args_conflicts_with_subcommand`.
+    #[clap(flatten)]
+    pub check_args: CheckArgs,
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// initialize cargo-vet for your project
+    /// \[default\] Check that the current project has been vetted
+    ///
+    /// This is the default behaviour if no subcommand is specified.
+    #[clap(disable_version_flag = true)]
+    Check(CheckArgs),
+
+    /// Initialize cargo-vet for your project
     #[clap(disable_version_flag = true)]
     Init(InitArgs),
 
@@ -193,7 +200,7 @@ pub enum Commands {
 
     /// Explicitly fetch the imports (foreign audit files)
     ///
-    /// Bare `cargo vet` will implicitly do this.
+    /// `cargo vet check` will implicitly do this.
     #[clap(disable_version_flag = true)]
     FetchImports(FetchImportsArgs),
 
@@ -218,6 +225,18 @@ pub enum Commands {
     /// In the future, many cargo-vet subcommands will implicitly do this.
     #[clap(disable_version_flag = true)]
     Gc(GcArgs),
+}
+
+#[derive(clap::Args)]
+pub struct CheckArgs {
+    /// Avoid suggesting audits for dependencies of unaudited dependencies.
+    ///
+    /// By default, if a dependency doesn't have sufficient audits for *itself*
+    /// then we try to speculate that its dependencies require the criteria.
+    /// This flag disables that behaviour, causing only suggestions which we're
+    /// certain of the requirements for to be emitted.
+    #[clap(long, action)]
+    pub shallow: bool,
 }
 
 #[derive(clap::Args)]
@@ -341,7 +360,16 @@ pub struct AddUnauditedArgs {
 }
 
 #[derive(clap::Args)]
-pub struct SuggestArgs {}
+pub struct SuggestArgs {
+    /// Avoid suggesting audits for dependencies of unaudited dependencies.
+    ///
+    /// By default, if a dependency doesn't have sufficient audits for *itself*
+    /// then we try to speculate that its dependencies require the criteria.
+    /// This flag disables that behaviour, causing only suggestions which we're
+    /// certain of the requirements for to be emitted.
+    #[clap(long, action)]
+    pub shallow: bool,
+}
 
 #[derive(clap::Args)]
 pub struct FmtArgs {}

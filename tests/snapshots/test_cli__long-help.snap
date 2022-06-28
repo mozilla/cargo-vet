@@ -6,10 +6,21 @@ stdout:
 cargo-vet 0.1.0
 Supply-chain security for Rust
 
+When run without a subcommand, `cargo vet` will invoke the `check` subcommand. See `cargo vet help
+check` for more details.
+
 USAGE:
-    cargo vet [OPTIONS] [SUBCOMMAND]
+    cargo vet [OPTIONS]
+    cargo vet <SUBCOMMAND>
 
 OPTIONS:
+        --shallow
+            Avoid suggesting audits for dependencies of unaudited dependencies.
+            
+            By default, if a dependency doesn't have sufficient audits for *itself* then we try to
+            speculate that its dependencies require the criteria. This flag disables that behaviour,
+            causing only suggestions which we're certain of the requirements for to be emitted.
+
     -h, --help
             Print help information
 
@@ -44,13 +55,6 @@ GLOBAL OPTIONS:
             
             [default: warn]
             [possible values: off, error, warn, info, debug, trace]
-
-        --shallow
-            Avoid suggesting audits for dependencies of unaudited dependencies.
-            
-            By default, if a dependency doesn't have sufficient audits for *itself* then we try to
-            speculate that its dependencies require the criteria. This flag disables that behaviour,
-            causing only suggestions which we're certain of the requirements for to be emitted.
 
         --output-file <OUTPUT_FILE>
             Instead of stdout, write output to this file
@@ -119,8 +123,10 @@ GLOBAL OPTIONS:
             graph
 
 SUBCOMMANDS:
+    check
+            [default] Check that the current project has been vetted
     init
-            initialize cargo-vet for your project
+            Initialize cargo-vet for your project
     accept-criteria-change
             Accept changes that a foreign audits.toml made to their criteria
     inspect
