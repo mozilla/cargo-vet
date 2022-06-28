@@ -393,7 +393,8 @@ fn real_main() -> Result<(), miette::Report> {
     };
 
     match &cfg.cli.command {
-        None => cmd_vet(out, &cfg),
+        None => cmd_check(out, &cfg, &cfg.cli.check_args),
+        Some(Check(sub_args)) => cmd_check(out, &cfg, sub_args),
         Some(Init(sub_args)) => cmd_init(out, &cfg, sub_args),
         Some(AcceptCriteriaChange(sub_args)) => cmd_accept_criteria_change(out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
@@ -1110,7 +1111,7 @@ fn cmd_add_unaudited(
 fn cmd_suggest(
     out: &mut dyn Out,
     cfg: &Config,
-    _sub_args: &SuggestArgs,
+    sub_args: &SuggestArgs,
 ) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
@@ -1122,7 +1123,7 @@ fn cmd_suggest(
         &cfg.metadata,
         cfg.cli.filter_graph.as_ref(),
         &suggest_store,
-        if cfg.cli.shallow {
+        if sub_args.shallow {
             ResolveDepth::Shallow
         } else {
             ResolveDepth::Deep
@@ -1316,7 +1317,7 @@ fn cmd_diff(out: &mut dyn Out, cfg: &Config, sub_args: &DiffArgs) -> Result<(), 
     Ok(())
 }
 
-fn cmd_vet(out: &mut dyn Out, cfg: &Config) -> Result<(), miette::Report> {
+fn cmd_check(out: &mut dyn Out, cfg: &Config, sub_args: &CheckArgs) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
@@ -1338,7 +1339,7 @@ fn cmd_vet(out: &mut dyn Out, cfg: &Config) -> Result<(), miette::Report> {
         &cfg.metadata,
         cfg.cli.filter_graph.as_ref(),
         &store,
-        if cfg.cli.shallow {
+        if sub_args.shallow {
             ResolveDepth::Shallow
         } else {
             ResolveDepth::Deep
