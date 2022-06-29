@@ -5,6 +5,6 @@ expression: format_outputs(&output)
 stdout:
 
 stderr:
-
+ERROR 
   × 'asdfsdfs' isn't one of your foreign packages
 
