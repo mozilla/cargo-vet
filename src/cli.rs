@@ -154,77 +154,218 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    // Main commands:
     /// \[default\] Check that the current project has been vetted
     ///
     /// This is the default behaviour if no subcommand is specified.
+    ///
+    /// If the check fails due to lack of audits, we will do our best to explain why
+    /// vetting failed, and what should be done to fix it. This can involve a certain
+    /// amount of guesswork, as there are many possible solutions and we only want to recommend
+    /// the "best" one to keep things simple.
+    ///
+    /// Failures and suggestions can either be "Certain" or "Speculative". Speculative items
+    /// are greyed out and sorted lower to indicate that the Certain entries should be looked
+    /// at first. Speculative items are for packages that probably need audits too, but
+    /// only appear as transitive dependencies of Certain items.
+    ///
+    /// During review of Certain issues you may take various actions that change what's needed
+    /// for the Speculative ones. For instance you may discover you're enabling a feature you
+    /// don't need, and that's the only reason the Speculative package is in your tree. Or you
+    /// may determine that the Certain package only needs to be safe-to-run, which may make
+    /// the Speculative requirements weaker or completely resolved. For these reasons we
+    /// recommend fixing problems "top down", and Certain items are The Top.
+    ///
+    /// Suggested fixes are grouped by the criteria they should be reviewed for and sorted by
+    /// how easy the review should be (in terms of lines of code). We only ever suggest audits
+    /// (and provide the command you need to run to do it), but there are other possible fixes
+    /// like an `exemption` or `policy` change.
+    ///
+    /// The most aggressive solution is to run `cargo vet regenerate exemptions` which will
+    /// add whatever exemptions necessary to make `check` pass (and remove uneeded ones).
+    /// Ideally you should avoid doing this and prefer adding audits, but if you've done all
+    /// the audits you plan on doing, that's the way to finish the job.
     #[clap(disable_version_flag = true)]
     Check(CheckArgs),
 
+    /// Suggest some low-hanging fruit to review
+    ///
+    /// This is essentially the same as `check` but with all your `exemptions` temporarily
+    /// removed as a way to inspect your "review backlog". As such, we recommend against
+    /// running this command while `check` is failing, because this will just give you worse
+    /// information.
+    ///
+    /// If you don't consider an exemption to be "backlog", add `suggest = false` to its
+    /// entry and we won't remove it while suggesting.
+    ///
+    /// See also `regenerate unaudited`, which can be used to "garbage collect"
+    /// your backlog (if you run it while `check` is passing).
+    #[clap(disable_version_flag = true)]
+    Suggest(SuggestArgs),
+
     /// Initialize cargo-vet for your project
+    ///
+    /// This will add `exemptions` and `audit-as-crates-io = false` for all packages that
+    /// need it to make `check` pass immediately and make it easy to start using vet with
+    /// your project.
+    ///
+    /// At this point you can either configure your project further or start working on your
+    /// review backlog with `suggest`.
     #[clap(disable_version_flag = true)]
     Init(InitArgs),
 
-    /// Accept changes that a foreign audits.toml made to their criteria
-    #[clap(disable_version_flag = true)]
-    AcceptCriteriaChange(AcceptCriteriaChangeArgs),
-
-    /// Fetch the source of `$package $version`
+    // Fetch Commands
+    /// Fetch the source of a package
+    ///
+    /// We will attempt to guess what criteria you want to audit the package for
+    /// based on the current check/suggest status, and show you the meaning of
+    /// those criteria ahead of time.
     #[clap(disable_version_flag = true)]
     Inspect(InspectArgs),
 
     /// Yield a diff against the last reviewed version
+    ///
+    /// We will attempt to guess what criteria you want to audit the package for
+    /// based on the current check/suggest status, and show you the meaning of
+    /// those criteria ahead of time.
     #[clap(disable_version_flag = true)]
     Diff(DiffArgs),
 
-    /// Mark `$package $version` as reviewed
+    // Update State Commands
+    /// Mark a package as audited
+    ///
+    /// This command will do its best to guess what you want to be certifying.
+    ///
+    /// If invoked with no args, it will try to certify the last thing you looked at
+    /// with `inspect` or `diff`. Otherwise you must either supply the package name
+    /// and one version (for a full audit) or two versions (for a delta audit).
+    ///
+    /// Once the package+version(s) have been selected, we will try to guess what
+    /// criteria to certify it for. First we will `check`, and if the check fails
+    /// and your audit would seemingly fix this package, we will use the criteria
+    /// recommended for that fix. If `check` passes, we will assume you are working
+    /// on your backlog and instead use the recommendations of `suggest`.
+    ///
+    /// If this removes the need for an `exemption` will we automatically remove it.
     #[clap(disable_version_flag = true)]
     Certify(CertifyArgs),
 
-    /// Mark `$package $version` as unaudited
+    /// Explicitly regenerate various pieces of information
+    ///
+    /// There are several things that `cargo vet` *can* do for you automatically
+    /// but we choose to make manual just to keep a human in the loop of those
+    /// decisions. Some of these might one day become automatic if we agree they're
+    /// boring/reliable enough.
+    ///
+    /// See the subcommands for specifics.
     #[clap(disable_version_flag = true)]
-    AddUnaudited(AddUnauditedArgs),
+    #[clap(subcommand)]
+    Regenerate(RegenerateSubcommands),
 
-    /// Mark `$package $version` as a violation of policy
+    /// Mark a package as exempted from review
+    ///
+    /// Exemptions are *usually* just "backlog" and the expectation is that you will review
+    /// them "eventually". You should usually only be trying to remove them, but sometimes
+    /// additions are necessary to make progress.
+    ///
+    /// `regenerate exemptions` will do this for your automatically to make `check` pass
+    /// (and remove any unnecessary ones), so we recommend using that over `add-exemption`.
+    /// This command mostly exists as "plumbing" for building tools on top of `cargo vet`.
+    #[clap(disable_version_flag = true)]
+    AddExemption(AddExemptionArgs),
+
+    /// Declare that some versions of a package violate certain audit criteria
+    ///
+    /// **IMPORTANT**: violations take *VersionReqs* not *Versions*. This is the same
+    /// syntax used by Cargo.toml when specifying dependencies. A bare `1.0.0` actually
+    /// means `^1.0.0`. If you want to forbid a *specific* version, use `=1.0.0`.
+    /// This command can be a bit awkward because syntax like `*` has special meaning
+    /// in scripts and terminals. It's probably easier to just manually add the entry
+    /// to your audits.toml, but the command's here in case you want it.
+    ///
+    /// Violations are essentially treated as integrity constraints on your supply-chain,
+    /// and will only result in errors if you have `exemptions` or `audits` (including
+    /// imported ones) that claim criteria that are contradicted by the `violation`.
+    /// It is not inherently an error to depend on a package with a `violation`.
+    ///
+    /// For instance, someone may review a package and determine that it's horribly
+    /// unsound in the face of untrusted inputs, and therefore *un*safe-to-deploy. They
+    /// would then add a "safe-to-deploy" violation for whatever versions of that
+    /// package seem to have that problem. But if the package basically works fine
+    /// on trusted inputs, it might still be safe-to-run. So if you use it in your
+    /// tests and have an audit that only claims safe-to-run, we won't mention it.
+    ///
+    /// When a violation *does* cause an integrity error, it's up to you and your
+    /// peers to figure out what to do about it. There isn't yet a mechanism for
+    /// dealing with disagreements with a peer's published violations.
     #[clap(disable_version_flag = true)]
     RecordViolation(RecordViolationArgs),
 
-    /// Suggest some low-hanging fruit to review
-    #[clap(disable_version_flag = true)]
-    Suggest(SuggestArgs),
-
+    // Plumbing/Debug Commands
     /// Reformat all of vet's files (in case you hand-edited them)
     ///
-    /// All commands that access the store (supply-chain) will implicitly do this.
+    /// Most commands will implicitly do this, so this mostly exists as "plumbing"
+    /// for building tools on top of vet, or in case you don't want to run another command.
     #[clap(disable_version_flag = true)]
     Fmt(FmtArgs),
 
     /// Explicitly fetch the imports (foreign audit files)
     ///
-    /// `cargo vet check` will implicitly do this.
+    /// `cargo vet check` will implicitly do this, so this mostly exists as "plumbing"
+    /// for building tools on top of vet.
     #[clap(disable_version_flag = true)]
     FetchImports(FetchImportsArgs),
 
-    /// Regenerate the 'unaudited' entries to try to minimize them and make the vet pass
-    #[clap(disable_version_flag = true)]
-    RegenerateUnaudited(RegenerateUnauditedArgs),
-
-    /// Print a mermaid-js visualization of the cargo build graph as understood by cargo-vet
+    /// Print the cargo build graph as understood by `cargo vet`
+    ///
+    /// This is a debugging command, the output's format is not guaranteed.
+    /// Use `cargo metadata` to get a stable version of what *cargo* thinks the
+    /// build graph is. Our graph is based on that result.
+    ///
+    /// With `--output-format=human` (the default) this will print out mermaid-js
+    /// diagrams, which things like github natively support rendering of.
+    ///
+    /// With `--output-format=json` we will print out more raw statistics for you
+    /// to search/analyze.
+    ///
+    /// Most projects will have unreadably complex build graphs, so you may want to
+    /// use the global `--filter-graph` argument to narrow your focus on an interesting
+    /// subgraph. `--filter-graph` is applied *before* doing any semantic analysis,
+    /// so if you filter out a package and it was the problem, the problem will disappear.
+    /// This can be used to bisect a problem if you get ambitious enough with your filters.
     #[clap(disable_version_flag = true)]
     DumpGraph(DumpGraphArgs),
 
     /// Print --help as markdown (for generating docs)
+    ///
+    /// The output of this is not stable or guaranteed.
     #[clap(disable_version_flag = true)]
     #[clap(hide = true)]
     HelpMarkdown(HelpMarkdownArgs),
 
     /// Clean up old packages from the vet cache
     ///
-    /// Removes  packages which haven't been accessed in a while, and deletes
+    /// Removes packages which haven't been accessed in a while, and deletes
     /// any extra files which aren't recognized by cargo-vet.
     ///
     /// In the future, many cargo-vet subcommands will implicitly do this.
     #[clap(disable_version_flag = true)]
     Gc(GcArgs),
+}
+
+#[derive(Subcommand)]
+pub enum RegenerateSubcommands {
+    ///
+    #[clap(disable_version_flag = true)]
+    Exemptions(RegenerateExemptionsArgs),
+
+    /// Suggest some low-hanging fruit to review
+    #[clap(disable_version_flag = true)]
+    Imports(RegenerateImportsArgs),
+
+    /// Initialize cargo-vet for your project
+    #[clap(disable_version_flag = true)]
+    AuditAsCratesIo(RegenerateAuditAsCratesIoArgs),
 }
 
 #[derive(clap::Args)]
@@ -332,7 +473,7 @@ pub struct RecordViolationArgs {
 
 /// Certifies the given version
 #[derive(clap::Args)]
-pub struct AddUnauditedArgs {
+pub struct AddExemptionArgs {
     /// The package to mark as unaudited (trusted)
     #[clap(action)]
     pub package: PackageName,
@@ -378,10 +519,13 @@ pub struct FmtArgs {}
 pub struct FetchImportsArgs {}
 
 #[derive(clap::Args)]
-pub struct RegenerateUnauditedArgs {}
+pub struct RegenerateExemptionsArgs {}
 
 #[derive(clap::Args)]
-pub struct AcceptCriteriaChangeArgs {}
+pub struct RegenerateImportsArgs {}
+
+#[derive(clap::Args)]
+pub struct RegenerateAuditAsCratesIoArgs {}
 
 #[derive(clap::Args)]
 pub struct HelpMarkdownArgs {}

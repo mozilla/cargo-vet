@@ -392,22 +392,24 @@ fn real_main() -> Result<(), miette::Report> {
         _rest: partial_cfg,
     };
 
+    use RegenerateSubcommands::*;
     match &cfg.cli.command {
         None => cmd_check(out, &cfg, &cfg.cli.check_args),
         Some(Check(sub_args)) => cmd_check(out, &cfg, sub_args),
         Some(Init(sub_args)) => cmd_init(out, &cfg, sub_args),
-        Some(AcceptCriteriaChange(sub_args)) => cmd_accept_criteria_change(out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
-        Some(AddUnaudited(sub_args)) => cmd_add_unaudited(out, &cfg, sub_args),
+        Some(AddExemption(sub_args)) => cmd_add_unaudited(out, &cfg, sub_args),
         Some(RecordViolation(sub_args)) => cmd_record_violation(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
         Some(FetchImports(sub_args)) => cmd_fetch_imports(out, &cfg, sub_args),
-        Some(RegenerateUnaudited(sub_args)) => cmd_regenerate_unaudited(out, &cfg, sub_args),
         Some(DumpGraph(sub_args)) => cmd_dump_graph(out, &cfg, sub_args),
         Some(Inspect(sub_args)) => cmd_inspect(out, &cfg, sub_args),
         Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
         Some(HelpMarkdown(_)) | Some(Gc(_)) => unreachable!("handled earlier"),
+        Some(Regenerate(Imports(sub_args))) => cmd_regenerate_imports(out, &cfg, sub_args),
+        Some(Regenerate(Exemptions(sub_args))) => cmd_regenerate_exemptions(out, &cfg, sub_args),
+        Some(Regenerate(AuditAsCratesIo(sub_args))) => cmd_regenerate_audit_as(out, &cfg, sub_args),
     }
 }
 
@@ -1041,7 +1043,7 @@ fn cmd_record_violation(
 fn cmd_add_unaudited(
     _out: &mut dyn Out,
     cfg: &Config,
-    sub_args: &AddUnauditedArgs,
+    sub_args: &AddExemptionArgs,
 ) -> Result<(), miette::Report> {
     // Add an unaudited entry
     let mut store = Store::acquire(cfg)?;
@@ -1140,13 +1142,32 @@ fn cmd_suggest(
     Ok(())
 }
 
-fn cmd_regenerate_unaudited(
+fn cmd_regenerate_imports(
     _out: &mut dyn Out,
-    cfg: &Config,
-    _sub_args: &RegenerateUnauditedArgs,
+    _cfg: &Config,
+    _sub_args: &RegenerateImportsArgs,
+) -> Result<(), miette::Report> {
+    // Run the checker to validate that the current set of deps is covered by the current cargo vet store
+    trace!("regenerating imports...");
+    todo!();
+}
+
+fn cmd_regenerate_audit_as(
+    _out: &mut dyn Out,
+    _cfg: &Config,
+    _sub_args: &RegenerateAuditAsCratesIoArgs,
 ) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("regenerating unaudited...");
+    todo!();
+}
+
+fn cmd_regenerate_exemptions(
+    _out: &mut dyn Out,
+    cfg: &Config,
+    _sub_args: &RegenerateExemptionsArgs,
+) -> Result<(), miette::Report> {
+    trace!("regenerating exemptions...");
     let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
@@ -1425,17 +1446,6 @@ fn cmd_fmt(_out: &mut dyn Out, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), 
     let store = Store::acquire(cfg)?;
     store.commit()?;
     Ok(())
-}
-
-fn cmd_accept_criteria_change(
-    _out: &mut dyn Out,
-    _cfg: &Config,
-    _sub_args: &AcceptCriteriaChangeArgs,
-) -> Result<(), miette::Report> {
-    // Accept changes that a foreign audits.toml made to their criteria.
-    trace!("accepting...");
-
-    unimplemented!("TODO(#68): unimplemented feature!");
 }
 
 /// Perform crimes on clap long_help to generate markdown docs
