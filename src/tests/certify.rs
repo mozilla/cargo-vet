@@ -100,17 +100,18 @@ fn mock_simple_certify_flow() {
 
     let mut store = Store::mock(config, audits, imports);
 
-    let mut output = BasicTestOutput::new();
-    output.on_edit = Some(Box::new(|_| {
-        Ok("\
+    let output = BasicTestOutput::with_callbacks(
+        |_| Ok("\n".to_owned()),
+        |_| {
+            Ok("\
             I, testing, certify that I have audited version 10.0.0 of third-party1 in accordance with the above criteria.\n\
             \n\
             These are testing notes. They contain some\n\
             newlines. Trailing whitespace        \n    \
             and leading whitespace\n\
             \n".to_owned())
-    }));
-    output.on_read_line = Some(Box::new(|_| Ok("\n".to_owned())));
+        },
+    );
 
     let cfg = mock_cfg_args(
         &metadata,
@@ -130,8 +131,15 @@ fn mock_simple_certify_flow() {
         unreachable!();
     };
 
-    crate::do_cmd_certify(&mut output, &cfg, sub_args, &mut store, None, None)
-        .expect("do_cmd_certify failed");
+    crate::do_cmd_certify(
+        &output.clone().as_dyn(),
+        &cfg,
+        sub_args,
+        &mut store,
+        None,
+        None,
+    )
+    .expect("do_cmd_certify failed");
 
     let audits = crate::serialization::to_formatted_toml(&store.audits).unwrap();
 

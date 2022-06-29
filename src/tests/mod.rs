@@ -1,9 +1,9 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    fmt, fs,
-    io::{self, Write as _},
+    fmt, fs, io,
     path::PathBuf,
+    sync::{Arc, Mutex},
 };
 
 use cargo_metadata::{Metadata, Version};
@@ -1055,78 +1055,89 @@ fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
     console::set_colors_enabled_stderr(false);
 
     let cfg = mock_cfg(metadata);
-    let mut output = BasicTestOutput::new();
+    let output = BasicTestOutput::new();
     let suggest = report.compute_suggest(&cfg, None, true).unwrap();
     report
-        .print_human(&mut output, &cfg, suggest.as_ref())
+        .print_human(&output.clone().as_dyn(), &cfg, suggest.as_ref())
         .unwrap();
     output.to_string()
 }
 
-struct BasicTestOutput<'a> {
-    output: Vec<u8>,
-    on_read_line: Option<Box<dyn FnMut(&str) -> io::Result<String> + 'a>>,
-    on_edit: Option<Box<dyn FnMut(String) -> io::Result<String> + 'a>>,
+struct BasicTestOutput {
+    output: Mutex<Vec<u8>>,
+    on_read_line: Option<Box<dyn Fn(&str) -> io::Result<String> + Send + Sync + 'static>>,
+    on_edit: Option<Box<dyn Fn(String) -> io::Result<String> + Send + Sync + 'static>>,
 }
 
-impl<'a> BasicTestOutput<'a> {
-    fn new() -> Self {
-        BasicTestOutput {
-            output: Vec::new(),
+impl BasicTestOutput {
+    fn new() -> Arc<Self> {
+        Arc::new(BasicTestOutput {
+            output: Mutex::new(Vec::new()),
             on_read_line: None,
             on_edit: None,
-        }
+        })
+    }
+
+    fn with_callbacks(
+        on_read_line: impl Fn(&str) -> io::Result<String> + Send + Sync + 'static,
+        on_edit: impl Fn(String) -> io::Result<String> + Send + Sync + 'static,
+    ) -> Arc<Self> {
+        Arc::new(BasicTestOutput {
+            output: Mutex::new(Vec::new()),
+            on_read_line: Some(Box::new(on_read_line)),
+            on_edit: Some(Box::new(on_edit)),
+        })
+    }
+
+    fn as_dyn(self: Arc<Self>) -> Arc<dyn Out> {
+        self
     }
 }
 
-impl<'a> fmt::Display for BasicTestOutput<'a> {
+impl fmt::Display for BasicTestOutput {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        std::str::from_utf8(&self.output).unwrap().fmt(f)
+        std::str::from_utf8(&self.output.lock().unwrap())
+            .unwrap()
+            .fmt(f)
     }
 }
 
-impl<'a> io::Write for BasicTestOutput<'a> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.output.extend_from_slice(buf);
+impl Out for BasicTestOutput {
+    fn write(&self, buf: &[u8]) -> io::Result<usize> {
+        self.output.lock().unwrap().extend_from_slice(buf);
         Ok(buf.len())
     }
 
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl<'a> Out for BasicTestOutput<'a> {
-    fn clear_screen(&mut self) -> io::Result<()> {
-        writeln!(self, "<<<CLEAR SCREEN>>>")?;
+    fn clear_screen(&self) -> io::Result<()> {
+        writeln!(self, "<<<CLEAR SCREEN>>>");
         Ok(())
     }
 
-    fn read_line_with_prompt(&mut self, initial: &str) -> io::Result<String> {
-        write!(self, "{}", initial)?;
-        if let Some(on_read_line) = &mut self.on_read_line {
+    fn read_line_with_prompt(&self, initial: &str) -> io::Result<String> {
+        write!(self, "{}", initial);
+        if let Some(on_read_line) = &self.on_read_line {
             let response = on_read_line(initial)?;
-            writeln!(self, "{}", response)?;
+            writeln!(self, "{}", response);
             Ok(response)
         } else {
             Err(io::ErrorKind::Unsupported.into())
         }
     }
 
-    fn editor<'b>(&'b mut self, name: &'b str) -> io::Result<Editor<'b>> {
-        if self.on_edit.is_some() {
+    fn editor<'b>(&'b self, name: &'b str) -> io::Result<Editor<'b>> {
+        if let Some(on_edit) = &self.on_edit {
             let mut editor = Editor::new(name)?;
             editor.set_run_editor(move |path| {
                 let original = fs::read_to_string(path)?;
-                writeln!(self, "<<<EDITING {}>>>\n{}", name, original)?;
-                match self.on_edit.as_mut().unwrap()(original) {
+                writeln!(self, "<<<EDITING {}>>>\n{}", name, original);
+                match on_edit(original) {
                     Ok(contents) => {
-                        writeln!(self, "<<<EDIT OK>>>\n{}\n<<<END EDIT>>>", contents)?;
+                        writeln!(self, "<<<EDIT OK>>>\n{}\n<<<END EDIT>>>", contents);
                         fs::write(path, contents)?;
                         Ok(true)
                     }
                     Err(err) => {
-                        writeln!(self, "<<<EDIT ERROR>>>")?;
+                        writeln!(self, "<<<EDIT ERROR>>>");
                         Err(err)
                     }
                 }

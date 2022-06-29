@@ -3,6 +3,7 @@ source: tests/test-cli.rs
 expression: format_outputs(&output)
 ---
 stdout:
+{"error": {"message": "'asdfsdfs' isn't one of your foreign packages","severity": "error","labels": [],"related": []}}
 
 stderr:
-{"message": "'asdfsdfs' isn't one of your foreign packages","severity": "error","labels": [],"related": []}
+

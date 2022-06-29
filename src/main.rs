@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::panic::panic_any;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{fs::File, io, mem, panic, path::PathBuf};
 
@@ -14,10 +15,12 @@ use errors::{
 };
 use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::join_all;
-use miette::{miette, Context, IntoDiagnostic};
+use lazy_static::lazy_static;
+use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use network::Network;
 use reqwest::Url;
 use serde::de::Deserialize;
+use thiserror::Error;
 use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
@@ -110,6 +113,37 @@ struct ExitPanic(i32);
 /// as our final act.
 struct ExecPanic(std::process::Command);
 
+type ReportErrorFunc = dyn Fn(&miette::Report) + Send + Sync + 'static;
+
+// XXX: We might be able to get rid of this `lazy_static` after 1.63 due to
+// `const Mutex::new` being stabilized.
+lazy_static! {
+    static ref REPORT_ERROR: Mutex<Option<Box<ReportErrorFunc>>> = Mutex::new(None);
+}
+
+fn set_report_errors_as_json(out: Arc<dyn Out>) {
+    *REPORT_ERROR.lock().unwrap() = Some(Box::new(move |error| {
+        // Manually invoke JSONReportHandler to format the error as a report
+        // to out_.
+        let mut report = String::new();
+        miette::JSONReportHandler::new()
+            .render_report(&mut report, error.as_ref())
+            .unwrap();
+        writeln!(out, r#"{{"error": {}}}"#, report);
+    }));
+}
+
+fn report_error(error: &miette::Report) {
+    {
+        let guard = REPORT_ERROR.lock().unwrap();
+        if let Some(do_report) = &*guard {
+            do_report(error);
+            return;
+        }
+    }
+    error!("{:?}", error);
+}
+
 fn main() -> Result<(), ()> {
     // NOTE: Limit the maximum number of blocking threads to 128, rather than
     // the default of 512.
@@ -147,8 +181,7 @@ fn main() -> Result<(), ()> {
         }
     };
     main_result.map_err(|e| {
-        let out: &mut dyn Out = &mut Term::stderr();
-        writeln!(out, "{:?}", e).unwrap();
+        report_error(&e);
         std::process::exit(-1);
     })
 }
@@ -178,71 +211,76 @@ fn real_main() -> Result<(), miette::Report> {
             .with_max_level(cli.verbose)
             .with_target(false)
             .without_time()
+            .with_ansi(console::colors_enabled_stderr())
             .with_writer(std::io::stderr)
             .init();
     }
 
-    // Set a panic hook to redirect to the logger
-    panic::set_hook(Box::new(|panic_info| {
+    // Control how errors are formatted by setting the miette hook. This will
+    // only be used for errors presented to humans, when formatting an error as
+    // JSON, it will be handled by a custom `report_error` override, bypassing
+    // the hook.
+    let using_log_file = cli.log_file.is_some();
+    miette::set_hook(Box::new(move |_| {
+        let graphical_theme = if console::colors_enabled_stderr() && !using_log_file {
+            miette::GraphicalTheme::unicode()
+        } else {
+            miette::GraphicalTheme::unicode_nocolor()
+        };
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                .graphical_theme(graphical_theme)
+                .build(),
+        )
+    }))
+    .expect("failed to initialize error handler");
+
+    // Now that miette is set up, use it to format panics.
+    panic::set_hook(Box::new(move |panic_info| {
         if panic_info.payload().is::<ExitPanic>() || panic_info.payload().is::<ExecPanic>() {
-            // Be silent, we're just trying to std::process::exit
             return;
         }
-        let (filename, line) = panic_info
-            .location()
-            .map(|loc| (loc.file(), loc.line()))
-            .unwrap_or(("<unknown>", 0));
 
-        let cause = panic_info
-            .payload()
-            .downcast_ref::<String>()
-            .map(String::deref)
-            .unwrap_or_else(|| {
-                panic_info
-                    .payload()
-                    .downcast_ref::<&str>()
-                    .copied()
-                    .unwrap_or("<cause unknown>")
-            });
-        error!(
-            "Panic - A panic occurred at {}:{}: {}",
-            filename, line, cause
+        let payload = panic_info.payload();
+        let message = if let Some(msg) = payload.downcast_ref::<&str>() {
+            msg
+        } else if let Some(msg) = payload.downcast_ref::<String>() {
+            &msg[..]
+        } else {
+            "something went wrong"
+        };
+
+        #[derive(Debug, Error, Diagnostic)]
+        #[error("{message}")]
+        pub struct PanicError {
+            pub message: String,
+            #[help]
+            pub help: Option<String>,
+        }
+
+        report_error(
+            &miette::Report::from(PanicError {
+                message: message.to_owned(),
+                help: panic_info
+                    .location()
+                    .map(|loc| format!("at {}:{}:{}", loc.file(), loc.line(), loc.column())),
+            })
+            .wrap_err("cargo vet panicked"),
         );
     }));
 
-    // FIXME: we should have separate configs for errors but this works for now
-    let error_colors_enabled = cli.output_file.is_none() && console::colors_enabled_stderr();
-    let output_json = cli.output_format == OutputFormat::Json;
-    miette::set_hook(Box::new(move |_| {
-        if output_json {
-            let json_handler = miette::JSONReportHandler;
-            Box::new(json_handler)
-        } else {
-            let graphical_theme = if error_colors_enabled {
-                miette::GraphicalTheme::unicode()
-            } else {
-                miette::GraphicalTheme::unicode_nocolor()
-            };
-            Box::new(
-                miette::MietteHandlerOpts::new()
-                    .graphical_theme(graphical_theme)
-                    .build(),
-            )
-        }
-    }))
-    .expect("Failed to initialize error handler");
-
     // Setup our output stream
-    let mut stdout;
-    let mut output_f;
-    let out: &mut dyn Out = if let Some(output_path) = &cli.output_file {
-        console::set_colors_enabled(false);
-        output_f = File::create(output_path).unwrap();
-        &mut output_f
+    let out: Arc<dyn Out> = if let Some(output_path) = &cli.output_file {
+        Arc::new(File::create(output_path).unwrap())
     } else {
-        stdout = Term::stdout();
-        &mut stdout
+        Arc::new(Term::stdout())
     };
+
+    // If we're outputting JSON, replace the error report method such that it
+    // writes errors out to the normal output stream as JSON.
+    if cli.output_format == OutputFormat::Json {
+        set_report_errors_as_json(out.clone());
+    }
 
     ////////////////////////////////////////////////////
     // Potentially handle freestanding commands
@@ -259,8 +297,8 @@ fn real_main() -> Result<(), miette::Report> {
     };
 
     match &partial_cfg.cli.command {
-        Some(HelpMarkdown(sub_args)) => return cmd_help_md(out, &partial_cfg, sub_args),
-        Some(Gc(sub_args)) => return cmd_gc(out, &partial_cfg, sub_args),
+        Some(HelpMarkdown(sub_args)) => return cmd_help_md(&out, &partial_cfg, sub_args),
+        Some(Gc(sub_args)) => return cmd_gc(&out, &partial_cfg, sub_args),
         _ => {
             // Not a freestanding command, time to do full parsing and setup
         }
@@ -395,26 +433,28 @@ fn real_main() -> Result<(), miette::Report> {
 
     use RegenerateSubcommands::*;
     match &cfg.cli.command {
-        None => cmd_check(out, &cfg, &cfg.cli.check_args),
-        Some(Check(sub_args)) => cmd_check(out, &cfg, sub_args),
-        Some(Init(sub_args)) => cmd_init(out, &cfg, sub_args),
-        Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
-        Some(AddExemption(sub_args)) => cmd_add_exemption(out, &cfg, sub_args),
-        Some(RecordViolation(sub_args)) => cmd_record_violation(out, &cfg, sub_args),
-        Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
-        Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
-        Some(FetchImports(sub_args)) => cmd_fetch_imports(out, &cfg, sub_args),
-        Some(DumpGraph(sub_args)) => cmd_dump_graph(out, &cfg, sub_args),
-        Some(Inspect(sub_args)) => cmd_inspect(out, &cfg, sub_args),
-        Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
-        Some(Regenerate(Imports(sub_args))) => cmd_regenerate_imports(out, &cfg, sub_args),
-        Some(Regenerate(Exemptions(sub_args))) => cmd_regenerate_exemptions(out, &cfg, sub_args),
-        Some(Regenerate(AuditAsCratesIo(sub_args))) => cmd_regenerate_audit_as(out, &cfg, sub_args),
+        None => cmd_check(&out, &cfg, &cfg.cli.check_args),
+        Some(Check(sub_args)) => cmd_check(&out, &cfg, sub_args),
+        Some(Init(sub_args)) => cmd_init(&out, &cfg, sub_args),
+        Some(Certify(sub_args)) => cmd_certify(&out, &cfg, sub_args),
+        Some(AddExemption(sub_args)) => cmd_add_exemption(&out, &cfg, sub_args),
+        Some(RecordViolation(sub_args)) => cmd_record_violation(&out, &cfg, sub_args),
+        Some(Suggest(sub_args)) => cmd_suggest(&out, &cfg, sub_args),
+        Some(Fmt(sub_args)) => cmd_fmt(&out, &cfg, sub_args),
+        Some(FetchImports(sub_args)) => cmd_fetch_imports(&out, &cfg, sub_args),
+        Some(DumpGraph(sub_args)) => cmd_dump_graph(&out, &cfg, sub_args),
+        Some(Inspect(sub_args)) => cmd_inspect(&out, &cfg, sub_args),
+        Some(Diff(sub_args)) => cmd_diff(&out, &cfg, sub_args),
+        Some(Regenerate(Imports(sub_args))) => cmd_regenerate_imports(&out, &cfg, sub_args),
+        Some(Regenerate(Exemptions(sub_args))) => cmd_regenerate_exemptions(&out, &cfg, sub_args),
+        Some(Regenerate(AuditAsCratesIo(sub_args))) => {
+            cmd_regenerate_audit_as(&out, &cfg, sub_args)
+        }
         Some(HelpMarkdown(_)) | Some(Gc(_)) => unreachable!("handled earlier"),
     }
 }
 
-fn cmd_init(_out: &mut dyn Out, cfg: &Config, _sub_args: &InitArgs) -> Result<(), miette::Report> {
+fn cmd_init(_out: &Arc<dyn Out>, cfg: &Config, _sub_args: &InitArgs) -> Result<(), miette::Report> {
     // Initialize vet
     trace!("initializing...");
 
@@ -486,7 +526,7 @@ pub fn init_files(
 }
 
 fn cmd_inspect(
-    out: &mut dyn Out,
+    out: &Arc<dyn Out>,
     cfg: &Config,
     sub_args: &InspectArgs,
 ) -> Result<(), miette::Report> {
@@ -516,8 +556,8 @@ fn cmd_inspect(
     {
         // Loosely borrowed from cargo crev.
         let shell = std::env::var_os("SHELL").unwrap();
-        writeln!(out, "Opening nested shell in: {:#?}", fetched).into_diagnostic()?;
-        writeln!(out, "Use `exit` or Ctrl-D to finish.",).into_diagnostic()?;
+        writeln!(out, "Opening nested shell in: {:#?}", fetched);
+        writeln!(out, "Use `exit` or Ctrl-D to finish.",);
         let mut command = std::process::Command::new(shell);
         command.current_dir(fetched.clone()).env("PWD", fetched);
         panic_any(ExecPanic(command));
@@ -525,13 +565,13 @@ fn cmd_inspect(
 
     #[cfg(not(target_family = "unix"))]
     {
-        writeln!(out, "  fetched to {:#?}", fetched).into_diagnostic()?;
+        writeln!(out, "  fetched to {:#?}", fetched);
         Ok(())
     }
 }
 
 fn cmd_certify(
-    out: &mut dyn Out,
+    out: &Arc<dyn Out>,
     cfg: &Config,
     sub_args: &CertifyArgs,
 ) -> Result<(), miette::Report> {
@@ -549,7 +589,7 @@ fn cmd_certify(
 }
 
 fn do_cmd_certify(
-    out: &mut dyn Out,
+    out: &Arc<dyn Out>,
     cfg: &Config,
     sub_args: &CertifyArgs,
     store: &mut Store,
@@ -653,14 +693,14 @@ fn do_cmd_certify(
         // Prompt for criteria
         loop {
             out.clear_screen()?;
-            write!(out, "choose criteria to certify for {}", package)?;
+            write!(out, "choose criteria to certify for {}", package);
             match &kind {
-                AuditKind::Full { version, .. } => write!(out, ":{}", version)?,
-                AuditKind::Delta { delta, .. } => write!(out, ":{} -> {}", delta.from, delta.to)?,
+                AuditKind::Full { version, .. } => write!(out, ":{}", version),
+                AuditKind::Delta { delta, .. } => write!(out, ":{} -> {}", delta.from, delta.to),
                 AuditKind::Violation { .. } => unreachable!(),
             }
-            writeln!(out)?;
-            writeln!(out, "  0. <clear selections>")?;
+            writeln!(out);
+            writeln!(out, "  0. <clear selections>");
             let implied_criteria = criteria_mapper.criteria_from_list(&chosen_criteria);
             for (criteria_idx, (criteria_name, _criteria_entry)) in
                 criteria_mapper.list.iter().enumerate()
@@ -671,28 +711,28 @@ fn do_cmd_certify(
                         "  {}. {}",
                         criteria_idx + 1,
                         out.style().green().apply_to(criteria_name)
-                    )?;
+                    );
                 } else if implied_criteria.has_criteria(criteria_idx) {
                     writeln!(
                         out,
                         "  {}. {}",
                         criteria_idx + 1,
                         out.style().yellow().apply_to(criteria_name)
-                    )?;
+                    );
                 } else {
-                    writeln!(out, "  {}. {}", criteria_idx + 1, criteria_name)?;
+                    writeln!(out, "  {}. {}", criteria_idx + 1, criteria_name);
                 }
             }
 
-            writeln!(out)?;
+            writeln!(out);
             writeln!(
                 out,
                 "current selection: {:?}",
                 criteria_mapper
                     .criteria_names(&implied_criteria)
                     .collect::<Vec<_>>()
-            )?;
-            writeln!(out, "(press ENTER to accept the current criteria)")?;
+            );
+            writeln!(out, "(press ENTER to accept the current criteria)");
             let input = out.read_line_with_prompt("> ")?;
             let input = input.trim();
             if input.is_empty() {
@@ -708,7 +748,7 @@ fn do_cmd_certify(
                 val
             } else {
                 // ERRORS: immediate error print to output for feedback, non-fatal
-                writeln!(out, "error: not a valid integer")?;
+                writeln!(out, "error: not a valid integer");
                 continue;
             };
             if answer == 0 {
@@ -717,7 +757,7 @@ fn do_cmd_certify(
             }
             if answer > criteria_mapper.list.len() {
                 // ERRORS: immediate error print to output for feedback, non-fatal
-                writeln!(out, "error: not a valid criteria")?;
+                writeln!(out, "error: not a valid criteria");
                 continue;
             }
             chosen_criteria.push(criteria_mapper.list[answer - 1].0.clone());
@@ -903,7 +943,7 @@ fn guess_audit_criteria(
 /// This method is async so it can be performed concurrently with waiting for
 /// the downloads to complete.
 async fn prompt_criteria_eulas(
-    out: &mut dyn Out,
+    out: &Arc<dyn Out>,
     cfg: &Config,
     network: Option<&Network>,
     store: &Store,
@@ -927,7 +967,7 @@ async fn prompt_criteria_eulas(
     // shouldn't block long enough for it interfere with downloading packages in
     // the background. We do the `read_line_with_prompt` call async.
     if criteria_names.is_empty() {
-        writeln!(out, "{}", out.style().bold().apply_to(description))?;
+        writeln!(out, "{}", out.style().bold().apply_to(description));
         warn!("unable to determine likely criteria, this may not be a relevant audit for this project.");
     } else {
         let eulas = join_all(criteria_names.iter().map(|criteria| async {
@@ -952,7 +992,7 @@ async fn prompt_criteria_eulas(
                 "{}\n\n  {}",
                 out.style().bold().apply_to(prompt),
                 eula.replace('\n', "\n  "),
-            )?;
+            );
         }
 
         writeln!(
@@ -961,7 +1001,7 @@ async fn prompt_criteria_eulas(
             out.style().bold().apply_to(
                 "Please read the above criteria and consider them when performing the audit."
             )
-        )?;
+        );
     }
 
     writeln!(
@@ -970,14 +1010,15 @@ async fn prompt_criteria_eulas(
         out.style().bold().apply_to(
             "Other software projects may rely on this audit. Ask for help if you're not sure."
         )
-    )?;
-    out.read_line_with_prompt_async("(press ENTER to continue...)")
-        .await?;
+    );
+    let out_ = out.clone();
+    tokio::task::spawn_blocking(move || out_.read_line_with_prompt("(press ENTER to continue...)"))
+        .await??;
     Ok(())
 }
 
 fn cmd_record_violation(
-    out: &mut dyn Out,
+    out: &Arc<dyn Out>,
     cfg: &Config,
     sub_args: &RecordViolationArgs,
 ) -> Result<(), miette::Report> {
@@ -1038,13 +1079,13 @@ fn cmd_record_violation(
 
     store.commit()?;
 
-    writeln!(out, "If you've identified a security vulnerability in {} please report it at https://github.com/rustsec/advisory-db#reporting-vulnerabilities", sub_args.package).unwrap();
+    writeln!(out, "If you've identified a security vulnerability in {} please report it at https://github.com/rustsec/advisory-db#reporting-vulnerabilities", sub_args.package);
 
     Ok(())
 }
 
 fn cmd_add_exemption(
-    _out: &mut dyn Out,
+    _out: &Arc<dyn Out>,
     cfg: &Config,
     sub_args: &AddExemptionArgs,
 ) -> Result<(), miette::Report> {
@@ -1114,7 +1155,7 @@ fn cmd_add_exemption(
 }
 
 fn cmd_suggest(
-    out: &mut dyn Out,
+    out: &Arc<dyn Out>,
     cfg: &Config,
     sub_args: &SuggestArgs,
 ) -> Result<(), miette::Report> {
@@ -1146,7 +1187,7 @@ fn cmd_suggest(
 }
 
 fn cmd_regenerate_imports(
-    out: &mut dyn Out,
+    out: &Arc<dyn Out>,
     cfg: &Config,
     _sub_args: &RegenerateImportsArgs,
 ) -> Result<(), miette::Report> {
@@ -1172,14 +1213,13 @@ fn cmd_regenerate_imports(
     writeln!(
         out,
         "warning: ran `regenerate imports` with --locked, this won't do anything!"
-    )
-    .into_diagnostic()?;
+    );
 
     Ok(())
 }
 
 fn cmd_regenerate_audit_as(
-    _out: &mut dyn Out,
+    _out: &Arc<dyn Out>,
     cfg: &Config,
     _sub_args: &RegenerateAuditAsCratesIoArgs,
 ) -> Result<(), miette::Report> {
@@ -1234,7 +1274,7 @@ fn fix_audit_as(cfg: &Config, store: &mut Store) -> Result<(), CacheAcquireError
 }
 
 fn cmd_regenerate_exemptions(
-    _out: &mut dyn Out,
+    _out: &Arc<dyn Out>,
     cfg: &Config,
     _sub_args: &RegenerateExemptionsArgs,
 ) -> Result<(), miette::Report> {
@@ -1352,7 +1392,7 @@ pub fn minimize_exemptions(
     Ok(())
 }
 
-fn cmd_diff(out: &mut dyn Out, cfg: &Config, sub_args: &DiffArgs) -> Result<(), miette::Report> {
+fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(), miette::Report> {
     let store = Store::acquire(cfg)?;
     let cache = Cache::acquire(cfg)?;
     let network = Network::acquire(cfg);
@@ -1393,7 +1433,7 @@ fn cmd_diff(out: &mut dyn Out, cfg: &Config, sub_args: &DiffArgs) -> Result<(), 
         pkgs.into_diagnostic()
     })?;
 
-    writeln!(out).into_diagnostic()?;
+    writeln!(out);
 
     // FIXME: mask out .cargo_vcs_info.json
 
@@ -1409,7 +1449,7 @@ fn cmd_diff(out: &mut dyn Out, cfg: &Config, sub_args: &DiffArgs) -> Result<(), 
     Ok(())
 }
 
-fn cmd_check(out: &mut dyn Out, cfg: &Config, sub_args: &CheckArgs) -> Result<(), miette::Report> {
+fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
@@ -1466,7 +1506,7 @@ fn cmd_check(out: &mut dyn Out, cfg: &Config, sub_args: &CheckArgs) -> Result<()
 }
 
 fn cmd_fetch_imports(
-    out: &mut dyn Out,
+    out: &Arc<dyn Out>,
     cfg: &Config,
     _sub_args: &FetchImportsArgs,
 ) -> Result<(), miette::Report> {
@@ -1490,14 +1530,13 @@ fn cmd_fetch_imports(
     writeln!(
         out,
         "warning: ran fetch-imports with --locked, this won't do anything!"
-    )
-    .into_diagnostic()?;
+    );
 
     Ok(())
 }
 
 fn cmd_dump_graph(
-    out: &mut dyn Out,
+    out: &Arc<dyn Out>,
     cfg: &Config,
     sub_args: &DumpGraphArgs,
 ) -> Result<(), miette::Report> {
@@ -1507,13 +1546,15 @@ fn cmd_dump_graph(
     let graph = resolver::DepGraph::new(&cfg.metadata, cfg.cli.filter_graph.as_ref(), None);
     match cfg.cli.output_format {
         OutputFormat::Human => graph.print_mermaid(out, sub_args).into_diagnostic()?,
-        OutputFormat::Json => serde_json::to_writer_pretty(out, &graph.nodes).into_diagnostic()?,
+        OutputFormat::Json => {
+            serde_json::to_writer_pretty(&**out, &graph.nodes).into_diagnostic()?
+        }
     }
 
     Ok(())
 }
 
-fn cmd_fmt(_out: &mut dyn Out, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), miette::Report> {
+fn cmd_fmt(_out: &Arc<dyn Out>, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), miette::Report> {
     // Reformat all the files (just load and store them, formatting is implicit).
     trace!("formatting...");
     let store = Store::acquire(cfg)?;
@@ -1523,7 +1564,7 @@ fn cmd_fmt(_out: &mut dyn Out, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), 
 
 /// Perform crimes on clap long_help to generate markdown docs
 fn cmd_help_md(
-    out: &mut dyn Out,
+    out: &Arc<dyn Out>,
     _cfg: &PartialConfig,
     _sub_args: &HelpMarkdownArgs,
 ) -> Result<(), miette::Report> {
@@ -1531,14 +1572,13 @@ fn cmd_help_md(
     let pretty_app_name = "cargo vet";
     // Make a new App to get the help message this time.
 
-    writeln!(out, "# {pretty_app_name} CLI manual").into_diagnostic()?;
-    writeln!(out).into_diagnostic()?;
+    writeln!(out, "# {pretty_app_name} CLI manual");
+    writeln!(out);
     writeln!(
         out,
         "> This manual can be regenerated with `{pretty_app_name} help-markdown`"
-    )
-    .into_diagnostic()?;
-    writeln!(out).into_diagnostic()?;
+    );
+    writeln!(out);
 
     let mut fake_cli = FakeCli::command().term_width(0);
     let full_command = fake_cli.get_subcommands_mut().next().unwrap();
@@ -1557,12 +1597,12 @@ fn cmd_help_md(
         let subcommand_name = command.get_name();
 
         if is_full_command {
-            writeln!(out, "Version: `{version_line}`").into_diagnostic()?;
-            writeln!(out).into_diagnostic()?;
+            writeln!(out, "Version: `{version_line}`");
+            writeln!(out);
         } else {
             // Give subcommands some breathing room
-            writeln!(out, "<br><br><br>").into_diagnostic()?;
-            writeln!(out, "## {pretty_app_name} {subcommand_name}").into_diagnostic()?;
+            writeln!(out, "<br><br><br>");
+            writeln!(out, "## {pretty_app_name} {subcommand_name}");
         }
 
         let mut in_subcommands_listing = false;
@@ -1578,17 +1618,16 @@ fn cmd_help_md(
                         in_usage = heading == "USAGE";
                         in_global_options = heading == "GLOBAL OPTIONS";
 
-                        writeln!(out, "### {heading}").into_diagnostic()?;
+                        writeln!(out, "### {heading}");
 
                         if in_global_options && !is_full_command {
                             writeln!(
                                 out,
                                 "This subcommand accepts all the [global options](#global-options)"
-                            )
-                            .into_diagnostic()?;
+                            );
                         }
                     } else {
-                        writeln!(out, "### {heading}").into_diagnostic()?;
+                        writeln!(out, "### {heading}");
                     }
                     continue;
                 }
@@ -1605,8 +1644,7 @@ fn cmd_help_md(
                 write!(
                     out,
                     "* [{own_subcommand_name}](#{app_name}-{own_subcommand_name}): "
-                )
-                .into_diagnostic()?;
+                );
                 continue;
             }
             // The rest is indented, get rid of that
@@ -1614,28 +1652,28 @@ fn cmd_help_md(
 
             // Usage strings get wrapped in full code blocks
             if in_usage && line.starts_with(pretty_app_name) {
-                writeln!(out, "```").into_diagnostic()?;
-                writeln!(out, "{line}").into_diagnostic()?;
-                writeln!(out, "```").into_diagnostic()?;
+                writeln!(out, "```");
+                writeln!(out, "{line}");
+                writeln!(out, "```");
                 continue;
             }
 
             // argument names are subheadings
             if line.starts_with('-') || line.starts_with('<') {
-                writeln!(out, "#### `{line}`").into_diagnostic()?;
+                writeln!(out, "#### `{line}`");
                 continue;
             }
 
             // escape default/value strings
             if line.starts_with('[') {
-                writeln!(out, "\\{line}  ").into_diagnostic()?;
+                writeln!(out, "\\{line}  ");
                 continue;
             }
 
             // Normal paragraph text
-            writeln!(out, "{line}").into_diagnostic()?;
+            writeln!(out, "{line}");
         }
-        writeln!(out).into_diagnostic()?;
+        writeln!(out);
 
         // The todo list is a stack, and processed in reverse-order, append
         // these commands to the end in reverse-order so the first command is
@@ -1654,7 +1692,11 @@ fn cmd_help_md(
     Ok(())
 }
 
-fn cmd_gc(out: &mut dyn Out, cfg: &PartialConfig, sub_args: &GcArgs) -> Result<(), miette::Report> {
+fn cmd_gc(
+    out: &Arc<dyn Out>,
+    cfg: &PartialConfig,
+    sub_args: &GcArgs,
+) -> Result<(), miette::Report> {
     let cache = Cache::acquire(cfg)?;
 
     if sub_args.clean {
@@ -1662,8 +1704,7 @@ fn cmd_gc(out: &mut dyn Out, cfg: &PartialConfig, sub_args: &GcArgs) -> Result<(
             out,
             "cleaning entire contents of cache directory: {}",
             cfg.cache_dir.display()
-        )
-        .into_diagnostic()?;
+        );
         cache.clean_sync().into_diagnostic()?;
         return Ok(());
     }

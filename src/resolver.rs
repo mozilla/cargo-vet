@@ -67,6 +67,7 @@ use futures_util::future::join_all;
 use miette::IntoDiagnostic;
 use serde::Serialize;
 use serde_json::json;
+use std::sync::Arc;
 use tracing::{error, trace, trace_span, warn};
 
 use crate::errors::SuggestError;
@@ -1022,7 +1023,7 @@ impl<'a> DepGraph<'a> {
 
     pub fn print_mermaid(
         &self,
-        out: &mut dyn Out,
+        out: &Arc<dyn Out>,
         sub_args: &DumpGraphArgs,
     ) -> Result<(), std::io::Error> {
         use crate::DumpGraphDepth::*;
@@ -1049,9 +1050,9 @@ impl<'a> DepGraph<'a> {
             }
         }
 
-        writeln!(out, "graph LR")?;
+        writeln!(out, "graph LR");
 
-        writeln!(out, "    subgraph roots")?;
+        writeln!(out, "    subgraph roots");
         for &idx in &visible_nodes {
             let package = &self.nodes[idx];
             if package.is_root && shown.insert(idx) {
@@ -1059,12 +1060,12 @@ impl<'a> DepGraph<'a> {
                     out,
                     "        node{idx}{{{}:{}}}",
                     package.name, package.version
-                )?;
+                );
             }
         }
-        writeln!(out, "    end")?;
+        writeln!(out, "    end");
 
-        writeln!(out, "    subgraph workspace-members")?;
+        writeln!(out, "    subgraph workspace-members");
         for &idx in &visible_nodes {
             let package = &self.nodes[idx];
             if package.is_workspace_member && shown.insert(idx) {
@@ -1072,12 +1073,12 @@ impl<'a> DepGraph<'a> {
                     out,
                     "        node{idx}[/{}:{}/]",
                     package.name, package.version
-                )?;
+                );
             }
         }
-        writeln!(out, "    end")?;
+        writeln!(out, "    end");
 
-        writeln!(out, "    subgraph first-party")?;
+        writeln!(out, "    subgraph first-party");
         for &idx in &visible_nodes {
             let package = &self.nodes[idx];
             if !package.is_third_party && shown.insert(idx) {
@@ -1085,12 +1086,12 @@ impl<'a> DepGraph<'a> {
                     out,
                     "        node{idx}[{}:{}]",
                     package.name, package.version
-                )?;
+                );
             }
         }
-        writeln!(out, "    end")?;
+        writeln!(out, "    end");
 
-        writeln!(out, "    subgraph third-party")?;
+        writeln!(out, "    subgraph third-party");
         for &idx in &visible_nodes {
             let package = &self.nodes[idx];
             if shown.insert(idx) {
@@ -1098,16 +1099,16 @@ impl<'a> DepGraph<'a> {
                     out,
                     "        node{idx}({}:{})",
                     package.name, package.version
-                )?;
+                );
             }
         }
-        writeln!(out, "    end")?;
+        writeln!(out, "    end");
 
         for &idx in &nodes_with_children {
             let package = &self.nodes[idx];
             for &dep_idx in &package.all_deps {
                 if visible_nodes.contains(&dep_idx) {
-                    writeln!(out, "    node{idx} --> node{dep_idx}")?;
+                    writeln!(out, "    node{idx} --> node{dep_idx}");
                 }
             }
         }
@@ -2589,7 +2590,7 @@ impl<'a> ResolveReport<'a> {
     /// Print a full human-readable report
     pub fn print_human(
         &self,
-        out: &mut dyn Out,
+        out: &Arc<dyn Out>,
         cfg: &Config,
         suggest: Option<&Suggest>,
     ) -> Result<(), std::io::Error> {
@@ -2603,7 +2604,7 @@ impl<'a> ResolveReport<'a> {
     /// Print only the suggest portion of a human-readable report
     pub fn print_suggest_human(
         &self,
-        out: &mut dyn Out,
+        out: &Arc<dyn Out>,
         _cfg: &Config,
         suggest: Option<&Suggest>,
     ) -> Result<(), std::io::Error> {
@@ -2611,7 +2612,7 @@ impl<'a> ResolveReport<'a> {
             suggest.print_human(out, self)?;
         } else {
             // This API is only used for vet-suggest
-            writeln!(out, "Nothing to suggest, you're fully audited!")?;
+            writeln!(out, "Nothing to suggest, you're fully audited!");
         }
         Ok(())
     }
@@ -2619,7 +2620,7 @@ impl<'a> ResolveReport<'a> {
     /// Print a full human-readable report
     pub fn print_json(
         &self,
-        out: &mut dyn Out,
+        out: &Arc<dyn Out>,
         _cfg: &Config,
         suggest: Option<&Suggest>,
     ) -> Result<(), miette::Report> {
@@ -2677,7 +2678,7 @@ impl<'a> ResolveReport<'a> {
             }
         };
 
-        serde_json::to_writer_pretty(out, &result).into_diagnostic()?;
+        serde_json::to_writer_pretty(&**out, &result).into_diagnostic()?;
 
         Ok(())
     }
@@ -2686,7 +2687,7 @@ impl<'a> ResolveReport<'a> {
 impl Success {
     pub fn print_human(
         &self,
-        out: &mut dyn Out,
+        out: &Arc<dyn Out>,
         _report: &ResolveReport,
         _cfg: &Config,
     ) -> Result<(), std::io::Error> {
@@ -2704,33 +2705,33 @@ impl Success {
             writeln!(
                 out,
                 "Vetting Succeeded (because you have no third-party dependencies)"
-            )?;
+            );
         } else {
-            write!(out, "Vetting Succeeded (")?;
+            write!(out, "Vetting Succeeded (");
 
             if fully_audited_count != 0 {
-                write!(out, "{} fully audited", fully_audited_count)?;
+                write!(out, "{} fully audited", fully_audited_count);
                 count_count -= 1;
                 if count_count > 0 {
-                    write!(out, ", ")?;
+                    write!(out, ", ");
                 }
             }
             if partially_audited_count != 0 {
-                write!(out, "{} partially audited", partially_audited_count)?;
+                write!(out, "{} partially audited", partially_audited_count);
                 count_count -= 1;
                 if count_count > 0 {
-                    write!(out, ", ")?;
+                    write!(out, ", ");
                 }
             }
             if exemptions_count != 0 {
-                write!(out, "{} exempted", exemptions_count)?;
+                write!(out, "{} exempted", exemptions_count);
                 count_count -= 1;
                 if count_count > 0 {
-                    write!(out, ", ")?;
+                    write!(out, ", ");
                 }
             }
 
-            writeln!(out, ")")?;
+            writeln!(out, ")");
         }
         Ok(())
     }
@@ -2739,11 +2740,11 @@ impl Success {
 impl Suggest {
     pub fn print_human(
         &self,
-        out: &mut dyn Out,
+        out: &Arc<dyn Out>,
         report: &ResolveReport,
     ) -> Result<(), std::io::Error> {
         for (criteria, suggestions) in &self.suggestions_by_criteria {
-            writeln!(out, "recommended audits for {}:", criteria)?;
+            writeln!(out, "recommended audits for {}:", criteria);
 
             let strings = suggestions
                 .iter()
@@ -2791,20 +2792,20 @@ impl Suggest {
                         .cyan()
                         .bold()
                         .apply_to(format_args!("    {s0:width$}", width = max0))
-                )?;
+                );
                 writeln!(
                     out,
                     "{}",
                     style.apply_to(format_args!("  {s1:width$}  {s2}", width = max1))
-                )?;
+                );
             }
 
-            writeln!(out)?;
+            writeln!(out);
         }
 
-        writeln!(out, "estimated audit backlog: {} lines", self.total_lines)?;
-        writeln!(out)?;
-        writeln!(out, "Use |cargo vet certify| to record the audits.")?;
+        writeln!(out, "estimated audit backlog: {} lines", self.total_lines);
+        writeln!(out);
+        writeln!(out, "Use |cargo vet certify| to record the audits.");
 
         Ok(())
     }
@@ -2813,14 +2814,14 @@ impl Suggest {
 impl FailForVet {
     fn print_human(
         &self,
-        out: &mut dyn Out,
+        out: &Arc<dyn Out>,
         report: &ResolveReport,
         _cfg: &Config,
         suggest: Option<&Suggest>,
     ) -> Result<(), std::io::Error> {
-        writeln!(out, "Vetting Failed!")?;
-        writeln!(out)?;
-        writeln!(out, "{} unvetted dependencies:", self.failures.len())?;
+        writeln!(out, "Vetting Failed!");
+        writeln!(out);
+        writeln!(out, "{} unvetted dependencies:", self.failures.len());
         let mut failures = self
             .failures
             .iter()
@@ -2841,7 +2842,7 @@ impl FailForVet {
 
             let label = format!("  {}:{}", failed_package.name, failed_package.version);
             if !confident_criteria.is_empty() {
-                writeln!(out, "{} missing {:?}", label, confident_criteria)?;
+                writeln!(out, "{} missing {:?}", label, confident_criteria);
             }
             if !unconfident_criteria.is_empty() {
                 writeln!(
@@ -2856,13 +2857,13 @@ impl FailForVet {
                         },
                         unconfident_criteria
                     ))
-                )?;
+                );
             }
         }
 
         // Suggest output generally requires hitting the network.
         if let Some(suggest) = suggest {
-            writeln!(out)?;
+            writeln!(out);
             suggest.print_human(out, report)?;
         }
 
@@ -2873,15 +2874,15 @@ impl FailForVet {
 impl FailForViolationConflict {
     fn print_human(
         &self,
-        out: &mut dyn Out,
+        out: &Arc<dyn Out>,
         report: &ResolveReport,
         _cfg: &Config,
     ) -> Result<(), std::io::Error> {
-        writeln!(out, "Violations Found!")?;
+        writeln!(out, "Violations Found!");
 
         for (&pkgidx, violations) in &self.violations {
             let package = &report.graph.nodes[pkgidx];
-            writeln!(out, "  {}:{}", package.name, package.version)?;
+            writeln!(out, "  {}:{}", package.name, package.version);
             for violation in violations {
                 match violation {
                     ViolationConflict::UnauditedConflict {
@@ -2889,9 +2890,9 @@ impl FailForViolationConflict {
                         violation,
                         exemptions,
                     } => {
-                        write!(out, "    the ")?;
+                        write!(out, "    the ");
                         print_exemption(out, exemptions)?;
-                        write!(out, "    conflicts with ")?;
+                        write!(out, "    conflicts with ");
                         print_entry(out, violation_source, violation)?;
                     }
                     ViolationConflict::AuditConflict {
@@ -2900,54 +2901,54 @@ impl FailForViolationConflict {
                         audit_source,
                         audit,
                     } => {
-                        write!(out, "    the ")?;
+                        write!(out, "    the ");
                         print_entry(out, audit_source, audit)?;
-                        write!(out, "    conflicts with ")?;
+                        write!(out, "    conflicts with ");
                         print_entry(out, violation_source, violation)?;
                     }
                 }
-                writeln!(out)?;
+                writeln!(out);
             }
         }
 
         fn print_exemption(
-            out: &mut dyn Out,
+            out: &Arc<dyn Out>,
             entry: &ExemptedDependency,
         ) -> Result<(), std::io::Error> {
-            writeln!(out, "exemption {}", entry.version)?;
-            writeln!(out, "      criteria: {:?}", entry.criteria)?;
+            writeln!(out, "exemption {}", entry.version);
+            writeln!(out, "      criteria: {:?}", entry.criteria);
             if let Some(notes) = &entry.notes {
-                writeln!(out, "      notes: {notes}")?;
+                writeln!(out, "      notes: {notes}");
             }
             Ok(())
         }
 
         fn print_entry(
-            out: &mut dyn Out,
+            out: &Arc<dyn Out>,
             source: &AuditSource,
             entry: &AuditEntry,
         ) -> Result<(), std::io::Error> {
             match source {
-                AuditSource::OwnAudits => write!(out, "own ")?,
-                AuditSource::Foreign(name) => write!(out, "foreign ({name}) ")?,
+                AuditSource::OwnAudits => write!(out, "own "),
+                AuditSource::Foreign(name) => write!(out, "foreign ({name}) "),
             }
             match &entry.kind {
                 AuditKind::Full { version, .. } => {
-                    writeln!(out, "audit {version}")?;
+                    writeln!(out, "audit {version}");
                 }
                 AuditKind::Delta { delta, .. } => {
-                    writeln!(out, "audit {} -> {}", delta.from, delta.to)?;
+                    writeln!(out, "audit {} -> {}", delta.from, delta.to);
                 }
                 AuditKind::Violation { violation } => {
-                    writeln!(out, "violation against {violation}")?;
+                    writeln!(out, "violation against {violation}");
                 }
             }
-            writeln!(out, "      criteria: {:?}", entry.criteria)?;
+            writeln!(out, "      criteria: {:?}", entry.criteria);
             if let Some(who) = &entry.who {
-                writeln!(out, "      who: {who}")?;
+                writeln!(out, "      who: {who}");
             }
             if let Some(notes) = &entry.notes {
-                writeln!(out, "      notes: {notes}")?;
+                writeln!(out, "      notes: {notes}");
             }
             Ok(())
         }
