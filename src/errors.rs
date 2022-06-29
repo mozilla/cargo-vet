@@ -4,7 +4,7 @@ use cargo_metadata::Version;
 use miette::{Diagnostic, NamedSource, SourceOffset, SourceSpan};
 use thiserror::Error;
 
-use crate::format::{ImportName, PackageName};
+use crate::format::{ForeignCriteriaName, ImportName, PackageName};
 
 pub type SourceFile = Arc<NamedSource>;
 
@@ -444,6 +444,29 @@ pub enum FetchAuditError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     Validate(#[from] StoreValidateErrors),
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    CriteriaChange(#[from] CriteriaChangeErrors),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("Some of your imported audits changed their criteria descriptions")]
+#[diagnostic()]
+pub struct CriteriaChangeErrors {
+    #[related]
+    pub errors: Vec<CriteriaChangeError>,
+}
+#[derive(Debug, Error, Diagnostic)]
+// FIXME: it would be rad if this was a diff!
+#[error(
+    "{import_name}'s '{criteria_name}' criteria changed from\n\n{old_desc}\n\nto\n\n{new_desc}\n"
+)]
+#[diagnostic(help("Run `cargo vet regenerate imports` to accept this new definition"))]
+pub struct CriteriaChangeError {
+    pub import_name: ImportName,
+    pub criteria_name: ForeignCriteriaName,
+    pub old_desc: String,
+    pub new_desc: String,
 }
 
 //////////////////////////////////////////////////////////

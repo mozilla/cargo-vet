@@ -1146,13 +1146,36 @@ fn cmd_suggest(
 }
 
 fn cmd_regenerate_imports(
-    _out: &mut dyn Out,
-    _cfg: &Config,
+    out: &mut dyn Out,
+    cfg: &Config,
     _sub_args: &RegenerateImportsArgs,
 ) -> Result<(), miette::Report> {
-    // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("regenerating imports...");
-    todo!();
+
+    let mut store = Store::acquire(cfg)?;
+    let network = Network::acquire(cfg);
+
+    if let Some(network) = &network {
+        if !cfg.cli.locked {
+            // Literally the only difference between this command and fetch-imports
+            // is that we pass `accept_changes = true`
+            tokio::runtime::Handle::current()
+                .block_on(store.fetch_foreign_audits(network, true))?;
+            store.commit()?;
+            return Ok(());
+        }
+    }
+
+    // ERRORS: just a warning that you're holding it wrong, unclear if immediate or buffered,
+    // or if this should be a hard error, or if we should ignore the --locked flag and
+    // just do it anyway
+    writeln!(
+        out,
+        "warning: ran `regenerate imports` with --locked, this won't do anything!"
+    )
+    .into_diagnostic()?;
+
+    Ok(())
 }
 
 fn cmd_regenerate_audit_as(
@@ -1160,7 +1183,6 @@ fn cmd_regenerate_audit_as(
     cfg: &Config,
     _sub_args: &RegenerateAuditAsCratesIoArgs,
 ) -> Result<(), miette::Report> {
-    // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("regenerating unaudited...");
     let mut store = Store::acquire(cfg)?;
 
@@ -1397,7 +1419,8 @@ fn cmd_check(out: &mut dyn Out, cfg: &Config, sub_args: &CheckArgs) -> Result<()
     if !cfg.cli.locked {
         // Try to update the foreign audits (imports)
         if let Some(network) = &network {
-            tokio::runtime::Handle::current().block_on(store.fetch_foreign_audits(network))?;
+            tokio::runtime::Handle::current()
+                .block_on(store.fetch_foreign_audits(network, false))?;
         }
 
         // Check if any of our first-parties are in the crates.io registry
@@ -1454,7 +1477,8 @@ fn cmd_fetch_imports(
 
     if let Some(network) = &network {
         if !cfg.cli.locked {
-            tokio::runtime::Handle::current().block_on(store.fetch_foreign_audits(network))?;
+            tokio::runtime::Handle::current()
+                .block_on(store.fetch_foreign_audits(network, false))?;
             store.commit()?;
             return Ok(());
         }

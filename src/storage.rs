@@ -11,7 +11,7 @@ use std::{
 use cargo_metadata::Version;
 use crates_index::Index;
 use flate2::read::GzDecoder;
-use futures_util::future::try_join_all;
+use futures_util::future::{join_all, try_join_all};
 use miette::{NamedSource, SourceOffset};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -20,11 +20,11 @@ use tracing::{error, info, log::warn, trace};
 
 use crate::{
     errors::{
-        CacheAcquireError, CacheCommitError, CommandError, DiffError, FetchAndDiffError,
-        FetchAuditError, FetchError, FlockError, InvalidCriteriaError, JsonParseError,
-        LoadJsonError, LoadTomlError, SourceFile, StoreAcquireError, StoreCommitError,
-        StoreCreateError, StoreJsonError, StoreTomlError, StoreValidateError, StoreValidateErrors,
-        TomlParseError, UnpackError,
+        CacheAcquireError, CacheCommitError, CommandError, CriteriaChangeError,
+        CriteriaChangeErrors, DiffError, FetchAndDiffError, FetchAuditError, FetchError,
+        FlockError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError, SourceFile,
+        StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError,
+        StoreValidateError, StoreValidateErrors, TomlParseError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
@@ -427,18 +427,72 @@ impl Store {
     }
 
     /// Fetch foreign audits, only call this is we're not --locked
-    pub async fn fetch_foreign_audits(&mut self, network: &Network) -> Result<(), FetchAuditError> {
-        let new_imports = ImportsFile {
-            audits: try_join_all(self.config.imports.iter().map(|(name, import)| async {
+    pub async fn fetch_foreign_audits(
+        &mut self,
+        network: &Network,
+        accept_changes: bool,
+    ) -> Result<(), FetchAuditError> {
+        let raw_new_imports =
+            try_join_all(self.config.imports.iter().map(|(name, import)| async {
                 let audit_file = fetch_foreign_audit(network, name, &import.url).await?;
-                Ok::<_, FetchAuditError>((name.clone(), audit_file))
+                // Fetch the descriptions to cache them and check that they haven't changed
+                // FIXME: this should probably treat failing to fetch as an error but eula_for_criteria
+                // hides errors... should we have two versions? Or make it the caller's problem?
+                let new_descs = join_all(audit_file.criteria.iter().map(|(criteria, _)| async {
+                    (
+                        criteria.clone(),
+                        crate::eula_for_criteria(Some(network), &audit_file.criteria, criteria)
+                            .await,
+                    )
+                }))
+                .await;
+                Ok::<_, FetchAuditError>((name.clone(), audit_file, new_descs))
             }))
-            .await?
-            .into_iter()
-            .collect(),
-        };
+            .await?;
 
-        // TODO(#68): error out if the criteria changed
+        let mut new_imports = ImportsFile {
+            audits: SortedMap::new(),
+        };
+        let mut criteria_changes = vec![];
+        for (import_name, mut audits_file, new_descs) in raw_new_imports {
+            for (criteria_name, new_desc) in new_descs {
+                if !accept_changes {
+                    // Check that the new description doesn't modify an existing old one
+                    if let Some(old_entry) = self
+                        .imports
+                        .audits
+                        .get(&import_name)
+                        .and_then(|file| file.criteria.get(&criteria_name))
+                    {
+                        let old_desc = old_entry.description.as_ref().unwrap();
+                        if old_desc != &new_desc {
+                            criteria_changes.push(CriteriaChangeError {
+                                import_name: import_name.clone(),
+                                criteria_name: criteria_name.to_owned(),
+                                old_desc: old_desc.clone(),
+                                new_desc,
+                            });
+                            continue;
+                        }
+                    }
+                }
+
+                // Store the new fetched description
+                audits_file
+                    .criteria
+                    .get_mut(&criteria_name)
+                    .unwrap()
+                    .description = Some(new_desc);
+            }
+
+            // Now add the new import
+            new_imports.audits.insert(import_name, audits_file);
+        }
+        if !criteria_changes.is_empty() {
+            Err(CriteriaChangeErrors {
+                errors: criteria_changes,
+            })?;
+        }
 
         // Accept the new imports. These will only be committed if the current command succeeds.
         self.imports = new_imports;
