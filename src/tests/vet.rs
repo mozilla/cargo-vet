@@ -17,14 +17,14 @@ fn mock_simple_init() {
 }
 
 #[test]
-fn mock_simple_no_unaudited() {
-    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+fn mock_simple_no_exemptions() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'exemptions' entries deleted.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = files_no_unaudited(&metadata);
+    let (config, audits, imports) = files_no_exemptions(&metadata);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -67,14 +67,14 @@ fn builtin_simple_init() {
 }
 
 #[test]
-fn builtin_simple_no_unaudited() {
-    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+fn builtin_simple_no_exemptions() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'exemptions' entries deleted.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+    let (config, audits, imports) = builtin_files_no_exemptions(&metadata);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -332,8 +332,8 @@ fn mock_simple_reviewed_too_weakly() {
 }
 
 #[test]
-fn mock_simple_delta_to_unaudited() {
-    // (Pass) A dep has a delta to an unaudited entry
+fn mock_simple_delta_to_exemptions() {
+    // (Pass) A dep has a delta to an exemptions entry
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -349,10 +349,10 @@ fn mock_simple_delta_to_unaudited() {
         DEFAULT_CRIT,
     ));
 
-    let direct_unaudited = &mut config.unaudited;
-    direct_unaudited.insert(
+    let direct_exemptions = &mut config.exemptions;
+    direct_exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
+        vec![exemptions(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -363,8 +363,8 @@ fn mock_simple_delta_to_unaudited() {
 }
 
 #[test]
-fn mock_simple_delta_to_unaudited_overshoot() {
-    // (Fail) A dep has a delta but it overshoots the unaudited entry.
+fn mock_simple_delta_to_exemptions_overshoot() {
+    // (Fail) A dep has a delta but it overshoots the exemptions entry.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -380,10 +380,10 @@ fn mock_simple_delta_to_unaudited_overshoot() {
         DEFAULT_CRIT,
     ));
 
-    let direct_unaudited = &mut config.unaudited;
-    direct_unaudited.insert(
+    let direct_exemptions = &mut config.exemptions;
+    direct_exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
+        vec![exemptions(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -394,8 +394,8 @@ fn mock_simple_delta_to_unaudited_overshoot() {
 }
 
 #[test]
-fn mock_simple_delta_to_unaudited_undershoot() {
-    // (Fail) A dep has a delta but it undershoots the unaudited entry.
+fn mock_simple_delta_to_exemptions_undershoot() {
+    // (Fail) A dep has a delta but it undershoots the exemptions entry.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -411,10 +411,10 @@ fn mock_simple_delta_to_unaudited_undershoot() {
         DEFAULT_CRIT,
     ));
 
-    let direct_unaudited = &mut config.unaudited;
-    direct_unaudited.insert(
+    let direct_exemptions = &mut config.exemptions;
+    direct_exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
+        vec![exemptions(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -529,8 +529,8 @@ fn mock_simple_reverse_delta_to_full_audit() {
 }
 
 #[test]
-fn mock_simple_reverse_delta_to_unaudited() {
-    // (Pass) A dep has a *reverse* delta to an unaudited entry
+fn mock_simple_reverse_delta_to_exemptions() {
+    // (Pass) A dep has a *reverse* delta to an exemptions entry
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -546,10 +546,10 @@ fn mock_simple_reverse_delta_to_unaudited() {
         DEFAULT_CRIT,
     ));
 
-    let direct_unaudited = &mut config.unaudited;
-    direct_unaudited.insert(
+    let direct_exemptions = &mut config.exemptions;
+    direct_exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(DEFAULT_VER + 5), DEFAULT_CRIT)],
+        vec![exemptions(ver(DEFAULT_VER + 5), DEFAULT_CRIT)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -560,8 +560,8 @@ fn mock_simple_reverse_delta_to_unaudited() {
 }
 
 #[test]
-fn mock_simple_wrongly_reversed_delta_to_unaudited() {
-    // (Fail) A dep has a *reverse* delta to an unaudited entry but they needed a normal one
+fn mock_simple_wrongly_reversed_delta_to_exemptions() {
+    // (Fail) A dep has a *reverse* delta to an exemptions entry but they needed a normal one
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -577,10 +577,10 @@ fn mock_simple_wrongly_reversed_delta_to_unaudited() {
         DEFAULT_CRIT,
     ));
 
-    let direct_unaudited = &mut config.unaudited;
-    direct_unaudited.insert(
+    let direct_exemptions = &mut config.exemptions;
+    direct_exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
+        vec![exemptions(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -617,8 +617,8 @@ fn mock_simple_wrongly_reversed_delta_to_full_audit() {
 }
 
 #[test]
-fn mock_simple_needed_reversed_delta_to_unaudited() {
-    // (Fail) A dep has a delta to an unaudited entry but they needed a reversed one
+fn mock_simple_needed_reversed_delta_to_exemptions() {
+    // (Fail) A dep has a delta to an exemptions entry but they needed a reversed one
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -634,10 +634,10 @@ fn mock_simple_needed_reversed_delta_to_unaudited() {
         DEFAULT_CRIT,
     ));
 
-    let direct_unaudited = &mut config.unaudited;
-    direct_unaudited.insert(
+    let direct_exemptions = &mut config.exemptions;
+    direct_exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(DEFAULT_VER + 5), DEFAULT_CRIT)],
+        vec![exemptions(ver(DEFAULT_VER + 5), DEFAULT_CRIT)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -648,8 +648,8 @@ fn mock_simple_needed_reversed_delta_to_unaudited() {
 }
 
 #[test]
-fn mock_simple_delta_to_unaudited_too_weak() {
-    // (Fail) A dep has a delta to an unaudited entry but it's too weak
+fn mock_simple_delta_to_exemptions_too_weak() {
+    // (Fail) A dep has a delta to an exemptions entry but it's too weak
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -665,10 +665,10 @@ fn mock_simple_delta_to_unaudited_too_weak() {
         "weak-reviewed",
     ));
 
-    let direct_unaudited = &mut config.unaudited;
-    direct_unaudited.insert(
+    let direct_exemptions = &mut config.exemptions;
+    direct_exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
+        vec![exemptions(ver(DEFAULT_VER - 5), DEFAULT_CRIT)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -732,7 +732,7 @@ fn mock_simple_delta_to_too_weak_full_audit() {
 
 #[test]
 fn mock_complex_inited() {
-    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'exemptions' entries deleted.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
@@ -746,13 +746,13 @@ fn mock_complex_inited() {
 }
 
 #[test]
-fn mock_complex_no_unaudited() {
-    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+fn mock_complex_no_exemptions() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'exemptions' entries deleted.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
-    let (config, audits, imports) = files_no_unaudited(&metadata);
+    let (config, audits, imports) = files_no_exemptions(&metadata);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -777,7 +777,7 @@ fn mock_complex_full_audited() {
 
 #[test]
 fn builtin_complex_inited() {
-    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'exemptions' entries deleted.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
@@ -791,13 +791,13 @@ fn builtin_complex_inited() {
 }
 
 #[test]
-fn builtin_complex_no_unaudited() {
-    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+fn builtin_complex_no_exemptions() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'exemptions' entries deleted.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
-    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+    let (config, audits, imports) = builtin_files_no_exemptions(&metadata);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -1338,14 +1338,14 @@ fn builtin_simple_deps_inited() {
 }
 
 #[test]
-fn builtin_simple_deps_no_unaudited() {
-    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+fn builtin_simple_deps_no_exemptions() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'exemptions' entries deleted.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+    let (config, audits, imports) = builtin_files_no_exemptions(&metadata);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -1456,14 +1456,14 @@ fn builtin_cycle_inited() {
 }
 
 #[test]
-fn builtin_cycle_unaudited() {
-    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+fn builtin_cycle_exemptions() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'exemptions' entries deleted.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::cycle();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+    let (config, audits, imports) = builtin_files_no_exemptions(&metadata);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -1515,7 +1515,7 @@ fn builtin_dev_detection() {
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = builtin_files_no_unaudited(&metadata);
+    let (config, mut audits, imports) = builtin_files_no_exemptions(&metadata);
     audits.audits.insert(
         "normal".to_string(),
         vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -1556,7 +1556,7 @@ fn builtin_dev_detection_empty() {
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+    let (config, audits, imports) = builtin_files_no_exemptions(&metadata);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -1573,7 +1573,7 @@ fn builtin_dev_detection_empty_deeper() {
     let mock = MockMetadata::dev_detection();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+    let (config, audits, imports) = builtin_files_no_exemptions(&metadata);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Deep);
@@ -1583,9 +1583,9 @@ fn builtin_dev_detection_empty_deeper() {
 }
 
 #[test]
-fn builtin_simple_unaudited_extra() {
-    // (Pass) there's an extra unused unaudited entry, but the other is needed
-    // (This test could warn if we try to detect "useless unaudited" eagerly)
+fn builtin_simple_exemptions_extra() {
+    // (Pass) there's an extra unused exemptions entry, but the other is needed
+    // (This test could warn if we try to detect "useless exemptions" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1595,11 +1595,11 @@ fn builtin_simple_unaudited_extra() {
 
     audits.audits.insert("third-party1".to_string(), vec![]);
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
         vec![
-            unaudited(ver(5), SAFE_TO_DEPLOY),
-            unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+            exemptions(ver(5), SAFE_TO_DEPLOY),
+            exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
         ],
     );
 
@@ -1611,9 +1611,9 @@ fn builtin_simple_unaudited_extra() {
 }
 
 #[test]
-fn builtin_simple_unaudited_not_a_real_dep() {
-    // (Pass) there's an unaudited entry for a package that isn't in our tree at all.
-    // (This test could warn if we try to detect "useless unaudited" eagerly)
+fn builtin_simple_exemptions_not_a_real_dep() {
+    // (Pass) there's an exemptions entry for a package that isn't in our tree at all.
+    // (This test could warn if we try to detect "useless exemptions" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1621,9 +1621,9 @@ fn builtin_simple_unaudited_not_a_real_dep() {
     let metadata = mock.metadata();
     let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "fake-dep".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -1634,9 +1634,9 @@ fn builtin_simple_unaudited_not_a_real_dep() {
 }
 
 #[test]
-fn builtin_simple_deps_unaudited_overbroad() {
-    // (Pass) the unaudited entry is needed but it's overbroad
-    // (This test could warn if we try to detect "useless unaudited" eagerly)
+fn builtin_simple_deps_exemptions_overbroad() {
+    // (Pass) the exemptions entry is needed but it's overbroad
+    // (This test could warn if we try to detect "useless exemptions" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
@@ -1646,9 +1646,9 @@ fn builtin_simple_deps_unaudited_overbroad() {
 
     audits.audits.insert("dev".to_string(), vec![]);
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "dev".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -1659,8 +1659,8 @@ fn builtin_simple_deps_unaudited_overbroad() {
 }
 
 #[test]
-fn builtin_complex_unaudited_twins() {
-    // (Pass) two versions of a crate exist and both are unaudited and they're needed
+fn builtin_complex_exemptions_twins() {
+    // (Pass) two versions of a crate exist and both are exemptions and they're needed
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
@@ -1670,11 +1670,11 @@ fn builtin_complex_unaudited_twins() {
 
     audits.audits.insert("third-core".to_string(), vec![]);
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-core".to_string(),
         vec![
-            unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-            unaudited(ver(5), SAFE_TO_DEPLOY),
+            exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+            exemptions(ver(5), SAFE_TO_DEPLOY),
         ],
     );
 
@@ -1686,8 +1686,8 @@ fn builtin_complex_unaudited_twins() {
 }
 
 #[test]
-fn builtin_complex_unaudited_partial_twins() {
-    // (Pass) two versions of a crate exist and one is unaudited and one is audited
+fn builtin_complex_exemptions_partial_twins() {
+    // (Pass) two versions of a crate exist and one is exemptions and one is audited
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
@@ -1700,9 +1700,9 @@ fn builtin_complex_unaudited_partial_twins() {
         vec![full_audit(ver(5), SAFE_TO_DEPLOY)],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-core".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -1713,9 +1713,9 @@ fn builtin_complex_unaudited_partial_twins() {
 }
 
 #[test]
-fn builtin_simple_unaudited_in_delta() {
+fn builtin_simple_exemptions_in_delta() {
     // (Pass) An audited entry overlaps a delta and isn't needed
-    // (This test could warn if we try to detect "useless unaudited" eagerly)
+    // (This test could warn if we try to detect "useless exemptions" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1732,9 +1732,9 @@ fn builtin_simple_unaudited_in_delta() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(5), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(5), SAFE_TO_DEPLOY)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -1745,9 +1745,9 @@ fn builtin_simple_unaudited_in_delta() {
 }
 
 #[test]
-fn builtin_simple_unaudited_in_full() {
+fn builtin_simple_exemptions_in_full() {
     // (Pass) An audited entry overlaps a full audit and isn't needed
-    // (This test could warn if we try to detect "useless unaudited" eagerly)
+    // (This test could warn if we try to detect "useless exemptions" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1764,9 +1764,9 @@ fn builtin_simple_unaudited_in_full() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(3), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(3), SAFE_TO_DEPLOY)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -1777,9 +1777,9 @@ fn builtin_simple_unaudited_in_full() {
 }
 
 #[test]
-fn builtin_simple_unaudited_in_direct_full() {
+fn builtin_simple_exemptions_in_direct_full() {
     // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
-    // (This test used to warn when we tried to detect "useless unaudited" eagerly)
+    // (This test used to warn when we tried to detect "useless exemptions" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1792,9 +1792,9 @@ fn builtin_simple_unaudited_in_direct_full() {
         vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -1805,9 +1805,9 @@ fn builtin_simple_unaudited_in_direct_full() {
 }
 
 #[test]
-fn builtin_simple_unaudited_nested_weaker_req() {
+fn builtin_simple_exemptions_nested_weaker_req() {
     // (Pass) A dep that has weaker requirements on its dep
-    // including dependency_criteria on an unaudited entry
+    // including dependency_criteria on an exemptions entry
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1840,18 +1840,18 @@ fn builtin_simple_unaudited_nested_weaker_req() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited_dep(
+        vec![exemptions_dep(
             ver(3),
             SAFE_TO_DEPLOY,
             [("transitive-third-party1", [SAFE_TO_RUN])],
         )],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "transitive-third-party1".to_string(),
-        vec![unaudited(ver(4), SAFE_TO_RUN)],
+        vec![exemptions(ver(4), SAFE_TO_RUN)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -1862,9 +1862,9 @@ fn builtin_simple_unaudited_nested_weaker_req() {
 }
 
 #[test]
-fn builtin_simple_unaudited_nested_weaker_req_needs_dep_criteria() {
+fn builtin_simple_exemptions_nested_weaker_req_needs_dep_criteria() {
     // (Fail) A dep that has weaker requirements on its dep
-    // but the unaudited entry is missing that so the whole thing fails
+    // but the exemptions entry is missing that so the whole thing fails
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1897,14 +1897,14 @@ fn builtin_simple_unaudited_nested_weaker_req_needs_dep_criteria() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(3), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(3), SAFE_TO_DEPLOY)],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "transitive-third-party1".to_string(),
-        vec![unaudited(ver(4), SAFE_TO_RUN)],
+        vec![exemptions(ver(4), SAFE_TO_RUN)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -1918,7 +1918,7 @@ fn builtin_simple_unaudited_nested_weaker_req_needs_dep_criteria() {
 }
 
 #[test]
-fn builtin_simple_unaudited_nested_stronger_req() {
+fn builtin_simple_exemptions_nested_stronger_req() {
     // (Pass) A dep that has stronger requirements on its dep
 
     let _enter = TEST_RUNTIME.enter();
@@ -1957,14 +1957,14 @@ fn builtin_simple_unaudited_nested_stronger_req() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(3), SAFE_TO_RUN)],
+        vec![exemptions(ver(3), SAFE_TO_RUN)],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "transitive-third-party1".to_string(),
-        vec![unaudited(ver(4), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(4), SAFE_TO_DEPLOY)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -1975,9 +1975,9 @@ fn builtin_simple_unaudited_nested_stronger_req() {
 }
 
 #[test]
-fn builtin_simple_deps_unaudited_adds_uneeded_criteria() {
+fn builtin_simple_deps_exemptions_adds_uneeded_criteria() {
     // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
-    // (This test could warn if we try to detect "useless unaudited" eagerly)
+    // (This test could warn if we try to detect "useless exemptions" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
@@ -1994,8 +1994,8 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria() {
     );
 
     config
-        .unaudited
-        .insert("dev".to_string(), vec![unaudited(ver(5), SAFE_TO_DEPLOY)]);
+        .exemptions
+        .insert("dev".to_string(), vec![exemptions(ver(5), SAFE_TO_DEPLOY)]);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -2008,9 +2008,9 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria() {
 }
 
 #[test]
-fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
+fn builtin_dev_detection_exemptions_adds_uneeded_criteria_indirect() {
     // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
-    // (This test could warn if we try to detect "useless unaudited" eagerly)
+    // (This test could warn if we try to detect "useless exemptions" eagerly)
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::dev_detection();
@@ -2026,9 +2026,9 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "simple-dev-indirect".to_string(),
-        vec![unaudited(ver(5), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(5), SAFE_TO_DEPLOY)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -2323,14 +2323,14 @@ fn builtin_haunted_init() {
 }
 
 #[test]
-fn builtin_haunted_no_unaudited() {
-    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+fn builtin_haunted_no_exemptions() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'exemptions' entries deleted.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::haunted_tree();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+    let (config, audits, imports) = builtin_files_no_exemptions(&metadata);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -2340,14 +2340,14 @@ fn builtin_haunted_no_unaudited() {
 }
 
 #[test]
-fn builtin_haunted_no_unaudited_deeper() {
-    // (Fail) Should look the same as a fresh 'vet init' but with all 'unaudited' entries deleted.
+fn builtin_haunted_no_exemptions_deeper() {
+    // (Fail) Should look the same as a fresh 'vet init' but with all 'exemptions' entries deleted.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::haunted_tree();
 
     let metadata = mock.metadata();
-    let (config, audits, imports) = builtin_files_no_unaudited(&metadata);
+    let (config, audits, imports) = builtin_files_no_exemptions(&metadata);
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Deep);
@@ -2424,9 +2424,9 @@ fn builtin_simple_audit_as_default_root() {
     config
         .policy
         .insert("root-package".to_string(), audit_as_policy(Some(true)));
-    config.unaudited.insert(
+    config.exemptions.insert(
         "root-package".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -2449,9 +2449,9 @@ fn builtin_simple_audit_as_default_root_too_weak() {
     config
         .policy
         .insert("root-package".to_string(), audit_as_policy(Some(true)));
-    config.unaudited.insert(
+    config.exemptions.insert(
         "root-package".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_RUN)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_RUN)],
     );
 
     let store = Store::mock(config, audits, imports);
@@ -2478,9 +2478,9 @@ fn builtin_simple_audit_as_weaker_root() {
             ..audit_as_policy(Some(true))
         },
     );
-    config.unaudited.insert(
+    config.exemptions.insert(
         "root-package".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_RUN)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_RUN)],
     );
 
     let store = Store::mock(config, audits, imports);

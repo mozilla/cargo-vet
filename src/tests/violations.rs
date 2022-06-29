@@ -1,8 +1,8 @@
 use super::*;
 
 #[test]
-fn mock_simple_violation_cur_unaudited() {
-    // (Fail) All marked 'unaudited' but a 'violation' entry matches a current version.
+fn mock_simple_violation_cur_exemptions() {
+    // (Fail) All marked 'exemptions' but a 'violation' entry matches a current version.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();

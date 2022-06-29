@@ -71,8 +71,8 @@ use tracing::{error, trace, trace_span, warn};
 
 use crate::errors::SuggestError;
 use crate::format::{
-    self, AuditKind, CriteriaName, CriteriaStr, Delta, DiffStat, ImportName, PackageName,
-    PackageStr, PolicyEntry, UnauditedDependency,
+    self, AuditKind, CriteriaName, CriteriaStr, Delta, DiffStat, ExemptedDependency, ImportName,
+    PackageName, PackageStr, PolicyEntry,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
@@ -110,9 +110,9 @@ pub enum Conclusion {
 
 #[derive(Debug, Clone)]
 pub struct Success {
-    /// Third-party packages that were successfully vetted using only 'unaudited'
-    pub vetted_with_unaudited: Vec<PackageIdx>,
-    /// Third-party packages that were successfully vetted using both 'audits' and 'unaudited'
+    /// Third-party packages that were successfully vetted using only 'exemptions'
+    pub vetted_with_exemptions: Vec<PackageIdx>,
+    /// Third-party packages that were successfully vetted using both 'audits' and 'exemptions'
     pub vetted_partially: Vec<PackageIdx>,
     /// Third-party packages that were successfully vetted using only 'audits'
     pub vetted_fully: Vec<PackageIdx>,
@@ -136,7 +136,7 @@ pub enum ViolationConflict {
     UnauditedConflict {
         violation_source: AuditSource,
         violation: AuditEntry,
-        unaudited: UnauditedDependency,
+        exemptions: ExemptedDependency,
     },
     AuditConflict {
         violation_source: AuditSource,
@@ -255,14 +255,14 @@ pub struct DepGraph<'a> {
 pub struct ResolveResult<'a> {
     /// The set of criteria we validated for this package.
     pub validated_criteria: CriteriaSet,
-    /// The set of criteria we validated for this package without 'unaudited' entries.
+    /// The set of criteria we validated for this package without 'exemptions' entries.
     pub fully_audited_criteria: CriteriaSet,
     /// Individual search results for each criteria.
     pub search_results: Vec<SearchResult<'a>>,
-    /// Whether there was an 'unaudited' entry for this exact version.
-    pub directly_unaudited: bool,
+    /// Whether there was an exemption for this exact version.
+    pub directly_exempted: bool,
     /// Whether we ever needed the not-fully_audited_criteria for our reverse-deps.
-    pub needed_unaudited: bool,
+    pub needed_exemption: bool,
 }
 
 pub type PolicyFailures = SortedMap<PackageIdx, CriteriaSet>;
@@ -343,9 +343,9 @@ pub struct DeltaEdge<'a> {
     /// Requirements that dependencies must satisfy for the edge to be valid.
     /// If a dependency isn't mentioned, then it defaults to `criteria`.
     dependency_criteria: FastMap<PackageStr<'a>, CriteriaSet>,
-    /// Whether this edge represents an 'unaudited' entry. These will initially
+    /// Whether this edge represents an exemption. These will initially
     /// be ignored, and then used only if we can't find a path.
-    is_unaudited_entry: bool,
+    is_exemption: bool,
 }
 
 fn builtin_criteria() -> SortedMap<CriteriaName, CriteriaEntry> {
@@ -627,8 +627,8 @@ impl ResolveResult<'_> {
             validated_criteria: empty.clone(),
             fully_audited_criteria: empty,
             search_results: vec![],
-            directly_unaudited: false,
-            needed_unaudited: false,
+            directly_exempted: false,
+            needed_exemption: false,
         }
     }
 
@@ -636,7 +636,7 @@ impl ResolveResult<'_> {
         if self.fully_audited_criteria.contains(other) {
             true
         } else if self.validated_criteria.contains(other) {
-            self.needed_unaudited = true;
+            self.needed_exemption = true;
             true
         } else {
             false
@@ -647,7 +647,7 @@ impl ResolveResult<'_> {
         if self.fully_audited_criteria.has_criteria(criteria_idx) {
             true
         } else if self.validated_criteria.has_criteria(criteria_idx) {
-            self.needed_unaudited = true;
+            self.needed_exemption = true;
             true
         } else {
             false
@@ -1306,7 +1306,7 @@ pub fn resolve<'a>(
     }
 
     // Ok, we've actually completely succeeded! Gather up stats on that success.
-    let mut vetted_with_unaudited = vec![];
+    let mut vetted_with_exemptions = vec![];
     let mut vetted_partially = vec![];
     let mut vetted_fully = vec![];
     for &pkgidx in &graph.topo_index {
@@ -1317,10 +1317,10 @@ pub fn resolve<'a>(
         }
         let result = &results[pkgidx];
 
-        if !result.needed_unaudited {
+        if !result.needed_exemption {
             vetted_fully.push(pkgidx);
-        } else if result.directly_unaudited {
-            vetted_with_unaudited.push(pkgidx);
+        } else if result.directly_exempted {
+            vetted_with_exemptions.push(pkgidx);
         } else {
             vetted_partially.push(pkgidx);
         }
@@ -1331,7 +1331,7 @@ pub fn resolve<'a>(
         criteria_mapper,
         results,
         conclusion: Conclusion::Success(Success {
-            vetted_with_unaudited,
+            vetted_with_exemptions,
             vetted_partially,
             vetted_fully,
         }),
@@ -1348,7 +1348,7 @@ fn resolve_third_party<'a>(
     pkgidx: PackageIdx,
 ) {
     let package = &graph.nodes[pkgidx];
-    let unaudited = store.config.unaudited.get(package.name);
+    let exemptions = store.config.exemptions.get(package.name);
 
     let own_audits = store.audits.audits.get(package.name).unwrap_or(&NO_AUDITS);
 
@@ -1386,13 +1386,13 @@ fn resolve_third_party<'a>(
             version: to_ver,
             criteria: criteria.clone(),
             dependency_criteria: dependency_criteria.clone(),
-            is_unaudited_entry: false,
+            is_exemption: false,
         });
         backward_audits.entry(to_ver).or_default().push(DeltaEdge {
             version: from_ver,
             criteria,
             dependency_criteria,
-            is_unaudited_entry: false,
+            is_exemption: false,
         });
     }
 
@@ -1454,13 +1454,13 @@ fn resolve_third_party<'a>(
                 version: to_ver,
                 criteria: local_criteria.clone(),
                 dependency_criteria: Default::default(),
-                is_unaudited_entry: false,
+                is_exemption: false,
             });
             backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                 version: from_ver,
                 criteria: local_criteria,
                 dependency_criteria: Default::default(),
-                is_unaudited_entry: false,
+                is_exemption: false,
             });
         }
     }
@@ -1497,8 +1497,8 @@ fn resolve_third_party<'a>(
             unreachable!("violation_entry wasn't a Violation?");
         };
 
-        // Note if this entry conflicts with any unaudited entries
-        if let Some(alloweds) = unaudited {
+        // Note if this entry conflicts with any exemptions
+        if let Some(alloweds) = exemptions {
             for allowed in alloweds {
                 let audit_criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
                 let has_violation = violation_criterias
@@ -1512,7 +1512,7 @@ fn resolve_third_party<'a>(
                         ViolationConflict::UnauditedConflict {
                             violation_source: violation_source.clone(),
                             violation: (*violation_entry).clone(),
-                            unaudited: allowed.clone(),
+                            exemptions: allowed.clone(),
                         },
                     );
                 }
@@ -1608,7 +1608,7 @@ fn resolve_third_party<'a>(
 
         // FIXME: this kind of violation is annoying to catch, but you kind of don't have to.
         //
-        // It's impossible to validate a package with some criteria without an audit/unaudited
+        // It's impossible to validate a package with some criteria without an audit/exemptions
         // entry with that criteria (or a criteria that implies it) touching that version.
         // Therefore we can catch any "true" violations by just looking at the AuditGraph's
         // edges as we do above. However if you current version is a violation and but doesn't
@@ -1630,12 +1630,12 @@ fn resolve_third_party<'a>(
         */
     }
 
-    let mut directly_unaudited = false;
+    let mut directly_exempted = false;
     // Unaudited entries are equivalent to full-audits
-    if let Some(alloweds) = unaudited {
+    if let Some(alloweds) = exemptions {
         for allowed in alloweds {
             if &allowed.version == package.version {
-                directly_unaudited = true;
+                directly_exempted = true;
             }
             let from_ver = &ROOT_VERSION;
             let to_ver = &allowed.version;
@@ -1648,18 +1648,18 @@ fn resolve_third_party<'a>(
                 })
                 .collect();
 
-            // For simplicity, turn 'unaudited' entries into deltas from 0.0.0
+            // For simplicity, turn 'exemptions' entries into deltas from 0.0.0
             forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: to_ver,
                 criteria: criteria.clone(),
                 dependency_criteria: dependency_criteria.clone(),
-                is_unaudited_entry: true,
+                is_exemption: true,
             });
             backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                 version: from_ver,
                 criteria,
                 dependency_criteria,
-                is_unaudited_entry: true,
+                is_exemption: true,
             });
         }
     }
@@ -1735,10 +1735,10 @@ fn resolve_third_party<'a>(
     results[pkgidx] = ResolveResult {
         validated_criteria,
         fully_audited_criteria,
-        directly_unaudited,
+        directly_exempted,
         search_results,
         // Only gets found out later, for now, assume not.
-        needed_unaudited: false,
+        needed_exemption: false,
     };
 }
 
@@ -1757,48 +1757,48 @@ fn search_for_path<'a>(
     // Finding any path validates that we satisfy that criteria. All we're doing is
     // basic depth-first search with a manual stack.
     //
-    // All full-audits and unaudited entries have been "desugarred" to a delta from 0.0.0,
+    // All full-audits and exemptions have been "desugarred" to a delta from 0.0.0,
     // meaning our graph now has exactly one source and one sink, significantly simplifying
     // the start and end conditions.
     //
     // Because we want to know if the validation can be done without ever using an
-    // 'unaudited' entry, we initially "defer" using those edges. This is accomplished
+    // exemption, we initially "defer" using those edges. This is accomplished
     // by wrapping the entire algorithm in a loop, and only taking those edges on the
     // next iteration of the outer loop. So if we find a path in the first iteration,
     // then that's an unambiguous proof that we didn't need those edges.
     //
     // We apply this same "deferring" trick to edges which fail because of our dependencies.
-    // Once we run out of both 'unaudited' entries and still don't have a path, we start
+    // Once we run out of both 'exemptions' entries and still don't have a path, we start
     // speculatively allowing ourselves to follow those edges. If we find a path by doing that
     // then we can reliably "blame" our deps for our own failings. Otherwise we there is
     // no possible path, and we are absolutely just missing reviews for ourself.
 
     // Conclusions
     let mut found_path = false;
-    let mut needed_unaudited_entry = false;
+    let mut needed_exemption = false;
     let mut needed_failed_edges = false;
     let mut failed_deps = SortedMap::<PackageIdx, CriteriaSet>::new();
 
     // Search State
     let mut search_stack = vec![from_version];
     let mut visited = SortedSet::new();
-    let mut deferred_unaudited_entries = vec![];
+    let mut deferred_exemptions_entries = vec![];
     let mut deferred_failed_edges = vec![];
 
     // Loop until we find a path or run out of deferred edges.
     loop {
         // If there are any deferred edges (only possible on iteration 2+), try to follow them.
-        // Always prefer following 'unaudited' edges, so that we only dip into failed edges when
+        // Always prefer following 'exemptions' edges, so that we only dip into failed edges when
         // we've completely run out of options.
-        if let Some(node) = deferred_unaudited_entries.pop() {
+        if let Some(node) = deferred_exemptions_entries.pop() {
             // Don't bother if we got to that node some other way.
             if visited.contains(node) {
                 continue;
             }
-            // Ok at this point we officially "need" the unaudited edge. If the search still
+            // Ok at this point we officially "need" the exemptions edge. If the search still
             // fails, then we won't mention that we used this, since the graph is just broken
             // and we can't make any conclusions about whether anything is needed or not!
-            needed_unaudited_entry = true;
+            needed_exemption = true;
             search_stack.push(node);
         } else if let Some(node) = deferred_failed_edges.pop() {
             // Don't bother if we got to that node some other way.
@@ -1864,9 +1864,9 @@ fn search_for_path<'a>(
                     }
 
                     if deps_satisfied {
-                        // Ok yep, this edge is usable! But defer it if it's an 'unaudited' entry.
-                        if edge.is_unaudited_entry {
-                            deferred_unaudited_entries.push(edge.version);
+                        // Ok yep, this edge is usable! But defer it if it's an exemption.
+                        if edge.is_exemption {
+                            deferred_exemptions_entries.push(edge.version);
                         } else {
                             search_stack.push(edge.version);
                         }
@@ -1880,7 +1880,8 @@ fn search_for_path<'a>(
         }
 
         // Exit conditions
-        if found_path || (deferred_unaudited_entries.is_empty() && deferred_failed_edges.is_empty())
+        if found_path
+            || (deferred_exemptions_entries.is_empty() && deferred_failed_edges.is_empty())
         {
             break;
         }
@@ -1890,7 +1891,7 @@ fn search_for_path<'a>(
     if found_path && !needed_failed_edges {
         // Complete success!
         SearchResult::Connected {
-            fully_audited: !needed_unaudited_entry,
+            fully_audited: !needed_exemption,
         }
     } else if found_path {
         // Failure, but it's clearly the fault of our deps.
@@ -2635,7 +2636,7 @@ impl<'a> ResolveReport<'a> {
                     "conclusion": "success",
                     "vetted_fully": success.vetted_fully.iter().map(json_package).collect::<Vec<_>>(),
                     "vetted_partially": success.vetted_partially.iter().map(json_package).collect::<Vec<_>>(),
-                    "vetted_with_unaudited": success.vetted_with_unaudited.iter().map(json_package).collect::<Vec<_>>(),
+                    "vetted_with_exemptions": success.vetted_with_exemptions.iter().map(json_package).collect::<Vec<_>>(),
                 })
             }
             Conclusion::FailForViolationConflict(fail) => json!({
@@ -2691,12 +2692,12 @@ impl Success {
     ) -> Result<(), std::io::Error> {
         let fully_audited_count = self.vetted_fully.len();
         let partially_audited_count: usize = self.vetted_partially.len();
-        let unaudited_count = self.vetted_with_unaudited.len();
+        let exemptions_count = self.vetted_with_exemptions.len();
 
         // Figure out how many entries we're going to print
         let mut count_count = (fully_audited_count != 0) as usize
             + (partially_audited_count != 0) as usize
-            + (unaudited_count != 0) as usize;
+            + (exemptions_count != 0) as usize;
 
         // Print out a summary of how we succeeded
         if count_count == 0 {
@@ -2721,8 +2722,8 @@ impl Success {
                     write!(out, ", ")?;
                 }
             }
-            if unaudited_count != 0 {
-                write!(out, "{} unaudited", unaudited_count)?;
+            if exemptions_count != 0 {
+                write!(out, "{} exempted", exemptions_count)?;
                 count_count -= 1;
                 if count_count > 0 {
                     write!(out, ", ")?;
@@ -2886,10 +2887,10 @@ impl FailForViolationConflict {
                     ViolationConflict::UnauditedConflict {
                         violation_source,
                         violation,
-                        unaudited,
+                        exemptions,
                     } => {
                         write!(out, "    the ")?;
-                        print_unaudited_entry(out, unaudited)?;
+                        print_exemption(out, exemptions)?;
                         write!(out, "    conflicts with ")?;
                         print_entry(out, violation_source, violation)?;
                     }
@@ -2909,11 +2910,11 @@ impl FailForViolationConflict {
             }
         }
 
-        fn print_unaudited_entry(
+        fn print_exemption(
             out: &mut dyn Out,
-            entry: &UnauditedDependency,
+            entry: &ExemptedDependency,
         ) -> Result<(), std::io::Error> {
-            writeln!(out, "unaudited {}", entry.version)?;
+            writeln!(out, "exemption {}", entry.version)?;
             writeln!(out, "      criteria: {:?}", entry.criteria)?;
             if let Some(notes) = &entry.notes {
                 writeln!(out, "      notes: {notes}")?;

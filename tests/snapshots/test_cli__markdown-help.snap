@@ -209,7 +209,7 @@ is failing, because this will just give you worse information.
 If you don't consider an exemption to be "backlog", add `suggest = false` to its entry and we won't
 remove it while suggesting.
 
-See also `regenerate unaudited`, which can be used to "garbage collect" your backlog (if you run it
+See also `regenerate exemptions`, which can be used to "garbage collect" your backlog (if you run it
 while `check` is passing).
 
 ### USAGE
@@ -479,10 +479,10 @@ cargo vet add-exemption [OPTIONS] <PACKAGE> <VERSION>
 
 ### ARGS
 #### `<PACKAGE>`
-The package to mark as unaudited (trusted)
+The package to mark as exempted
 
 #### `<VERSION>`
-The version to mark as unaudited
+The version to mark as exempted
 
 ### OPTIONS
 #### `--criteria <CRITERIA>`
@@ -491,7 +491,7 @@ The criteria to assume (trust)
 If not provided, we will prompt you for this information.
 
 #### `--dependency-criteria <DEPENDENCY_CRITERIA>`
-The dependency-criteria to require for this unaudited entry to be valid
+The dependency-criteria to require for this exemption to be valid
 
 If not provided, we will still implicitly require dependencies to satisfy `criteria`.
 
@@ -501,7 +501,7 @@ A free-form string to include with the new forbid entry
 If not provided, there will be no notes.
 
 #### `--no-suggest`
-Suppress suggesting this unaudited entry
+Suppress suggesting this exemption for review
 
 #### `-h, --help`
 Print help information

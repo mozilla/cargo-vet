@@ -24,8 +24,8 @@ use crate::cli::*;
 use crate::errors::{CommandError, DownloadError};
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, Delta, DependencyCriteria,
-    FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo,
-    UnauditedDependency,
+    ExemptedDependency, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr,
+    SortedMap, StoreInfo,
 };
 use crate::out::Out;
 use crate::resolver::{Conclusion, CriteriaMapper, DepGraph, ResolveDepth, SuggestItem};
@@ -399,7 +399,7 @@ fn real_main() -> Result<(), miette::Report> {
         Some(Check(sub_args)) => cmd_check(out, &cfg, sub_args),
         Some(Init(sub_args)) => cmd_init(out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(out, &cfg, sub_args),
-        Some(AddExemption(sub_args)) => cmd_add_unaudited(out, &cfg, sub_args),
+        Some(AddExemption(sub_args)) => cmd_add_exemption(out, &cfg, sub_args),
         Some(RecordViolation(sub_args)) => cmd_record_violation(out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(out, &cfg, sub_args),
@@ -462,7 +462,7 @@ pub fn init_files(
                 vec![format::DEFAULT_POLICY_CRITERIA.to_string().into()]
             };
             // NOTE: May have multiple copies of a package!
-            let item = UnauditedDependency {
+            let item = ExemptedDependency {
                 version: package.version.clone(),
                 criteria,
                 dependency_criteria: DependencyCriteria::new(),
@@ -477,7 +477,7 @@ pub fn init_files(
         ConfigFile {
             default_criteria: format::get_default_criteria(),
             imports: SortedMap::new(),
-            unaudited: dependencies,
+            exemptions: dependencies,
             policy: SortedMap::new(),
         }
     };
@@ -833,21 +833,21 @@ fn do_cmd_certify(
         .or_insert(vec![])
         .push(new_entry);
 
-    // If we're submitting a full audit, look for a matching unaudited entry to remove
+    // If we're submitting a full audit, look for a matching exemption entry to remove
     if let AuditKind::Full { version, .. } = &kind {
-        if let Some(unaudited_list) = store.config.unaudited.get_mut(&package) {
+        if let Some(exemption_list) = store.config.exemptions.get_mut(&package) {
             let cur_criteria_set = criteria_mapper.criteria_from_list(criteria_names);
             // Iterate backwards so that we can delete while iterating
             // (will only affect indices that we've already visited!)
-            for idx in (0..unaudited_list.len()).rev() {
-                let entry = &unaudited_list[idx];
+            for idx in (0..exemption_list.len()).rev() {
+                let entry = &exemption_list[idx];
                 let entry_criteria_set = criteria_mapper.criteria_from_list(&entry.criteria);
                 if &entry.version == version && cur_criteria_set.contains(&entry_criteria_set) {
-                    unaudited_list.remove(idx);
+                    exemption_list.remove(idx);
                 }
             }
-            if unaudited_list.is_empty() {
-                store.config.unaudited.remove(&package);
+            if exemption_list.is_empty() {
+                store.config.exemptions.remove(&package);
             }
         }
     }
@@ -1043,12 +1043,12 @@ fn cmd_record_violation(
     Ok(())
 }
 
-fn cmd_add_unaudited(
+fn cmd_add_exemption(
     _out: &mut dyn Out,
     cfg: &Config,
     sub_args: &AddExemptionArgs,
 ) -> Result<(), miette::Report> {
-    // Add an unaudited entry
+    // Add an exemption entry
     let mut store = Store::acquire(cfg)?;
 
     let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
@@ -1093,7 +1093,7 @@ fn cmd_add_unaudited(
     }
 
     // Ok! Ready to commit the audit!
-    let new_entry = UnauditedDependency {
+    let new_entry = ExemptedDependency {
         criteria,
         notes,
         version: sub_args.version.clone(),
@@ -1103,7 +1103,7 @@ fn cmd_add_unaudited(
 
     store
         .config
-        .unaudited
+        .exemptions
         .entry(sub_args.package.clone())
         .or_insert(vec![])
         .push(new_entry);
@@ -1183,7 +1183,7 @@ fn cmd_regenerate_audit_as(
     cfg: &Config,
     _sub_args: &RegenerateAuditAsCratesIoArgs,
 ) -> Result<(), miette::Report> {
-    trace!("regenerating unaudited...");
+    trace!("regenerating audit-as-crates-io...");
     let mut store = Store::acquire(cfg)?;
 
     fix_audit_as(cfg, &mut store)?;
@@ -1242,7 +1242,7 @@ fn cmd_regenerate_exemptions(
     let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
-    minimize_unaudited(cfg, &mut store, network.as_ref())?;
+    minimize_exemptions(cfg, &mut store, network.as_ref())?;
 
     // We were successful, commit the store
     store.commit()?;
@@ -1250,13 +1250,13 @@ fn cmd_regenerate_exemptions(
     Ok(())
 }
 
-pub fn minimize_unaudited(
+pub fn minimize_exemptions(
     cfg: &Config,
     store: &mut Store,
     network: Option<&Network>,
 ) -> Result<(), MinimizeUnauditedError> {
-    // Set the unaudited entries to nothing
-    let old_unaudited = mem::take(&mut store.config.unaudited);
+    // Set the exemption entries to nothing
+    let old_exemptions = mem::take(&mut store.config.exemptions);
 
     // Try to vet
     let report = resolver::resolve(
@@ -1266,9 +1266,9 @@ pub fn minimize_unaudited(
         ResolveDepth::Deep,
     );
 
-    trace!("minimizing unaudited...");
-    let new_unaudited = if let Some(suggest) = report.compute_suggest(cfg, network, false)? {
-        let mut new_unaudited = SortedMap::new();
+    trace!("minimizing exemptions...");
+    let new_exemptions = if let Some(suggest) = report.compute_suggest(cfg, network, false)? {
+        let mut new_exemptions = SortedMap::new();
         let mut suggest_by_package_name = SortedMap::<PackageStr, Vec<SuggestItem>>::new();
         for item in suggest.suggestions {
             let package = &report.graph.nodes[item.package];
@@ -1279,7 +1279,7 @@ pub fn minimize_unaudited(
         }
 
         // First try to preserve as many old entries as possible
-        for (package_name, old_entries) in &old_unaudited {
+        for (package_name, old_entries) in &old_exemptions {
             let mut no_suggestions = Vec::new();
             let suggestions = suggest_by_package_name
                 .get_mut(&**package_name)
@@ -1297,7 +1297,7 @@ pub fn minimize_unaudited(
                         {
                             new_item.suggested_criteria.clear_criteria(&old_criteria);
 
-                            new_unaudited
+                            new_exemptions
                                 .entry(package_name.clone())
                                 .or_insert(Vec::new())
                                 .push(old_entry.clone());
@@ -1311,7 +1311,7 @@ pub fn minimize_unaudited(
                 // If we haven't cleared out all the suggestions for this package, make sure its entry is inserted
                 // to try to preserve the original order of it.
                 if !suggestions.is_empty() {
-                    new_unaudited
+                    new_exemptions
                         .entry(package_name.clone())
                         .or_insert(Vec::new());
                 }
@@ -1326,10 +1326,10 @@ pub fn minimize_unaudited(
                     .all_criteria_names(&item.suggested_criteria)
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>();
-                new_unaudited
+                new_exemptions
                     .entry(package_name.to_string())
                     .or_insert(Vec::new())
-                    .push(UnauditedDependency {
+                    .push(ExemptedDependency {
                         version: item.suggested_diff.to.clone(),
                         criteria: criteria_names.iter().map(|s| s.to_owned().into()).collect(),
                         dependency_criteria: DependencyCriteria::new(),
@@ -1339,15 +1339,15 @@ pub fn minimize_unaudited(
             }
         }
 
-        new_unaudited
+        new_exemptions
     } else if let Conclusion::Success(_) = report.conclusion {
         SortedMap::new()
     } else {
         return Err(MinimizeUnauditedError::Unknown);
     };
 
-    // Alright there's the new unaudited
-    store.config.unaudited = new_unaudited;
+    // Alright there's the new exemptions
+    store.config.exemptions = new_exemptions;
 
     Ok(())
 }

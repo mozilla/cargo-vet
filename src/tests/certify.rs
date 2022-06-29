@@ -7,7 +7,7 @@ fn mock_simple_suggested_criteria() {
 
     let metadata = mock.metadata();
 
-    let (mut config, mut audits, imports) = files_no_unaudited(&metadata);
+    let (mut config, mut audits, imports) = files_no_exemptions(&metadata);
 
     config.policy.insert(
         "first-party".to_string(),
