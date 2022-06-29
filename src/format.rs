@@ -314,7 +314,7 @@ fn is_default_criteria(val: &CriteriaName) -> bool {
 /// If this sounds overwhelming, don't worry, everything defaults to "nothing special"
 /// and an empty PolicyTable basically just means "everything should satisfy the
 /// default criteria in audits.toml".
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct PolicyEntry {
     /// Whether this nominally-first-party crate should actually be subject to audits
     /// as-if it was third-party, based on matches to crates.io packages with the same

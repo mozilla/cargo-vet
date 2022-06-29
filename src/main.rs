@@ -8,8 +8,9 @@ use cargo_metadata::{Metadata, Package, Version};
 use clap::{CommandFactory, Parser};
 use console::Term;
 use errors::{
-    AuditAsError, AuditAsErrors, CertifyError, MinimizeUnauditedError, NeedsAuditAsError,
-    NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors, UserInfoError,
+    AuditAsError, AuditAsErrors, CacheAcquireError, CertifyError, MinimizeUnauditedError,
+    NeedsAuditAsError, NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors,
+    UserInfoError,
 };
 use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::join_all;
@@ -423,6 +424,8 @@ fn cmd_init(_out: &mut dyn Out, cfg: &Config, _sub_args: &InitArgs) -> Result<()
     store.config = config;
     store.audits = audits;
     store.imports = imports;
+
+    fix_audit_as(cfg, &mut store)?;
 
     store.commit()?;
 
@@ -1154,12 +1157,58 @@ fn cmd_regenerate_imports(
 
 fn cmd_regenerate_audit_as(
     _out: &mut dyn Out,
-    _cfg: &Config,
+    cfg: &Config,
     _sub_args: &RegenerateAuditAsCratesIoArgs,
 ) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("regenerating unaudited...");
-    todo!();
+    let mut store = Store::acquire(cfg)?;
+
+    fix_audit_as(cfg, &mut store)?;
+
+    // We were successful, commit the store
+    store.commit()?;
+
+    Ok(())
+}
+
+/// Adjust the store to satisfy audit-as-crates-io issues
+///
+/// Every reported issue will be resolved by just setting `audit-as-crates-io = Some(false)`,
+/// because that always works, no matter what the problem is.
+fn fix_audit_as(cfg: &Config, store: &mut Store) -> Result<(), CacheAcquireError> {
+    // NOTE: In the future this might require Network, but for now `cargo metadata` is a precondition
+    // and guarantees a fully populated and up to date index, so we can just rely on that and know
+    // this is Networkless.
+    let issues = check_audit_as_crates_io(cfg, store);
+    if let Err(AuditAsErrors { errors }) = issues {
+        for error in errors {
+            match error {
+                AuditAsError::NeedsAuditAs(needs) => {
+                    for err in needs.errors {
+                        store
+                            .config
+                            .policy
+                            .entry(err.package)
+                            .or_default()
+                            .audit_as_crates_io = Some(false);
+                    }
+                }
+                AuditAsError::ShouldntBeAuditAs(shouldnts) => {
+                    for err in shouldnts.errors {
+                        store
+                            .config
+                            .policy
+                            .entry(err.package)
+                            .or_default()
+                            .audit_as_crates_io = Some(false);
+                    }
+                }
+                AuditAsError::CacheAcquire(err) => return Err(err),
+            }
+        }
+    }
+    Ok(())
 }
 
 fn cmd_regenerate_exemptions(
