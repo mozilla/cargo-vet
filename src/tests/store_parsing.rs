@@ -86,12 +86,12 @@ dependency-criteria = { clap_derive = "good" }
 [policy.boring]
 audit-as-crates-io = true
 
-[[unaudited.clap]]
+[[exemptions.clap]]
 version = "1.0.0"
 criteria = "oops"
 dependency-criteria = { clap_derive = "nah", oops = ["no", "safe-to-run"] }
 
-[[unaudited.clap_derive]]
+[[exemptions.clap_derive]]
 version = "1.0.0"
 criteria = "safe-to-run"
 

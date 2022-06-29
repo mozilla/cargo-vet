@@ -198,7 +198,7 @@ pub enum Commands {
     /// If you don't consider an exemption to be "backlog", add `suggest = false` to its
     /// entry and we won't remove it while suggesting.
     ///
-    /// See also `regenerate unaudited`, which can be used to "garbage collect"
+    /// See also `regenerate exemptions`, which can be used to "garbage collect"
     /// your backlog (if you run it while `check` is passing).
     #[clap(disable_version_flag = true)]
     Suggest(SuggestArgs),
@@ -474,10 +474,10 @@ pub struct RecordViolationArgs {
 /// Certifies the given version
 #[derive(clap::Args)]
 pub struct AddExemptionArgs {
-    /// The package to mark as unaudited (trusted)
+    /// The package to mark as exempted
     #[clap(action)]
     pub package: PackageName,
-    /// The version to mark as unaudited
+    /// The version to mark as exempted
     #[clap(action)]
     pub version: Version,
     /// The criteria to assume (trust)
@@ -485,7 +485,7 @@ pub struct AddExemptionArgs {
     /// If not provided, we will prompt you for this information.
     #[clap(long, action)]
     pub criteria: Vec<CriteriaName>,
-    /// The dependency-criteria to require for this unaudited entry to be valid
+    /// The dependency-criteria to require for this exemption to be valid
     ///
     /// If not provided, we will still implicitly require dependencies to satisfy `criteria`.
     #[clap(long, action)]
@@ -495,7 +495,7 @@ pub struct AddExemptionArgs {
     /// If not provided, there will be no notes.
     #[clap(long, action)]
     pub notes: Option<String>,
-    /// Suppress suggesting this unaudited entry
+    /// Suppress suggesting this exemption for review
     #[clap(long, action)]
     pub no_suggest: bool,
 }

@@ -143,7 +143,7 @@ pub enum MinimizeUnauditedError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Suggest(#[from] SuggestError),
-    #[error("An unknown error occured while trying to minimize unaudited entries")]
+    #[error("An unknown error occured while trying to minimize exemptions entries")]
     Unknown,
 }
 

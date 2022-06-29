@@ -19,8 +19,8 @@ use crate::{
     init_files,
     out::Out,
     resolver::{ResolveDepth, ResolveReport},
-    AuditEntry, AuditsFile, Config, ConfigFile, CriteriaEntry, ImportsFile, PackageExt,
-    PartialConfig, SortedMap, Store, UnauditedDependency,
+    AuditEntry, AuditsFile, Config, ConfigFile, CriteriaEntry, ExemptedDependency, ImportsFile,
+    PackageExt, PartialConfig, SortedMap, Store,
 };
 
 mod audit_as_crates_io;
@@ -237,8 +237,8 @@ fn dep_ver(name: &'static str, version: u64) -> MockDependency {
 }
 
 #[allow(dead_code)]
-fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependency {
-    UnauditedDependency {
+fn default_exemptions(version: Version, config: &ConfigFile) -> ExemptedDependency {
+    ExemptedDependency {
         version,
         criteria: vec![config.default_criteria.clone().into()],
         dependency_criteria: DependencyCriteria::new(),
@@ -246,8 +246,8 @@ fn default_unaudited(version: Version, config: &ConfigFile) -> UnauditedDependen
         suggest: true,
     }
 }
-fn unaudited(version: Version, criteria: CriteriaStr) -> UnauditedDependency {
-    UnauditedDependency {
+fn exemptions(version: Version, criteria: CriteriaStr) -> ExemptedDependency {
+    ExemptedDependency {
         version,
         criteria: vec![criteria.to_string().into()],
         dependency_criteria: DependencyCriteria::new(),
@@ -256,7 +256,7 @@ fn unaudited(version: Version, criteria: CriteriaStr) -> UnauditedDependency {
     }
 }
 
-fn unaudited_dep(
+fn exemptions_dep(
     version: Version,
     criteria: CriteriaStr,
     dependency_criteria: impl IntoIterator<
@@ -265,8 +265,8 @@ fn unaudited_dep(
             impl IntoIterator<Item = impl Into<CriteriaName>>,
         ),
     >,
-) -> UnauditedDependency {
-    UnauditedDependency {
+) -> ExemptedDependency {
+    ExemptedDependency {
         version,
         criteria: vec![criteria.to_string().into()],
         notes: None,
@@ -943,8 +943,8 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     config.default_criteria = DEFAULT_CRIT.to_string();
 
     // Rewrite the default used by init
-    for unaudited in &mut config.unaudited {
-        for entry in unaudited.1 {
+    for exemption in &mut config.exemptions {
+        for entry in exemption.1 {
             assert_eq!(&*entry.criteria, &["safe-to-deploy".to_string()]);
             entry.criteria = vec![DEFAULT_CRIT.to_string().into()];
         }
@@ -953,17 +953,17 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     (config, audits, imports)
 }
 
-fn files_no_unaudited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
+fn files_no_exemptions(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     let (mut config, audits, imports) = files_inited(metadata);
 
-    // Just clear all the unaudited entries out
-    config.unaudited.clear();
+    // Just clear all the exemptions out
+    config.exemptions.clear();
 
     (config, audits, imports)
 }
 
 fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
-    let (config, mut audits, imports) = files_no_unaudited(metadata);
+    let (config, mut audits, imports) = files_no_exemptions(metadata);
 
     let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
@@ -983,16 +983,16 @@ fn builtin_files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, Imports
     init_files(metadata, None)
 }
 
-fn builtin_files_no_unaudited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
+fn builtin_files_no_exemptions(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     let (mut config, audits, imports) = builtin_files_inited(metadata);
 
-    // Just clear all the unaudited entries out
-    config.unaudited.clear();
+    // Just clear all the exemptions out
+    config.exemptions.clear();
 
     (config, audits, imports)
 }
 fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
-    let (config, mut audits, imports) = builtin_files_no_unaudited(metadata);
+    let (config, mut audits, imports) = builtin_files_no_exemptions(metadata);
 
     let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
@@ -1011,7 +1011,7 @@ fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile
     let (mut config, mut audits, imports) = builtin_files_inited(metadata);
 
     let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
-    for (name, entries) in std::mem::take(&mut config.unaudited) {
+    for (name, entries) in std::mem::take(&mut config.exemptions) {
         for entry in entries {
             audited
                 .entry(name.clone())

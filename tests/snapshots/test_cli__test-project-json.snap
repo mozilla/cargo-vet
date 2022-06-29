@@ -33,7 +33,7 @@ stdout:
       "version": "0.3.7"
     }
   ],
-  "vetted_with_unaudited": [
+  "vetted_with_exemptions": [
     {
       "name": "libc",
       "version": "0.2.123"

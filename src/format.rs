@@ -286,7 +286,8 @@ pub struct ConfigFile {
     /// (paths, git, etc) is assumed to be "under your control" and therefore implicitly trusted.
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
-    pub unaudited: SortedMap<PackageName, Vec<UnauditedDependency>>,
+    #[serde(alias = "unaudited")]
+    pub exemptions: SortedMap<PackageName, Vec<ExemptedDependency>>,
 }
 
 pub static SAFE_TO_DEPLOY: CriteriaStr = "safe-to-deploy";
@@ -401,7 +402,7 @@ pub struct CriteriaMapping {
 /// Semantically identical to a 'full audit' entry, but private to our project
 /// and tracked as less-good than a proper audit, so that you try to get rid of it.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UnauditedDependency {
+pub struct ExemptedDependency {
     /// The version of the crate that we are currently "fine" with leaving unaudited.
     pub version: Version,
     /// Criteria that we're willing to handwave for this version (assuming our dependencies
@@ -411,10 +412,10 @@ pub struct UnauditedDependency {
     #[serde(with = "serialization::string_or_vec")]
     pub criteria: Vec<Spanned<CriteriaName>>,
     /// Whether 'suggest' should bother mentioning this (defaults true).
-    #[serde(default = "get_default_unaudited_suggest")]
-    #[serde(skip_serializing_if = "is_default_unaudited_suggest")]
+    #[serde(default = "get_default_exemptions_suggest")]
+    #[serde(skip_serializing_if = "is_default_exemptions_suggest")]
     pub suggest: bool,
-    /// Custom criteria for an unaudited crate's dependencies.
+    /// Custom criteria for an exempted crate's dependencies.
     ///
     /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
     #[serde(rename = "dependency-criteria")]
@@ -426,12 +427,12 @@ pub struct UnauditedDependency {
     pub notes: Option<String>,
 }
 
-static DEFAULT_UNAUDITED_SUGGEST: bool = true;
-pub fn get_default_unaudited_suggest() -> bool {
-    DEFAULT_UNAUDITED_SUGGEST
+static DEFAULT_EXEMPTIONS_SUGGEST: bool = true;
+pub fn get_default_exemptions_suggest() -> bool {
+    DEFAULT_EXEMPTIONS_SUGGEST
 }
-fn is_default_unaudited_suggest(val: &bool) -> bool {
-    val == &DEFAULT_UNAUDITED_SUGGEST
+fn is_default_exemptions_suggest(val: &bool) -> bool {
+    val == &DEFAULT_EXEMPTIONS_SUGGEST
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

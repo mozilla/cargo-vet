@@ -142,7 +142,7 @@ impl Store {
                 default_criteria: String::new(),
                 imports: SortedMap::new(),
                 policy: SortedMap::new(),
-                unaudited: SortedMap::new(),
+                exemptions: SortedMap::new(),
             },
             imports: ImportsFile {
                 audits: SortedMap::new(),
@@ -234,7 +234,7 @@ impl Store {
 
     /// Create a clone of the store for use to resolve `suggest`.
     ///
-    /// This cloned store will not contain `unaudited` entries from the config,
+    /// This cloned store will not contain `exemptions` entries from the config,
     /// unless they're marked as `suggest = false`, such that the resolver will
     /// identify these missing audits when generating a report.
     ///
@@ -251,8 +251,8 @@ impl Store {
             audits_src: self.audits_src.clone(),
             imports_src: self.imports_src.clone(),
         };
-        // Delete all unaudited entries except those that are suggest=false
-        for versions in &mut clone.config.unaudited.values_mut() {
+        // Delete all exemptions entries except those that are suggest=false
+        for versions in &mut clone.config.exemptions.values_mut() {
             versions.retain(|e| !e.suggest);
         }
         clone
@@ -283,7 +283,7 @@ impl Store {
         //
         // * check that policy entries are only first-party?
         //   * (we currently allow policy.criteria on third-parties for audit-as-crates-io)
-        // * check that unaudited entries are for things that exist?
+        // * check that exemptions entries are for things that exist?
         // * check that lockfile and imports aren't desync'd (catch new/removed import urls)
         //
         // * check that each CriteriaEntry has 'description' or 'description_url'
@@ -325,7 +325,7 @@ impl Store {
         let no_criteria = vec![];
         let mut invalid_criteria_errors = vec![];
 
-        for (_package, entries) in &self.config.unaudited {
+        for (_package, entries) in &self.config.exemptions {
             for entry in entries {
                 check_criteria(
                     &self.config_src,
@@ -1335,7 +1335,7 @@ fn store_audits(writer: impl Write, mut audits: AuditsFile) -> Result<(), StoreT
 }
 fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), StoreTomlError> {
     config
-        .unaudited
+        .exemptions
         .values_mut()
         .for_each(|entries| entries.sort());
 

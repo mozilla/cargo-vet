@@ -2,5 +2,5 @@
 source: src/tests/vet.rs
 expression: output
 ---
-Vetting Succeeded (4 unaudited)
+Vetting Succeeded (4 exempted)
 

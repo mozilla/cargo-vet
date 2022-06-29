@@ -1,13 +1,13 @@
 use super::*;
 
-fn get_unaudited(store: &Store) -> String {
-    toml_edit::ser::to_string_pretty(&store.config.unaudited).unwrap()
+fn get_exemptions(store: &Store) -> String {
+    toml_edit::ser::to_string_pretty(&store.config.exemptions).unwrap()
 }
 
 #[test]
-fn builtin_simple_unaudited_not_a_real_dep_regenerate() {
-    // (Pass) there's an unaudited entry for a package that isn't in our tree at all.
-    // Should strip the result and produce an empty unaudited file.
+fn builtin_simple_exemptions_not_a_real_dep_regenerate() {
+    // (Pass) there's an exemptions entry for a package that isn't in our tree at all.
+    // Should strip the result and produce an empty exemptions file.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -15,22 +15,22 @@ fn builtin_simple_unaudited_not_a_real_dep_regenerate() {
     let metadata = mock.metadata();
     let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "fake-dep".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
-    insta::assert_snapshot!("builtin-simple-not-a-real-dep-regenerate", unaudited);
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!("builtin-simple-not-a-real-dep-regenerate", exemptions);
 }
 
 #[test]
-fn builtin_simple_deps_unaudited_overbroad_regenerate() {
-    // (Pass) the unaudited entry is needed but it's overbroad
+fn builtin_simple_deps_exemptions_overbroad_regenerate() {
+    // (Pass) the exemptions entry is needed but it's overbroad
     // Should downgrade from safe-to-deploy to safe-to-run
 
     let _enter = TEST_RUNTIME.enter();
@@ -41,22 +41,22 @@ fn builtin_simple_deps_unaudited_overbroad_regenerate() {
 
     audits.audits.insert("dev".to_string(), vec![]);
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "dev".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
-    insta::assert_snapshot!("builtin-simple-unaudited-overbroad-regenerate", unaudited);
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!("builtin-simple-unaudited-overbroad-regenerate", exemptions);
 }
 
 #[test]
-fn builtin_complex_unaudited_twins_regenerate() {
-    // (Pass) two versions of a crate exist and both are unaudited and they're needed
+fn builtin_complex_exemptions_twins_regenerate() {
+    // (Pass) two versions of a crate exist and both are exemptions and they're needed
     // Should be a no-op and both entries should remain
 
     let _enter = TEST_RUNTIME.enter();
@@ -67,25 +67,25 @@ fn builtin_complex_unaudited_twins_regenerate() {
 
     audits.audits.insert("third-core".to_string(), vec![]);
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-core".to_string(),
         vec![
-            unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
-            unaudited(ver(5), SAFE_TO_DEPLOY),
+            exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+            exemptions(ver(5), SAFE_TO_DEPLOY),
         ],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
-    insta::assert_snapshot!("builtin-simple-unaudited-twins-regenerate", unaudited);
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!("builtin-simple-unaudited-twins-regenerate", exemptions);
 }
 
 #[test]
-fn builtin_complex_unaudited_partial_twins_regenerate() {
-    // (Pass) two versions of a crate exist and one is unaudited and one is audited
+fn builtin_complex_exemptions_partial_twins_regenerate() {
+    // (Pass) two versions of a crate exist and one is exemptions and one is audited
     // Should be a no-op and both entries should remain
 
     let _enter = TEST_RUNTIME.enter();
@@ -99,26 +99,26 @@ fn builtin_complex_unaudited_partial_twins_regenerate() {
         vec![full_audit(ver(5), SAFE_TO_DEPLOY)],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-core".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
+    let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
         "builtin-simple-unaudited-partial-twins-regenerate",
-        unaudited
+        exemptions
     );
 }
 
 #[test]
-fn builtin_simple_unaudited_in_delta_regenerate() {
+fn builtin_simple_exemptions_in_delta_regenerate() {
     // (Pass) An audited entry overlaps a delta and isn't needed
-    // Should emit an empty unaudited file
+    // Should emit an empty exemptions file
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -135,23 +135,23 @@ fn builtin_simple_unaudited_in_delta_regenerate() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(5), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(5), SAFE_TO_DEPLOY)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
-    insta::assert_snapshot!("builtin-simple-unaudited-in-delta-regenerate", unaudited);
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!("builtin-simple-unaudited-in-delta-regenerate", exemptions);
 }
 
 #[test]
-fn builtin_simple_unaudited_in_full_regenerate() {
+fn builtin_simple_exemptions_in_full_regenerate() {
     // (Pass) An audited entry overlaps a full audit and isn't needed
-    // Should emit an empty unaudited file
+    // Should emit an empty exemptions file
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -168,23 +168,23 @@ fn builtin_simple_unaudited_in_full_regenerate() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(3), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(3), SAFE_TO_DEPLOY)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
-    insta::assert_snapshot!("builtin-simple-unaudited-in-full-regenerate", unaudited);
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!("builtin-simple-unaudited-in-full-regenerate", exemptions);
 }
 
 #[test]
-fn builtin_simple_deps_unaudited_adds_uneeded_criteria_regenerate() {
+fn builtin_simple_deps_exemptions_adds_uneeded_criteria_regenerate() {
     // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
-    // Should produce an empty unaudited
+    // Should produce an empty exemptions
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple_deps();
@@ -201,24 +201,24 @@ fn builtin_simple_deps_unaudited_adds_uneeded_criteria_regenerate() {
     );
 
     config
-        .unaudited
-        .insert("dev".to_string(), vec![unaudited(ver(5), SAFE_TO_DEPLOY)]);
+        .exemptions
+        .insert("dev".to_string(), vec![exemptions(ver(5), SAFE_TO_DEPLOY)]);
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
+    let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
         "builtin-simple-deps-unaudited-adds-uneeded-criteria-regenerate",
-        unaudited
+        exemptions
     );
 }
 
 #[test]
-fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect_regenerate() {
+fn builtin_dev_detection_exemptions_adds_uneeded_criteria_indirect_regenerate() {
     // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
-    // Should result in an empty unaudited file
+    // Should result in an empty exemptions file
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::dev_detection();
@@ -235,26 +235,26 @@ fn builtin_dev_detection_unaudited_adds_uneeded_criteria_indirect_regenerate() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "simple-dev-indirect".to_string(),
-        vec![unaudited(ver(5), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(5), SAFE_TO_DEPLOY)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
+    let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
         "builtin-dev-detection-unaudited-adds-uneeded-criteria-indirect-regenerate",
-        unaudited
+        exemptions
     );
 }
 
 #[test]
-fn builtin_simple_unaudited_extra_regenerate() {
-    // (Pass) there's an extra unused unaudited entry, but the other is needed.
-    // Should result in only the v10 unaudited entry remaining.
+fn builtin_simple_exemptions_extra_regenerate() {
+    // (Pass) there's an extra unused exemptions entry, but the other is needed.
+    // Should result in only the v10 exemptions entry remaining.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -264,26 +264,26 @@ fn builtin_simple_unaudited_extra_regenerate() {
 
     audits.audits.insert("third-party1".to_string(), vec![]);
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
         vec![
-            unaudited(ver(5), SAFE_TO_DEPLOY),
-            unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+            exemptions(ver(5), SAFE_TO_DEPLOY),
+            exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
         ],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
-    insta::assert_snapshot!("builtin-simple-unaudited-extra-regenerate", unaudited);
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!("builtin-simple-unaudited-extra-regenerate", exemptions);
 }
 
 #[test]
-fn builtin_simple_unaudited_in_direct_full_regenerate() {
+fn builtin_simple_exemptions_in_direct_full_regenerate() {
     // (Pass) An audited entry overlaps a full audit which is the cur version and isn't needed
-    // Should produce an empty unaudited
+    // Should produce an empty exemptions
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -296,26 +296,26 @@ fn builtin_simple_unaudited_in_direct_full_regenerate() {
         vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
+    let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
         "builtin-simple-unaudited-in-direct-full-regenerate",
-        unaudited
+        exemptions
     );
 }
 
 #[test]
-fn builtin_simple_unaudited_nested_weaker_req_regenerate() {
+fn builtin_simple_exemptions_nested_weaker_req_regenerate() {
     // (Pass) A dep that has weaker requirements on its dep
-    // BUSTED: doesn't emit dependency-criteria for third-party1's 'unaudited'
+    // BUSTED: doesn't emit dependency-criteria for third-party1's 'exemptions'
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -348,33 +348,33 @@ fn builtin_simple_unaudited_nested_weaker_req_regenerate() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited_dep(
+        vec![exemptions_dep(
             ver(3),
             SAFE_TO_DEPLOY,
             [("transitive-third-party1", [SAFE_TO_RUN])],
         )],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "transitive-third-party1".to_string(),
-        vec![unaudited(ver(4), SAFE_TO_RUN)],
+        vec![exemptions(ver(4), SAFE_TO_RUN)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
+    let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
         "builtin-simple-unaudited-nested-weaker-req-regenerate",
-        unaudited
+        exemptions
     );
 }
 
 #[test]
-fn builtin_simple_unaudited_nested_stronger_req_regenerate() {
+fn builtin_simple_exemptions_nested_stronger_req_regenerate() {
     // (Pass) A dep that has stronger requirements on its dep
     // BUSTED: should emit safe-to-deploy for transitive-third-party1
 
@@ -414,24 +414,24 @@ fn builtin_simple_unaudited_nested_stronger_req_regenerate() {
         ],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "third-party1".to_string(),
-        vec![unaudited(ver(3), SAFE_TO_RUN)],
+        vec![exemptions(ver(3), SAFE_TO_RUN)],
     );
 
-    config.unaudited.insert(
+    config.exemptions.insert(
         "transitive-third-party1".to_string(),
-        vec![unaudited(ver(4), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(4), SAFE_TO_DEPLOY)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
+    let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
         "builtin-simple-unaudited-nested-stronger-req-regenerate",
-        unaudited
+        exemptions
     );
 }
 
@@ -448,17 +448,20 @@ fn builtin_simple_audit_as_default_root_regenerate() {
     config
         .policy
         .insert("root-package".to_string(), audit_as_policy(Some(true)));
-    config.unaudited.insert(
+    config.exemptions.insert(
         "root-package".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
-    insta::assert_snapshot!("builtin-simple-audit-as-default-root-regenerate", unaudited);
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!(
+        "builtin-simple-audit-as-default-root-regenerate",
+        exemptions
+    );
 }
 
 #[test]
@@ -478,15 +481,15 @@ fn builtin_simple_audit_as_weaker_root_regenerate() {
             ..audit_as_policy(Some(true))
         },
     );
-    config.unaudited.insert(
+    config.exemptions.insert(
         "root-package".to_string(),
-        vec![unaudited(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        vec![exemptions(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::minimize_unaudited(&cfg, &mut store, None).unwrap();
+    crate::minimize_exemptions(&cfg, &mut store, None).unwrap();
 
-    let unaudited = get_unaudited(&store);
-    insta::assert_snapshot!("builtin-simple-audit-as-weaker-root-regenerate", unaudited);
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!("builtin-simple-audit-as-weaker-root-regenerate", exemptions);
 }
