@@ -405,6 +405,9 @@ pub struct InspectArgs {
     /// The version to inspect
     #[clap(action)]
     pub version: Version,
+    /// How to inspect the source
+    #[clap(long, action, default_value = "sourcegraph")]
+    pub mode: FetchMode,
 }
 
 /// Emits a diff of the two versions
@@ -419,6 +422,9 @@ pub struct DiffArgs {
     /// The target version to diff
     #[clap(action)]
     pub version2: Version,
+    /// How to inspect the source
+    #[clap(long, action, default_value = "sourcegraph")]
+    pub mode: FetchMode,
 }
 
 /// Certifies a package as audited
@@ -640,6 +646,12 @@ impl FromStr for DependencyCriteriaArg {
             Err(e) => Err(convert_error(s, e)),
         }
     }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum FetchMode {
+    Local,
+    Sourcegraph,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]

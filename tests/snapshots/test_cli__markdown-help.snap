@@ -273,6 +273,12 @@ The package to inspect
 The version to inspect
 
 ### OPTIONS
+#### `--mode <MODE>`
+How to inspect the source
+
+\[default: sourcegraph]  
+\[possible values: local, sourcegraph]  
+
 #### `-h, --help`
 Print help information
 
@@ -302,6 +308,12 @@ The base version to diff
 The target version to diff
 
 ### OPTIONS
+#### `--mode <MODE>`
+How to inspect the source
+
+\[default: sourcegraph]  
+\[possible values: local, sourcegraph]  
+
 #### `-h, --help`
 Print help information
 
