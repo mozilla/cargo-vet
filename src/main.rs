@@ -555,21 +555,15 @@ fn cmd_inspect(
                 package,
                 None,
                 version,
-                prompt,
+                &prompt,
             ))
             .into_diagnostic()?;
 
-        match open::that(&url) {
-            Ok(()) => {
-                writeln!(out, "opened {url} in your browser");
-                return Ok(());
-            }
-            Err(_e) => {
-                return Err(miette!(
-                    "Couldn't open {url} in your browser, try --mode=local?"
-                ));
-            }
-        }
+        open::that(&url)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Couldn't open {url} in your browser, try --mode=local?"))?;
+
+        return Ok(());
     }
 
     let fetched = tokio::runtime::Handle::current().block_on(async {
@@ -583,7 +577,7 @@ fn cmd_inspect(
                 package,
                 None,
                 version,
-                "continue...".to_owned()
+                "continue..."
             ),
         );
         eulas.into_diagnostic()?;
@@ -991,7 +985,7 @@ async fn prompt_criteria_eulas(
     package: PackageStr<'_>,
     from: Option<&Version>,
     to: &Version,
-    final_prompt: String,
+    final_prompt: &str,
 ) -> Result<(), io::Error> {
     let description = if let Some(from) = from {
         format!(
@@ -1050,14 +1044,12 @@ async fn prompt_criteria_eulas(
         out,
         "{}",
         out.style().bold().apply_to(
-            "Other software projects may rely on this audit. Ask for help if you're not sure."
+            "Other software projects may rely on this audit. Ask for help if you're not sure.\n"
         )
     );
     let out_ = out.clone();
-    tokio::task::spawn_blocking(move || {
-        out_.read_line_with_prompt(&format!("(press ENTER to {final_prompt})"))
-    })
-    .await??;
+    let final_prompt = format!("(press ENTER to {final_prompt})");
+    tokio::task::spawn_blocking(move || out_.read_line_with_prompt(&final_prompt)).await??;
     Ok(())
 }
 
@@ -1469,21 +1461,15 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
                 package,
                 Some(version1),
                 version2,
-                prompt,
+                &prompt,
             ))
             .into_diagnostic()?;
 
-        match open::that(&url) {
-            Ok(()) => {
-                writeln!(out, "opened {url} in your browser");
-                return Ok(());
-            }
-            Err(_e) => {
-                return Err(miette!(
-                    "Couldn't open {url} in your browser, try --mode=local?"
-                ));
-            }
-        }
+        open::that(&url)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Couldn't open {url} in your browser, try --mode=local?"))?;
+
+        return Ok(());
     }
 
     let (fetched1, fetched2) = tokio::runtime::Handle::current().block_on(async {
@@ -1505,7 +1491,7 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
                 package,
                 Some(version1),
                 version2,
-                "continue...".to_owned(),
+                "continue...",
             )
         );
         eulas.into_diagnostic()?;
