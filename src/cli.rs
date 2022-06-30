@@ -456,6 +456,12 @@ pub struct CertifyArgs {
     /// Accept all criteria without an interactive prompt
     #[clap(long, action)]
     pub accept_all: bool,
+    /// Force the command to ignore whether the package/version makes sense
+    ///
+    /// To catch typos/mistakes, we check if the thing you're trying to
+    /// talk about is part of your current build, but this flag disables that.
+    #[clap(long, action)]
+    pub force: bool,
 }
 
 /// Forbids the given version
@@ -482,6 +488,12 @@ pub struct RecordViolationArgs {
     /// If not provided, there will be no notes.
     #[clap(long, action)]
     pub notes: Option<String>,
+    /// Force the command to ignore whether the package/version makes sense
+    ///
+    /// To catch typos/mistakes, we check if the thing you're trying to
+    /// talk about is part of your current build, but this flag disables that.
+    #[clap(long, action)]
+    pub force: bool,
 }
 
 /// Certifies the given version
@@ -511,6 +523,12 @@ pub struct AddExemptionArgs {
     /// Suppress suggesting this exemption for review
     #[clap(long, action)]
     pub no_suggest: bool,
+    /// Force the command to ignore whether the package/version makes sense
+    ///
+    /// To catch typos/mistakes, we check if the thing you're trying to
+    /// talk about is part of your current build, but this flag disables that.
+    #[clap(long, action)]
+    pub force: bool,
 }
 
 #[derive(clap::Args)]
