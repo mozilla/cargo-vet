@@ -89,3 +89,5 @@ audit criteria, configurable policies for different subtrees in the build graph,
 and filtering out platform-specific code. These features are all completely
 optional, and the baseline experience is designed to be simple and require
 minimal onboarding.
+
+<!-- diagrams: https://docs.google.com/presentation/d/18svkEsm9K5gLQeJLfILGdMUTsujiDgzecrswcOAdceQ/edit -->
