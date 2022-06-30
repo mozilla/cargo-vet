@@ -544,6 +544,8 @@ fn cmd_inspect(
     });
 
     if sub_args.mode == FetchMode::Sourcegraph {
+        let url = format!("https://sourcegraph.com/crates/{package}@v{version}");
+        let prompt = format!("open {url} in your browser");
         tokio::runtime::Handle::current()
             .block_on(prompt_criteria_eulas(
                 out,
@@ -553,14 +555,19 @@ fn cmd_inspect(
                 package,
                 None,
                 version,
+                prompt,
             ))
             .into_diagnostic()?;
 
-        let url = format!("https://sourcegraph.com/crates/{package}@v{version}");
         match open::that(&url) {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                warn!("Couldn't open browser, falling back to local {:?}", e);
+            Ok(()) => {
+                writeln!(out, "opened {url} in your browser");
+                return Ok(());
+            }
+            Err(_e) => {
+                return Err(miette!(
+                    "Couldn't open {url} in your browser, try --mode=local?"
+                ));
             }
         }
     }
@@ -568,7 +575,16 @@ fn cmd_inspect(
     let fetched = tokio::runtime::Handle::current().block_on(async {
         let (pkg, eulas) = tokio::join!(
             cache.fetch_package(network.as_ref(), package, version),
-            prompt_criteria_eulas(out, cfg, network.as_ref(), &store, package, None, version),
+            prompt_criteria_eulas(
+                out,
+                cfg,
+                network.as_ref(),
+                &store,
+                package,
+                None,
+                version,
+                "continue...".to_owned()
+            ),
         );
         eulas.into_diagnostic()?;
         pkg.into_diagnostic()
@@ -966,6 +982,7 @@ fn guess_audit_criteria(
 ///
 /// This method is async so it can be performed concurrently with waiting for
 /// the downloads to complete.
+#[allow(clippy::too_many_arguments)]
 async fn prompt_criteria_eulas(
     out: &Arc<dyn Out>,
     cfg: &Config,
@@ -974,6 +991,7 @@ async fn prompt_criteria_eulas(
     package: PackageStr<'_>,
     from: Option<&Version>,
     to: &Version,
+    final_prompt: String,
 ) -> Result<(), io::Error> {
     let description = if let Some(from) = from {
         format!(
@@ -1036,8 +1054,10 @@ async fn prompt_criteria_eulas(
         )
     );
     let out_ = out.clone();
-    tokio::task::spawn_blocking(move || out_.read_line_with_prompt("(press ENTER to continue...)"))
-        .await??;
+    tokio::task::spawn_blocking(move || {
+        out_.read_line_with_prompt(&format!("(press ENTER to {final_prompt})"))
+    })
+    .await??;
     Ok(())
 }
 
@@ -1437,6 +1457,9 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
     });
 
     if sub_args.mode == FetchMode::Sourcegraph {
+        let url =
+            format!("https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}");
+        let prompt = format!("open {url} in your browser");
         tokio::runtime::Handle::current()
             .block_on(prompt_criteria_eulas(
                 out,
@@ -1446,16 +1469,19 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
                 package,
                 Some(version1),
                 version2,
+                prompt,
             ))
             .into_diagnostic()?;
 
-        let url =
-            format!("https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}");
-
         match open::that(&url) {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                warn!("Couldn't open browser, falling back to local {:?}", e);
+            Ok(()) => {
+                writeln!(out, "opened {url} in your browser");
+                return Ok(());
+            }
+            Err(_e) => {
+                return Err(miette!(
+                    "Couldn't open {url} in your browser, try --mode=local?"
+                ));
             }
         }
     }
@@ -1479,6 +1505,7 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
                 package,
                 Some(version1),
                 version2,
+                "continue...".to_owned(),
             )
         );
         eulas.into_diagnostic()?;
