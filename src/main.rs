@@ -545,7 +545,6 @@ fn cmd_inspect(
 
     if sub_args.mode == FetchMode::Sourcegraph {
         let url = format!("https://sourcegraph.com/crates/{package}@v{version}");
-        let prompt = format!("open {url} in your browser");
         tokio::runtime::Handle::current()
             .block_on(prompt_criteria_eulas(
                 out,
@@ -555,7 +554,7 @@ fn cmd_inspect(
                 package,
                 None,
                 version,
-                &prompt,
+                Some(&url),
             ))
             .into_diagnostic()?;
 
@@ -577,7 +576,7 @@ fn cmd_inspect(
                 package,
                 None,
                 version,
-                "continue..."
+                None,
             ),
         );
         eulas.into_diagnostic()?;
@@ -985,7 +984,7 @@ async fn prompt_criteria_eulas(
     package: PackageStr<'_>,
     from: Option<&Version>,
     to: &Version,
-    final_prompt: &str,
+    url: Option<&str>,
 ) -> Result<(), io::Error> {
     let description = if let Some(from) = from {
         format!(
@@ -1047,9 +1046,21 @@ async fn prompt_criteria_eulas(
             "Other software projects may rely on this audit. Ask for help if you're not sure.\n"
         )
     );
+
+    let final_prompt = if let Some(url) = url {
+        writeln!(
+            out,
+            "You can inspect the {} here: {}\n",
+            if from.is_some() { "diff" } else { "crate" },
+            url,
+        );
+        "(press ENTER to open in your browser, or re-run with --mode=local)"
+    } else {
+        "(press ENTER to inspect locally)"
+    };
+
     let out_ = out.clone();
-    let final_prompt = format!("(press ENTER to {final_prompt})");
-    tokio::task::spawn_blocking(move || out_.read_line_with_prompt(&final_prompt)).await??;
+    tokio::task::spawn_blocking(move || out_.read_line_with_prompt(final_prompt)).await??;
     Ok(())
 }
 
@@ -1451,7 +1462,6 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
     if sub_args.mode == FetchMode::Sourcegraph {
         let url =
             format!("https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}");
-        let prompt = format!("open {url} in your browser");
         tokio::runtime::Handle::current()
             .block_on(prompt_criteria_eulas(
                 out,
@@ -1461,7 +1471,7 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
                 package,
                 Some(version1),
                 version2,
-                &prompt,
+                Some(&url),
             ))
             .into_diagnostic()?;
 
@@ -1491,7 +1501,7 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
                 package,
                 Some(version1),
                 version2,
-                "continue...",
+                None,
             )
         );
         eulas.into_diagnostic()?;
