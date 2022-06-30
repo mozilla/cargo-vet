@@ -364,6 +364,12 @@ If not provided, there will be no notes.
 #### `--accept-all`
 Accept all criteria without an interactive prompt
 
+#### `--force`
+Force the command to ignore whether the package/version makes sense
+
+To catch typos/mistakes, we check if the thing you're trying to talk about is part of
+your current build, but this flag disables that.
+
 #### `-h, --help`
 Print help information
 
@@ -517,6 +523,12 @@ If not provided, there will be no notes.
 #### `--no-suggest`
 Suppress suggesting this exemption for review
 
+#### `--force`
+Force the command to ignore whether the package/version makes sense
+
+To catch typos/mistakes, we check if the thing you're trying to talk about is part of
+your current build, but this flag disables that.
+
 #### `-h, --help`
 Print help information
 
@@ -575,6 +587,12 @@ If not provided, we will collect this information from the local git.
 A free-form string to include with the new forbid entry
 
 If not provided, there will be no notes.
+
+#### `--force`
+Force the command to ignore whether the package/version makes sense
+
+To catch typos/mistakes, we check if the thing you're trying to talk about is part of
+your current build, but this flag disables that.
 
 #### `-h, --help`
 Print help information

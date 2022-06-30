@@ -97,6 +97,7 @@ pub enum CertifyError {
     #[error("couldn't find uncommented certify statement")]
     CouldntFindCertifyStatement,
     #[error("'{0}' isn't one of your foreign packages")]
+    #[diagnostic(help("use --force to ignore this error"))]
     NotAPackage(PackageName),
     #[error(transparent)]
     IoError(#[from] std::io::Error),

@@ -607,7 +607,9 @@ fn do_cmd_certify(
     };
 
     // FIXME: can/should we check if the version makes sense..?
-    if !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == *package) {
+    if !sub_args.force
+        && !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == *package)
+    {
         return Err(CertifyError::NotAPackage(package));
     }
 
@@ -1051,7 +1053,9 @@ fn cmd_record_violation(
     };
 
     // FIXME: can/should we check if the version makes sense..?
-    if !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == sub_args.package) {
+    if !sub_args.force
+        && !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == sub_args.package)
+    {
         // ERRORS: immediate fatal diagnostic? should we allow you to forbid random packages?
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
         // useful audits whenever you update your dependencies! But this might be a useful guard
@@ -1122,7 +1126,9 @@ fn cmd_add_exemption(
     let suggest = !sub_args.no_suggest;
 
     // FIXME: can/should we check if the version makes sense..?
-    if !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == sub_args.package) {
+    if !sub_args.force
+        && !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == sub_args.package)
+    {
         // ERRORS: immediate fatal diagnostic? should we allow you to certify random packages?
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
         // useful audits whenever you update your dependencies! But this might be a useful guard
