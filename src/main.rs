@@ -407,10 +407,10 @@ fn real_main() -> Result<(), miette::Report> {
         Some(DumpGraph(sub_args)) => cmd_dump_graph(out, &cfg, sub_args),
         Some(Inspect(sub_args)) => cmd_inspect(out, &cfg, sub_args),
         Some(Diff(sub_args)) => cmd_diff(out, &cfg, sub_args),
-        Some(HelpMarkdown(_)) | Some(Gc(_)) => unreachable!("handled earlier"),
         Some(Regenerate(Imports(sub_args))) => cmd_regenerate_imports(out, &cfg, sub_args),
         Some(Regenerate(Exemptions(sub_args))) => cmd_regenerate_exemptions(out, &cfg, sub_args),
         Some(Regenerate(AuditAsCratesIo(sub_args))) => cmd_regenerate_audit_as(out, &cfg, sub_args),
+        Some(HelpMarkdown(_)) | Some(Gc(_)) => unreachable!("handled earlier"),
     }
 }
 
