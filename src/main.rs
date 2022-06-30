@@ -543,6 +543,28 @@ fn cmd_inspect(
         version: version.clone(),
     });
 
+    if sub_args.mode == FetchMode::Sourcegraph {
+        tokio::runtime::Handle::current()
+            .block_on(prompt_criteria_eulas(
+                out,
+                cfg,
+                network.as_ref(),
+                &store,
+                package,
+                None,
+                version,
+            ))
+            .into_diagnostic()?;
+
+        let url = format!("https://sourcegraph.com/crates/{package}@v{version}");
+        match open::that(&url) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                warn!("Couldn't open browser, falling back to local {:?}", e);
+            }
+        }
+    }
+
     let fetched = tokio::runtime::Handle::current().block_on(async {
         let (pkg, eulas) = tokio::join!(
             cache.fetch_package(network.as_ref(), package, version),
@@ -1413,6 +1435,30 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
         version1: version1.clone(),
         version2: version2.clone(),
     });
+
+    if sub_args.mode == FetchMode::Sourcegraph {
+        tokio::runtime::Handle::current()
+            .block_on(prompt_criteria_eulas(
+                out,
+                cfg,
+                network.as_ref(),
+                &store,
+                package,
+                Some(version1),
+                version2,
+            ))
+            .into_diagnostic()?;
+
+        let url =
+            format!("https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}");
+
+        match open::that(&url) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                warn!("Couldn't open browser, falling back to local {:?}", e);
+            }
+        }
+    }
 
     let (fetched1, fetched2) = tokio::runtime::Handle::current().block_on(async {
         // NOTE: don't `try_join` everything as we don't want to abort the
