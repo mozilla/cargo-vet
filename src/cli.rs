@@ -355,15 +355,28 @@ pub enum Commands {
 
 #[derive(Subcommand)]
 pub enum RegenerateSubcommands {
+    /// Regenerate your exemptions to make `check` pass minimally
     ///
+    /// This command can be used for two purposes: to force your supply-chain to pass `check`
+    /// when it's currently failing, or to minimize/garbage-collect your exemptions when it's
+    /// already passing. These are ultimately the same operation.
+    ///
+    /// We will try our best to preserve existing exemptions, removing only those that
+    /// aren't needed, and adding only those that are needed. Exemptions that are overbroad
+    /// may also be weakened (i.e. safe-to-deploy may be reduced to safe-to-run).
     #[clap(disable_version_flag = true)]
     Exemptions(RegenerateExemptionsArgs),
 
-    /// Suggest some low-hanging fruit to review
+    /// Regenerate your imports and accept changes to criteria
+    ///
+    /// This is equivalent to `cargo vet fetch-imports` but it won't produce an error if
+    /// the descriptions of foreign criteria change.
     #[clap(disable_version_flag = true)]
     Imports(RegenerateImportsArgs),
 
-    /// Initialize cargo-vet for your project
+    /// Regenerate you audit-as-crates-io entries to make `check` pass
+    ///
+    /// This will just set any problematic entries to `audit-as-crates-io = false`.
     #[clap(disable_version_flag = true)]
     AuditAsCratesIo(RegenerateAuditAsCratesIoArgs),
 }
