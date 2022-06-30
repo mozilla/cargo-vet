@@ -1,6 +1,6 @@
 # Motivation
 
-The discussion below covers the high-level motivation behind this approach. If
+The discussion below covers the high-level motivation for building this system. If
 you're just interested in how it works, you can skip to the next section.
 
 ### Security Risks of Third-Party Code
@@ -23,10 +23,10 @@ However, that is often not a realistic solution for many projects today. In the 
 of technical guarantees, the responsibility for ensuring software integrity falls to
 humans. But reviewing every line of third-party code can be very time-consuming and
 difficult, and undermines the original premise of low-friction code reuse. Practically
-speaking, it usually just doesn't happen — even at large well-resourced companies.
+speaking, it often just doesn't happen — even at large well-resourced companies.
 
 ### Tackling This in Rust
-There are two properties of Rust that make this problem more tractable.
+There are two properties of Rust that make this problem easier to solve.
 
 First, it's relatively easy to audit Rust code. Unlike C/C++, Rust code is
 memory-safe by default, and unlike JavaScript, there is no highly-dynamic shared
@@ -55,34 +55,6 @@ merely auditing the diff between the two. Not every organization
 and project share the same level of risk tolerance, but there is a lot of common
 ground, and substantial room for improvement beyond no sharing at all.
 
-### Design
-
-The core idea behind `cargo vet` is that teams perform these relatively-cheap
-audits, document them in a structured way, and make that information available to
-others. The more people that participate, the more likely each developer is to find
-that a new import has already been audited, and the less total work there is for
-everyone.
-
-To remain lightweight, `cargo vet` does not introduce its own mechanisms for identity,
-integrity, and history. Audits and trusted parties are recorded in a flat file in the project repository,
-and are thus subject to the same access controls and record-keeping as the rest of the
-project. No extra work is required to make an open-source projects audits available to
-others, since others can simply reference the file directly from the public repository.
-Closed-source projects, by contrast, will need to push a copy of their audit file to
-a known public location if they wish to make it available to others.
-
-The means of discovering other participants is expected to change over time as adoption grows. Early on,
-parties can simply coordinate directly, and look to each other's lists of trusted sources
-for inspiration. As the numbers grow, it may be helpful to develop a centralized directory.
-Eventually, it may make sense to integrate this information directly with crates.io.
-
-Audit sharing is a key force-multiplier behind `cargo vet`, but it is not essential.
-You can of course decline to import any external audit sets, and either perform all the
-audits yourself or add them to your allow-list and only audit updates. This second
-approach can be a useful low-effort way to protect a mature projects from future
-supply-chain attacks. By simply enforcing that any future imports are differentially
-audited, you can reliably prevent future attacks while deferring verification against past
-compromise (which may be a larger undertaking).
 
 ## Footnotes
 
