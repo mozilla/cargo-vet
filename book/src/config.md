@@ -146,21 +146,6 @@ entries.
 
 Defaults to the empty set and is not inherited.
 
-#### `targets`
-
-A string or array of target specifiers for the platforms of interest for this
-top-level crate. These are the platforms that `cargo vet` will require audits
-for when traversing the subtree (audits can optionally [restrict their
-validity](audit-entries.md#targets) to a set of targets).
-
-For top-level crates, defaults to all platforms.
-
-#### `dev-targets`
-
-Same as the above, but applied to dev-dependencies.
-
-For top-level crates, defaults to all platforms.
-
 #### `notes`
 
 Free-form string for recording rationale or other relevant information.

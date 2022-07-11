@@ -37,19 +37,6 @@ the dependency even if it's listed in the `unaudited` table.
 
 Specifies the relevant criteria for this audit. This field is required.
 
-## `targets`
-
-A string or array of strings specifying the targets for which this audit is
-valid.
-
-Unless otherwise specified, audit entries are assumed to apply to all platforms.
-However, they can optionally be restricted to certain platforms (so that, for
-example, an auditor can skim over complicated assembly code for a platform that
-their project doesn't target).
-
-The syntax for this field mirrors Cargo's syntax for [platform-specific
-dependencies](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#platform-specific-dependencies).
-
 ## `who`
 
 A string identifying the auditor. When invoking `cargo vet certify`, the
