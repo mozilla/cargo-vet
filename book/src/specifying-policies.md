@@ -11,10 +11,6 @@ requirements more precisely, such as:
 * **Using different criteria for different top-level crates.** Your workspace
   might contain both a production product and an internal tool, which might
 require different levels of audits for their dependencies.
-* **Ignoring targets you don't support.** Some dependencies are only built for
-  certain platforms. Additionally, audit records can [specify](audit-entries.md#targets)
-  that they do not cover platform-specific code for certain targets. You can
-  leverage these details by scoping `cargo vet` to your platforms of interest.
 
 If the default behavior works for you, there's no need to specify anything. If
 you wish to encode policies such as the above, you can do so in

@@ -420,8 +420,6 @@ fn default_policy() -> PolicyEntry {
         criteria: None,
         dev_criteria: None,
         dependency_criteria: SortedMap::new(),
-        targets: None,
-        dev_targets: None,
         notes: None,
     }
 }
@@ -932,8 +930,6 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                         criteria: Some(vec![DEFAULT_CRIT.to_string().into()]),
                         dev_criteria: Some(vec![DEFAULT_CRIT.to_string().into()]),
                         dependency_criteria: DependencyCriteria::new(),
-                        targets: None,
-                        dev_targets: None,
                         notes: None,
                     },
                 );

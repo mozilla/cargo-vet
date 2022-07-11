@@ -356,13 +356,6 @@ pub struct PolicyEntry {
     #[serde(with = "serialization::string_or_vec_or_none")]
     pub dev_criteria: Option<Vec<Spanned<CriteriaName>>>,
 
-    /// TODO: figure this out
-    pub targets: Option<Vec<String>>,
-
-    /// `targets` but for dev-deps
-    #[serde(rename = "dev-targets")]
-    pub dev_targets: Option<Vec<String>>,
-
     /// Custom criteria for a specific first-party crate's dependencies.
     ///
     /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
