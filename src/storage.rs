@@ -12,7 +12,6 @@ use cargo_metadata::Version;
 use crates_index::Index;
 use flate2::read::GzDecoder;
 use futures_util::future::{join_all, try_join_all};
-use miette::{NamedSource, SourceOffset};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
@@ -22,9 +21,9 @@ use crate::{
     errors::{
         CacheAcquireError, CacheCommitError, CommandError, CriteriaChangeError,
         CriteriaChangeErrors, DiffError, FetchAndDiffError, FetchAuditError, FetchError,
-        FlockError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError, SourceFile,
+        FlockError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError,
         StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError,
-        StoreValidateError, StoreValidateErrors, TomlParseError, UnpackError,
+        StoreValidateError, StoreValidateErrors, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
@@ -33,7 +32,7 @@ use crate::{
     },
     network::Network,
     resolver,
-    serialization::{spanned::Spanned, to_formatted_toml},
+    serialization::{parse_toml_source, spanned::Spanned, to_formatted_toml, SourceFile},
     Config, PartialConfig,
 };
 
@@ -123,9 +122,9 @@ pub struct Store {
     pub imports: ImportsFile,
     pub audits: AuditsFile,
 
-    pub config_src: SourceFile,
-    pub imports_src: SourceFile,
-    pub audits_src: SourceFile,
+    pub config_src: Arc<SourceFile>,
+    pub imports_src: Arc<SourceFile>,
+    pub audits_src: Arc<SourceFile>,
 }
 
 impl Store {
@@ -151,9 +150,9 @@ impl Store {
                 criteria: SortedMap::new(),
                 audits: SortedMap::new(),
             },
-            config_src: Arc::new(NamedSource::new(CONFIG_TOML, "")),
-            audits_src: Arc::new(NamedSource::new(AUDITS_TOML, "")),
-            imports_src: Arc::new(NamedSource::new(IMPORTS_LOCK, "")),
+            config_src: SourceFile::empty(CONFIG_TOML),
+            audits_src: SourceFile::empty(AUDITS_TOML),
+            imports_src: SourceFile::empty(IMPORTS_LOCK),
         })
     }
 
@@ -201,9 +200,9 @@ impl Store {
             config,
             imports,
             audits,
-            config_src: Arc::new(NamedSource::new(CONFIG_TOML, "")),
-            audits_src: Arc::new(NamedSource::new(AUDITS_TOML, "")),
-            imports_src: Arc::new(NamedSource::new(IMPORTS_LOCK, "")),
+            config_src: SourceFile::empty(CONFIG_TOML),
+            audits_src: SourceFile::empty(AUDITS_TOML),
+            imports_src: SourceFile::empty(IMPORTS_LOCK),
         }
     }
 
@@ -295,7 +294,7 @@ impl Store {
         // * nested check imports, complicated because of namespaces
 
         fn check_criteria(
-            source_code: &SourceFile,
+            source_code: &Arc<SourceFile>,
             valid: &Arc<Vec<CriteriaName>>,
             errors: &mut Vec<InvalidCriteriaError>,
             criteria: &[Spanned<CriteriaName>],
@@ -515,17 +514,8 @@ async fn fetch_foreign_audit(
     })?;
     let audit_bytes = network.download(parsed_url).await?;
     let audit_string = String::from_utf8(audit_bytes).map_err(LoadTomlError::from)?;
-    let audit_source = Arc::new(NamedSource::new(name, audit_string.clone()));
-    let audit_file: AuditsFile = toml::de::from_str(&audit_string)
-        .map_err(|error| {
-            let (line, col) = error.line_col().unwrap_or((0, 0));
-            TomlParseError {
-                source_code: audit_source,
-                span: SourceOffset::from_location(&audit_string, line + 1, col + 1),
-                error,
-            }
-        })
-        .map_err(LoadTomlError::from)?;
+    let audit_source = SourceFile::new(name, audit_string);
+    let audit_file: AuditsFile = parse_toml_source(&audit_source).map_err(LoadTomlError::from)?;
     Ok(audit_file)
 }
 
@@ -1269,28 +1259,16 @@ fn find_cargo_registry() -> Result<CargoRegistry, crates_index::Error> {
     })
 }
 
-fn load_toml<T>(file_name: &str, reader: impl Read) -> Result<(SourceFile, T), LoadTomlError>
+fn load_toml<T>(file_name: &str, reader: impl Read) -> Result<(Arc<SourceFile>, T), LoadTomlError>
 where
     T: for<'a> Deserialize<'a>,
 {
     let mut reader = BufReader::new(reader);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
-    let result = toml::de::from_str(&string);
-    // We defer the NamedSource creation into each branch because the error path wants to
-    // have access to the input string, but NamedSource consumes and erases it.
-    match result {
-        Ok(toml) => Ok((Arc::new(NamedSource::new(file_name, string)), toml)),
-        Err(error) => {
-            let (line, col) = error.line_col().unwrap_or((0, 0));
-            let span = SourceOffset::from_location(&string, line + 1, col);
-            Err(TomlParseError {
-                source_code: Arc::new(NamedSource::new(file_name, string)),
-                span,
-                error,
-            })?
-        }
-    }
+    let source_code = SourceFile::new(file_name, string);
+    let result = parse_toml_source(&source_code)?;
+    Ok((source_code, result))
 }
 fn store_toml<T>(mut writer: impl Write, heading: &str, val: T) -> Result<(), StoreTomlError>
 where

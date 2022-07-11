@@ -1,12 +1,105 @@
 //! Serialization helpers
 
-use crate::format::{DependencyCriteria, SortedMap};
+use crate::{
+    errors::TomlParseError,
+    format::{DependencyCriteria, SortedMap},
+};
 use core::fmt;
+use miette::{MietteError, MietteSpanContents, SourceCode, SourceOffset, SourceSpan, SpanContents};
 use serde::{
     de::{self, value, SeqAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use spanned::Spanned;
+use std::{ops::Range, sync::Arc};
+
+#[derive(Debug)]
+enum SourceFileKind {
+    String(String),
+    Nested {
+        outer: Arc<SourceFile>,
+        range: Range<usize>,
+    },
+}
+
+/// Basic source file for an in-memory string, with the original name and source
+/// public. This fills a similar purpose to a `miette::NamedSource`, except the
+/// source and names remain accessible, and so can be used for other purposes.
+#[derive(Debug)]
+pub struct SourceFile {
+    pub name: String,
+    source: SourceFileKind,
+}
+
+impl SourceFile {
+    /// Create a new empty source file.
+    pub fn empty(name: &str) -> Arc<Self> {
+        Arc::new(SourceFile {
+            name: name.to_owned(),
+            source: SourceFileKind::String(String::new()),
+        })
+    }
+
+    /// Create a new source file with owned string contents.
+    pub fn new(name: &str, source: String) -> Arc<Self> {
+        Arc::new(SourceFile {
+            name: name.to_owned(),
+            source: SourceFileKind::String(source),
+        })
+    }
+
+    /// Create a new source file for a subset of the given outer source file
+    /// without copying the original string.
+    pub fn new_nested(name: &str, outer: Arc<Self>, range: Range<usize>) -> Arc<Self> {
+        assert!(range.start <= range.end, "invalid range");
+        assert!(
+            range.end <= outer.source().len(),
+            "range is larger than outer source file"
+        );
+        Arc::new(SourceFile {
+            name: name.to_owned(),
+            source: SourceFileKind::Nested { outer, range },
+        })
+    }
+
+    /// Get a reference to the file's original source text e.g. for parsing.
+    pub fn source(&self) -> &str {
+        match &self.source {
+            SourceFileKind::String(s) => s,
+            SourceFileKind::Nested { outer, range } => &outer.source()[range.clone()],
+        }
+    }
+}
+
+impl SourceCode for SourceFile {
+    fn read_span<'a>(
+        &'a self,
+        span: &SourceSpan,
+        context_lines_before: usize,
+        context_lines_after: usize,
+    ) -> Result<Box<dyn SpanContents<'a> + 'a>, MietteError> {
+        let contents = self
+            .source()
+            .read_span(span, context_lines_before, context_lines_after)?;
+        Ok(Box::new(MietteSpanContents::new_named(
+            self.name.clone(),
+            contents.data(),
+            *contents.span(),
+            contents.line(),
+            contents.column(),
+            contents.line_count(),
+        )))
+    }
+}
+
+impl Default for SourceFile {
+    fn default() -> Self {
+        SourceFile {
+            name: "unknown".to_owned(),
+            source: SourceFileKind::String(String::new()),
+        }
+    }
+}
 
 /// Serde handler to allow specifying any of [], "foo", ["foo"], or ["foo", "bar"],
 /// with the strings getting proper toml spans from the original source. Specifically,
@@ -355,6 +448,22 @@ where
     let mut toml_document = toml_edit::ser::to_document(&val)?;
     TomlFormatter.visit_document_mut(&mut toml_document);
     Ok(toml_document)
+}
+
+/// Parse a toml `SourceFile` with serde, returning an error with span
+/// information on failure.
+pub fn parse_toml_source<'a, T: Deserialize<'a>>(
+    source_code: &'a Arc<SourceFile>,
+) -> Result<T, TomlParseError> {
+    toml::de::from_str(source_code.source()).map_err(|error| {
+        let (line, col) = error.line_col().unwrap_or((0, 0));
+        let span = SourceOffset::from_location(&source_code.source(), line + 1, col);
+        TomlParseError {
+            source_code: source_code.clone(),
+            span,
+            error,
+        }
+    })
 }
 
 pub mod spanned {

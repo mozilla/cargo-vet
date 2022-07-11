@@ -1,12 +1,13 @@
 use std::{ffi::OsString, fmt::Display, path::PathBuf, string::FromUtf8Error, sync::Arc};
 
 use cargo_metadata::Version;
-use miette::{Diagnostic, NamedSource, SourceOffset, SourceSpan};
+use miette::{Diagnostic, SourceOffset, SourceSpan};
 use thiserror::Error;
 
-use crate::format::{ForeignCriteriaName, ImportName, PackageName};
-
-pub type SourceFile = Arc<NamedSource>;
+use crate::{
+    format::{ForeignCriteriaName, ImportName, PackageName},
+    serialization::SourceFile,
+};
 
 ///////////////////////////////////////////////////////////
 // AuditAsErrors
@@ -227,7 +228,7 @@ pub enum StoreValidateError {
 #[diagnostic(help("the possible criteria are {:?}", valid_names))]
 pub struct InvalidCriteriaError {
     #[source_code]
-    pub source_code: SourceFile,
+    pub source_code: Arc<SourceFile>,
     #[label]
     pub span: SourceSpan,
     pub invalid: String,
@@ -550,7 +551,7 @@ pub enum FlockError {
 #[error("Failed to parse toml file")]
 pub struct TomlParseError {
     #[source_code]
-    pub source_code: SourceFile,
+    pub source_code: Arc<SourceFile>,
     #[label("here")]
     pub span: SourceOffset,
     #[source]
@@ -561,7 +562,7 @@ pub struct TomlParseError {
 #[error("Failed to parse json file")]
 pub struct JsonParseError {
     // #[source_code]
-    // input: SourceFile,
+    // input: Arc<SourceString>,
     // #[label("here")]
     // span: SourceOffset,
     #[source]
