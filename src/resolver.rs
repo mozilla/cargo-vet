@@ -433,7 +433,7 @@ impl CriteriaMapper {
         result
     }
     pub fn set_criteria(&self, set: &mut CriteriaSet, criteria: CriteriaStr) {
-        set.set_criteria(self.index[criteria])
+        set.unioned_with(&self.implied_criteria[self.index[criteria]])
     }
     pub fn clear_criteria(&self, set: &mut CriteriaFailureSet, criteria: CriteriaStr) {
         set.clear_criteria(&self.implied_criteria[self.index[criteria]])
