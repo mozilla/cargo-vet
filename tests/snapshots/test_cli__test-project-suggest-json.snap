@@ -10,13 +10,6 @@ stdout:
       "missing_criteria": [
         "safe-to-deploy"
       ],
-      "name": "bumpalo",
-      "version": "3.9.1"
-    },
-    {
-      "missing_criteria": [
-        "safe-to-deploy"
-      ],
       "name": "bytes",
       "version": "1.1.0"
     },
@@ -33,13 +26,6 @@ stdout:
       ],
       "name": "cfg-if",
       "version": "1.0.0"
-    },
-    {
-      "missing_criteria": [
-        "safe-to-deploy"
-      ],
-      "name": "core-foundation",
-      "version": "0.9.3"
     },
     {
       "missing_criteria": [
@@ -1507,21 +1493,6 @@ stdout:
           }
         },
         {
-          "name": "core-foundation",
-          "notable_parents": "security-framework",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "diffstat": {
-              "count": 3960,
-              "raw": " 28 files changed, 3960 insertions(+)\n"
-            },
-            "from": "0.0.0",
-            "to": "0.9.3"
-          }
-        },
-        {
           "name": "tracing-attributes",
           "notable_parents": "tracing",
           "suggested_criteria": [
@@ -1819,21 +1790,6 @@ stdout:
             },
             "from": "0.0.0",
             "to": "2.6.1"
-          }
-        },
-        {
-          "name": "bumpalo",
-          "notable_parents": "wasm-bindgen-backend",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "diffstat": {
-              "count": 10106,
-              "raw": " 19 files changed, 10106 insertions(+)\n"
-            },
-            "from": "0.0.0",
-            "to": "3.9.1"
           }
         },
         {
@@ -2997,21 +2953,6 @@ stdout:
         }
       },
       {
-        "name": "core-foundation",
-        "notable_parents": "security-framework",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3960,
-            "raw": " 28 files changed, 3960 insertions(+)\n"
-          },
-          "from": "0.0.0",
-          "to": "0.9.3"
-        }
-      },
-      {
         "name": "tracing-attributes",
         "notable_parents": "tracing",
         "suggested_criteria": [
@@ -3309,21 +3250,6 @@ stdout:
           },
           "from": "0.0.0",
           "to": "2.6.1"
-        }
-      },
-      {
-        "name": "bumpalo",
-        "notable_parents": "wasm-bindgen-backend",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 10106,
-            "raw": " 19 files changed, 10106 insertions(+)\n"
-          },
-          "from": "0.0.0",
-          "to": "3.9.1"
         }
       },
       {
@@ -3642,7 +3568,7 @@ stdout:
         }
       }
     ],
-    "total_lines": 1742618
+    "total_lines": 1728552
   }
 }
 stderr:

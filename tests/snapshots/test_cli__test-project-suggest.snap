@@ -58,7 +58,6 @@ recommended audits for safe-to-deploy:
     cargo vet inspect unicode-bidi 0.3.7                  (used by idna)                                              (3398 lines)
     cargo vet inspect quote 1.0.18                        (used by syn, and 4 others)                                 (3845 lines)
     cargo vet inspect redox_syscall 0.2.13                (used by tempfile)                                          (3897 lines)
-    cargo vet inspect core-foundation 0.9.3               (used by security-framework)                                (3960 lines)
     cargo vet inspect tracing-attributes 0.1.20           (used by tracing)                                           (3964 lines)
     cargo vet inspect ipnet 2.4.0                         (used by reqwest)                                           (3980 lines)
     cargo vet inspect futures-channel 0.3.21              (used by hyper)                                             (3999 lines)
@@ -79,7 +78,6 @@ recommended audits for safe-to-deploy:
     cargo vet inspect bytes 1.1.0                         (used by h2, http, hyper, tokio, and 4 others)              (9213 lines)
     cargo vet inspect openssl-sys 0.9.72                  (used by openssl, native-tls)                               (9484 lines)
     cargo vet inspect security-framework 2.6.1            (used by native-tls)                                        (9776 lines)
-    cargo vet inspect bumpalo 3.9.1                       (used by wasm-bindgen-backend)                              (10106 lines)
     cargo vet inspect tracing 0.1.33                      (used by h2, hyper, tokio-util)                             (10957 lines)
     cargo vet inspect mio 0.8.2                           (used by tokio)                                             (11882 lines)
     cargo vet inspect js-sys 0.3.57                       (used by reqwest, web-sys, wasm-bindgen-futures)            (12875 lines)
@@ -105,7 +103,7 @@ recommended audits for safe-to-deploy:
 recommended audits for safe-to-run:
     cargo vet inspect hermit-abi 0.1.19  (used by atty)  (938 lines)
 
-estimated audit backlog: 1742618 lines
+estimated audit backlog: 1728552 lines
 
 Use |cargo vet certify| to record the audits.
 

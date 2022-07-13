@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::ops::Deref;
 use std::panic::panic_any;
 use std::sync::{Arc, Mutex};
@@ -14,17 +13,15 @@ use errors::{
     UserInfoError,
 };
 use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
-use futures_util::future::join_all;
 use lazy_static::lazy_static;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use network::Network;
-use reqwest::Url;
 use serde::de::Deserialize;
 use thiserror::Error;
 use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
-use crate::errors::{CommandError, DownloadError};
+use crate::errors::CommandError;
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, Delta, DependencyCriteria,
     ExemptedDependency, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr,
@@ -484,7 +481,7 @@ pub fn init_files(
 
     // Default imports file is empty
     let imports = ImportsFile {
-        audits: SortedMap::new(),
+        imports: SortedMap::new(),
     };
 
     // This is the hard one
@@ -624,7 +621,7 @@ fn do_cmd_certify(
     cfg: &Config,
     sub_args: &CertifyArgs,
     store: &mut Store,
-    network: Option<&Network>,
+    _network: Option<&Network>,
     last_fetch: Option<FetchCommand>,
 ) -> Result<(), CertifyError> {
     // Before setting up magic, we need to agree on a package
@@ -822,16 +819,6 @@ fn do_cmd_certify(
 
     let mut notes = sub_args.notes.clone();
     if !sub_args.accept_all {
-        // Get all the EULAs at once
-        let eulas = tokio::runtime::Handle::current().block_on(join_all(
-            criteria_names.iter().map(|criteria| async {
-                (
-                    *criteria,
-                    eula_for_criteria(network, &store.audits.criteria, criteria).await,
-                )
-            }),
-        ));
-
         let mut editor = out.editor("VET_CERTIFY")?;
         if let Some(notes) = &notes {
             editor.select_comment_char(notes);
@@ -842,10 +829,10 @@ fn do_cmd_certify(
         )?;
         editor.add_text("")?;
 
-        for (criteria, eula) in &eulas {
+        for criteria in &criteria_names {
             editor.add_comments(&format!("=== BEGIN CRITERIA {:?} ===", criteria))?;
             editor.add_comments("")?;
-            editor.add_comments(eula)?;
+            editor.add_comments(&eula_for_criteria(&store.audits.criteria, criteria))?;
             editor.add_comments("")?;
             editor.add_comments("=== END CRITERIA ===")?;
             editor.add_comments("")?;
@@ -979,7 +966,7 @@ fn guess_audit_criteria(
 async fn prompt_criteria_eulas(
     out: &Arc<dyn Out>,
     cfg: &Config,
-    network: Option<&Network>,
+    _network: Option<&Network>,
     store: &Store,
     package: PackageStr<'_>,
     from: Option<&Version>,
@@ -1005,15 +992,7 @@ async fn prompt_criteria_eulas(
         writeln!(out, "{}", out.style().bold().apply_to(description));
         warn!("unable to determine likely criteria, this may not be a relevant audit for this project.");
     } else {
-        let eulas = join_all(criteria_names.iter().map(|criteria| async {
-            (
-                &criteria[..],
-                eula_for_criteria(network, &store.audits.criteria, criteria).await,
-            )
-        }))
-        .await;
-
-        for (idx, (criteria, eula)) in eulas.into_iter().enumerate() {
+        for (idx, criteria) in criteria_names.iter().enumerate() {
             let prompt = if idx == 0 {
                 format!(
                     "{}, likely to certify it for {:?}, which means:",
@@ -1026,7 +1005,7 @@ async fn prompt_criteria_eulas(
                 out,
                 "{}\n\n  {}",
                 out.style().bold().apply_to(prompt),
-                eula.replace('\n', "\n  "),
+                eula_for_criteria(&store.audits.criteria, criteria).replace('\n', "\n  "),
             );
         }
 
@@ -1244,15 +1223,13 @@ fn cmd_regenerate_imports(
 ) -> Result<(), miette::Report> {
     trace!("regenerating imports...");
 
-    let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
     if let Some(network) = &network {
         if !cfg.cli.locked {
             // Literally the only difference between this command and fetch-imports
-            // is that we pass `accept_changes = true`
-            tokio::runtime::Handle::current()
-                .block_on(store.fetch_foreign_audits(network, true))?;
+            // is that we pass `accept_foreign_criteria_changes = true`
+            let store = Store::acquire_maybe_update_imports(cfg, Some(network), true, true)?;
             store.commit()?;
             return Ok(());
         }
@@ -1528,16 +1505,11 @@ fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
-    let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
-    if !cfg.cli.locked {
-        // Try to update the foreign audits (imports)
-        if let Some(network) = &network {
-            tokio::runtime::Handle::current()
-                .block_on(store.fetch_foreign_audits(network, false))?;
-        }
+    let store = Store::acquire_maybe_update_imports(cfg, network.as_ref(), !cfg.cli.locked, false)?;
 
+    if !cfg.cli.locked {
         // Check if any of our first-parties are in the crates.io registry
         check_audit_as_crates_io(cfg, &store)?;
     }
@@ -1587,13 +1559,12 @@ fn cmd_fetch_imports(
 ) -> Result<(), miette::Report> {
     trace!("fetching imports...");
 
-    let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
 
     if let Some(network) = &network {
         if !cfg.cli.locked {
-            tokio::runtime::Handle::current()
-                .block_on(store.fetch_foreign_audits(network, false))?;
+            let store =
+                Store::acquire_maybe_update_imports(cfg, Some(network), !cfg.cli.locked, false)?;
             store.commit()?;
             return Ok(());
         }
@@ -1825,34 +1796,20 @@ fn get_user_info() -> Result<UserInfo, UserInfoError> {
     Ok(UserInfo { username, email })
 }
 
-async fn eula_for_criteria(
-    network: Option<&Network>,
+fn eula_for_criteria(
     criteria_map: &SortedMap<CriteriaName, CriteriaEntry>,
     criteria: CriteriaStr<'_>,
 ) -> String {
-    let builtin_eulas = [
-        (
-            format::SAFE_TO_DEPLOY,
-            include_str!("criteria/safe-to-deploy.txt"),
-        ),
-        (
-            format::SAFE_TO_RUN,
-            include_str!("criteria/safe-to-run.txt"),
-        ),
-    ]
-    .into_iter()
-    .collect::<HashMap<_, _>>();
-
     // Several fallbacks
     // * Try to get the builtin criteria
     // * Try to get the criteria's description
-    // * Try to fetch the criteria's url
     // * Just display the url
 
     // First try the builtins
-    let builtin = builtin_eulas.get(&*criteria).map(|s| s.to_string());
-    if let Some(eula) = builtin {
-        return eula;
+    match criteria {
+        format::SAFE_TO_DEPLOY => return include_str!("criteria/safe-to-deploy.txt").to_owned(),
+        format::SAFE_TO_RUN => return include_str!("criteria/safe-to-run.txt").to_owned(),
+        _ => {}
     }
 
     // ERRORS: the caller should have verified this entry already!
@@ -1865,26 +1822,16 @@ async fn eula_for_criteria(
         criteria
     );
 
-    // Now try the description
-    if let Some(eula) = criteria_entry.description.clone() {
-        return eula;
-    }
-
-    // If we get here then there must be a URL, try to fetch it. If it fails, just print the URL
-    let url = Url::parse(criteria_entry.description_url.as_ref().unwrap()).unwrap();
-    if let Some(network) = network {
-        if let Ok(eula) = network.download(url.clone()).await.and_then(|bytes| {
-            String::from_utf8(bytes).map_err(|error| DownloadError::InvalidText {
-                url: url.clone(),
-                error,
-            })
-        }) {
-            return eula;
-        }
+    // Now try the description, either downloaded or explicitly defined.
+    if let Some(eula) = criteria_entry.description() {
+        return eula.to_owned();
     }
 
     // If we get here then the download failed, just print the URL
-    format!("Could not download criteria description, it should be available at {url}")
+    format!(
+        "Could not download criteria description, it should be available at {}",
+        criteria_entry.description_url.as_ref().unwrap()
+    )
 }
 
 /// All third-party packages, with the audit-as-crates-io policy applied

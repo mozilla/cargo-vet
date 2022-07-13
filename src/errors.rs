@@ -176,6 +176,12 @@ pub enum StoreAcquireError {
     ),
     #[error(transparent)]
     #[diagnostic(transparent)]
+    ResolveImports(#[from] ResolveImportsError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadImportsFile(#[from] LoadImportsFileError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     LoadToml(#[from] LoadTomlError),
     #[error("Couldn't acquire the store")]
     IoError(
@@ -427,25 +433,39 @@ pub enum UnpackError {
 //////////////////////////////////////////////////////////
 
 #[derive(Debug, Error, Diagnostic)]
-#[non_exhaustive]
-pub enum FetchAuditError {
-    // FIXME: would have to explicitly import URL for this error
-    #[error("invalid URL for foreign import {import_name} @ {import_url}")]
-    InvalidUrl {
-        import_name: ImportName,
-        import_url: String,
+pub enum FetchImportError {
+    #[error("running as --frozen, and resource is not cached")]
+    Frozen,
+    #[error("invalid URL")]
+    InvalidUrl(
         #[source]
-        error: url::ParseError,
-    },
+        #[from]
+        url::ParseError,
+    ),
+    #[error("resource isn't valid utf8")]
+    InvalidText(
+        #[source]
+        #[from]
+        FromUtf8Error,
+    ),
     #[diagnostic(transparent)]
     #[error(transparent)]
     Download(#[from] DownloadError),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum ResolveImportsError {
+    #[error("failed to fetch foreign import {name} from {url}")]
+    FetchImportError {
+        name: ImportName,
+        url: String,
+        #[source]
+        error: FetchImportError,
+    },
     #[diagnostic(transparent)]
     #[error(transparent)]
-    Toml(#[from] LoadTomlError),
-    #[diagnostic(transparent)]
-    #[error(transparent)]
-    Validate(#[from] StoreValidateErrors),
+    Toml(#[from] TomlParseError),
     #[diagnostic(transparent)]
     #[error(transparent)]
     CriteriaChange(#[from] CriteriaChangeErrors),
@@ -458,6 +478,7 @@ pub struct CriteriaChangeErrors {
     #[related]
     pub errors: Vec<CriteriaChangeError>,
 }
+
 #[derive(Debug, Error, Diagnostic)]
 // FIXME: it would be rad if this was a diff!
 #[error(
@@ -629,4 +650,41 @@ pub enum StoreTomlError {
         #[source]
         std::io::Error,
     ),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum LoadImportsFileError {
+    #[error("Invalid import header format")]
+    InvalidHeader {
+        #[source_code]
+        source_code: Arc<SourceFile>,
+        #[label]
+        span: SourceSpan,
+    },
+    #[error("expected {expected} lines for import of '{import_name}', found {actual}")]
+    TruncatedImport {
+        #[source_code]
+        source_code: Arc<SourceFile>,
+        #[label]
+        span: SourceSpan,
+        import_name: String,
+        expected: usize,
+        actual: usize,
+    },
+    #[error("imports file wasn't valid utf8")]
+    InvalidText {
+        #[source]
+        #[from]
+        error: FromUtf8Error,
+    },
+    #[error("couldn't load imports file")]
+    IoError(
+        #[from]
+        #[source]
+        std::io::Error,
+    ),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TomlParse(#[from] TomlParseError),
 }

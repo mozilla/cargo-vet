@@ -1,12 +1,22 @@
 
 # cargo-vet config file
 
+[imports.peer_a]
+url = "https://example.com/peer_a/supply-chain/audits.toml"
+
+[[imports.peer_a.criteria-map]]
+ours = "safe-to-deploy"
+theirs = "safe-to-deploy"
+
+[imports.peer_b]
+url = "https://example.com/peer_b/supply-chain/audits.toml"
+
+[[imports.peer_b.criteria-map]]
+ours = "safe-to-deploy"
+theirs = "nifty"
+
 [policy.test-project]
 audit-as-crates-io = false
-
-[[exemptions.bumpalo]]
-version = "3.9.1"
-criteria = "safe-to-deploy"
 
 [[exemptions.bytes]]
 version = "1.1.0"
@@ -18,10 +28,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.cfg-if]]
 version = "1.0.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.core-foundation]]
-version = "0.9.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.core-foundation-sys]]

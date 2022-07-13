@@ -25,6 +25,14 @@ stdout:
     {
       "name": "base64",
       "version": "0.13.0"
+    },
+    {
+      "name": "core-foundation",
+      "version": "0.9.3"
+    },
+    {
+      "name": "bumpalo",
+      "version": "3.9.1"
     }
   ],
   "vetted_partially": [
@@ -283,10 +291,6 @@ stdout:
       "version": "0.8.3"
     },
     {
-      "name": "core-foundation",
-      "version": "0.9.3"
-    },
-    {
       "name": "security-framework-sys",
       "version": "2.6.1"
     },
@@ -329,10 +333,6 @@ stdout:
     {
       "name": "ipnet",
       "version": "2.4.0"
-    },
-    {
-      "name": "bumpalo",
-      "version": "3.9.1"
     },
     {
       "name": "wasm-bindgen-shared",

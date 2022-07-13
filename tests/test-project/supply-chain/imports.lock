@@ -1,5 +1,31 @@
 
 # cargo-vet imports lock
 
-[audits]
+---
+url = "https://example.com/nifty_description.txt"
+lines = 2
+---
+This crate sure is nifty!
+You bet!
+
+---
+url = "https://example.com/peer_a/supply-chain/audits.toml"
+lines = 4
+---
+[[audits.bumpalo]]
+criteria = "safe-to-deploy"
+version = "3.9.1"
+notes = "an imported audit"
+
+---
+url = "https://example.com/peer_b/supply-chain/audits.toml"
+lines = 7
+---
+[criteria.nifty]
+description-url = "https://example.com/nifty_description.txt"
+
+[[audits.core-foundation]]
+criteria = "nifty"
+version = "0.9.3"
+notes = "another imported audit"
 

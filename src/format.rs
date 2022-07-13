@@ -1,11 +1,13 @@
 //! Details of the file formats used by cargo vet
 
 use crate::serialization::spanned::Spanned;
+use crate::serialization::SourceFile;
 use crate::{flock::Filesystem, serialization};
 use core::{cmp, fmt};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use cargo_metadata::Version;
 use serde::{
@@ -127,7 +129,7 @@ impl MetaConfig {
 pub type AuditedDependencies = SortedMap<PackageName, Vec<AuditEntry>>;
 
 /// audits.toml
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
 pub struct AuditsFile {
     /// A map of criteria_name to details on that criteria.
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
@@ -146,11 +148,29 @@ pub struct CriteriaEntry {
     /// This can be useful for sharing criteria descriptions across multiple repositories.
     #[serde(rename = "description-url")]
     pub description_url: Option<String>,
+    /// The description text loaded from `description_url`. This is fetched
+    /// during `Store::resolve_imports` and is intentionally not serialized.
+    /// It will be stored in and loaded from `imports.lock` behind the scenes to
+    /// be made available when locked or frozen.
+    #[serde(skip)]
+    pub fetched_description: Option<String>,
     /// Criteria that this one implies
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec")]
     pub implies: Vec<Spanned<CriteriaName>>,
+}
+
+impl CriteriaEntry {
+    /// Tries to get either the explicitly provided description, or the one
+    /// fetched from `description_url`.
+    /// Can return `None` if we were unable to fetch the description when
+    /// resolving imports.
+    pub fn description(&self) -> Option<&str> {
+        self.description
+            .as_deref()
+            .or(self.fetched_description.as_deref())
+    }
 }
 
 /// This is conceptually an enum
@@ -290,9 +310,9 @@ pub struct ConfigFile {
     pub exemptions: SortedMap<PackageName, Vec<ExemptedDependency>>,
 }
 
-pub static SAFE_TO_DEPLOY: CriteriaStr = "safe-to-deploy";
-pub static SAFE_TO_RUN: CriteriaStr = "safe-to-run";
-pub static DEFAULT_CRITERIA: CriteriaStr = SAFE_TO_DEPLOY;
+pub const SAFE_TO_DEPLOY: CriteriaStr = "safe-to-deploy";
+pub const SAFE_TO_RUN: CriteriaStr = "safe-to-run";
+pub const DEFAULT_CRITERIA: CriteriaStr = SAFE_TO_DEPLOY;
 
 pub fn get_default_criteria() -> CriteriaName {
     CriteriaName::from(DEFAULT_CRITERIA)
@@ -380,6 +400,10 @@ pub struct RemoteImport {
     /// A list of criteria that are implied by foreign criteria
     #[serde(rename = "criteria-map")]
     pub criteria_map: Vec<CriteriaMapping>,
+    /// The imported audit payload. This isn't serialized in the config, but
+    /// will be populated from the imports.lock when acquiring the store.
+    #[serde(skip)]
+    pub audits: Option<(Arc<SourceFile>, AuditsFile)>,
 }
 
 /// Translations of foreign criteria to local criteria.
@@ -438,10 +462,15 @@ fn is_default_exemptions_suggest(val: &bool) -> bool {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-/// imports.lock, not sure what I want to put in here yet.
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct ImportsFile {
-    pub audits: SortedMap<ImportName, AuditsFile>,
+    pub imports: SortedMap<String, Arc<SourceFile>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ImportMetadata {
+    pub url: String,
+    pub lines: usize,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

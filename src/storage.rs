@@ -3,6 +3,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{self, BufReader, Read, Seek, Write},
     mem,
+    ops::Range,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, SystemTime},
@@ -15,20 +16,23 @@ use futures_util::future::{join_all, try_join_all};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
+use tokio::join;
 use tracing::{error, info, log::warn, trace};
 
 use crate::{
     errors::{
         CacheAcquireError, CacheCommitError, CommandError, CriteriaChangeError,
-        CriteriaChangeErrors, DiffError, FetchAndDiffError, FetchAuditError, FetchError,
-        FlockError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError,
-        StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError,
-        StoreValidateError, StoreValidateErrors, UnpackError,
+        CriteriaChangeErrors, DiffError, FetchAndDiffError, FetchError, FetchImportError,
+        FlockError, InvalidCriteriaError, JsonParseError, LoadImportsFileError, LoadJsonError,
+        LoadTomlError, ResolveImportsError, StoreAcquireError, StoreCommitError, StoreCreateError,
+        StoreJsonError, StoreTomlError, StoreValidateError, StoreValidateErrors, TomlParseError,
+        UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
-        AuditsFile, CommandHistory, ConfigFile, CriteriaName, Delta, DiffCache, DiffStat, FastMap,
-        FetchCommand, ImportsFile, MetaConfig, PackageStr, SortedMap, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        AuditsFile, CommandHistory, ConfigFile, CriteriaEntry, CriteriaName, Delta, DiffCache,
+        DiffStat, FastMap, FetchCommand, ImportMetadata, ImportsFile, MetaConfig, PackageStr,
+        SortedMap, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     resolver,
@@ -123,7 +127,6 @@ pub struct Store {
     pub audits: AuditsFile,
 
     pub config_src: Arc<SourceFile>,
-    pub imports_src: Arc<SourceFile>,
     pub audits_src: Arc<SourceFile>,
 }
 
@@ -144,7 +147,7 @@ impl Store {
                 exemptions: SortedMap::new(),
             },
             imports: ImportsFile {
-                audits: SortedMap::new(),
+                imports: SortedMap::new(),
             },
             audits: AuditsFile {
                 criteria: SortedMap::new(),
@@ -152,7 +155,6 @@ impl Store {
             },
             config_src: SourceFile::empty(CONFIG_TOML),
             audits_src: SourceFile::empty(AUDITS_TOML),
-            imports_src: SourceFile::empty(IMPORTS_LOCK),
         })
     }
 
@@ -163,6 +165,16 @@ impl Store {
 
     /// Acquire an existing store
     pub fn acquire(cfg: &Config) -> Result<Self, StoreAcquireError> {
+        Self::acquire_maybe_update_imports(cfg, None, false, false)
+    }
+
+    /// Acquire an existing store, updating imported resources.
+    pub fn acquire_maybe_update_imports(
+        cfg: &Config,
+        network: Option<&Network>,
+        regenerate_imports: bool,
+        accept_foreign_criteria_changes: bool,
+    ) -> Result<Self, StoreAcquireError> {
         let root = cfg.metacfg.store_path();
 
         // Before we do anything else, acquire an exclusive lock on the
@@ -173,18 +185,31 @@ impl Store {
 
         let (config_src, config): (_, ConfigFile) = load_toml(CONFIG_TOML, lock.read_config()?)?;
         let (audits_src, audits): (_, AuditsFile) = load_toml(AUDITS_TOML, lock.read_audits()?)?;
-        let (imports_src, imports): (_, ImportsFile) =
-            load_toml(IMPORTS_LOCK, lock.read_imports()?)?;
+        let imports = match load_imports(lock.read_imports()?) {
+            Ok(rv) => rv,
+            Err(_) if regenerate_imports && network.is_some() => {
+                warn!("unable to parse imports.lock, re-generating");
+                ImportsFile {
+                    imports: SortedMap::new(),
+                }
+            }
+            Err(err) => return Err(err.into()),
+        };
 
-        let store = Self {
+        let mut store = Self {
             lock: Some(lock),
             config,
             audits,
             imports,
             config_src,
             audits_src,
-            imports_src,
         };
+
+        tokio::runtime::Handle::current().block_on(store.resolve_imports(
+            network,
+            regenerate_imports,
+            accept_foreign_criteria_changes,
+        ))?;
 
         // Check that the store isn't corrupt
         store.validate()?;
@@ -202,7 +227,6 @@ impl Store {
             audits,
             config_src: SourceFile::empty(CONFIG_TOML),
             audits_src: SourceFile::empty(AUDITS_TOML),
-            imports_src: SourceFile::empty(IMPORTS_LOCK),
         }
     }
 
@@ -214,17 +238,18 @@ impl Store {
     ) -> Result<Self, StoreAcquireError> {
         let (config_src, config): (_, ConfigFile) = load_toml(CONFIG_TOML, config.as_bytes())?;
         let (audits_src, audits): (_, AuditsFile) = load_toml(AUDITS_TOML, audits.as_bytes())?;
-        let (imports_src, imports): (_, ImportsFile) = load_toml(IMPORTS_LOCK, imports.as_bytes())?;
+        let imports = load_imports(imports.as_bytes())?;
 
-        let store = Self {
+        let mut store = Self {
             lock: None,
             config,
             imports,
             audits,
             config_src,
             audits_src,
-            imports_src,
         };
+
+        tokio::runtime::Handle::current().block_on(store.resolve_imports(None, false, false))?;
 
         store.validate()?;
 
@@ -248,7 +273,6 @@ impl Store {
             audits: self.audits.clone(),
             config_src: self.config_src.clone(),
             audits_src: self.audits_src.clone(),
-            imports_src: self.imports_src.clone(),
         };
         // Delete all exemptions entries except those that are suggest=false
         for versions in &mut clone.config.exemptions.values_mut() {
@@ -269,6 +293,24 @@ impl Store {
             store_config(config, self.config)?;
             store_imports(imports, self.imports)?;
         }
+        Ok(())
+    }
+
+    /// Resolves all imports (criteria description URLs and foreign audits)
+    /// within the local config.
+    async fn resolve_imports(
+        &mut self,
+        network: Option<&Network>,
+        regenerate_imports: bool,
+        accept_changes: bool,
+    ) -> Result<(), ResolveImportsError> {
+        let fetcher = ImportFetcher::new(network, regenerate_imports, &self.imports);
+        let ((), res) = join!(
+            fetcher.fetch_criteria_descriptions(&mut self.audits),
+            fetcher.fetch_foreign_audits(accept_changes, &mut self.config),
+        );
+        res?;
+        self.imports = fetcher.get_used_imports();
         Ok(())
     }
 
@@ -424,99 +466,178 @@ impl Store {
 
         Ok(())
     }
+}
 
-    /// Fetch foreign audits, only call this is we're not --locked
-    pub async fn fetch_foreign_audits(
-        &mut self,
-        network: &Network,
-        accept_changes: bool,
-    ) -> Result<(), FetchAuditError> {
-        let raw_new_imports =
-            try_join_all(self.config.imports.iter().map(|(name, import)| async {
-                let audit_file = fetch_foreign_audit(network, name, &import.url).await?;
-                // Fetch the descriptions to cache them and check that they haven't changed
-                // FIXME: this should probably treat failing to fetch as an error but eula_for_criteria
-                // hides errors... should we have two versions? Or make it the caller's problem?
-                let new_descs = join_all(audit_file.criteria.iter().map(|(criteria, _)| async {
-                    (
-                        criteria.clone(),
-                        crate::eula_for_criteria(Some(network), &audit_file.criteria, criteria)
-                            .await,
-                    )
-                }))
-                .await;
-                Ok::<_, FetchAuditError>((name.clone(), audit_file, new_descs))
-            }))
-            .await?;
+struct ImportFetcher<'a> {
+    network: Option<&'a Network>,
+    imports: &'a ImportsFile,
+    regenerate_imports: bool,
+    accessed: Mutex<SortedMap<String, Arc<tokio::sync::OnceCell<Arc<SourceFile>>>>>,
+}
 
-        let mut new_imports = ImportsFile {
-            audits: SortedMap::new(),
-        };
-        let mut criteria_changes = vec![];
-        for (import_name, mut audits_file, new_descs) in raw_new_imports {
-            for (criteria_name, new_desc) in new_descs {
-                if !accept_changes {
-                    // Check that the new description doesn't modify an existing old one
-                    if let Some(old_entry) = self
-                        .imports
-                        .audits
-                        .get(&import_name)
-                        .and_then(|file| file.criteria.get(&criteria_name))
-                    {
-                        let old_desc = old_entry.description.as_ref().unwrap();
-                        if old_desc != &new_desc {
-                            criteria_changes.push(CriteriaChangeError {
-                                import_name: import_name.clone(),
-                                criteria_name: criteria_name.to_owned(),
-                                old_desc: old_desc.clone(),
-                                new_desc,
-                            });
-                            continue;
-                        }
+impl<'a> ImportFetcher<'a> {
+    fn new(
+        network: Option<&'a Network>,
+        regenerate_imports: bool,
+        imports: &'a ImportsFile,
+    ) -> Self {
+        ImportFetcher {
+            network,
+            imports,
+            regenerate_imports,
+            accessed: Default::default(),
+        }
+    }
+
+    fn get_cached(&self, url: &str) -> Option<Arc<SourceFile>> {
+        self.imports.imports.get(url).cloned()
+    }
+
+    /// Asynchronously fetch a resource, avoiding duplicated effort and
+    /// recording the result to be saved into ImportsFile.
+    async fn fetch(&self, url: &str) -> Result<Arc<SourceFile>, FetchImportError> {
+        let once_cell = self
+            .accessed
+            .lock()
+            .unwrap()
+            .entry(url.to_owned())
+            .or_default()
+            .clone();
+        once_cell
+            .get_or_try_init(|| async {
+                // If we shouldn't check the network, try to use an existing cached version.
+                if !self.regenerate_imports || self.network.is_none() {
+                    if let Some(import) = self.imports.imports.get(url) {
+                        return Ok(import.clone());
                     }
                 }
 
-                // Store the new fetched description
-                audits_file
-                    .criteria
-                    .get_mut(&criteria_name)
-                    .unwrap()
-                    .description = Some(new_desc);
+                // Download the resource.
+                let network = self.network.ok_or(FetchImportError::Frozen)?;
+                let bytes = network.download(Url::parse(url)?).await?;
+                let string = String::from_utf8(bytes)?;
+                Ok::<_, FetchImportError>(SourceFile::new(url, string))
+            })
+            .await
+            .cloned()
+    }
+
+    async fn fetch_criteria_descriptions(&self, audits: &mut AuditsFile) {
+        join_all(audits.criteria.values_mut().map(|criteria| async move {
+            if let CriteriaEntry {
+                description: None,
+                description_url: Some(url),
+                fetched_description,
+                ..
+            } = criteria
+            {
+                // FIXME: This currently always swallows errors, as nothing
+                // actually depends on criteria descriptions being available. We
+                // should probably record these errors somewhere and report them
+                // in bulk at the end of importing as a warning.
+                *fetched_description = self.fetch(url).await.map(|s| s.source().to_owned()).ok();
+            }
+        }))
+        .await;
+    }
+
+    async fn fetch_foreign_audits(
+        &self,
+        accept_changes: bool,
+        config: &mut ConfigFile,
+    ) -> Result<(), ResolveImportsError> {
+        let change_errors = try_join_all(config.imports.iter_mut().map(|(name, import)| async {
+            let audit_source = self.fetch(&import.url).await.map_err(|error| {
+                ResolveImportsError::FetchImportError {
+                    name: name.to_owned(),
+                    url: import.url.clone(),
+                    error,
+                }
+            })?;
+
+            let mut audit_file: AuditsFile = parse_toml_source(&audit_source)?;
+
+            self.fetch_criteria_descriptions(&mut audit_file).await;
+
+            // Collect any diffs from the previous criteria descriptions to the
+            // new one to return. This can be used by the caller to report
+            // errors etc.
+            //
+            // This will always be empty unless `self.regenerate_imports` is
+            // set, as otherwise we cannot fetch new imports.
+            let mut change_errors = Vec::new();
+            if !accept_changes && self.regenerate_imports && self.network.is_some() {
+                if let Some(mut old_audits_file) = self
+                    .get_cached(&import.url)
+                    .and_then(|sf| parse_toml_source(&sf).ok())
+                {
+                    // Exclusively fetch old criteria descriptions locally, as we
+                    // don't want to update off the network, or continue caching
+                    // these values.
+                    ImportFetcher::new(None, false, self.imports)
+                        .fetch_criteria_descriptions(&mut old_audits_file)
+                        .await;
+                    for (criteria_name, old_criteria) in &old_audits_file.criteria {
+                        let new_criteria = match audit_file.criteria.get(criteria_name) {
+                            Some(new_criteria) => new_criteria,
+                            None => continue,
+                        };
+
+                        // FIXME: We could probably ignore changes in criteria
+                        // which aren't mapped to local criteria.
+                        match (
+                            old_criteria.description(),
+                            new_criteria.description(),
+                            new_criteria.description_url.as_ref(),
+                        ) {
+                            (Some(old_desc), Some(new_desc), _) if old_desc != new_desc => {
+                                change_errors.push(CriteriaChangeError {
+                                    import_name: name.clone(),
+                                    criteria_name: criteria_name.clone(),
+                                    old_desc: old_desc.to_owned(),
+                                    new_desc: new_desc.to_owned(),
+                                });
+                            }
+                            (Some(old_desc), None, Some(new_url)) => {
+                                change_errors.push(CriteriaChangeError {
+                                    import_name: name.clone(),
+                                    criteria_name: criteria_name.clone(),
+                                    old_desc: old_desc.to_owned(),
+                                    new_desc: format!("Unable to fetch description, it should be available at {new_url}"),
+                                });
+                            }
+                            _ => {}
+                        }
+                    }
+                }
             }
 
-            // Now add the new import
-            new_imports.audits.insert(import_name, audits_file);
-        }
-        if !criteria_changes.is_empty() {
+            // Save the parsed audits file into the import config.
+            import.audits = Some((audit_source.clone(), audit_file));
+            Ok::<_, ResolveImportsError>(change_errors)
+        }))
+        .await?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
+        if !change_errors.is_empty() {
             Err(CriteriaChangeErrors {
-                errors: criteria_changes,
+                errors: change_errors,
             })?;
         }
-
-        // Accept the new imports. These will only be committed if the current command succeeds.
-        self.imports = new_imports;
-
-        // Now do one last validation to catch corrupt imports
-        self.validate()?;
         Ok(())
     }
-}
 
-async fn fetch_foreign_audit(
-    network: &Network,
-    name: &str,
-    url: &str,
-) -> Result<AuditsFile, FetchAuditError> {
-    let parsed_url = Url::parse(url).map_err(|error| FetchAuditError::InvalidUrl {
-        import_url: url.to_owned(),
-        import_name: name.to_owned(),
-        error,
-    })?;
-    let audit_bytes = network.download(parsed_url).await?;
-    let audit_string = String::from_utf8(audit_bytes).map_err(LoadTomlError::from)?;
-    let audit_source = SourceFile::new(name, audit_string);
-    let audit_file: AuditsFile = parse_toml_source(&audit_source).map_err(LoadTomlError::from)?;
-    Ok(audit_file)
+    fn get_used_imports(&self) -> ImportsFile {
+        let cache = self.accessed.lock().unwrap();
+        ImportsFile {
+            imports: cache
+                .iter()
+                .filter_map(|(url, once_cell)| once_cell.get().cloned().map(|s| (url.clone(), s)))
+                .collect(),
+        }
+    }
 }
 
 /// A Registry in CARGO_HOME (usually the crates.io one)
@@ -1259,6 +1380,149 @@ fn find_cargo_registry() -> Result<CargoRegistry, crates_index::Error> {
     })
 }
 
+struct LinesRanges<'a> {
+    source: &'a str,
+    offset: usize,
+}
+
+impl<'a> LinesRanges<'a> {
+    fn new(source: &'a str) -> Self {
+        LinesRanges { source, offset: 0 }
+    }
+
+    fn next_line_start(&self) -> usize {
+        self.offset
+    }
+}
+
+impl<'a> Iterator for LinesRanges<'a> {
+    type Item = (Range<usize>, &'a str);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.offset == self.source.len() {
+            return None;
+        }
+
+        let line_start = self.offset;
+        let line_end;
+        let next_line;
+        match self.source[line_start..].find('\n') {
+            Some(nl) => {
+                next_line = line_start + nl + 1;
+                if self.source[line_start..next_line].ends_with("\r\n") {
+                    line_end = next_line - 2;
+                } else {
+                    line_end = next_line - 1;
+                }
+            }
+            None => {
+                line_end = self.source.len();
+                next_line = self.source.len();
+            }
+        }
+        self.offset = next_line;
+        let range = line_start..line_end;
+        Some((range.clone(), &self.source[range]))
+    }
+}
+
+fn load_imports(reader: impl Read) -> Result<ImportsFile, LoadImportsFileError> {
+    let mut reader = BufReader::new(reader);
+    let mut string = String::new();
+    reader.read_to_string(&mut string)?;
+    let source_file = SourceFile::new(IMPORTS_LOCK, string);
+
+    let mut imports_file = ImportsFile {
+        imports: SortedMap::new(),
+    };
+
+    let mut lines = LinesRanges::new(source_file.source());
+    while let Some((range, line)) = lines.next() {
+        // Ignore comment lines and empty lines before and between imports.
+        if line.starts_with('#') || line.trim().is_empty() {
+            continue;
+        }
+
+        if line.trim() != "---" {
+            return Err(LoadImportsFileError::InvalidHeader {
+                source_code: source_file.clone(),
+                span: range.into(),
+            });
+        }
+
+        let header_start = lines.next_line_start();
+        let header_end = loop {
+            let (hdr_range, hdr_line) =
+                lines
+                    .next()
+                    .ok_or_else(|| LoadImportsFileError::InvalidHeader {
+                        source_code: source_file.clone(),
+                        span: range.clone().into(),
+                    })?;
+            if hdr_line.trim() == "---" {
+                break hdr_range.start;
+            }
+        };
+
+        let header = SourceFile::new_nested(
+            "import header",
+            source_file.clone(),
+            header_start..header_end,
+        );
+        let metadata: ImportMetadata =
+            parse_toml_source(&header).map_err(|error| TomlParseError {
+                source_code: source_file.clone(),
+                span: (header_start + error.span.offset()).into(),
+                error: error.error,
+            })?;
+
+        // Seek past the required number of import lines, using the start and
+        // end offset to copy the relevant data into a new buffer.
+        let start_offset = lines.next_line_start();
+        for import_line in 0..metadata.lines {
+            let _ = lines
+                .next()
+                .ok_or_else(|| LoadImportsFileError::TruncatedImport {
+                    source_code: source_file.clone(),
+                    span: range.clone().into(),
+                    import_name: metadata.url.to_owned(),
+                    expected: metadata.lines,
+                    actual: import_line,
+                })?;
+        }
+        imports_file.imports.insert(
+            metadata.url.to_owned(),
+            SourceFile::new_nested(
+                &metadata.url,
+                source_file.clone(),
+                start_offset..lines.next_line_start(),
+            ),
+        );
+    }
+    Ok(imports_file)
+}
+
+fn store_imports(mut writer: impl Write, imports: ImportsFile) -> Result<(), StoreTomlError> {
+    let heading = r###"
+# cargo-vet imports lock
+"###;
+    writeln!(&mut writer, "{}", heading)?;
+
+    for (url, source) in &imports.imports {
+        let metadata = ImportMetadata {
+            url: url.to_owned(),
+            lines: source.source().lines().count(),
+        };
+        writeln!(
+            &mut writer,
+            "---\n{}\n---\n{}",
+            to_formatted_toml(metadata)?.to_string().trim(),
+            source.source()
+        )?;
+    }
+    Ok(())
+}
+
 fn load_toml<T>(file_name: &str, reader: impl Read) -> Result<(Arc<SourceFile>, T), LoadTomlError>
 where
     T: for<'a> Deserialize<'a>,
@@ -1322,14 +1586,6 @@ fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), StoreT
 "###;
 
     store_toml(writer, heading, config)?;
-    Ok(())
-}
-fn store_imports(writer: impl Write, imports: ImportsFile) -> Result<(), StoreTomlError> {
-    let heading = r###"
-# cargo-vet imports lock
-"###;
-
-    store_toml(writer, heading, imports)?;
     Ok(())
 }
 fn store_diff_cache(writer: impl Write, diff_cache: DiffCache) -> Result<(), StoreTomlError> {

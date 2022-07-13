@@ -891,6 +891,7 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                 implies: vec!["reviewed".to_string().into()],
                 description: Some("strongly reviewed".to_string()),
                 description_url: None,
+                fetched_description: None,
             },
         ),
         (
@@ -899,6 +900,7 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                 implies: vec!["weak-reviewed".to_string().into()],
                 description: Some("reviewed".to_string()),
                 description_url: None,
+                fetched_description: None,
             },
         ),
         (
@@ -907,6 +909,7 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                 implies: vec![],
                 description: Some("weakly reviewed".to_string()),
                 description_url: None,
+                fetched_description: None,
             },
         ),
         (
@@ -915,6 +918,7 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                 implies: vec![],
                 description: Some("fuzzed".to_string()),
                 description_url: None,
+                fetched_description: None,
             },
         ),
     ]);

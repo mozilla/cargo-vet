@@ -356,6 +356,7 @@ fn builtin_criteria() -> SortedMap<CriteriaName, CriteriaEntry> {
             CriteriaEntry {
                 description: Some("safe to run locally".to_string()),
                 description_url: None,
+                fetched_description: None,
                 implies: vec![],
             },
         ),
@@ -364,6 +365,7 @@ fn builtin_criteria() -> SortedMap<CriteriaName, CriteriaEntry> {
             CriteriaEntry {
                 description: Some("safe to deploy to production".to_string()),
                 description_url: None,
+                fetched_description: None,
                 implies: vec!["safe-to-run".to_string().into()],
             },
         ),
@@ -1398,16 +1400,17 @@ fn resolve_third_party<'a>(
     }
 
     // Try to map foreign audits into our worldview
-    for (foreign_name, foreign_audits) in &store.imports.audits {
+    for (foreign_name, foreign_import) in &store.config.imports {
+        let foreign_audits = if let Some((_, foreign_audits)) = foreign_import.audits.as_ref() {
+            foreign_audits
+        } else {
+            continue;
+        };
+
         // Prep CriteriaSet machinery for comparing requirements
         let foreign_criteria_mapper = CriteriaMapper::new(&foreign_audits.criteria);
-        let criteria_map = &store
-            .config
-            .imports
-            .get(foreign_name)
-            .expect("Foreign Import isn't in config file (imports.lock outdated?)")
-            .criteria_map;
-        let criteria_map: Vec<(CriteriaStr, CriteriaSet)> = criteria_map
+        let criteria_map: Vec<(CriteriaStr, CriteriaSet)> = foreign_import
+            .criteria_map
             .iter()
             .map(|mapping| {
                 let set = foreign_criteria_mapper.criteria_from_list(&mapping.theirs);
@@ -1560,10 +1563,11 @@ fn resolve_third_party<'a>(
             }
         }
 
-        for (foreign_name, foreign_audits) in &store.imports.audits {
-            for audit in foreign_audits
+        for (foreign_name, foreign_import) in &store.config.imports {
+            for audit in foreign_import
                 .audits
-                .get(package.name)
+                .as_ref()
+                .and_then(|(_, f)| f.audits.get(package.name))
                 .unwrap_or(&NO_AUDITS)
             {
                 let audit_criteria = criteria_mapper.criteria_from_entry(audit);

@@ -1,8 +1,11 @@
+use super::*;
+
 const EMPTY_CONFIG: &str = "\n";
 const EMPTY_AUDITS: &str = "[audits]\n";
-const EMPTY_IMPORTS: &str = "[audits]\n";
+const EMPTY_IMPORTS: &str = "\n";
 
 fn get_valid_store(config: &str, audits: &str, imports: &str) -> String {
+    let _enter = TEST_RUNTIME.enter();
     let res = crate::Store::mock_acquire(config, audits, imports);
     match res {
         Ok(_) => String::new(),
