@@ -49,18 +49,22 @@ even if the project is hosted somewhere like GitHub, there's no guarantee that
 the code in the repository matches the bits submitted to crates.io. And the
 packages on crates.io aren't easy to download manually.
 
-To make this easy, the `cargo vet inspect` subcommand will ensure the crate has
-been downloaded to your local registry cache and drop your terminal into the
-appropriate directory to inspect it with whatever tools you like. When you
-finish the audit, you can use `cargo vet certify` to add the entry to
+To make this easy, the `cargo vet inspect` subcommand will give you a link to
+the exact version of the crate hosted on [Sourcegraph](https://about.sourcegraph.com/).
+
+When you finish the audit, you can use `cargo vet certify` to add the entry to
 `audits.toml`:
 
 ```
 $ cargo vet inspect baz 1.3
-  Opening nested shell in ~/.cargo/registry/src/github.com-1ecc6299db9ec823/baz-1.3
-  Use `exit` or Ctrl-D to finish.
-$ ...
-$ exit
+You are about to inspect version 1.3 of 'baz', likely to certify it for "safe-to-deploy", which means:
+
+   ...
+
+You can inspect the crate here: https://sourcegraph.com/crates/baz@v1.3
+
+(press ENTER to open in your browser, or re-run with --mode=local)
+
 $ cargo vet certify baz 1.3
 
   I, Alice, certify that I have audited version 1.3 of baz in accordance with
@@ -73,12 +77,21 @@ $ cargo vet certify baz 1.3
   Recorded full audit of baz version 1.3
 ```
 
-Similarly, `cargo vet diff` will fetch two versions of a given crate, compare
-them, and output a git-compatible diff between the two:
+You can also use the `--mode=local` flag to have `inspect` download the crate to
+and drop you into a nested shell to inspect the crate.
+
+Similarly, `cargo vet diff` will give you a [Sourcegraph](https://about.sourcegraph.com/)
+link that will display the diff between the two versions.
+
 ```
 $ cargo vet diff foo 1.2 1.2.1
-  (Diff printed to stdout)
-$ ...
+
+You are about to diff versions 1.2 and 1.2.1 of 'foo', likely to certify it for "safe-to-deploy", which means:
+
+   ...
+
+You can inspect the diff here: https://sourcegraph.com/crates/foo/-/compare/v1.2...v1.2.1
+
 $ cargo vet certify foo 1.2 1.2.1
 
   I, Alice, certify that I have audited the changes between versions 1.2 and
@@ -91,10 +104,8 @@ $ cargo vet certify foo 1.2 1.2.1
   Recorded relative audit between foo versions 1.2 and 1.2.1
 ```
 
-In the future, it may be valuable to stand up a web service to provide a richer
-display of the differences between public crates. However, since auditing is
-usually a much lighter-weight process than full code review, this functionality
-is not essential.
+You can also use `--mode=local` flag to have `diff` download the two crates and display a
+git-compatible diff between the two.
 
 ## Shrinking the `unaudited` Table
 
