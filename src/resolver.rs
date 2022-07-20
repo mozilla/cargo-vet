@@ -534,7 +534,7 @@ impl CriteriaMapper {
         namespace: &CriteriaNamespace,
         criteria: CriteriaStr,
     ) {
-        set.set_criteria(self.index[namespace][criteria])
+        set.unioned_with(&self.implied_criteria[self.index[namespace][criteria]])
     }
     pub fn clear_criteria(&self, set: &mut CriteriaFailureSet, criteria: CriteriaStr) {
         self.clear_namespaced_criteria(set, &CriteriaNamespace::Local, criteria)
