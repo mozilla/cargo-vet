@@ -1,0 +1,7 @@
+---
+source: src/tests/vet.rs
+assertion_line: 2821
+expression: output
+---
+Vetting Succeeded (3 fully audited)
+

@@ -34,6 +34,12 @@ mod violations;
 const DEFAULT_VER: u64 = 10;
 const DEFAULT_CRIT: CriteriaStr = "reviewed";
 
+// Some strings for imports
+const FOREIGN: &str = "peer-company";
+const FOREIGN_URL: &str = "https://peercompany.co.uk";
+const OTHER_FOREIGN: &str = "rival-company";
+const OTHER_FOREIGN_URL: &str = "https://rivalcompany.ca";
+
 lazy_static::lazy_static! {
     static ref TEST_RUNTIME: tokio::runtime::Runtime = {
         let error_colors_enabled = false;
@@ -1156,15 +1162,6 @@ impl Out for BasicTestOutput {
 //      * which is a third-party
 //      * with different policies
 //         * where only the weaker one is satisfied (fail but give good diagnostic)
-//
-// * foreign mappings
-//   * only using builtins
-//   * 1:1 explicit mappings
-//   * asymmetric cases
-//   * missing mappings
-//   * foreign has criteria with the same name, unmapped (don't accidentally mix it up)
-//   * foreign has criteria with the same name, mapped to that name
-//   * foreign has criteria with the same name, mapped to a different name
 //
 // * misc
 //   * git deps are first party but not in workspace
