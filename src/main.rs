@@ -705,7 +705,12 @@ fn do_cmd_certify(
         (user_info.username, Some(who))
     };
 
-    let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
+    //let foreign_criteria = store.imports.iter().map();
+    let criteria_mapper = CriteriaMapper::new(
+        &store.audits.criteria,
+        &store.imports,
+        &store.config.imports,
+    );
 
     let criteria_names = if sub_args.criteria.is_empty() {
         let (from, to) = match &kind {
@@ -735,25 +740,30 @@ fn do_cmd_certify(
             writeln!(out);
             writeln!(out, "  0. <clear selections>");
             let implied_criteria = criteria_mapper.criteria_from_list(&chosen_criteria);
-            for (criteria_idx, (criteria_name, _criteria_entry)) in
-                criteria_mapper.list.iter().enumerate()
-            {
-                if chosen_criteria.contains(criteria_name) {
+            for (criteria_idx, criteria_info) in criteria_mapper.list.iter().enumerate() {
+                if chosen_criteria.contains(&criteria_info.namespaced_name) {
                     writeln!(
                         out,
                         "  {}. {}",
                         criteria_idx + 1,
-                        out.style().green().apply_to(criteria_name)
+                        out.style().green().apply_to(&criteria_info.namespaced_name)
                     );
                 } else if implied_criteria.has_criteria(criteria_idx) {
                     writeln!(
                         out,
                         "  {}. {}",
                         criteria_idx + 1,
-                        out.style().yellow().apply_to(criteria_name)
+                        out.style()
+                            .yellow()
+                            .apply_to(&criteria_info.namespaced_name)
                     );
                 } else {
-                    writeln!(out, "  {}. {}", criteria_idx + 1, criteria_name);
+                    writeln!(
+                        out,
+                        "  {}. {}",
+                        criteria_idx + 1,
+                        &criteria_info.namespaced_name
+                    );
                 }
             }
 
@@ -793,7 +803,7 @@ fn do_cmd_certify(
                 writeln!(out, "error: not a valid criteria");
                 continue;
             }
-            chosen_criteria.push(criteria_mapper.list[answer - 1].0.clone());
+            chosen_criteria.push(criteria_mapper.list[answer - 1].namespaced_name.clone());
         }
         chosen_criteria
     } else {

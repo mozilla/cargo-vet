@@ -1,3 +1,5 @@
+use crate::format::CriteriaMapping;
+
 use super::*;
 
 #[test]
@@ -2488,4 +2490,333 @@ fn builtin_simple_audit_as_weaker_root() {
 
     let output = get_report(&metadata, report);
     insta::assert_snapshot!("builtin-simple-audit-as-weaker-root", output);
+}
+
+#[test]
+fn builtin_simple_foreign_audited() {
+    // (Pass) All entries have direct full audits.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+    imports.audits.insert(FOREIGN.to_owned(), audits.clone());
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            criteria_map: Vec::new(),
+        },
+    );
+    audits.audits.clear();
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn mock_simple_foreign_audited_pun_no_mapping() {
+    // (Fail) All entries have direct full audits, but there isn't a mapping so the names don't match
+    // NOTE: it's possible this situation merits a "help" message"?
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = files_full_audited(&metadata);
+    imports.audits.insert(FOREIGN.to_owned(), audits.clone());
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            criteria_map: Vec::new(),
+        },
+    );
+    audits.audits.clear();
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn mock_simple_foreign_audited_pun_mapped() {
+    // (Pass) All entries have direct full audits, and are mapped in
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = files_full_audited(&metadata);
+    imports.audits.insert(FOREIGN.to_owned(), audits.clone());
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            criteria_map: vec![CriteriaMapping {
+                ours: DEFAULT_CRIT.to_owned(),
+                theirs: vec![DEFAULT_CRIT.to_owned().into()],
+            }],
+        },
+    );
+    audits.audits.clear();
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn mock_simple_foreign_audited_pun_wrong_mapped() {
+    // (Fail) All entries have direct full audits, and are mapped in... but from the wrong import
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = files_full_audited(&metadata);
+    // FOREIGN has the audits, but OTHER_FOREIGN has the mapping
+    imports.audits.insert(FOREIGN.to_owned(), audits.clone());
+    audits.audits.clear();
+    imports
+        .audits
+        .insert(OTHER_FOREIGN.to_owned(), audits.clone());
+    config.imports.insert(
+        OTHER_FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: OTHER_FOREIGN_URL.to_owned(),
+            criteria_map: vec![CriteriaMapping {
+                ours: DEFAULT_CRIT.to_owned(),
+                theirs: vec![DEFAULT_CRIT.to_owned().into()],
+            }],
+        },
+    );
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            criteria_map: vec![],
+        },
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn builtin_simple_foreign_tag_team() {
+    // (Pass) An audit is achieved by connecting a foreign builtin audit to a local one
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+    audits.audits.insert(
+        "transitive-third-party1".to_owned(),
+        vec![full_audit(ver(5), SAFE_TO_DEPLOY)],
+    );
+    imports.audits.insert(
+        FOREIGN.to_owned(),
+        AuditsFile {
+            criteria: SortedMap::new(),
+            audits: [(
+                "transitive-third-party1".to_owned(),
+                vec![delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+            )]
+            .into_iter()
+            .collect(),
+        },
+    );
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            criteria_map: Vec::new(),
+        },
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn builtin_simple_mega_foreign_tag_team() {
+    // (Pass) An audit is achieved by connecting a two foreign imports together
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+    audits.audits.insert(
+        "transitive-third-party1".to_owned(),
+        vec![full_audit(ver(3), SAFE_TO_DEPLOY)],
+    );
+    imports.audits.insert(
+        FOREIGN.to_owned(),
+        AuditsFile {
+            criteria: SortedMap::new(),
+            audits: [(
+                "transitive-third-party1".to_owned(),
+                vec![delta_audit(ver(3), ver(6), SAFE_TO_DEPLOY)],
+            )]
+            .into_iter()
+            .collect(),
+        },
+    );
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            criteria_map: Vec::new(),
+        },
+    );
+    imports.audits.insert(
+        OTHER_FOREIGN.to_owned(),
+        AuditsFile {
+            criteria: SortedMap::new(),
+            audits: [(
+                "transitive-third-party1".to_owned(),
+                vec![delta_audit(ver(6), ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+            )]
+            .into_iter()
+            .collect(),
+        },
+    );
+    config.imports.insert(
+        OTHER_FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: OTHER_FOREIGN_URL.to_owned(),
+            criteria_map: Vec::new(),
+        },
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn builtin_simple_foreign_dep_criteria_fail() {
+    // (Fail) Vetting hinges on some foreign audit with non-local depenency_criteria
+    // In this case we're "forced" to suggest a foreign audit
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+    audits.audits.remove("third-party1");
+    imports.audits.insert(
+        FOREIGN.to_owned(),
+        AuditsFile {
+            criteria: [(
+                DEFAULT_CRIT.to_owned(),
+                CriteriaEntry {
+                    description: Some("nice".to_owned()),
+                    description_url: None,
+                    implies: Vec::new(),
+                },
+            )]
+            .into_iter()
+            .collect(),
+            audits: [(
+                "third-party1".to_owned(),
+                vec![full_audit_dep(
+                    ver(DEFAULT_VER),
+                    SAFE_TO_DEPLOY,
+                    [("transitive-third-party1", [DEFAULT_CRIT])],
+                )],
+            )]
+            .into_iter()
+            .collect(),
+        },
+    );
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            criteria_map: Vec::new(),
+        },
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn builtin_simple_foreign_dep_criteria_pass() {
+    // (Fail) Vetting hinges on some foreign audit with non-local depenency_criteria
+    // In this case we're "forced" to suggest a foreign audit
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+    audits.audits.remove("third-party1");
+    imports.audits.insert(
+        FOREIGN.to_owned(),
+        AuditsFile {
+            criteria: [(
+                DEFAULT_CRIT.to_owned(),
+                CriteriaEntry {
+                    description: Some("nice".to_owned()),
+                    description_url: None,
+                    implies: Vec::new(),
+                },
+            )]
+            .into_iter()
+            .collect(),
+            audits: [
+                (
+                    "third-party1".to_owned(),
+                    vec![full_audit_dep(
+                        ver(DEFAULT_VER),
+                        SAFE_TO_DEPLOY,
+                        [("transitive-third-party1", [DEFAULT_CRIT])],
+                    )],
+                ),
+                (
+                    "transitive-third-party1".to_owned(),
+                    vec![full_audit(ver(DEFAULT_VER), DEFAULT_CRIT)],
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        },
+    );
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            criteria_map: Vec::new(),
+        },
+    );
+
+    let store = Store::mock(config, audits, imports);
+    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
+
+    let output = get_report(&metadata, report);
+    insta::assert_snapshot!(output);
 }

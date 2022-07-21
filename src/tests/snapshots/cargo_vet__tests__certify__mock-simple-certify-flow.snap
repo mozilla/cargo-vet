@@ -6,12 +6,12 @@ OUTPUT:
 <<<CLEAR SCREEN>>>
 choose criteria to certify for third-party1:10.0.0
   0. <clear selections>
-  1. fuzzed
-  2. reviewed
-  3. strong-reviewed
-  4. weak-reviewed
-  5. safe-to-deploy
-  6. safe-to-run
+  1. safe-to-run
+  2. safe-to-deploy
+  3. fuzzed
+  4. reviewed
+  5. strong-reviewed
+  6. weak-reviewed
 
 current selection: ["reviewed"]
 (press ENTER to accept the current criteria)
