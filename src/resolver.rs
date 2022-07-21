@@ -73,7 +73,7 @@ use tracing::{error, trace, trace_span};
 use crate::errors::SuggestError;
 use crate::format::{
     self, AuditKind, CriteriaName, CriteriaStr, Delta, DiffStat, ExemptedDependency, ImportName,
-    ImportsFile, PackageName, PackageStr, PolicyEntry, RemoteImport,
+    ImportsFile, PackageName, PackageStr, PolicyEntry, RemoteImport, SAFE_TO_DEPLOY, SAFE_TO_RUN,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
@@ -187,12 +187,20 @@ pub enum CriteriaNamespace {
     Foreign(ImportName),
 }
 
+#[derive(Debug, Clone)]
+pub struct CriteriaInfo {
+    pub namespace: CriteriaNamespace,
+    pub raw_name: CriteriaName,
+    pub namespaced_name: String,
+    pub entry: CriteriaEntry,
+}
+
 /// A processed version of config.toml's criteria definitions, for mapping
 /// lists of criteria names to CriteriaSets.
 #[derive(Debug, Clone)]
 pub struct CriteriaMapper {
     /// All the criteria in their raw form
-    pub list: Vec<(CriteriaNamespace, CriteriaName, CriteriaEntry)>,
+    pub list: Vec<CriteriaInfo>,
     /// name -> index in all lists
     pub index: FastMap<CriteriaNamespace, FastMap<CriteriaName, usize>>,
     /// The transitive closure of all criteria implied by each criteria (including self)
@@ -349,26 +357,28 @@ pub struct DeltaEdge<'a> {
 }
 
 const NUM_BUILTINS: usize = 2;
-fn builtin_criteria() -> [(CriteriaNamespace, CriteriaName, CriteriaEntry); NUM_BUILTINS] {
+fn builtin_criteria() -> [CriteriaInfo; NUM_BUILTINS] {
     [
-        (
-            CriteriaNamespace::Local,
-            "safe-to-run".to_string(),
-            CriteriaEntry {
+        CriteriaInfo {
+            namespace: CriteriaNamespace::Local,
+            raw_name: SAFE_TO_RUN.to_string(),
+            namespaced_name: SAFE_TO_RUN.to_string(),
+            entry: CriteriaEntry {
                 description: Some("safe to run locally".to_string()),
                 description_url: None,
                 implies: vec![],
             },
-        ),
-        (
-            CriteriaNamespace::Local,
-            "safe-to-deploy".to_string(),
-            CriteriaEntry {
+        },
+        CriteriaInfo {
+            namespace: CriteriaNamespace::Local,
+            raw_name: SAFE_TO_DEPLOY.to_string(),
+            namespaced_name: SAFE_TO_DEPLOY.to_string(),
+            entry: CriteriaEntry {
                 description: Some("safe to deploy to production".to_string()),
                 description_url: None,
                 implies: vec!["safe-to-run".to_string().into()],
             },
-        ),
+        },
     ]
 }
 
@@ -379,17 +389,19 @@ impl CriteriaMapper {
         mappings: &SortedMap<ImportName, RemoteImport>,
     ) -> CriteriaMapper {
         // First, build a list of all our criteria
-        let locals = criteria
-            .iter()
-            .map(|(k, v)| (CriteriaNamespace::Local, k.clone(), v.clone()));
+        let locals = criteria.iter().map(|(k, v)| CriteriaInfo {
+            namespace: CriteriaNamespace::Local,
+            raw_name: k.clone(),
+            namespaced_name: k.clone(),
+            entry: v.clone(),
+        });
         let builtins = builtin_criteria();
         let foreigns = imports.audits.iter().flat_map(|(import, audit_file)| {
-            audit_file.criteria.iter().map(|(k, v)| {
-                (
-                    CriteriaNamespace::Foreign(import.clone()),
-                    k.clone(),
-                    v.clone(),
-                )
+            audit_file.criteria.iter().map(move |(k, v)| CriteriaInfo {
+                namespace: CriteriaNamespace::Foreign(import.clone()),
+                raw_name: k.clone(),
+                namespaced_name: format!("{}::{}", import, k),
+                entry: v.clone(),
             })
         });
         let list = builtins
@@ -405,11 +417,11 @@ impl CriteriaMapper {
         let all_import_names = mappings.iter().map(|(import_name, _)| import_name);
 
         // Add all the natural entries
-        for (idx, (namespace, criteria_name, _entry)) in list.iter().enumerate() {
+        for (idx, info) in list.iter().enumerate() {
             let prev = index
-                .entry(namespace.clone())
+                .entry(info.namespace.clone())
                 .or_default()
-                .insert(criteria_name.clone(), idx);
+                .insert(info.raw_name.clone(), idx);
             assert!(prev.is_none(), "criteria name was multiply defined???");
         }
 
@@ -417,11 +429,11 @@ impl CriteriaMapper {
         // the same CriteriaIdx, we can now forget that builtins are special and
         // just naturally look them up in any namespace without issue.
         for import_name in all_import_names {
-            for (idx, (_local, criteria_name, _entry)) in list[0..NUM_BUILTINS].iter().enumerate() {
+            for (idx, info) in list[0..NUM_BUILTINS].iter().enumerate() {
                 index
                     .entry(CriteriaNamespace::Foreign(import_name.clone()))
                     .or_default()
-                    .insert(criteria_name.clone(), idx);
+                    .insert(info.raw_name.clone(), idx);
             }
         }
 
@@ -430,10 +442,10 @@ impl CriteriaMapper {
         // will becomes `implies[idx]`, the value used whenever the criteria is named.
         let mut direct_implies = FastMap::<usize, CriteriaSet>::with_capacity(num_criteria);
         // Add all the edges for implies entries (and ensure there's a node for every idx)
-        for (idx, (namespace, _name, entry)) in list.iter().enumerate() {
+        for (idx, info) in list.iter().enumerate() {
             let mut edges = CriteriaSet::none(num_criteria);
-            for implied in &entry.implies {
-                let their_idx = index[namespace][&**implied];
+            for implied in &info.entry.implies {
+                let their_idx = index[&info.namespace][&**implied];
                 edges.set_criteria(their_idx);
             }
             direct_implies.insert(idx, edges);
@@ -577,11 +589,19 @@ impl CriteriaMapper {
             .indices()
             .filter(|&cur_idx| {
                 criteria.indices().all(|other_idx| {
-                    // Require that we aren't implied by other_idx (and ignore our own index)
-                    cur_idx == other_idx || !self.implied_criteria[other_idx].has_criteria(cur_idx)
+                    // Ignore our own index
+                    let is_identity = cur_idx == other_idx;
+                    // Discard this criteria if it's implied by another
+                    let isnt_implied = !self.implied_criteria[other_idx].has_criteria(cur_idx);
+                    // Unless we're local and they're foreign, then we win
+                    let cur_is_local = self.list[cur_idx].namespace == CriteriaNamespace::Local;
+                    let other_is_foreign =
+                        self.list[other_idx].namespace != CriteriaNamespace::Local;
+                    let is_mapping = cur_is_local && other_is_foreign;
+                    is_identity || isnt_implied || is_mapping
                 })
             })
-            .map(|idx| &*self.list[idx].1)
+            .map(|idx| &*self.list[idx].namespaced_name)
     }
 
     pub fn all_criteria_names<'a>(
@@ -609,12 +629,19 @@ impl CriteriaMapper {
             .filter(|&cur_idx| {
                 !criteria.confident().has_criteria(cur_idx)
                     && criteria.all().indices().all(|other_idx| {
-                        // Require that we aren't implied by other_idx (and ignore our own index)
-                        cur_idx == other_idx
-                            || !self.implied_criteria[other_idx].has_criteria(cur_idx)
+                        // Ignore our own index
+                        let is_identity = cur_idx == other_idx;
+                        // Discard this criteria if it's implied by another
+                        let isnt_implied = !self.implied_criteria[other_idx].has_criteria(cur_idx);
+                        // Unless we're local and they're foreign, then we win
+                        let cur_is_local = self.list[cur_idx].namespace == CriteriaNamespace::Local;
+                        let other_is_foreign =
+                            self.list[other_idx].namespace != CriteriaNamespace::Local;
+                        let is_mapping = cur_is_local && other_is_foreign;
+                        is_identity || isnt_implied || is_mapping
                     })
             })
-            .map(|idx| &*self.list[idx].1)
+            .map(|idx| &*self.list[idx].namespaced_name)
     }
 }
 
