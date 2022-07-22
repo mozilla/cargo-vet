@@ -838,7 +838,7 @@ fn do_cmd_certify(
         }
 
         editor.add_comments(
-            "Please read the following criteria and uncomment the statement below:",
+            "Please read the following criteria and then follow the instructions below:",
         )?;
         editor.add_text("")?;
 
@@ -850,11 +850,11 @@ fn do_cmd_certify(
             editor.add_comments("=== END CRITERIA ===")?;
             editor.add_comments("")?;
         }
-        editor.add_comments("STATEMENT:")?;
+        editor.add_comments("Uncomment the following statement:")?;
         editor.add_text("")?;
         editor.add_comments(&statement)?;
         editor.add_text("")?;
-        editor.add_comments("NOTES:")?;
+        editor.add_comments("Add any notes about your audit below this line:")?;
         editor.add_text("")?;
         if let Some(notes) = &notes {
             editor.add_text(notes)?;
