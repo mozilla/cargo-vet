@@ -111,10 +111,6 @@ const DURATION_DAY: Duration = Duration::from_secs(60 * 60 * 24);
 /// by panicking with this type instead of a string.
 struct ExitPanic(i32);
 
-/// Similar to the above, but allows us to exec a new command
-/// as our final act.
-struct ExecPanic(std::process::Command);
-
 type ReportErrorFunc = dyn Fn(&miette::Report) + Send + Sync + 'static;
 
 // XXX: We might be able to get rid of this `lazy_static` after 1.63 due to
@@ -164,18 +160,10 @@ fn main() -> Result<(), ()> {
     let panic_result = std::panic::catch_unwind(real_main);
     let main_result = match panic_result {
         Ok(main_result) => main_result,
-        Err(mut e) => {
+        Err(e) => {
             if let Some(ExitPanic(code)) = e.downcast_ref::<ExitPanic>() {
                 // Exit panic, just silently exit with this status
                 std::process::exit(*code);
-            } else if let Some(ExecPanic(_command)) = e.downcast_mut::<ExecPanic>() {
-                // Exit with an exec.
-                #[cfg(target_family = "unix")]
-                {
-                    use std::os::unix::process::CommandExt;
-                    _command.exec();
-                }
-                unreachable!("we only use ExecPanic for unix");
             } else {
                 // Normal panic, let it ride
                 std::panic::resume_unwind(e);
@@ -239,7 +227,7 @@ fn real_main() -> Result<(), miette::Report> {
 
     // Now that miette is set up, use it to format panics.
     panic::set_hook(Box::new(move |panic_info| {
-        if panic_info.payload().is::<ExitPanic>() || panic_info.payload().is::<ExecPanic>() {
+        if panic_info.payload().is::<ExitPanic>() {
             return;
         }
 
@@ -532,75 +520,85 @@ fn cmd_inspect(
     cfg: &Config,
     sub_args: &InspectArgs,
 ) -> Result<(), miette::Report> {
-    let store = Store::acquire(cfg)?;
-    let cache = Cache::acquire(cfg)?;
-    let network = Network::acquire(cfg);
-
     let version = &sub_args.version;
     let package = &*sub_args.package;
 
-    // Record this command for magic in `vet certify`
-    cache.set_last_fetch(FetchCommand::Inspect {
-        package: package.to_owned(),
-        version: version.clone(),
-    });
+    let fetched = {
+        let store = Store::acquire(cfg)?;
+        let cache = Cache::acquire(cfg)?;
+        let network = Network::acquire(cfg);
 
-    if sub_args.mode == FetchMode::Sourcegraph {
-        let url = format!("https://sourcegraph.com/crates/{package}@v{version}");
-        tokio::runtime::Handle::current()
-            .block_on(prompt_criteria_eulas(
-                out,
-                cfg,
-                network.as_ref(),
-                &store,
-                package,
-                None,
-                version,
-                Some(&url),
-            ))
+        // Record this command for magic in `vet certify`
+        cache.set_last_fetch(FetchCommand::Inspect {
+            package: package.to_owned(),
+            version: version.clone(),
+        });
+
+        if sub_args.mode == FetchMode::Sourcegraph {
+            let url = format!("https://sourcegraph.com/crates/{package}@v{version}");
+            tokio::runtime::Handle::current()
+                .block_on(prompt_criteria_eulas(
+                    out,
+                    cfg,
+                    network.as_ref(),
+                    &store,
+                    package,
+                    None,
+                    version,
+                    Some(&url),
+                ))
+                .into_diagnostic()?;
+
+            open::that(&url).into_diagnostic().wrap_err_with(|| {
+                format!("Couldn't open {url} in your browser, try --mode=local?")
+            })?;
+
+            writeln!(out, "\nUse |cargo vet certify| to record your audit.");
+            return Ok(());
+        }
+
+        tokio::runtime::Handle::current().block_on(async {
+            let (pkg, eulas) = tokio::join!(
+                cache.fetch_package(network.as_ref(), package, version),
+                prompt_criteria_eulas(
+                    out,
+                    cfg,
+                    network.as_ref(),
+                    &store,
+                    package,
+                    None,
+                    version,
+                    None,
+                ),
+            );
+            eulas.into_diagnostic()?;
+            pkg.into_diagnostic()
+        })?
+    };
+
+    #[cfg(target_family = "unix")]
+    if let Some(shell) = std::env::var_os("SHELL") {
+        // Loosely borrowed from cargo crev.
+        writeln!(out, "Opening nested shell in: {:#?}", fetched);
+        writeln!(out, "Use `exit` or Ctrl-D to finish.",);
+        let status = std::process::Command::new(shell)
+            .current_dir(fetched.clone())
+            .env("PWD", fetched)
+            .status()
+            .map_err(CommandError::CommandFailed)
             .into_diagnostic()?;
 
-        open::that(&url)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't open {url} in your browser, try --mode=local?"))?;
+        writeln!(out, "\nUse |cargo vet certify| to record your audit.");
 
+        if let Some(code) = status.code() {
+            panic_any(ExitPanic(code));
+        }
         return Ok(());
     }
 
-    let fetched = tokio::runtime::Handle::current().block_on(async {
-        let (pkg, eulas) = tokio::join!(
-            cache.fetch_package(network.as_ref(), package, version),
-            prompt_criteria_eulas(
-                out,
-                cfg,
-                network.as_ref(),
-                &store,
-                package,
-                None,
-                version,
-                None,
-            ),
-        );
-        eulas.into_diagnostic()?;
-        pkg.into_diagnostic()
-    })?;
-
-    #[cfg(target_family = "unix")]
-    {
-        // Loosely borrowed from cargo crev.
-        let shell = std::env::var_os("SHELL").unwrap();
-        writeln!(out, "Opening nested shell in: {:#?}", fetched);
-        writeln!(out, "Use `exit` or Ctrl-D to finish.",);
-        let mut command = std::process::Command::new(shell);
-        command.current_dir(fetched.clone()).env("PWD", fetched);
-        panic_any(ExecPanic(command));
-    }
-
-    #[cfg(not(target_family = "unix"))]
-    {
-        writeln!(out, "  fetched to {:#?}", fetched);
-        Ok(())
-    }
+    writeln!(out, "  fetched to {:#?}", fetched);
+    writeln!(out, "\nUse |cargo vet certify| to record your audit.");
+    Ok(())
 }
 
 fn cmd_certify(
@@ -1463,69 +1461,74 @@ pub fn minimize_exemptions(
 }
 
 fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(), miette::Report> {
-    let store = Store::acquire(cfg)?;
-    let cache = Cache::acquire(cfg)?;
-    let network = Network::acquire(cfg);
-
     let version1 = &sub_args.version1;
     let version2 = &sub_args.version2;
     let package = &*sub_args.package;
 
-    // Record this command for magic in `vet certify`
-    cache.set_last_fetch(FetchCommand::Diff {
-        package: package.to_owned(),
-        version1: version1.clone(),
-        version2: version2.clone(),
-    });
+    let (fetched1, fetched2) = {
+        let store = Store::acquire(cfg)?;
+        let cache = Cache::acquire(cfg)?;
+        let network = Network::acquire(cfg);
 
-    if sub_args.mode == FetchMode::Sourcegraph {
-        let url =
-            format!("https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}");
-        tokio::runtime::Handle::current()
-            .block_on(prompt_criteria_eulas(
-                out,
-                cfg,
-                network.as_ref(),
-                &store,
-                package,
-                Some(version1),
-                version2,
-                Some(&url),
-            ))
-            .into_diagnostic()?;
+        // Record this command for magic in `vet certify`
+        cache.set_last_fetch(FetchCommand::Diff {
+            package: package.to_owned(),
+            version1: version1.clone(),
+            version2: version2.clone(),
+        });
 
-        open::that(&url)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't open {url} in your browser, try --mode=local?"))?;
+        if sub_args.mode == FetchMode::Sourcegraph {
+            let url = format!(
+                "https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}"
+            );
+            tokio::runtime::Handle::current()
+                .block_on(prompt_criteria_eulas(
+                    out,
+                    cfg,
+                    network.as_ref(),
+                    &store,
+                    package,
+                    Some(version1),
+                    version2,
+                    Some(&url),
+                ))
+                .into_diagnostic()?;
 
-        return Ok(());
-    }
+            open::that(&url).into_diagnostic().wrap_err_with(|| {
+                format!("Couldn't open {url} in your browser, try --mode=local?")
+            })?;
 
-    let (fetched1, fetched2) = tokio::runtime::Handle::current().block_on(async {
-        // NOTE: don't `try_join` everything as we don't want to abort the
-        // prompt to the user if the download fails while it is being shown, as
-        // that could be disorienting.
-        let (pkgs, eulas) = tokio::join!(
-            async {
-                tokio::try_join!(
-                    cache.fetch_package(network.as_ref(), package, version1),
-                    cache.fetch_package(network.as_ref(), package, version2)
+            writeln!(out, "\nUse |cargo vet certify| to record your audit.");
+
+            return Ok(());
+        }
+
+        tokio::runtime::Handle::current().block_on(async {
+            // NOTE: don't `try_join` everything as we don't want to abort the
+            // prompt to the user if the download fails while it is being shown, as
+            // that could be disorienting.
+            let (pkgs, eulas) = tokio::join!(
+                async {
+                    tokio::try_join!(
+                        cache.fetch_package(network.as_ref(), package, version1),
+                        cache.fetch_package(network.as_ref(), package, version2)
+                    )
+                },
+                prompt_criteria_eulas(
+                    out,
+                    cfg,
+                    network.as_ref(),
+                    &store,
+                    package,
+                    Some(version1),
+                    version2,
+                    None,
                 )
-            },
-            prompt_criteria_eulas(
-                out,
-                cfg,
-                network.as_ref(),
-                &store,
-                package,
-                Some(version1),
-                version2,
-                None,
-            )
-        );
-        eulas.into_diagnostic()?;
-        pkgs.into_diagnostic()
-    })?;
+            );
+            eulas.into_diagnostic()?;
+            pkgs.into_diagnostic()
+        })?
+    };
 
     writeln!(out);
 
@@ -1539,6 +1542,8 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
         .status()
         .map_err(CommandError::CommandFailed)
         .into_diagnostic()?;
+
+    writeln!(out, "\nUse |cargo vet certify| to record your audit.");
 
     Ok(())
 }
