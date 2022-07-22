@@ -18,7 +18,7 @@ current selection: ["reviewed"]
 > 
 
 <<<EDITING VET_CERTIFY>>>
-# Please read the following criteria and uncomment the statement below:
+# Please read the following criteria and then follow the instructions below:
 
 # === BEGIN CRITERIA "reviewed" ===
 #
@@ -26,11 +26,11 @@ current selection: ["reviewed"]
 #
 # === END CRITERIA ===
 #
-# STATEMENT:
+# Uncomment the following statement:
 
 # I, testing, certify that I have audited version 10.0.0 of third-party1 in accordance with the above criteria.
 
-# NOTES:
+# Add any notes about your audit below this line:
 
 
 <<<EDIT OK>>>
