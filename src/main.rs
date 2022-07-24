@@ -31,7 +31,9 @@ use crate::format::{
     SortedMap, StoreInfo,
 };
 use crate::out::Out;
-use crate::resolver::{Conclusion, CriteriaMapper, DepGraph, ResolveDepth, SuggestItem};
+use crate::resolver::{
+    Conclusion, CriteriaMapper, CriteriaNamespace, DepGraph, ResolveDepth, SuggestItem,
+};
 use crate::storage::{Cache, Store};
 
 mod cli;
@@ -705,7 +707,6 @@ fn do_cmd_certify(
         (user_info.username, Some(who))
     };
 
-    //let foreign_criteria = store.imports.iter().map();
     let criteria_mapper = CriteriaMapper::new(
         &store.audits.criteria,
         &store.imports,
@@ -740,7 +741,15 @@ fn do_cmd_certify(
             writeln!(out);
             writeln!(out, "  0. <clear selections>");
             let implied_criteria = criteria_mapper.criteria_from_list(&chosen_criteria);
-            for (criteria_idx, criteria_info) in criteria_mapper.list.iter().enumerate() {
+            // Iterate over all the local criteria. Note that it's fine for us to do the enumerate
+            // first, because local criteria are added to the list before foreign criteria, so they
+            // should be contiguous from 0..N.
+            let local_criteria = criteria_mapper
+                .list
+                .iter()
+                .enumerate()
+                .filter(|(_, info)| matches!(info.namespace, CriteriaNamespace::Local));
+            for (criteria_idx, criteria_info) in local_criteria {
                 if chosen_criteria.contains(&criteria_info.namespaced_name) {
                     writeln!(
                         out,

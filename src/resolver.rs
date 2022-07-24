@@ -169,13 +169,18 @@ pub struct DiffRecommendation {
 }
 
 /// Set of booleans, 64 should be Enough For Anyone (but abstracting in case not).
-#[derive(Clone, Default)]
+///
+/// Note that this intentionally doesn't implement Default to allow the implementation
+/// to require the CriteriaMapper to provide the count of items at construction time.
+/// Which will be useful if we ever decide to give it ~infinite capacity and wrap
+/// a BitSet.
+#[derive(Clone)]
 pub struct CriteriaSet(u64);
 const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
 
 /// Set of criteria which failed for a given package. `confident` contains only
 /// criteria which we're confident about, whereas `all` contains all criteria.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct CriteriaFailureSet {
     pub confident: CriteriaSet,
     pub all: CriteriaSet,
@@ -187,12 +192,35 @@ pub enum CriteriaNamespace {
     Foreign(ImportName),
 }
 
+/// Misc info about a Criteria that CriteriaMapper wants for some tasks.
 #[derive(Debug, Clone)]
 pub struct CriteriaInfo {
+    /// The namespace this criteria is natively part of.
+    ///
+    /// Note that builtins are in [`CriteriaNamespace::Local`] but still resolve
+    /// in foreign namespaces. This is effectively done by having a copy of those
+    /// criteria in every namespace that is auto-mapped into local. Because mapping
+    /// is bijective, the foreign copies are pointless and everyone just uses the
+    /// same local instance happily.
+    ///
+    /// The automapping is resolved by [`CriteriaMapper::index`].
     pub namespace: CriteriaNamespace,
-    pub raw_name: CriteriaName,
+    /// The name of the criteria with namespacing modifiers applied.
+    ///
+    /// e.g. a local criteria will show up as `some-criteria` but a foreign
+    /// one will appear as `foreign::some-criteria`. This string is intended
+    /// for user-facing messages to avoid ambiguities (and make it easier to
+    /// tell if we mess up and leak a foreign criteria where it shouldn't be).
     pub namespaced_name: String,
-    pub entry: CriteriaEntry,
+
+    /// The raw name of the criteria, as it would appear if it was local.
+    ///
+    /// FIXME: arguably we don't need to hold onto this, but it's annoying
+    /// to factor out and the overhead is completely trivial.
+    raw_name: CriteriaName,
+    /// FIXME: we don't actually need/want to store this but it's annoying
+    /// to factor out and honestly the overhead is completely trivial.
+    implies: Vec<CriteriaName>,
 }
 
 /// A processed version of config.toml's criteria definitions, for mapping
@@ -277,7 +305,7 @@ pub type PolicyFailures = SortedMap<PackageIdx, CriteriaSet>;
 /// (FailedPackage, Failures, is_dev)
 pub type RootFailures = Vec<(PackageIdx, PolicyFailures, bool)>;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct AuditFailure {
     pub criteria_failures: CriteriaFailureSet,
 }
@@ -363,21 +391,13 @@ fn builtin_criteria() -> [CriteriaInfo; NUM_BUILTINS] {
             namespace: CriteriaNamespace::Local,
             raw_name: SAFE_TO_RUN.to_string(),
             namespaced_name: SAFE_TO_RUN.to_string(),
-            entry: CriteriaEntry {
-                description: Some("safe to run locally".to_string()),
-                description_url: None,
-                implies: vec![],
-            },
+            implies: vec![],
         },
         CriteriaInfo {
             namespace: CriteriaNamespace::Local,
             raw_name: SAFE_TO_DEPLOY.to_string(),
             namespaced_name: SAFE_TO_DEPLOY.to_string(),
-            entry: CriteriaEntry {
-                description: Some("safe to deploy to production".to_string()),
-                description_url: None,
-                implies: vec!["safe-to-run".to_string().into()],
-            },
+            implies: vec!["safe-to-run".to_string()],
         },
     ]
 }
@@ -393,7 +413,7 @@ impl CriteriaMapper {
             namespace: CriteriaNamespace::Local,
             raw_name: k.clone(),
             namespaced_name: k.clone(),
-            entry: v.clone(),
+            implies: v.implies.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
         });
         let builtins = builtin_criteria();
         let foreigns = imports.audits.iter().flat_map(|(import, audit_file)| {
@@ -401,7 +421,7 @@ impl CriteriaMapper {
                 namespace: CriteriaNamespace::Foreign(import.clone()),
                 raw_name: k.clone(),
                 namespaced_name: format!("{}::{}", import, k),
-                entry: v.clone(),
+                implies: v.implies.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
             })
         });
         let list = builtins
@@ -444,13 +464,24 @@ impl CriteriaMapper {
         // Add all the edges for implies entries (and ensure there's a node for every idx)
         for (idx, info) in list.iter().enumerate() {
             let mut edges = CriteriaSet::none(num_criteria);
-            for implied in &info.entry.implies {
+            for implied in &info.implies {
                 let their_idx = index[&info.namespace][&**implied];
                 edges.set_criteria(their_idx);
             }
             direct_implies.insert(idx, edges);
         }
+
         // Add all the edges for foreign mappings
+        //
+        // FIXME: in principle these foreign criteria can be completely eliminated
+        // because they're 100% redundant with the local criteria they're getting
+        // mapped to. However this results in us discarding some information that
+        // conceivably could be useful for some diagnostics or other analysis.
+        //
+        // For now let's leave them in with an eye towards eliminating them.
+        // We currently handle eliminating their redundant nature in a more "late-bound"
+        // way in `CriteriaMapper::minimal_indices` and the various APIs that are
+        // built on top of it (all the *_criteria_names APIs, which govern ~all output).
         for (import_name, mappings) in mappings
             .iter()
             .map(|(name, entry)| (name, &entry.criteria_map))
@@ -560,8 +591,19 @@ impl CriteriaMapper {
         set.clear_criteria(&self.implied_criteria[self.index[namespace][criteria]])
     }
     /// An iterator over every criteria in order, with 'implies' fully applied.
+    ///
+    /// This includes any foreign criteria that has been eliminated as redundant.
     pub fn all_criteria_iter(&self) -> impl Iterator<Item = &CriteriaSet> {
         self.implied_criteria.iter()
+    }
+    /// An iterator over every **local** criteria in order, with 'implies' fully applied.
+    pub fn all_local_criteria_iter(&self) -> impl Iterator<Item = &CriteriaSet> {
+        // Just filter out the non-local criteria
+        self.implied_criteria
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| matches!(self.list[*idx].namespace, CriteriaNamespace::Local))
+            .map(|(_, set)| set)
     }
     pub fn len(&self) -> usize {
         self.list.len()
@@ -579,28 +621,34 @@ impl CriteriaMapper {
         CriteriaFailureSet::none(self.len())
     }
 
+    /// Like [`CriteriaSet::indices`] but uses knowledge of things like
+    /// `implies` relationships to remove redundant information. For
+    /// instance, if safe-to-deploy is set, we don't also yield safe-to-run.
+    pub fn minimal_indices<'a>(
+        &'a self,
+        criteria: &'a CriteriaSet,
+    ) -> impl Iterator<Item = usize> + 'a {
+        criteria.indices().filter(|&cur_idx| {
+            criteria.indices().all(|other_idx| {
+                // Ignore our own index
+                let is_identity = cur_idx == other_idx;
+                // Discard this criteria if it's implied by another
+                let isnt_implied = !self.implied_criteria[other_idx].has_criteria(cur_idx);
+                // Unless we're local and they're foreign, then we win
+                let cur_is_local = self.list[cur_idx].namespace == CriteriaNamespace::Local;
+                let other_is_foreign = self.list[other_idx].namespace != CriteriaNamespace::Local;
+                let is_mapping = cur_is_local && other_is_foreign;
+                is_identity || isnt_implied || is_mapping
+            })
+        })
+    }
+
     /// Yields all the names of the set criteria with implied members filtered out.
     pub fn criteria_names<'a>(
         &'a self,
         criteria: &'a CriteriaSet,
     ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
-        // Filter out any criteria implied by other criteria
-        criteria
-            .indices()
-            .filter(|&cur_idx| {
-                criteria.indices().all(|other_idx| {
-                    // Ignore our own index
-                    let is_identity = cur_idx == other_idx;
-                    // Discard this criteria if it's implied by another
-                    let isnt_implied = !self.implied_criteria[other_idx].has_criteria(cur_idx);
-                    // Unless we're local and they're foreign, then we win
-                    let cur_is_local = self.list[cur_idx].namespace == CriteriaNamespace::Local;
-                    let other_is_foreign =
-                        self.list[other_idx].namespace != CriteriaNamespace::Local;
-                    let is_mapping = cur_is_local && other_is_foreign;
-                    is_identity || isnt_implied || is_mapping
-                })
-            })
+        self.minimal_indices(criteria)
             .map(|idx| &*self.list[idx].namespaced_name)
     }
 
@@ -622,25 +670,9 @@ impl CriteriaMapper {
         &'a self,
         criteria: &'a CriteriaFailureSet,
     ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
-        // Filter out any criteria implied by other criteria or present in `confident()`
-        criteria
-            .all()
-            .indices()
-            .filter(|&cur_idx| {
-                !criteria.confident().has_criteria(cur_idx)
-                    && criteria.all().indices().all(|other_idx| {
-                        // Ignore our own index
-                        let is_identity = cur_idx == other_idx;
-                        // Discard this criteria if it's implied by another
-                        let isnt_implied = !self.implied_criteria[other_idx].has_criteria(cur_idx);
-                        // Unless we're local and they're foreign, then we win
-                        let cur_is_local = self.list[cur_idx].namespace == CriteriaNamespace::Local;
-                        let other_is_foreign =
-                            self.list[other_idx].namespace != CriteriaNamespace::Local;
-                        let is_mapping = cur_is_local && other_is_foreign;
-                        is_identity || isnt_implied || is_mapping
-                    })
-            })
+        // Filter criteria present in `confident()`
+        self.minimal_indices(criteria.all())
+            .filter(|idx| !criteria.confident().has_criteria(*idx))
             .map(|idx| &*self.list[idx].namespaced_name)
     }
 }
@@ -699,6 +731,10 @@ impl CriteriaSet {
             }
         })
     }
+    /// Clear all the bits in the set
+    fn clear(&mut self) {
+        self.0 = 0;
+    }
 }
 
 impl fmt::Debug for CriteriaSet {
@@ -719,7 +755,10 @@ impl CriteriaFailureSet {
             confident: if confident {
                 criteria.clone()
             } else {
-                CriteriaSet::default()
+                // Kinda jank but lets us copy the capacity without knowing it
+                let mut set = criteria.clone();
+                set.clear();
+                set
             },
             all: criteria.clone(),
         }
@@ -1417,7 +1456,9 @@ pub fn resolve<'a>(
                 );
                 failures
                     .entry(failure)
-                    .or_default()
+                    .or_insert_with(|| AuditFailure {
+                        criteria_failures: criteria_mapper.no_criteria_failures(),
+                    })
                     .criteria_failures
                     .unioned_with(criteria_failures);
             }
