@@ -9,7 +9,7 @@ to the [Rationale & Design](./rationale.md) section.
 You might find yourself using a crate authored either by someone you personally
 know or by a well-known member the community, in which case you might see low
 value in an additional audit. In this situation, you are of course free to
-simply leave the crate in the `unaudited` list indefinitely, perhaps with a
+simply leave the crate in the `exemptions` list indefinitely, perhaps with a
 `suggest = false` and note indicating that this specific audit is a low priority.
 
 There are, of course, dangers in being too permissive in these cases. Crates are
@@ -27,7 +27,7 @@ about the tool to having it running on CI. Having an open-ended task — like
 auditing one or more crates — on that critical path increases the chance that
 the developer gets side-tracked and never completes the setup. So the idea is to
 enable developers to quickly get to a green state, and then use `cargo vet
-suggest` to ratchet down the set of unaudited code at their own pace.
+suggest` to ratchet down the set of exemptions at their own pace.
 
 
 ## Why does `cargo vet` require audits for overridden dependencies?
@@ -46,7 +46,7 @@ full audit of the original crate despite formally transforming it into
 first-party code.  Since `cargo vet` has no way to distinguish this case from a
 from-scratch rewrite, it conservatively assumes the override is a derivative
 work, and requires the original version to be audited. The from-scratch can be
-handled by adding an entry to the `unaudited` table with `suggest = false` and a
+handled by adding an entry to the `exemptions` table with `suggest = false` and a
 note explaining the situation.
 
 ## How does this relate to `cargo crev`?

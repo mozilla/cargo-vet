@@ -20,7 +20,7 @@ $ cargo vet init
 ```
 
 This creates and populates the `supply-chain` directory. It contains two files:
-`audits.toml` and `config.toml`. The `unaudited` table of `config.toml` is
+`audits.toml` and `config.toml`. The `exemptions` table of `config.toml` is
 populated with the full list of third-party crates currently used by the
 project. The files in this directory should be added to version control along
 with `Cargo.lock`.
@@ -29,7 +29,7 @@ Now, try vetting again:
 
 ```
 $ cargo vet
-  Vetting Succeeded (0 audited, X unaudited)
+  Vetting Succeeded (X exempted)
 ```
 
 You're now up and running, though with an empty audit set: vetting only succeeds

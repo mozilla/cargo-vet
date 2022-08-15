@@ -37,7 +37,7 @@ one or more already-audited versions. In these cases, `cargo vet`
 computes all the possible approaches and selects the smallest one.
 
 You can, of course, choose to add one or more unvetted dependencies to the
-`unaudited` list instead of auditing them. This may be expedient in some
+`exemptions` list instead of auditing them. This may be expedient in some
 situations, though doing so frequently undermines the value provided by the
 tool.
 
@@ -107,21 +107,21 @@ $ cargo vet certify foo 1.2 1.2.1
 You can also use `--mode=local` flag to have `diff` download the two crates and display a
 git-compatible diff between the two.
 
-## Shrinking the `unaudited` Table
+## Shrinking the `exemptions` Table
 
-Even when your project is passing `cargo vet`, lingering entries in `unaudited`
+Even when your project is passing `cargo vet`, lingering entries in `exemptions`
 could still leave you vulnerable. As such, shrinking it is a worthwhile endeavor.
 
 Any malicious crate can compromise your program, but not every crate requires
 the same amount of effort to verify. Some crates are larger than others, and
 different versions of the same crate are usually quite similar. To take
 advantage of this, `cargo vet suggest` can estimate the lowest-effort audits
-you can perform to reduce the number of entries in `unaudited`, and
+you can perform to reduce the number of entries in `exemptions`, and
 consequently, your attack surface.
 
 More precisely, `cargo vet suggest` computes the number of lines that would need
-to be reviewed for each unaudited dependency, and displays them in order. This
-is the same information you'd get if you emptied out `unaudited` and re-ran
+to be reviewed for each exemptions dependency, and displays them in order. This
+is the same information you'd get if you emptied out `exemptions` and re-ran
 `cargo vet`.
 
 ## Suggestions from the Registry

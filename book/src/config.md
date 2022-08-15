@@ -150,7 +150,7 @@ Defaults to the empty set and is not inherited.
 
 Free-form string for recording rationale or other relevant information.
 
-### The `unaudited` Table
+### The `exemptions` Table
 
 This table enumerates the set of crates which are being used despite missing the
 required audits. It has a similar structure to the `audits` table in
