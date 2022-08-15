@@ -1,11 +1,11 @@
 # Configuring CI
 
-As a final step in setting up a project, it's strongly recommended to
-*continuously* perform verification of your dependencies via your
-project's continuous integration system.
+As a final step in setting up a project, you should enable verification to run
+as part of your project's continuous integration system.
 
-An example of configuring this via GitHub Actions is to add this to your
-configuration:
+If your project is hosted on GitHub, you can accomplish this by adding the
+following to a new or existing `.yml` file in `.github/workflows` (with `X.Y.Z`
+replaced with your desired version):
 
 ```yml
 name: CI
@@ -14,13 +14,26 @@ jobs:
   cargo-vet:
     name: Vet Dependencies
     runs-on: ubuntu-latest
+    env:
+      CARGO_VET_VERSION: X.Y.Z
     steps:
     - uses: actions/checkout@master
     - name: Install Rust
       run: rustup update stable && rustup default stable
-    - run: cargo install cargo-vet
-    - run: cargo vet --locked
+    - uses: actions/cache@v2
+      with:
+        path: ${{ runner.tool_cache }}/cargo-vet
+        key: cargo-vet-bin-${{ env.CARGO_VET_VERSION }}
+    - name: Add the tool cache directory to the search path
+      run: echo "${{ runner.tool_cache }}/cargo-vet/bin" >> $GITHUB_PATH
+    - name: Ensure that the tool cache is populated with the cargo-vet binary
+      run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ env.CARGO_VET_VERSION }} cargo-vet
+    - name: Invoke cargo-vet
+      run: cargo vet --locked
 ```
 
 This will ensure that that all changes made to your repository, either via a PR
-or a direct push, have a fully-vetted dependency set.
+or a direct push, have a fully-vetted dependency set. The extra logic around the
+tool cache allows GitHub to persist a copy of the cargo-vet binary rather than
+compiling it from scratch each time, enabling results to be displayed within a
+few seconds rather than several minutes.
