@@ -6,11 +6,9 @@ crates against the following criteria on all-platforms:
 * For dev-dependencies and build-dependencies: `safe-to-run`
 
 In some situations, you may be able to reduce your workload by encoding your
-requirements more precisely, such as:
-
-* **Using different criteria for different top-level crates.** Your workspace
-  might contain both a production product and an internal tool, which might
-require different levels of audits for their dependencies.
+requirements more precisely. For example, your workspace might contain both a
+production product and an internal tool, and you might decide that the
+dependencies of the latter need only be `safe-to-run`.
 
 If the default behavior works for you, there's no need to specify anything. If
 you wish to encode policies such as the above, you can do so in
