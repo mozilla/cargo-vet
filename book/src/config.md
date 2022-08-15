@@ -118,7 +118,7 @@ of a given crate.
 
 This table maps first-party crates to the audit requirements that `cargo vet`
 should enforce on their dependencies. When unspecified, non-top-level
-first-party crates inherit policy attributes from their parents, whereas
+first-party crates inherit most policy attributes from their parents, whereas
 top-level first-party crates get the defaults described below.
 
 In this context, "top-level" generally refers to crates with no
@@ -145,6 +145,12 @@ to the [equivalent field](audit-entries.md#dependency-criteria) in audit
 entries.
 
 Defaults to the empty set and is not inherited.
+
+#### `audit-as-crates-io`
+
+Specifies whether first-party packages with this crate name should receive audit
+enforcement as if they were fetched from crates.io. See [First-Party
+Code](first-party-code.md) for more details.
 
 #### `notes`
 

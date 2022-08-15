@@ -17,6 +17,6 @@
   - [Configuration](./config.md)
   - [Audit Entries](./audit-entries.md)
   - [Built-In Criteria](./built-in-criteria.md)
-  - [Commands](./commands.md)
-  - [How Vetting Works](./how-vetting-works.md)
+  - [First-Party Code](./first-party-code.md)
   - [Design Choice FAQ](./design-choice-faq.md)
+  - [Commands](./commands.md)

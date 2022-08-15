@@ -30,25 +30,6 @@ enable developers to quickly get to a green state, and then use `cargo vet
 suggest` to ratchet down the set of exemptions at their own pace.
 
 
-## Why does `cargo vet` require audits for overridden dependencies?
-
-Cargo supports [dependency
-overrides](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html),
-which allows developers to replace public crates in their dependency graph with
-a custom version. Strictly speaking, these overrides are first-party code, but
-`cargo vet` nevertheless requires a corresponding audit for the public version.
-
-The reason is that this custom version might be generated in one of two ways: by
-building a semantically-compatible replacement from scratch, or by starting with
-the source of the original crate and making some (potentially-minimal)
-modifications. The latter case is quite common, and in practice rarely entails a
-full audit of the original crate despite formally transforming it into
-first-party code.  Since `cargo vet` has no way to distinguish this case from a
-from-scratch rewrite, it conservatively assumes the override is a derivative
-work, and requires the original version to be audited. The from-scratch can be
-handled by adding an entry to the `exemptions` table with `suggest = false` and a
-note explaining the situation.
-
 ## How does this relate to `cargo crev`?
 
 This work was partially inspired by `cargo crev`, and borrows some aspects
