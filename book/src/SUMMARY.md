@@ -19,5 +19,5 @@
   - [Audit Entries](./audit-entries.md)
   - [Built-In Criteria](./built-in-criteria.md)
   - [First-Party Code](./first-party-code.md)
-  - [Design Choice FAQ](./design-choice-faq.md)
+  - [FAQ](./faq.md)
   - [Commands](./commands.md)

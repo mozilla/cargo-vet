@@ -1,8 +1,7 @@
-# Design Choice FAQ
+# FAQ
 
-This section serves to document the rationale behind various design choices and
-highlight some alternatives considered. This should be considered supplementary
-to the [Rationale & Design](./rationale.md) section.
+This section aims to address a few frequently-asked questions whose answers
+don't quite fit elsewhere in the book.
 
 
 ## Why does `cargo vet init` automatically exempt all existing dependencies?
