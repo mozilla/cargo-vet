@@ -13,6 +13,7 @@
   - [Specifying Policies](./specifying-policies.md)
   - [Multiple Repositories](./multiple-repositories.md)
   - [Configuring CI](./configuring-ci.md)
+  - [Curating Your Audit Set](./curating-your-audit-set.md)
 - [Reference](./reference.md)
   - [Configuration](./config.md)
   - [Audit Entries](./audit-entries.md)
