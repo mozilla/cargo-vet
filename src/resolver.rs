@@ -1941,7 +1941,7 @@ fn search_for_path<'a>(
                         // `[safe-to-run, some-other-criteria]` validating each criteria individually.
                         let dep_req = edge
                             .dependency_criteria
-                            .get(&*dep_package.name)
+                            .get(dep_package.name)
                             .unwrap_or(cur_criteria);
 
                         if !dep_vet_result.contains(dep_req) {
