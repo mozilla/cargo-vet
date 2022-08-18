@@ -1065,6 +1065,7 @@ fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
     output.to_string()
 }
 
+#[allow(clippy::type_complexity)]
 struct BasicTestOutput {
     output: Mutex<Vec<u8>>,
     on_read_line: Option<Box<dyn Fn(&str) -> io::Result<String> + Send + Sync + 'static>>,
