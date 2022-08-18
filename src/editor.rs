@@ -110,6 +110,7 @@ const LINE_ENDING: &str = "\n";
 pub struct Editor<'a> {
     tempfile: NamedTempFile,
     comment_char: char,
+    #[allow(clippy::type_complexity)]
     run_editor: Box<dyn FnOnce(&Path) -> io::Result<bool> + 'a>,
 }
 

@@ -1874,14 +1874,14 @@ async fn eula_for_criteria(
     // * Just display the url
 
     // First try the builtins
-    let builtin = builtin_eulas.get(&*criteria).map(|s| s.to_string());
+    let builtin = builtin_eulas.get(criteria).map(|s| s.to_string());
     if let Some(eula) = builtin {
         return eula;
     }
 
     // ERRORS: the caller should have verified this entry already!
     let criteria_entry = criteria_map
-        .get(&*criteria)
+        .get(criteria)
         .unwrap_or_else(|| panic!("no entry for the criteria {}", criteria));
     assert!(
         criteria_entry.description.is_some() || criteria_entry.description_url.is_some(),

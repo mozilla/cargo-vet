@@ -73,7 +73,7 @@ impl Out for Term {
     }
 
     fn clear_screen(&self) -> io::Result<()> {
-        (&*self).clear_screen()
+        self.clear_screen()
     }
 
     fn read_line_with_prompt(&self, prompt: &str) -> io::Result<String> {
