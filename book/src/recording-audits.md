@@ -74,8 +74,8 @@ previously-recorded entry is determined to have been erroneous. Even if the
 owner no longer uses the specified crates, the audit records can still prove
 useful to others in the ecosystem.
 
-## The `unaudited` table in `config.toml`
+## The `exemptions` table in `config.toml`
 
 This table enumerates the dependencies that have not been audited, but which the
 project is nonetheless using. The structure is generally the same as the
-`audits` table, with a [few differences](config.md#the-unaudited-table).
+`audits` table, with a [few differences](config.md#the-exemptions-table).

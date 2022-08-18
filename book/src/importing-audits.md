@@ -1,6 +1,6 @@
 # Importing Audits
 
-The fastest way to shrink the `unaudited` list is to pull in the audit sets from
+The fastest way to shrink the `exemptions` list is to pull in the audit sets from
 other projects that you trust via `imports` directives in `config.toml`.  This
 directive allows you to virtually merge audit lists from other projects into
 your own:

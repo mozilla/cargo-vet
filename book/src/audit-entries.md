@@ -31,7 +31,7 @@ range of versions is usually required, this field uses Cargo's standard
 syntax.
 
 If a `violation` entry exists for a given crate version, `cargo vet` will reject
-the dependency even if it's listed in the `unaudited` table.
+the dependency even if it's listed in the `exemptions` table.
 
 ## `criteria`
 
