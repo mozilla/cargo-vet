@@ -162,6 +162,14 @@ pub struct AuditEntry {
     pub criteria: Vec<Spanned<CriteriaName>>,
     pub kind: AuditKind,
     pub notes: Option<String>,
+    /// A non-serialized member which indicates whether this audit is a "fresh"
+    /// audit. This will be set for all audits imported found in the remote
+    /// audits file which aren't also found in the local `imports.lock` cache.
+    ///
+    /// This should almost always be `false`, and only set to `true` by the
+    /// import handling code.
+    #[serde(skip)]
+    pub is_fresh_import: bool,
 }
 
 /// Implement PartialOrd manually because the order we want for sorting is

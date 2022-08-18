@@ -1,0 +1,13 @@
+---
+source: src/tests/import.rs
+expression: output
+---
+ 
+ [[audits.peer-company.audits.third-party2]]
+ criteria = "safe-to-deploy"
+ delta = "100.0.0 -> 200.0.0"
+-
+-[[audits.peer-company.audits.unused-package]]
+-criteria = "safe-to-deploy"
+-version = "10.0.0"
+

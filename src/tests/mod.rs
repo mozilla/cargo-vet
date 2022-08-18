@@ -25,6 +25,7 @@ use crate::{
 
 mod audit_as_crates_io;
 mod certify;
+mod import;
 mod regenerate_unaudited;
 mod store_parsing;
 mod vet;
@@ -299,6 +300,7 @@ fn delta_audit(from: Version, to: Version, criteria: CriteriaStr) -> AuditEntry 
             delta,
             dependency_criteria: DependencyCriteria::default(),
         },
+        is_fresh_import: false,
     }
 }
 
@@ -331,6 +333,7 @@ fn delta_audit_dep(
                 })
                 .collect(),
         },
+        is_fresh_import: false,
     }
 }
 
@@ -343,6 +346,7 @@ fn full_audit(version: Version, criteria: CriteriaStr) -> AuditEntry {
             version,
             dependency_criteria: DependencyCriteria::default(),
         },
+        is_fresh_import: false,
     }
 }
 
@@ -358,6 +362,7 @@ fn full_audit_m(
             version,
             dependency_criteria: DependencyCriteria::default(),
         },
+        is_fresh_import: false,
     }
 }
 
@@ -387,6 +392,7 @@ fn full_audit_dep(
                 })
                 .collect(),
         },
+        is_fresh_import: false,
     }
 }
 
@@ -396,6 +402,7 @@ fn violation_hard(version: VersionReq) -> AuditEntry {
         notes: None,
         criteria: vec![SAFE_TO_RUN.to_string().into()],
         kind: AuditKind::Violation { violation: version },
+        is_fresh_import: false,
     }
 }
 #[allow(dead_code)]
@@ -405,6 +412,7 @@ fn violation(version: VersionReq, criteria: CriteriaStr) -> AuditEntry {
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Violation { violation: version },
+        is_fresh_import: false,
     }
 }
 #[allow(dead_code)]
@@ -417,6 +425,7 @@ fn violation_m(
         notes: None,
         criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         kind: AuditKind::Violation { violation: version },
+        is_fresh_import: false,
     }
 }
 

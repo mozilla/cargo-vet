@@ -234,6 +234,9 @@ pub mod audit {
                 notes: val.notes,
                 criteria: val.criteria,
                 kind: kind?,
+                // By default, always read entries as non-fresh. The import code
+                // will set this flag to true for imported entries.
+                is_fresh_import: false,
             })
         }
     }
@@ -605,6 +608,7 @@ mod test {
                         dependency_criteria: dc_long,
                     },
                     notes: Some("notes go here!".to_owned()),
+                    is_fresh_import: false, // ignored
                 },
                 AuditEntry {
                     who: None,
@@ -614,6 +618,7 @@ mod test {
                         dependency_criteria: dc_short,
                     },
                     notes: Some("notes go here!".to_owned()),
+                    is_fresh_import: true, // ignored
                 },
             ],
         );

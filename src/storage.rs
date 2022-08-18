@@ -11,7 +11,7 @@ use std::{
 use cargo_metadata::Version;
 use crates_index::Index;
 use flate2::read::GzDecoder;
-use futures_util::future::{join_all, try_join_all};
+use futures_util::future::try_join_all;
 use miette::{NamedSource, SourceOffset};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -21,18 +21,19 @@ use tracing::{error, info, log::warn, trace};
 use crate::{
     errors::{
         CacheAcquireError, CacheCommitError, CommandError, CriteriaChangeError,
-        CriteriaChangeErrors, DiffError, FetchAndDiffError, FetchAuditError, FetchError,
-        FlockError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError, SourceFile,
-        StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError,
-        StoreValidateError, StoreValidateErrors, TomlParseError, UnpackError,
+        CriteriaChangeErrors, DiffError, DownloadError, FetchAndDiffError, FetchAuditError,
+        FetchError, FlockError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError,
+        SourceFile, StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError,
+        StoreTomlError, StoreValidateError, StoreValidateErrors, TomlParseError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
-        AuditsFile, CommandHistory, ConfigFile, CriteriaName, Delta, DiffCache, DiffStat, FastMap,
-        FetchCommand, ImportsFile, MetaConfig, PackageStr, SortedMap, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        AuditKind, AuditsFile, CommandHistory, ConfigFile, CriteriaName, Delta, DiffCache,
+        DiffStat, FastMap, FetchCommand, ImportName, ImportsFile, MetaConfig, PackageStr,
+        SortedMap, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
-    resolver,
+    resolver::{self, Conclusion},
     serialization::{spanned::Spanned, to_formatted_toml},
     Config, PartialConfig,
 };
@@ -123,6 +124,10 @@ pub struct Store {
     pub imports: ImportsFile,
     pub audits: AuditsFile,
 
+    // The complete live set of imports fetched from the network. Will be
+    // initialized to `None` if `--locked` was passed.
+    pub live_imports: Option<ImportsFile>,
+
     pub config_src: SourceFile,
     pub imports_src: SourceFile,
     pub audits_src: SourceFile,
@@ -151,6 +156,7 @@ impl Store {
                 criteria: SortedMap::new(),
                 audits: SortedMap::new(),
             },
+            live_imports: None,
             config_src: Arc::new(NamedSource::new(CONFIG_TOML, "")),
             audits_src: Arc::new(NamedSource::new(AUDITS_TOML, "")),
             imports_src: Arc::new(NamedSource::new(IMPORTS_LOCK, "")),
@@ -162,8 +168,19 @@ impl Store {
         metacfg.store_path().as_path_unlocked().exists()
     }
 
+    pub fn acquire_offline(cfg: &Config) -> Result<Self, StoreAcquireError> {
+        Self::acquire(cfg, None, false)
+    }
+
     /// Acquire an existing store
-    pub fn acquire(cfg: &Config) -> Result<Self, StoreAcquireError> {
+    ///
+    /// If `network` is passed and `!cfg.cli.locked`, this will fetch remote
+    /// imports to use for comparison purposes.
+    pub fn acquire(
+        cfg: &Config,
+        network: Option<&Network>,
+        allow_criteria_changes: bool,
+    ) -> Result<Self, StoreAcquireError> {
         let root = cfg.metacfg.store_path();
 
         // Before we do anything else, acquire an exclusive lock on the
@@ -177,11 +194,24 @@ impl Store {
         let (imports_src, imports): (_, ImportsFile) =
             load_toml(IMPORTS_LOCK, lock.read_imports()?)?;
 
+        // If this command isn't locked, and the network is available, fetch the
+        // live state of imported audits.
+        let live_imports = if let (false, Some(network)) = (cfg.cli.locked, network) {
+            let imported_audits = tokio::runtime::Handle::current()
+                .block_on(fetch_imported_audits(network, &config))?;
+            let live_imports =
+                process_imported_audits(imported_audits, &imports, allow_criteria_changes)?;
+            Some(live_imports)
+        } else {
+            None
+        };
+
         let store = Self {
             lock: Some(lock),
             config,
             audits,
             imports,
+            live_imports,
             config_src,
             audits_src,
             imports_src,
@@ -201,10 +231,35 @@ impl Store {
             config,
             imports,
             audits,
+            live_imports: None,
             config_src: Arc::new(NamedSource::new(CONFIG_TOML, "")),
             audits_src: Arc::new(NamedSource::new(AUDITS_TOML, "")),
             imports_src: Arc::new(NamedSource::new(IMPORTS_LOCK, "")),
         }
+    }
+
+    /// Create a mock store, also mocking out the unlocked import fetching
+    /// process by providing the live values of imported AuditsFiles.
+    #[cfg(test)]
+    pub fn mock_online(
+        config: ConfigFile,
+        audits: AuditsFile,
+        imports: ImportsFile,
+        fetched_audits: Vec<(ImportName, AuditsFile)>,
+        allow_criteria_changes: bool,
+    ) -> Result<Self, CriteriaChangeErrors> {
+        let live_imports =
+            process_imported_audits(fetched_audits, &imports, allow_criteria_changes)?;
+        Ok(Self {
+            lock: None,
+            config,
+            imports,
+            audits,
+            live_imports: Some(live_imports),
+            config_src: Arc::new(NamedSource::new(CONFIG_TOML, "")),
+            audits_src: Arc::new(NamedSource::new(AUDITS_TOML, "")),
+            imports_src: Arc::new(NamedSource::new(IMPORTS_LOCK, "")),
+        })
     }
 
     #[cfg(test)]
@@ -222,6 +277,7 @@ impl Store {
             config,
             imports,
             audits,
+            live_imports: None,
             config_src,
             audits_src,
             imports_src,
@@ -247,6 +303,7 @@ impl Store {
             config: self.config.clone(),
             imports: self.imports.clone(),
             audits: self.audits.clone(),
+            live_imports: self.live_imports.clone(),
             config_src: self.config_src.clone(),
             audits_src: self.audits_src.clone(),
             imports_src: self.imports_src.clone(),
@@ -256,6 +313,18 @@ impl Store {
             versions.retain(|e| !e.suggest);
         }
         clone
+    }
+
+    /// Returns the set of audits which should be operated upon.
+    ///
+    /// If the store was acquired unlocked, this will include audits which are
+    /// not stored in imports.lock, otherwise it will only contain imports
+    /// stored locally.
+    pub fn imported_audits(&self) -> &SortedMap<ImportName, AuditsFile> {
+        match &self.live_imports {
+            Some(live_imports) => &live_imports.audits,
+            None => &self.imports.audits,
+        }
     }
 
     /// Commit the store's contents back to disk
@@ -446,84 +515,203 @@ impl Store {
         Ok(())
     }
 
-    /// Fetch foreign audits, only call this is we're not --locked
-    pub async fn fetch_foreign_audits(
-        &mut self,
-        network: &Network,
-        accept_changes: bool,
-    ) -> Result<(), FetchAuditError> {
-        let raw_new_imports =
-            try_join_all(self.config.imports.iter().map(|(name, import)| async {
-                let audit_file = fetch_foreign_audit(network, name, &import.url).await?;
-                // Fetch the descriptions to cache them and check that they haven't changed
-                // FIXME: this should probably treat failing to fetch as an error but eula_for_criteria
-                // hides errors... should we have two versions? Or make it the caller's problem?
-                let new_descs = join_all(audit_file.criteria.iter().map(|(criteria, _)| async {
-                    (
-                        criteria.clone(),
-                        crate::eula_for_criteria(Some(network), &audit_file.criteria, criteria)
-                            .await,
-                    )
-                }))
-                .await;
-                Ok::<_, FetchAuditError>((name.clone(), audit_file, new_descs))
-            }))
-            .await?;
+    /// Return an updated version of the `imports.lock` file taking into account
+    /// the result of running the resolver, to pick which audits need to be
+    /// vendored.
+    ///
+    /// If `force_update` is specified, audits for all crates will be updated,
+    /// even if the currently vendored audits would be sufficient.
+    #[must_use]
+    pub fn get_updated_imports_file(
+        &self,
+        report: &resolver::ResolveReport<'_>,
+        force_update: bool,
+    ) -> ImportsFile {
+        if self.live_imports.is_none() {
+            // We're locked, so can't update anything.
+            return self.imports.clone();
+        }
+
+        // Determine which packages were used.
+        let mut used_packages = SortedMap::new();
+        for package in report.graph.nodes.iter() {
+            used_packages.insert(package.name, false);
+        }
+
+        // If we succeeded, also record which packages need fresh imports.
+        if let Conclusion::Success(success) = &report.conclusion {
+            for &node_idx in &success.needed_fresh_imports {
+                let package = &report.graph.nodes[node_idx];
+                used_packages.insert(package.name, true);
+            }
+        }
 
         let mut new_imports = ImportsFile {
             audits: SortedMap::new(),
         };
-        let mut criteria_changes = vec![];
-        for (import_name, mut audits_file, new_descs) in raw_new_imports {
-            for (criteria_name, new_desc) in new_descs {
-                if !accept_changes {
-                    // Check that the new description doesn't modify an existing old one
-                    if let Some(old_entry) = self
-                        .imports
-                        .audits
-                        .get(&import_name)
-                        .and_then(|file| file.criteria.get(&criteria_name))
-                    {
-                        let old_desc = old_entry.description.as_ref().unwrap();
-                        if old_desc != &new_desc {
-                            criteria_changes.push(CriteriaChangeError {
-                                import_name: import_name.clone(),
-                                criteria_name: criteria_name.to_owned(),
-                                old_desc: old_desc.clone(),
-                                new_desc,
-                            });
-                            continue;
-                        }
-                    }
+        for import_name in self.config.imports.keys() {
+            let live_audit_file = self
+                .imported_audits()
+                .get(import_name)
+                .expect("Live audits missing for import?");
+
+            // Is this the first time we're doing this import? If it is we'll
+            // want to effectively force-update this peer.
+            let first_import = !self.imports.audits.contains_key(import_name);
+
+            // Create the new audits file, and copy criteria into it on a
+            // per-package basis, only including used packages.
+            // We always use the live version of criteria in the new file.
+            let mut new_audits_file = AuditsFile {
+                criteria: live_audit_file.criteria.clone(),
+                audits: SortedMap::new(),
+            };
+            for (&package, &need_fresh_imports) in &used_packages {
+                // Always pull audit entries from the live version to pull in
+                // revocations, violations, updated notes, etc.
+                // Filter out entries which are fresh unless we're updating
+                // entries for this package or it's a violation.
+                let update_package = first_import || need_fresh_imports || force_update;
+                let audits = live_audit_file
+                    .audits
+                    .get(package)
+                    .map(|v| &v[..])
+                    .unwrap_or(&[])
+                    .iter()
+                    .filter(|audit| {
+                        update_package
+                            || !audit.is_fresh_import
+                            || matches!(audit.kind, AuditKind::Violation { .. })
+                    })
+                    .cloned()
+                    .map(|mut audit| {
+                        audit.is_fresh_import = false;
+                        audit
+                    })
+                    .collect::<Vec<_>>();
+
+                // Record audits in the new audits file, if there are any.
+                if !audits.is_empty() {
+                    new_audits_file.audits.insert(package.to_owned(), audits);
                 }
-
-                // Store the new fetched description
-                audits_file
-                    .criteria
-                    .get_mut(&criteria_name)
-                    .unwrap()
-                    .description = Some(new_desc);
             }
-
-            // Now add the new import
-            new_imports.audits.insert(import_name, audits_file);
-        }
-        if !criteria_changes.is_empty() {
-            Err(CriteriaChangeErrors {
-                errors: criteria_changes,
-            })?;
+            new_imports
+                .audits
+                .insert(import_name.to_owned(), new_audits_file);
         }
 
-        // Accept the new imports. These will only be committed if the current command succeeds.
-        self.imports = new_imports;
+        new_imports
+    }
 
-        // Now do one last validation to catch corrupt imports
-        self.validate()?;
-        Ok(())
+    pub fn maybe_update_imports_file(&mut self, cfg: &Config, force_update: bool) {
+        let report = resolver::resolve(
+            &cfg.metadata,
+            cfg.cli.filter_graph.as_ref(),
+            self,
+            // Resolve depth only impacts error results, so we can use Shallow
+            // to do less work.
+            resolver::ResolveDepth::Shallow,
+        );
+        self.imports = self.get_updated_imports_file(&report, force_update);
     }
 }
 
-async fn fetch_foreign_audit(
+/// Process imported audits from the network, generating a `LiveImports`
+/// description of the live state of imported audits.
+fn process_imported_audits(
+    fetched_audits: Vec<(ImportName, AuditsFile)>,
+    imports_lock: &ImportsFile,
+    allow_criteria_changes: bool,
+) -> Result<ImportsFile, CriteriaChangeErrors> {
+    let mut new_imports = ImportsFile {
+        audits: SortedMap::new(),
+    };
+    let mut changed_criteria = Vec::new();
+    for (import_name, mut audits_file) in fetched_audits {
+        // By default all audits read from the network are fresh.
+        for audit_entry in audits_file.audits.values_mut().flat_map(|v| v.iter_mut()) {
+            audit_entry.is_fresh_import = true;
+        }
+
+        // If we have an existing audits file for these imports, compare against it.
+        if let Some(existing_audits_file) = imports_lock.audits.get(&import_name) {
+            if !allow_criteria_changes {
+                // Compare the new criteria descriptions with existing criteria
+                // descriptions. If the description already exists, record a
+                // CriteriaChangeError.
+                for (criteria_name, old_entry) in &existing_audits_file.criteria {
+                    if let Some(new_entry) = audits_file.criteria.get(criteria_name) {
+                        let old_desc = old_entry.description.as_ref().unwrap();
+                        let new_desc = new_entry.description.as_ref().unwrap();
+                        if old_desc != new_desc {
+                            changed_criteria.push(CriteriaChangeError {
+                                import_name: import_name.clone(),
+                                criteria_name: criteria_name.to_owned(),
+                                old_desc: old_desc.clone(),
+                                new_desc: new_desc.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Compare the new audits with existing audits. If an audit already
+            // existed in the existing audits file, mark it as non-fresh.
+            for (package, existing_audits) in &existing_audits_file.audits {
+                let new_audits = audits_file
+                    .audits
+                    .get_mut(package)
+                    .map(|v| &mut v[..])
+                    .unwrap_or(&mut []);
+                for existing_audit in existing_audits {
+                    for new_audit in &mut new_audits[..] {
+                        // Ignore `who` and `notes` for comparison, as they
+                        // are not relevant semantically and might have been
+                        // updated uneventfully.
+                        if new_audit.is_fresh_import
+                            && new_audit.kind == existing_audit.kind
+                            && new_audit.criteria == existing_audit.criteria
+                        {
+                            new_audit.is_fresh_import = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Now add the new import
+        new_imports.audits.insert(import_name, audits_file);
+    }
+
+    if !changed_criteria.is_empty() {
+        return Err(CriteriaChangeErrors {
+            errors: changed_criteria,
+        });
+    }
+
+    // FIXME: Consider doing some additional validation on these audits
+    // before returning?
+
+    Ok(new_imports)
+}
+
+/// Fetch all declared imports from the network, filling in any criteria
+/// descriptions.
+async fn fetch_imported_audits(
+    network: &Network,
+    config: &ConfigFile,
+) -> Result<Vec<(ImportName, AuditsFile)>, FetchAuditError> {
+    try_join_all(config.imports.iter().map(|(name, import)| async {
+        let audit_file = fetch_imported_audit(network, name, &import.url).await?;
+        Ok::<_, FetchAuditError>((name.clone(), audit_file))
+    }))
+    .await
+}
+
+/// Fetch a single AuditsFile from the network, filling in any criteria
+/// descriptions.
+async fn fetch_imported_audit(
     network: &Network,
     name: &str,
     url: &str,
@@ -536,7 +724,7 @@ async fn fetch_foreign_audit(
     let audit_bytes = network.download(parsed_url).await?;
     let audit_string = String::from_utf8(audit_bytes).map_err(LoadTomlError::from)?;
     let audit_source = Arc::new(NamedSource::new(name, audit_string.clone()));
-    let audit_file: AuditsFile = toml::de::from_str(&audit_string)
+    let mut audit_file: AuditsFile = toml::de::from_str(&audit_string)
         .map_err(|error| {
             let (line, col) = error.line_col().unwrap_or((0, 0));
             TomlParseError {
@@ -546,6 +734,46 @@ async fn fetch_foreign_audit(
             }
         })
         .map_err(LoadTomlError::from)?;
+
+    // Eagerly fetch all descriptions for criteria in the imported audits file,
+    // and store them inline. We'll error out if any of these descriptions are
+    // unavailable.
+    try_join_all(
+        audit_file
+            .criteria
+            .iter_mut()
+            .map(|(criteria_name, criteria_entry)| async {
+                if criteria_entry.description.is_some() {
+                    return Ok(());
+                }
+
+                let url_string = criteria_entry.description_url.as_ref().ok_or_else(|| {
+                    FetchAuditError::MissingCriteriaDescription {
+                        import_name: name.to_owned(),
+                        criteria_name: criteria_name.clone(),
+                    }
+                })?;
+                let url = Url::parse(url_string).map_err(|error| {
+                    FetchAuditError::InvalidCriteriaDescriptionUrl {
+                        import_name: name.to_owned(),
+                        criteria_name: criteria_name.clone(),
+                        url: url_string.clone(),
+                        error,
+                    }
+                })?;
+                let bytes = network.download(url.clone()).await?;
+                let description =
+                    String::from_utf8(bytes).map_err(|error| DownloadError::InvalidText {
+                        url: url.clone(),
+                        error,
+                    })?;
+
+                criteria_entry.description = Some(description);
+                Ok::<(), FetchAuditError>(())
+            }),
+    )
+    .await?;
+
     Ok(audit_file)
 }
 
