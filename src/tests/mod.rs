@@ -14,7 +14,7 @@ use crate::{
     editor::Editor,
     format::{
         AuditKind, CriteriaName, CriteriaStr, Delta, DependencyCriteria, FastMap, MetaConfig,
-        PackageName, PackageStr, PolicyEntry, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        PackageName, PackageStr, PolicyEntry, SortedSet, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     init_files,
     out::Out,
@@ -1150,6 +1150,32 @@ impl Out for BasicTestOutput {
             panic!("Unexpected editor call without on_edit configured!");
         }
     }
+}
+
+/// Format a diff between the old and new strings for reporting.
+fn generate_diff(old: &str, new: &str) -> String {
+    similar::utils::diff_lines(similar::Algorithm::Myers, old, new)
+        .into_iter()
+        .map(|(tag, line)| format!("{}{}", tag, line))
+        .collect()
+}
+
+/// Generate a diff between two values returned from `Store::mock_commit`.
+fn diff_store_commits(old: &SortedMap<String, String>, new: &SortedMap<String, String>) -> String {
+    use std::fmt::Write;
+    let mut result = String::new();
+    let keys = old.keys().chain(new.keys()).collect::<SortedSet<&String>>();
+    for key in keys {
+        let old = old.get(key).map(|s| &s[..]).unwrap_or("");
+        let new = new.get(key).map(|s| &s[..]).unwrap_or("");
+        if old == new {
+            writeln!(&mut result, "{key}: (unchanged)").unwrap();
+            continue;
+        }
+        let diff = generate_diff(old, new);
+        writeln!(&mut result, "{key}:\n{diff}").unwrap();
+    }
+    result
 }
 
 // TESTING BACKLOG:

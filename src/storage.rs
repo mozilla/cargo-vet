@@ -273,6 +273,26 @@ impl Store {
         Ok(())
     }
 
+    /// Mock `commit`. Returns the serialized value for each file in the store.
+    /// Doesn't take `self` by value so that it can continue to be used.
+    #[cfg(test)]
+    pub fn mock_commit(&self) -> SortedMap<String, String> {
+        let mut audits = Vec::new();
+        let mut config = Vec::new();
+        let mut imports = Vec::new();
+        store_audits(&mut audits, self.audits.clone()).unwrap();
+        store_config(&mut config, self.config.clone()).unwrap();
+        store_imports(&mut imports, self.imports.clone()).unwrap();
+
+        [
+            (AUDITS_TOML.to_owned(), String::from_utf8(audits).unwrap()),
+            (CONFIG_TOML.to_owned(), String::from_utf8(config).unwrap()),
+            (IMPORTS_LOCK.to_owned(), String::from_utf8(imports).unwrap()),
+        ]
+        .into_iter()
+        .collect()
+    }
+
     /// Validate the store's integrity
     #[allow(clippy::for_kv_map)]
     pub fn validate(&self) -> Result<(), StoreValidateErrors> {
