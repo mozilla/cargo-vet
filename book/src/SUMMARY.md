@@ -21,3 +21,4 @@
   - [First-Party Code](./first-party-code.md)
   - [FAQ](./faq.md)
   - [Commands](./commands.md)
+  - [The Algorithm](./algorithm.md)
