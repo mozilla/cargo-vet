@@ -1,0 +1,28 @@
+---
+source: src/tests/vet.rs
+expression: json
+---
+{
+  "conclusion": "success",
+  "vetted_fully": [
+    {
+      "name": "third-core",
+      "version": "5.0.0"
+    },
+    {
+      "name": "thirdA",
+      "version": "10.0.0"
+    },
+    {
+      "name": "thirdAB",
+      "version": "10.0.0"
+    }
+  ],
+  "vetted_partially": [],
+  "vetted_with_exemptions": [
+    {
+      "name": "third-core",
+      "version": "10.0.0"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+---
+source: src/tests/vet.rs
+expression: json
+---
+{
+  "conclusion": "success",
+  "vetted_fully": [],
+  "vetted_partially": [],
+  "vetted_with_exemptions": []
+}

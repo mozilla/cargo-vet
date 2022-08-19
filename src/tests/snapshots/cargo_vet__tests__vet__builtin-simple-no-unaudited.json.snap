@@ -1,0 +1,92 @@
+---
+source: src/tests/vet.rs
+expression: json
+---
+{
+  "conclusion": "fail (vetting)",
+  "failures": [
+    {
+      "missing_criteria": [
+        "safe-to-deploy"
+      ],
+      "name": "third-party1",
+      "version": "10.0.0"
+    },
+    {
+      "missing_criteria": [
+        "safe-to-deploy"
+      ],
+      "name": "third-party2",
+      "version": "10.0.0"
+    }
+  ],
+  "suggest": {
+    "suggest_by_criteria": {
+      "safe-to-deploy": [
+        {
+          "name": "third-party1",
+          "notable_parents": "first-party",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 100,
+              "raw": "+100"
+            },
+            "from": "0.0.0",
+            "to": "10.0.0"
+          }
+        },
+        {
+          "name": "third-party2",
+          "notable_parents": "first-party",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 100,
+              "raw": "+100"
+            },
+            "from": "0.0.0",
+            "to": "10.0.0"
+          }
+        }
+      ]
+    },
+    "suggestions": [
+      {
+        "name": "third-party1",
+        "notable_parents": "first-party",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 100,
+            "raw": "+100"
+          },
+          "from": "0.0.0",
+          "to": "10.0.0"
+        }
+      },
+      {
+        "name": "third-party2",
+        "notable_parents": "first-party",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 100,
+            "raw": "+100"
+          },
+          "from": "0.0.0",
+          "to": "10.0.0"
+        }
+      }
+    ],
+    "total_lines": 200
+  }
+}

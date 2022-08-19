@@ -20,8 +20,7 @@ fn mock_simple_violation_cur_exemptions() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-simple-violation-cur-unaudited", output);
+    assert_report_snapshot!("mock-simple-violation-cur-unaudited", &metadata, report);
 }
 
 #[test]
@@ -46,8 +45,7 @@ fn mock_simple_violation_cur_full_audit() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-simple-violation-cur-full-audit", output);
+    assert_report_snapshot!("mock-simple-violation-cur-full-audit", &metadata, report);
 }
 
 #[test]
@@ -74,8 +72,7 @@ fn mock_simple_violation_delta() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-simple-violation-delta", output);
+    assert_report_snapshot!("mock-simple-violation-delta", &metadata, report);
 }
 
 #[test]
@@ -102,8 +99,7 @@ fn mock_simple_violation_full_audit() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-simple-violation-full-audit", output);
+    assert_report_snapshot!("mock-simple-violation-full-audit", &metadata, report);
 }
 
 #[test]
@@ -128,8 +124,7 @@ fn mock_simple_violation_wildcard() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-simple-violation-wildcard", output);
+    assert_report_snapshot!("mock-simple-violation-wildcard", &metadata, report);
 }
 
 #[test]
@@ -153,8 +148,7 @@ fn builtin_simple_deps_violation_dodged() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("builtin-simple-deps-violation-dodged", output);
+    assert_report_snapshot!("builtin-simple-deps-violation-dodged", &metadata, report);
 }
 
 #[test]
@@ -178,8 +172,7 @@ fn builtin_simple_deps_violation_low_hit() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("builtin-simple-deps-violation-low-hit", output);
+    assert_report_snapshot!("builtin-simple-deps-violation-low-hit", &metadata, report);
 }
 
 #[test]
@@ -203,8 +196,7 @@ fn builtin_simple_deps_violation_high_hit() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("builtin-simple-deps-violation-high-hit", output);
+    assert_report_snapshot!("builtin-simple-deps-violation-high-hit", &metadata, report);
 }
 
 #[test]
@@ -228,8 +220,7 @@ fn builtin_simple_deps_violation_imply_hit() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("builtin-simple-deps-violation-imply-hit", output);
+    assert_report_snapshot!("builtin-simple-deps-violation-imply-hit", &metadata, report);
 }
 
 #[test]
@@ -253,8 +244,11 @@ fn builtin_simple_deps_violation_redundant_low_hit() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("builtin-simple-deps-violation-redundant-low-hit", output);
+    assert_report_snapshot!(
+        "builtin-simple-deps-violation-redundant-low-hit",
+        &metadata,
+        report
+    );
 }
 
 #[test]
@@ -278,6 +272,9 @@ fn mock_simple_violation_hit_with_extra_junk() {
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
-    let output = get_report(&metadata, report);
-    insta::assert_snapshot!("mock-simple-violation-hit-with-extra-junk", output);
+    assert_report_snapshot!(
+        "mock-simple-violation-hit-with-extra-junk",
+        &metadata,
+        report
+    );
 }
