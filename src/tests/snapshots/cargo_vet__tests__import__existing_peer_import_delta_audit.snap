@@ -1,0 +1,22 @@
+---
+source: src/tests/import.rs
+expression: output
+---
+ 
+ [[audits.peer-company.audits.third-party2]]
+ criteria = "safe-to-deploy"
+ version = "9.0.0"
+ 
+-[audits.rival-company.audits]
++[[audits.peer-company.audits.third-party2]]
++criteria = "safe-to-deploy"
++delta = "9.0.0 -> 10.0.0"
++
++[[audits.peer-company.audits.third-party2]]
++criteria = "safe-to-deploy"
++delta = "100.0.0 -> 200.0.0"
++
++[[audits.rival-company.audits.third-party2]]
++criteria = "safe-to-deploy"
++delta = "200.0.0 -> 300.0.0"
+

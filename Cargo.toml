@@ -57,3 +57,4 @@ features = [
 
 [dev-dependencies]
 insta = "1.15.0"
+similar = "2.1.0"

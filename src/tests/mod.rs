@@ -14,7 +14,7 @@ use crate::{
     editor::Editor,
     format::{
         AuditKind, CriteriaName, CriteriaStr, Delta, DependencyCriteria, FastMap, MetaConfig,
-        PackageName, PackageStr, PolicyEntry, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        PackageName, PackageStr, PolicyEntry, SortedSet, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     init_files,
     out::Out,
@@ -25,6 +25,7 @@ use crate::{
 
 mod audit_as_crates_io;
 mod certify;
+mod import;
 mod regenerate_unaudited;
 mod store_parsing;
 mod vet;
@@ -299,6 +300,7 @@ fn delta_audit(from: Version, to: Version, criteria: CriteriaStr) -> AuditEntry 
             delta,
             dependency_criteria: DependencyCriteria::default(),
         },
+        is_fresh_import: false,
     }
 }
 
@@ -331,6 +333,7 @@ fn delta_audit_dep(
                 })
                 .collect(),
         },
+        is_fresh_import: false,
     }
 }
 
@@ -343,6 +346,7 @@ fn full_audit(version: Version, criteria: CriteriaStr) -> AuditEntry {
             version,
             dependency_criteria: DependencyCriteria::default(),
         },
+        is_fresh_import: false,
     }
 }
 
@@ -358,6 +362,7 @@ fn full_audit_m(
             version,
             dependency_criteria: DependencyCriteria::default(),
         },
+        is_fresh_import: false,
     }
 }
 
@@ -387,6 +392,7 @@ fn full_audit_dep(
                 })
                 .collect(),
         },
+        is_fresh_import: false,
     }
 }
 
@@ -396,6 +402,7 @@ fn violation_hard(version: VersionReq) -> AuditEntry {
         notes: None,
         criteria: vec![SAFE_TO_RUN.to_string().into()],
         kind: AuditKind::Violation { violation: version },
+        is_fresh_import: false,
     }
 }
 #[allow(dead_code)]
@@ -405,6 +412,7 @@ fn violation(version: VersionReq, criteria: CriteriaStr) -> AuditEntry {
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Violation { violation: version },
+        is_fresh_import: false,
     }
 }
 #[allow(dead_code)]
@@ -417,6 +425,7 @@ fn violation_m(
         notes: None,
         criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         kind: AuditKind::Violation { violation: version },
+        is_fresh_import: false,
     }
 }
 
@@ -1150,6 +1159,32 @@ impl Out for BasicTestOutput {
             panic!("Unexpected editor call without on_edit configured!");
         }
     }
+}
+
+/// Format a diff between the old and new strings for reporting.
+fn generate_diff(old: &str, new: &str) -> String {
+    similar::utils::diff_lines(similar::Algorithm::Myers, old, new)
+        .into_iter()
+        .map(|(tag, line)| format!("{}{}", tag, line))
+        .collect()
+}
+
+/// Generate a diff between two values returned from `Store::mock_commit`.
+fn diff_store_commits(old: &SortedMap<String, String>, new: &SortedMap<String, String>) -> String {
+    use std::fmt::Write;
+    let mut result = String::new();
+    let keys = old.keys().chain(new.keys()).collect::<SortedSet<&String>>();
+    for key in keys {
+        let old = old.get(key).map(|s| &s[..]).unwrap_or("");
+        let new = new.get(key).map(|s| &s[..]).unwrap_or("");
+        if old == new {
+            writeln!(&mut result, "{key}: (unchanged)").unwrap();
+            continue;
+        }
+        let diff = generate_diff(old, new);
+        writeln!(&mut result, "{key}:\n{diff}").unwrap();
+    }
+    result
 }
 
 // TESTING BACKLOG:

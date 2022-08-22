@@ -524,9 +524,9 @@ fn cmd_inspect(
     let package = &*sub_args.package;
 
     let fetched = {
-        let store = Store::acquire(cfg)?;
-        let cache = Cache::acquire(cfg)?;
         let network = Network::acquire(cfg);
+        let store = Store::acquire(cfg, network.as_ref(), false)?;
+        let cache = Cache::acquire(cfg)?;
 
         // Record this command for magic in `vet certify`
         cache.set_last_fetch(FetchCommand::Inspect {
@@ -607,13 +607,17 @@ fn cmd_certify(
     sub_args: &CertifyArgs,
 ) -> Result<(), miette::Report> {
     // Certify that you have reviewed a crate's source for some version / delta
-    let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
+    let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
     // Grab the last fetch and immediately drop the cache
     let last_fetch = Cache::acquire(cfg)?.get_last_fetch();
 
     do_cmd_certify(out, cfg, sub_args, &mut store, network.as_ref(), last_fetch)?;
+
+    // Re-run the resolver after adding the new `certify`. This will be used to
+    // potentially update imports.
+    store.maybe_update_imports_file(cfg, false);
 
     store.commit()?;
     Ok(())
@@ -707,7 +711,7 @@ fn do_cmd_certify(
 
     let criteria_mapper = CriteriaMapper::new(
         &store.audits.criteria,
-        &store.imports,
+        store.imported_audits(),
         &store.config.imports,
     );
 
@@ -914,6 +918,7 @@ fn do_cmd_certify(
             .collect(),
         who,
         notes,
+        is_fresh_import: false,
     };
 
     store
@@ -1087,7 +1092,7 @@ fn cmd_record_violation(
     sub_args: &RecordViolationArgs,
 ) -> Result<(), miette::Report> {
     // Mark a package as a violation
-    let mut store = Store::acquire(cfg)?;
+    let mut store = Store::acquire_offline(cfg)?;
 
     let kind = AuditKind::Violation {
         violation: sub_args.versions.clone(),
@@ -1134,6 +1139,7 @@ fn cmd_record_violation(
         criteria,
         who,
         notes,
+        is_fresh_import: false,
     };
 
     store
@@ -1156,7 +1162,7 @@ fn cmd_add_exemption(
     sub_args: &AddExemptionArgs,
 ) -> Result<(), miette::Report> {
     // Add an exemption entry
-    let mut store = Store::acquire(cfg)?;
+    let mut store = Store::acquire_offline(cfg)?;
 
     let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
         // TODO: look at the current audits to infer this? prompt?
@@ -1229,8 +1235,8 @@ fn cmd_suggest(
 ) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
-    let suggest_store = Store::acquire(cfg)?.clone_for_suggest();
     let network = Network::acquire(cfg);
+    let suggest_store = Store::acquire(cfg, network.as_ref(), false)?.clone_for_suggest();
 
     // DO THE THING!!!!
     let report = resolver::resolve(
@@ -1261,28 +1267,21 @@ fn cmd_regenerate_imports(
 ) -> Result<(), miette::Report> {
     trace!("regenerating imports...");
 
-    let mut store = Store::acquire(cfg)?;
-    let network = Network::acquire(cfg);
-
-    if let Some(network) = &network {
-        if !cfg.cli.locked {
-            // Literally the only difference between this command and fetch-imports
-            // is that we pass `accept_changes = true`
-            tokio::runtime::Handle::current()
-                .block_on(store.fetch_foreign_audits(network, true))?;
-            store.commit()?;
-            return Ok(());
-        }
+    if cfg.cli.locked {
+        // ERRORS: just a warning that you're holding it wrong, unclear if immediate or buffered,
+        // or if this should be a hard error, or if we should ignore the --locked flag and
+        // just do it anyway
+        writeln!(
+            out,
+            "warning: ran `regenerate imports` with --locked, this won't do anything!"
+        );
+        return Ok(());
     }
 
-    // ERRORS: just a warning that you're holding it wrong, unclear if immediate or buffered,
-    // or if this should be a hard error, or if we should ignore the --locked flag and
-    // just do it anyway
-    writeln!(
-        out,
-        "warning: ran `regenerate imports` with --locked, this won't do anything!"
-    );
-
+    let network = Network::acquire(cfg);
+    let mut store = Store::acquire(cfg, network.as_ref(), true)?;
+    store.maybe_update_imports_file(cfg, true);
+    store.commit()?;
     Ok(())
 }
 
@@ -1292,7 +1291,7 @@ fn cmd_regenerate_audit_as(
     _sub_args: &RegenerateAuditAsCratesIoArgs,
 ) -> Result<(), miette::Report> {
     trace!("regenerating audit-as-crates-io...");
-    let mut store = Store::acquire(cfg)?;
+    let mut store = Store::acquire_offline(cfg)?;
 
     fix_audit_as(cfg, &mut store)?;
 
@@ -1347,8 +1346,8 @@ fn cmd_regenerate_exemptions(
     _sub_args: &RegenerateExemptionsArgs,
 ) -> Result<(), miette::Report> {
     trace!("regenerating exemptions...");
-    let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
+    let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
     minimize_exemptions(cfg, &mut store, network.as_ref())?;
 
@@ -1457,6 +1456,9 @@ pub fn minimize_exemptions(
     // Alright there's the new exemptions
     store.config.exemptions = new_exemptions;
 
+    // Re-vet and ensure that imports are updated after changing exemptions.
+    store.maybe_update_imports_file(cfg, false);
+
     Ok(())
 }
 
@@ -1466,9 +1468,9 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
     let package = &*sub_args.package;
 
     let (fetched1, fetched2) = {
-        let store = Store::acquire(cfg)?;
-        let cache = Cache::acquire(cfg)?;
         let network = Network::acquire(cfg);
+        let store = Store::acquire(cfg, network.as_ref(), false)?;
+        let cache = Cache::acquire(cfg)?;
 
         // Record this command for magic in `vet certify`
         cache.set_last_fetch(FetchCommand::Diff {
@@ -1552,16 +1554,10 @@ fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
-    let mut store = Store::acquire(cfg)?;
     let network = Network::acquire(cfg);
+    let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
     if !cfg.cli.locked {
-        // Try to update the foreign audits (imports)
-        if let Some(network) = &network {
-            tokio::runtime::Handle::current()
-                .block_on(store.fetch_foreign_audits(network, false))?;
-        }
-
         // Check if any of our first-parties are in the crates.io registry
         check_audit_as_crates_io(cfg, &store)?;
     }
@@ -1598,6 +1594,7 @@ fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(
         // Err(eyre!("report contains errors"))?;
         panic_any(ExitPanic(-1));
     } else {
+        store.imports = store.get_updated_imports_file(&report, false);
         store.commit()?;
     }
 
@@ -1611,25 +1608,23 @@ fn cmd_fetch_imports(
 ) -> Result<(), miette::Report> {
     trace!("fetching imports...");
 
-    let mut store = Store::acquire(cfg)?;
-    let network = Network::acquire(cfg);
+    if cfg.cli.locked {
+        // ERRORS: just a warning that you're holding it wrong, unclear if immediate or buffered,
+        // or if this should be a hard error, or if we should ignore the --locked flag and
+        // just do it anyway
+        writeln!(
+            out,
+            "warning: ran fetch-imports with --locked, this won't do anything!"
+        );
 
-    if let Some(network) = &network {
-        if !cfg.cli.locked {
-            tokio::runtime::Handle::current()
-                .block_on(store.fetch_foreign_audits(network, false))?;
-            store.commit()?;
-            return Ok(());
-        }
+        return Ok(());
     }
 
-    // ERRORS: just a warning that you're holding it wrong, unclear if immediate or buffered,
-    // or if this should be a hard error, or if we should ignore the --locked flag and
-    // just do it anyway
-    writeln!(
-        out,
-        "warning: ran fetch-imports with --locked, this won't do anything!"
-    );
+    let network = Network::acquire(cfg);
+    let mut store = Store::acquire(cfg, network.as_ref(), false)?;
+
+    store.maybe_update_imports_file(cfg, true);
+    store.commit()?;
 
     Ok(())
 }
@@ -1656,7 +1651,8 @@ fn cmd_dump_graph(
 fn cmd_fmt(_out: &Arc<dyn Out>, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), miette::Report> {
     // Reformat all the files (just load and store them, formatting is implicit).
     trace!("formatting...");
-    let store = Store::acquire(cfg)?;
+    // We don't need to fetch foreign audits to format files
+    let store = Store::acquire_offline(cfg)?;
     store.commit()?;
     Ok(())
 }

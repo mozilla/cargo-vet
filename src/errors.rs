@@ -185,6 +185,12 @@ pub enum StoreAcquireError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Validate(#[from] StoreValidateErrors),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    FetchAuditError(#[from] FetchAuditError),
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    CriteriaChange(#[from] CriteriaChangeErrors),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -201,6 +207,26 @@ pub enum StoreCommitError {
         #[source]
         StoreTomlError,
     ),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("Some of your imported audits changed their criteria descriptions")]
+#[diagnostic()]
+pub struct CriteriaChangeErrors {
+    #[related]
+    pub errors: Vec<CriteriaChangeError>,
+}
+#[derive(Debug, Error, Diagnostic)]
+// FIXME: it would be rad if this was a diff!
+#[error(
+    "{import_name}'s '{criteria_name}' criteria changed from\n\n{old_desc}\n\nto\n\n{new_desc}\n"
+)]
+#[diagnostic(help("Run `cargo vet regenerate imports` to accept this new definition"))]
+pub struct CriteriaChangeError {
+    pub import_name: ImportName,
+    pub criteria_name: ForeignCriteriaName,
+    pub old_desc: String,
+    pub new_desc: String,
 }
 
 ////////////////////////////////////////////////////////////
@@ -436,38 +462,25 @@ pub enum FetchAuditError {
         #[source]
         error: url::ParseError,
     },
+    #[error("{import_name}'s '{criteria_name}' criteria is missing a description")]
+    MissingCriteriaDescription {
+        import_name: ImportName,
+        criteria_name: ForeignCriteriaName,
+    },
+    #[error("{import_name}'s '{criteria_name}' criteria description URI is invalid: '{url}'")]
+    InvalidCriteriaDescriptionUrl {
+        import_name: ImportName,
+        criteria_name: ForeignCriteriaName,
+        url: String,
+        #[source]
+        error: url::ParseError,
+    },
     #[diagnostic(transparent)]
     #[error(transparent)]
     Download(#[from] DownloadError),
     #[diagnostic(transparent)]
     #[error(transparent)]
     Toml(#[from] LoadTomlError),
-    #[diagnostic(transparent)]
-    #[error(transparent)]
-    Validate(#[from] StoreValidateErrors),
-    #[diagnostic(transparent)]
-    #[error(transparent)]
-    CriteriaChange(#[from] CriteriaChangeErrors),
-}
-
-#[derive(Debug, Error, Diagnostic)]
-#[error("Some of your imported audits changed their criteria descriptions")]
-#[diagnostic()]
-pub struct CriteriaChangeErrors {
-    #[related]
-    pub errors: Vec<CriteriaChangeError>,
-}
-#[derive(Debug, Error, Diagnostic)]
-// FIXME: it would be rad if this was a diff!
-#[error(
-    "{import_name}'s '{criteria_name}' criteria changed from\n\n{old_desc}\n\nto\n\n{new_desc}\n"
-)]
-#[diagnostic(help("Run `cargo vet regenerate imports` to accept this new definition"))]
-pub struct CriteriaChangeError {
-    pub import_name: ImportName,
-    pub criteria_name: ForeignCriteriaName,
-    pub old_desc: String,
-    pub new_desc: String,
 }
 
 //////////////////////////////////////////////////////////
