@@ -1,0 +1,55 @@
+---
+source: src/tests/vet.rs
+expression: json
+---
+{
+  "conclusion": "fail (vetting)",
+  "failures": [
+    {
+      "missing_criteria": [
+        "reviewed"
+      ],
+      "name": "third-core",
+      "version": "5.0.0"
+    }
+  ],
+  "suggest": {
+    "suggest_by_criteria": {
+      "reviewed": [
+        {
+          "name": "third-core",
+          "notable_parents": "firstA",
+          "suggested_criteria": [
+            "reviewed"
+          ],
+          "suggested_diff": {
+            "diffstat": {
+              "count": 25,
+              "raw": "+25"
+            },
+            "from": "0.0.0",
+            "to": "5.0.0"
+          }
+        }
+      ]
+    },
+    "suggestions": [
+      {
+        "name": "third-core",
+        "notable_parents": "firstA",
+        "suggested_criteria": [
+          "reviewed"
+        ],
+        "suggested_diff": {
+          "diffstat": {
+            "count": 25,
+            "raw": "+25"
+          },
+          "from": "0.0.0",
+          "to": "5.0.0"
+        }
+      }
+    ],
+    "total_lines": 25
+  }
+}

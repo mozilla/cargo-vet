@@ -2791,7 +2791,7 @@ impl<'a> ResolveReport<'a> {
         Ok(())
     }
 
-    /// Print a full human-readable report
+    /// Print a full json report
     pub fn print_json(
         &self,
         out: &Arc<dyn Out>,

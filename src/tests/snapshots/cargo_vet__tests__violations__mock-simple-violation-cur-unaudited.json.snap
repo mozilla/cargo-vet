@@ -1,0 +1,29 @@
+---
+source: src/tests/violations.rs
+expression: json
+---
+{
+  "conclusion": "fail (violation)",
+  "violations": {
+    "third-party1:10.0.0": [
+      {
+        "UnauditedConflict": {
+          "exemptions": {
+            "criteria": "reviewed",
+            "notes": null,
+            "version": "10.0.0"
+          },
+          "violation": {
+            "criteria": "weak-reviewed",
+            "delta": null,
+            "notes": null,
+            "version": null,
+            "violation": "=10",
+            "who": null
+          },
+          "violation_source": "Local"
+        }
+      }
+    ]
+  }
+}

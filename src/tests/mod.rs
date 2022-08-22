@@ -23,6 +23,21 @@ use crate::{
     PackageExt, PartialConfig, SortedMap, Store,
 };
 
+/// Helper for performing an `assert_snapshot!` for the report output of a
+/// resolver invocation. This will generate both human and JSON reports for the
+/// given resolve report, and snapshot both. The JSON reports will have the
+/// suffix `.json`.
+///
+/// Unlike a normal `assert_snapshot!` the snapshot name isn't inferred by this
+/// macro, as multiple snapshots with different names need to be generated.
+macro_rules! assert_report_snapshot {
+    ($name:expr, $metadata:expr, $report:expr) => {{
+        let (human, json) = $crate::tests::get_reports(&$metadata, $report);
+        insta::assert_snapshot!($name, human);
+        insta::assert_snapshot!(concat!($name, ".json"), json);
+    }};
+}
+
 mod audit_as_crates_io;
 mod certify;
 mod import;
@@ -1060,18 +1075,23 @@ where
     }
 }
 
-fn get_report(metadata: &Metadata, report: ResolveReport) -> String {
+fn get_reports(metadata: &Metadata, report: ResolveReport) -> (String, String) {
     // FIXME: Figure out how to handle disabling output colours better in tests.
     console::set_colors_enabled(false);
     console::set_colors_enabled_stderr(false);
 
     let cfg = mock_cfg(metadata);
-    let output = BasicTestOutput::new();
     let suggest = report.compute_suggest(&cfg, None, true).unwrap();
+
+    let human_output = BasicTestOutput::new();
     report
-        .print_human(&output.clone().as_dyn(), &cfg, suggest.as_ref())
+        .print_human(&human_output.clone().as_dyn(), &cfg, suggest.as_ref())
         .unwrap();
-    output.to_string()
+    let json_output = BasicTestOutput::new();
+    report
+        .print_json(&json_output.clone().as_dyn(), &cfg, suggest.as_ref())
+        .unwrap();
+    (human_output.to_string(), json_output.to_string())
 }
 
 #[allow(clippy::type_complexity)]

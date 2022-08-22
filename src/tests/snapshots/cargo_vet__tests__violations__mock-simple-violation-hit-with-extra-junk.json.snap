@@ -1,0 +1,36 @@
+---
+source: src/tests/violations.rs
+expression: json
+---
+{
+  "conclusion": "fail (violation)",
+  "violations": {
+    "third-party1:10.0.0": [
+      {
+        "AuditConflict": {
+          "audit": {
+            "criteria": "safe-to-run",
+            "delta": null,
+            "notes": null,
+            "version": "10.0.0",
+            "violation": null,
+            "who": null
+          },
+          "audit_source": "Local",
+          "violation": {
+            "criteria": [
+              "safe-to-run",
+              "fuzzed"
+            ],
+            "delta": null,
+            "notes": null,
+            "version": null,
+            "violation": "*",
+            "who": null
+          },
+          "violation_source": "Local"
+        }
+      }
+    ]
+  }
+}
