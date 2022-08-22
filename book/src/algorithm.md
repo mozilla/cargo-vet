@@ -20,9 +20,9 @@ may vary slightly in how they do these steps, as they may implicitly be --locked
 or want to query hypothetical states.
 
 1. Acquire the build graph ([cargo metadata][] via the [cargo_metadata][] crate)
-2. Acquire the store (supply_chain) (load, parse, validate)
+2. Acquire the store (`supply_chain`) (load, parse, validate)
 3. Update the imports (fetch, parse, validate)
-4. Check audit-as-crates-io (check against local cargo registry)
+4. Check `audit-as-crates-io` (check against local cargo registry)
 
 
 ## Resolve Steps
@@ -31,9 +31,9 @@ These are the logical steps of the resolver, although they are more interleaved 
 initial summary implies:
 
 1. Build data structures
-    1. Construct the DepGraph
-    2. Construct the CriteriaMapper
-    3. Construct the AuditGraphs for each package (and check violations)
+    1. Construct the `DepGraph`
+    2. Construct the `CriteriaMapper`
+    3. Construct the `AuditGraphs` for each package (and check violations)
 2. Resolve the validated criteria for each package
     1. Resolve third parties (crates.io)
     2. Resolve first parties (non-crates.io)
@@ -115,9 +115,9 @@ based on the required criteria.
 
 # Step 1a: The DepGraph (Processing Cargo Metadata)
 
-All of our analysis derives from the output of [cargo metadata][] and [cargo_metadata][]'s
-interpretation of that, so it's worth discussing how we use it, and what we believe to
-be true of its output.
+All of our analysis derives from the output of [cargo metadata][] and our
+interpretation of that, so it's worth discussing how we use it, and what we
+believe to be true of its output.
 
 Our interpretation of the metadata is the DepGraph. You can dump the DepGraph with
 `cargo vet dump-graph`. Most commands take a `--filter-graph` argument which will
@@ -140,7 +140,7 @@ be vetted, because they are simply subsets of that graph.
 
 Cargo metadata produces the build graph in a kind of awkward way where some information
 for the packages is in `"packages"` and some information is in  `"resolve"`, and we need
-to manually compute lots of facts like "roots", "only for tests", and "[topological sort][]" 
+to manually compute lots of facts like "roots", "only for tests", and "[topological sort][]"
 (metadata has a notion of roots, but it's not what you think, and mostly reflects an 
 internal concept of cargo that isn't useful to us).
 
@@ -162,7 +162,7 @@ The DepGraph holds this interner.
 ## Dealing With Cycles From Tests
 
 The resolver assumes the maximal graph is a [DAG][], which is an almost true statement
-that we can make true with a minor desugarring of the graph. There is only one situation
+that we can make true with a minor desugaring of the graph. There is only one situation
 where the cargo build graph is not a DAG: the tests for a crate. This can happen very
 easily, and is kind of natural, but also very evil when you first learn about it.
 
@@ -197,20 +197,20 @@ There is a subtle distinction to be made here for packages *only* used for tests
 these wouldn't be part of the build graph without dev-dependencies (dev edges) but
 they are still "real" nodes, and all of their dependencies are "real" and still
 must form a proper DAG. The only packages which can have cycle-causing dev-dependencies,
-and therefore require a desugarring to produce "fake" nodes, are *workspace members*.
+and therefore require a desugaring to produce "fake" nodes, are *workspace members*.
 These are the packages that will be tested if you run `cargo test --workspace`.
 
-Actually doing this desugarring is really messy, because a lot of things about the "real"
+Actually doing this desugaring is really messy, because a lot of things about the "real"
 node are still true about the "fake" node, and we generally want to talk about the "real"
 node and the "fake" node as if they were one thing. So we actually just analyze the build graph
 in two steps. To understand how this works, we need to first look at how DAGs are analyzed.
 
 Any analysis on a [DAG][] generally starts with a [toplogical sort][], which is just a fancy way of saying you do depth-first-search ([DFS][]) on every root and only use a node only after you've searched all its children (this is the post-order, for graph people). Note that each iteration of DFS reuses the
-"visited" from the previous iterations, because we only want to visit each node once. 
+"visited" from the previous iterations, because we only want to visit each node once.
 
 Also note that knowing the roots is simply an optimization, you can just run DFS on every node and you will get a valid topological order -- we run it for all the workspace members, which includes all of
 the roots, but none of the test-only packages, which will be useful for identifying test-only packages
-when we get to our desugarring. (You may have workspace members which in fact are only for testing,
+when we get to our desugaring. (You may have workspace members which in fact are only for testing,
 but as far as `vet` is concerned those are proper packages in their own right -- those packages are
 however good candidates for a `safe-to-run` policy override.)
 
@@ -219,7 +219,7 @@ property of a node which recursively depends on the properties of its dependenci
 you can just have a for-loop that computes the properties of each node, and blindly assume that
 any query about your dependencies will have its results already computed. Nice!
 
-With that established, here is the *actual* approach we use to emulate the "fake" node desugarring:
+With that established, here is the *actual* approach we use to emulate the "fake" node desugaring:
 
 1. analyze the build graph without dev deps (edges), which is definitely a DAG
 2. add back the dev deps and reprocess all the nodes as if they were the "fake" node
@@ -506,9 +506,10 @@ about the state of the audits:
 * If we failed, was there a possible path? (Should we blame our deps for our failure?)
 * What nodes were reachable from the Root and reverse-reachable from the Target? (candidates for suggest)
 
-The exact details of this are a bit in flux, but the basic idea here is to
-have a sort of priority queue system in place where we initially ignore all
-edges, and then start adding back the "best" edges until we find a path.
+This is accomplished by running the search off of a priority queue, rather than
+using a stack, such that we only try to use the "best" edges first, and can
+be certain that we don't try to use a "worse" edge until we've tried all of the
+paths using better edges.
 
 The best edge of all is a local audit. If we can find a path using only
 those edges, then we're fully audited, we don't need any exemptions we
@@ -608,8 +609,8 @@ of the reverse-dependency.
 To further indicate this, when checking a self_policy we either set the node's
 validated criteria to all_criteria or no_criteria.
 
-It's also worth noting that, due to audit-as-crates-io (and maybe other shenanigans
-like patches?) you can end up in a situation where a third-party depends on a
+It's also worth noting that, due to audit-as-crates-io and `[patch]`
+declarations, you can end up in a situation where a third-party depends on a
 first-party, or third-parties have `policy.criteria` entries. This is why
 Step 3a is interleaved with Step 2.
 
@@ -766,7 +767,7 @@ have an audit for 1.0.1, we will happily recommend the reverse-diff from `1.0.1 
 This is slightly brain melty at first but nothing really needs to specially handle this,
 it Just Works.
 
-Any diff we recommend from the Root Version is "resugarred" into recommending a full audit,
+Any diff we recommend from the Root Version is "resugared" into recommending a full audit,
 (and is also computed by diffing against an empty directory). It should be impossible to
 recommend a diff *to* the Root Version because there should never be audits of the Root
 Version (barring the fact that we're sloppy right now and use 0.0.0 which totally can be
