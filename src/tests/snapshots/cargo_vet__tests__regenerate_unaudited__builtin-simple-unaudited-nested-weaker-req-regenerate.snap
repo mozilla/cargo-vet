@@ -1,6 +1,6 @@
 ---
 source: src/tests/regenerate_unaudited.rs
-expression: unaudited
+expression: exemptions
 ---
 [[third-party1]]
 version = "3.0.0"
@@ -10,6 +10,6 @@ criteria = "safe-to-deploy"
 transitive-third-party1 = "safe-to-run"
 
 [[transitive-third-party1]]
-version = "10.0.0"
-criteria = "safe-to-deploy"
+version = "4.0.0"
+criteria = "safe-to-run"
 

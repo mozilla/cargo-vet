@@ -135,17 +135,16 @@ pub enum InitError {
 }
 
 //////////////////////////////////////////////////////////
-// MinimizeUnauditedError
+// RegenerateExemptionsError
 //////////////////////////////////////////////////////////
 
 #[derive(Debug, Error, Diagnostic)]
 #[non_exhaustive]
-pub enum MinimizeUnauditedError {
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Suggest(#[from] SuggestError),
-    #[error("An unknown error occured while trying to minimize exemptions entries")]
-    Unknown,
+pub enum RegenerateExemptionsError {
+    #[error(
+        "Regenerating exemptions failed due to violation conflicts. Run 'cargo vet' for details"
+    )]
+    ViolationConflict,
 }
 
 ///////////////////////////////////////////////////////////

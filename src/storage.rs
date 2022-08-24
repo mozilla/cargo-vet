@@ -524,7 +524,8 @@ impl Store {
     #[must_use]
     pub fn get_updated_imports_file(
         &self,
-        report: &resolver::ResolveReport<'_>,
+        graph: &resolver::DepGraph<'_>,
+        conclusion: &resolver::Conclusion,
         force_update: bool,
     ) -> ImportsFile {
         if self.live_imports.is_none() {
@@ -534,14 +535,14 @@ impl Store {
 
         // Determine which packages were used.
         let mut used_packages = SortedMap::new();
-        for package in report.graph.nodes.iter() {
+        for package in graph.nodes.iter() {
             used_packages.insert(package.name, false);
         }
 
         // If we succeeded, also record which packages need fresh imports.
-        if let Conclusion::Success(success) = &report.conclusion {
+        if let Conclusion::Success(success) = conclusion {
             for &node_idx in &success.needed_fresh_imports {
-                let package = &report.graph.nodes[node_idx];
+                let package = &graph.nodes[node_idx];
                 used_packages.insert(package.name, true);
             }
         }
@@ -612,7 +613,8 @@ impl Store {
             // to do less work.
             resolver::ResolveDepth::Shallow,
         );
-        self.imports = self.get_updated_imports_file(&report, force_update);
+        self.imports =
+            self.get_updated_imports_file(&report.graph, &report.conclusion, force_update);
     }
 }
 
