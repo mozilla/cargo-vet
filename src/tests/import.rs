@@ -6,7 +6,8 @@ fn get_imports_file_changes(metadata: &Metadata, store: &Store, force_updates: b
     // Run the resolver before calling `get_imports_file` to compute the new
     // imports file.
     let report = crate::resolver::resolve(metadata, None, store, ResolveDepth::Shallow);
-    let new_imports = store.get_updated_imports_file(&report, force_updates);
+    let new_imports =
+        store.get_updated_imports_file(&report.graph, &report.conclusion, force_updates);
 
     // Format the old and new files as TOML, and write out a diff using `similar`.
     let old_imports = crate::serialization::to_formatted_toml(&store.imports)
@@ -724,7 +725,7 @@ fn peer_audits_exemption_minimize() {
     // Capture the old imports before minimizing exemptions
     let old = store.mock_commit();
 
-    crate::minimize_exemptions(&mock_cfg(&metadata), &mut store, None).unwrap();
+    crate::resolver::regenerate_exemptions(&mock_cfg(&metadata), &mut store).unwrap();
 
     // Capture after minimizing exemptions, and generate a diff.
     let new = store.mock_commit();

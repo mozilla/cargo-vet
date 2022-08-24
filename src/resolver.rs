@@ -69,13 +69,15 @@ use serde::Serialize;
 use serde_json::json;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
+use std::mem;
 use std::sync::Arc;
 use tracing::{error, trace, trace_span};
 
-use crate::errors::SuggestError;
+use crate::errors::{RegenerateExemptionsError, SuggestError};
 use crate::format::{
-    self, AuditKind, AuditsFile, CriteriaName, CriteriaStr, Delta, DiffStat, ExemptedDependency,
-    ImportName, PackageName, PackageStr, PolicyEntry, RemoteImport, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+    self, AuditKind, AuditsFile, CriteriaName, CriteriaStr, Delta, DependencyCriteria, DiffStat,
+    ExemptedDependency, ImportName, PackageName, PackageStr, PolicyEntry, RemoteImport,
+    SAFE_TO_DEPLOY, SAFE_TO_RUN,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
@@ -1322,7 +1324,6 @@ pub fn resolve<'a>(
     store: &'a Store,
     resolve_depth: ResolveDepth,
 ) -> ResolveReport<'a> {
-    let _resolve_span = trace_span!("validate").entered();
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
     let graph = DepGraph::new(metadata, filter_graph, Some(&store.config.policy));
@@ -1336,9 +1337,28 @@ pub fn resolve<'a>(
     );
     trace!("built CriteriaMapper!");
 
+    let (results, conclusion) = resolve_core(&graph, store, &criteria_mapper, resolve_depth);
+
+    ResolveReport {
+        graph,
+        criteria_mapper,
+        results,
+        conclusion,
+    }
+}
+
+fn resolve_core<'a>(
+    graph: &DepGraph<'a>,
+    store: &'a Store,
+    criteria_mapper: &CriteriaMapper,
+    resolve_depth: ResolveDepth,
+) -> (Vec<ResolveResult<'a>>, Conclusion) {
+    let _resolve_span = trace_span!("validate").entered();
+
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
     let mut results =
         vec![ResolveResult::with_no_criteria(criteria_mapper.no_criteria()); graph.nodes.len()];
+
     let mut root_failures = RootFailures::new();
     let mut violations = SortedMap::new();
     let mut root_caveats = Caveats::default();
@@ -1352,8 +1372,8 @@ pub fn resolve<'a>(
         if package.is_third_party {
             resolve_third_party(
                 store,
-                &graph,
-                &criteria_mapper,
+                graph,
+                criteria_mapper,
                 &mut results,
                 &mut violations,
                 &mut root_failures,
@@ -1362,8 +1382,8 @@ pub fn resolve<'a>(
         } else {
             resolve_first_party(
                 store,
-                &graph,
-                &criteria_mapper,
+                graph,
+                criteria_mapper,
                 &mut results,
                 &mut violations,
                 &mut root_failures,
@@ -1374,8 +1394,8 @@ pub fn resolve<'a>(
         // Check that any policy on our resolved value is satisfied
         resolve_self_policy(
             store,
-            &graph,
-            &criteria_mapper,
+            graph,
+            criteria_mapper,
             &mut results,
             &mut violations,
             &mut root_failures,
@@ -1415,8 +1435,8 @@ pub fn resolve<'a>(
         if package.is_workspace_member {
             resolve_dev(
                 store,
-                &graph,
-                &criteria_mapper,
+                graph,
+                criteria_mapper,
                 &mut results,
                 &mut violations,
                 &mut root_failures,
@@ -1435,14 +1455,10 @@ pub fn resolve<'a>(
 
     // If there were violations, report that
     if !violations.is_empty() {
-        return ResolveReport {
-            graph,
-            criteria_mapper,
+        return (
             results,
-            conclusion: Conclusion::FailForViolationConflict(FailForViolationConflict {
-                violations,
-            }),
-        };
+            Conclusion::FailForViolationConflict(FailForViolationConflict { violations }),
+        );
     }
     _resolve_span.exit();
     let _blame_span = trace_span!("blame").entered();
@@ -1451,8 +1467,8 @@ pub fn resolve<'a>(
     // down from the roots to the leaves that caused those failures.
     let mut failures = SortedMap::<PackageIdx, AuditFailure>::new();
     visit_failures(
-        &graph,
-        &criteria_mapper,
+        graph,
+        criteria_mapper,
         &results,
         &root_failures,
         resolve_depth,
@@ -1493,15 +1509,13 @@ pub fn resolve<'a>(
 
     // If there are any failures, report that
     if !failures.is_empty() {
-        return ResolveReport {
-            graph,
-            criteria_mapper,
+        return (
             results,
-            conclusion: Conclusion::FailForVet(FailForVet {
+            Conclusion::FailForVet(FailForVet {
                 failures,
                 suggest: None,
             }),
-        };
+        );
     }
 
     // Ok, we've actually completely succeeded! Gather up stats on that success.
@@ -1525,17 +1539,15 @@ pub fn resolve<'a>(
         }
     }
 
-    ResolveReport {
-        graph,
-        criteria_mapper,
+    (
         results,
-        conclusion: Conclusion::Success(Success {
+        Conclusion::Success(Success {
             vetted_with_exemptions,
             vetted_partially,
             vetted_fully,
             needed_fresh_imports: root_caveats.needed_fresh_imports,
         }),
-    }
+    )
 }
 
 fn resolve_third_party<'a>(
@@ -3128,5 +3140,278 @@ impl FailForViolationConflict {
         }
 
         Ok(())
+    }
+}
+
+/// Ensure that vet will pass on the store by adding new exemptions, as well as
+/// removing existing ones which are no longer necessary. Regenerating
+/// exemptions generally tries to avoid unnecessary changes, and to continue to
+/// pin exemptions in the past when delta-audits from exemptions are in-use.
+pub fn regenerate_exemptions(
+    cfg: &Config,
+    store: &mut Store,
+) -> Result<(), RegenerateExemptionsError> {
+    // While minimizing exemptions, a number of different calls to the resolver
+    // will be made using the same DepGraph and CriteriaMapper, which will be
+    // generated up-front.
+    let graph = DepGraph::new(
+        &cfg.metadata,
+        cfg.cli.filter_graph.as_ref(),
+        Some(&store.config.policy),
+    );
+    let criteria_mapper = CriteriaMapper::new(
+        &store.audits.criteria,
+        store.imported_audits(),
+        &store.config.imports,
+    );
+
+    // Clear out the existing exemptions, starting with a clean slate. We'll
+    // re-add exemptions as-needed.
+    let old_exemptions = mem::take(&mut store.config.exemptions);
+
+    // Build a list of all relevant versions of each crate used in this crate
+    // graph by-name. We sort this in ascending order, meaning that we try to
+    // add exemptions for earlier (in-use) versions first when needed.
+    let mut pkg_versions_by_name: SortedMap<PackageStr<'_>, Vec<&Version>> = SortedMap::new();
+    for package in &graph.nodes {
+        pkg_versions_by_name
+            .entry(package.name)
+            .or_default()
+            .push(package.version);
+    }
+    for versions in pkg_versions_by_name.values_mut() {
+        versions.sort();
+    }
+
+    /// A single exemption which we may or may not end up mapping into the final
+    /// exemptions file. There is one of these for each existing exemption, as
+    /// well as for each used version, such that some combination of these
+    /// exemptions can satisfy any criteria.
+    struct PotentialExemption<'a> {
+        version: &'a Version,
+        max_criteria: CriteriaSet,
+        useful_criteria: CriteriaSet,
+        suggest: bool,
+        dependency_criteria: &'a DependencyCriteria,
+        notes: &'a Option<String>,
+    }
+
+    impl<'a> PotentialExemption<'a> {
+        /// Check if the exemption is "special" (i.e. if it is `suggest = false`
+        /// or has `dependency_criteria`). We avoid removing special exemptions
+        /// if they could be applicable.
+        fn is_special(&self) -> bool {
+            !self.suggest || !self.dependency_criteria.is_empty()
+        }
+    }
+
+    let no_dependency_criteria = DependencyCriteria::new();
+    let mut potential_exemptions = SortedMap::<PackageStr<'_>, Vec<PotentialExemption<'_>>>::new();
+
+    loop {
+        // Try to vet. We only probe shallowly as we only want to add exemptions
+        // which we're certain of the requirements for. We'll loop around again
+        // to add more audits until we successfully vet.
+        let (results, conclusion) =
+            resolve_core(&graph, store, &criteria_mapper, ResolveDepth::Shallow);
+
+        // We only need to do more work here if we have any failures which we
+        // can work with.
+        let fail = match &conclusion {
+            Conclusion::FailForVet(fail) => fail,
+            Conclusion::FailForViolationConflict(..) => {
+                return Err(RegenerateExemptionsError::ViolationConflict);
+            }
+            Conclusion::Success(..) => {
+                // We succeeded! Whatever exemptions we've recorded so-far are
+                // suficient, so we're done. Record any imports which ended up
+                // being required for the vet to pass.
+                store.imports = store.get_updated_imports_file(&graph, &conclusion, false);
+                return Ok(());
+            }
+        };
+
+        for (&failure_idx, failure) in &fail.failures {
+            let package = &graph.nodes[failure_idx];
+            let result = &results[failure_idx];
+
+            trace!("minimizing exemptions for {}", package.name);
+
+            let potential_exemptions =
+                potential_exemptions.entry(package.name).or_insert_with(|| {
+                    let existing_exemptions = old_exemptions
+                        .get(package.name)
+                        .map(|v| &v[..])
+                        .unwrap_or(&[]);
+                    // First, we will consider all existing exemptions in the
+                    // order they appear in the exemption list to satisfy our
+                    // criteria.
+                    let mut potentials: Vec<_> = existing_exemptions
+                        .iter()
+                        .map(|exemption| {
+                            let mut potential = PotentialExemption {
+                                version: &exemption.version,
+                                max_criteria: criteria_mapper.all_criteria(),
+                                useful_criteria: criteria_mapper.no_criteria(),
+                                suggest: exemption.suggest,
+                                dependency_criteria: &exemption.dependency_criteria,
+                                notes: &exemption.notes,
+                            };
+                            // We don't allow special exemptions (criteria with
+                            // `suggest = false` or `dependency_criteria`) to
+                            // expand the allowed criteria, so record the
+                            // existing criteria as our maximum.
+                            if potential.is_special() {
+                                potential.max_criteria = criteria_mapper
+                                    .criteria_from_namespaced_list(
+                                        &CriteriaNamespace::Local,
+                                        &exemption.criteria,
+                                    );
+                            }
+                            potential
+                        })
+                        .collect();
+                    // Next, for criteria with `suggest = false` (but without
+                    // `dependency_criteria`), we'll consider adding a
+                    // suggestable expanded exemption at the same version
+                    // without criteria limitations, to try to pin exemptions at
+                    // specific past versions.
+                    for exemption in existing_exemptions {
+                        if !exemption.suggest && exemption.dependency_criteria.is_empty() {
+                            potentials.push(PotentialExemption {
+                                version: &exemption.version,
+                                max_criteria: criteria_mapper.all_criteria(),
+                                useful_criteria: criteria_mapper.no_criteria(),
+                                suggest: true,
+                                dependency_criteria: &no_dependency_criteria,
+                                notes: &exemption.notes,
+                            })
+                        }
+                    }
+                    // Then, if none of those apply, we'll consider adding a new
+                    // exemption for each version in the DepGraph.
+                    potentials.extend(
+                        pkg_versions_by_name
+                            .get(package.name)
+                            .expect("no versions of failed package?")
+                            .iter()
+                            .map(|version| PotentialExemption {
+                                version,
+                                max_criteria: criteria_mapper.all_criteria(),
+                                useful_criteria: criteria_mapper.no_criteria(),
+                                suggest: true,
+                                dependency_criteria: &no_dependency_criteria,
+                                notes: &None,
+                            }),
+                    );
+                    potentials
+                });
+
+            'min_criteria: for criteria_idx in
+                criteria_mapper.minimal_indices(failure.criteria_failures.confident())
+            {
+                let implied = &criteria_mapper.implied_criteria[criteria_idx];
+
+                // In the first pass, try to satisfy as many implied criteria as
+                // possible using "special" potential exemptions (i.e. those
+                // with `suggest = false` or `dependency_criteria`).
+                //
+                // We always want to prioritize marking all "special" exemptions
+                // which may be applicable as "used", as they may have different
+                // conditions which will be relevant to keep the number of
+                // suggested exemptions down.
+                let mut missed_criteria = false;
+                for implied_idx in implied.indices() {
+                    // Check if this implied criteria actually failed, if it
+                    // didn't, we don't need to add any new exemptions for it.
+                    let reachable_from_target = match &result.search_results[implied_idx] {
+                        SearchResult::Disconnected {
+                            reachable_from_target,
+                            ..
+                        } => reachable_from_target,
+                        _ => continue,
+                    };
+                    let mut found = false;
+                    for potential in &mut potential_exemptions[..] {
+                        if potential.is_special()
+                            && potential.max_criteria.has_criteria(implied_idx)
+                            && reachable_from_target.contains(potential.version)
+                        {
+                            // We found a "special" exemption which matches!
+                            // Record the criteria we're using and that we found
+                            // something, but continue to see if we find any
+                            // other "special" exemptions.
+                            found = true;
+                            potential
+                                .useful_criteria
+                                .unioned_with(&criteria_mapper.implied_criteria[implied_idx]);
+                        }
+                    }
+                    if !found {
+                        missed_criteria = true;
+                    }
+                }
+                // If we were able to satisfy all criteria with only "special"
+                // exemptions, we're done!
+                if !missed_criteria {
+                    continue;
+                }
+
+                let reachable_from_target = match &result.search_results[criteria_idx] {
+                    SearchResult::Disconnected {
+                        reachable_from_target,
+                        ..
+                    } => reachable_from_target,
+                    _ => unreachable!("minimal criteria didn't actually fail?"),
+                };
+
+                // In the second pass, we'll take the first applicable exemption
+                // which we're able to find, and ensure that its criteria
+                // satisfies what we're looking for.
+                for potential in &mut potential_exemptions[..] {
+                    if potential.max_criteria.has_criteria(criteria_idx)
+                        && reachable_from_target.contains(potential.version)
+                    {
+                        potential
+                            .useful_criteria
+                            .unioned_with(&criteria_mapper.implied_criteria[criteria_idx]);
+                        continue 'min_criteria;
+                    }
+                }
+
+                // We should always find an exemption which satisfies the
+                // criteria due to us adding a potential exemption for each
+                // failed version which can satisfy any criteria.
+                unreachable!("couldn't find an exemption which satisfies the criteria?");
+            }
+        }
+
+        // Update `store.config.exemptions` to reflect changed exemptions and
+        // loop back around.
+        store.config.exemptions = potential_exemptions
+            .iter()
+            .filter_map(|(&package_name, potential)| {
+                let mut exemptions: Vec<_> = potential
+                    .iter()
+                    .filter(|potential| !potential.useful_criteria.is_empty())
+                    .map(|potential| ExemptedDependency {
+                        version: potential.version.clone(),
+                        criteria: criteria_mapper
+                            .criteria_names(&potential.useful_criteria)
+                            .map(|criteria| criteria.to_owned().into())
+                            .collect(),
+                        suggest: potential.suggest,
+                        dependency_criteria: potential.dependency_criteria.clone(),
+                        notes: potential.notes.clone(),
+                    })
+                    .collect();
+                exemptions.sort();
+                if exemptions.is_empty() {
+                    None
+                } else {
+                    Some((package_name.to_owned(), exemptions))
+                }
+            })
+            .collect();
     }
 }

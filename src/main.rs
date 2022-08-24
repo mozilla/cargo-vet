@@ -3,15 +3,14 @@ use std::ops::Deref;
 use std::panic::panic_any;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::{fs::File, io, mem, panic, path::PathBuf};
+use std::{fs::File, io, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package, Version};
 use clap::{CommandFactory, Parser};
 use console::Term;
 use errors::{
-    AuditAsError, AuditAsErrors, CacheAcquireError, CertifyError, MinimizeUnauditedError,
-    NeedsAuditAsError, NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors,
-    UserInfoError,
+    AuditAsError, AuditAsErrors, CacheAcquireError, CertifyError, NeedsAuditAsError,
+    NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors, UserInfoError,
 };
 use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::join_all;
@@ -31,9 +30,7 @@ use crate::format::{
     SortedMap, StoreInfo,
 };
 use crate::out::Out;
-use crate::resolver::{
-    Conclusion, CriteriaMapper, CriteriaNamespace, DepGraph, ResolveDepth, SuggestItem,
-};
+use crate::resolver::{CriteriaMapper, CriteriaNamespace, DepGraph, ResolveDepth};
 use crate::storage::{Cache, Store};
 
 mod cli;
@@ -1349,115 +1346,10 @@ fn cmd_regenerate_exemptions(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
-    minimize_exemptions(cfg, &mut store, network.as_ref())?;
+    resolver::regenerate_exemptions(cfg, &mut store)?;
 
     // We were successful, commit the store
     store.commit()?;
-
-    Ok(())
-}
-
-pub fn minimize_exemptions(
-    cfg: &Config,
-    store: &mut Store,
-    network: Option<&Network>,
-) -> Result<(), MinimizeUnauditedError> {
-    // Set the exemption entries to nothing
-    let old_exemptions = mem::take(&mut store.config.exemptions);
-
-    // Try to vet
-    let report = resolver::resolve(
-        &cfg.metadata,
-        cfg.cli.filter_graph.as_ref(),
-        store,
-        ResolveDepth::Deep,
-    );
-
-    trace!("minimizing exemptions...");
-    let new_exemptions = if let Some(suggest) = report.compute_suggest(cfg, network, false)? {
-        let mut new_exemptions = SortedMap::new();
-        let mut suggest_by_package_name = SortedMap::<PackageStr, Vec<SuggestItem>>::new();
-        for item in suggest.suggestions {
-            let package = &report.graph.nodes[item.package];
-            suggest_by_package_name
-                .entry(package.name)
-                .or_default()
-                .push(item);
-        }
-
-        // First try to preserve as many old entries as possible
-        for (package_name, old_entries) in &old_exemptions {
-            let mut no_suggestions = Vec::new();
-            let suggestions = suggest_by_package_name
-                .get_mut(&**package_name)
-                .unwrap_or(&mut no_suggestions);
-            for old_entry in old_entries {
-                for item_idx in (0..suggestions.len()).rev() {
-                    // If there's an existing entry for these criteria, preserve it
-                    let new_item = &mut suggestions[item_idx];
-                    {
-                        let old_criteria = report
-                            .criteria_mapper
-                            .criteria_from_list(&old_entry.criteria);
-                        if new_item.suggested_diff.to == old_entry.version
-                            && new_item.suggested_criteria.all.contains(&old_criteria)
-                        {
-                            new_item.suggested_criteria.clear_criteria(&old_criteria);
-
-                            new_exemptions
-                                .entry(package_name.clone())
-                                .or_insert(Vec::new())
-                                .push(old_entry.clone());
-                        }
-                    }
-                    // If we've exhausted all the criteria for this suggestion, remove it
-                    if new_item.suggested_criteria.is_empty() {
-                        suggestions.swap_remove(item_idx);
-                    }
-                }
-                // If we haven't cleared out all the suggestions for this package, make sure its entry is inserted
-                // to try to preserve the original order of it.
-                if !suggestions.is_empty() {
-                    new_exemptions
-                        .entry(package_name.clone())
-                        .or_insert(Vec::new());
-                }
-            }
-        }
-
-        // Now insert any remaining suggestions
-        for (package_name, new_items) in suggest_by_package_name {
-            for item in new_items {
-                let criteria_names = report
-                    .criteria_mapper
-                    .all_criteria_names(&item.suggested_criteria)
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>();
-                new_exemptions
-                    .entry(package_name.to_string())
-                    .or_insert(Vec::new())
-                    .push(ExemptedDependency {
-                        version: item.suggested_diff.to.clone(),
-                        criteria: criteria_names.iter().map(|s| s.to_owned().into()).collect(),
-                        dependency_criteria: DependencyCriteria::new(),
-                        notes: None,
-                        suggest: true,
-                    })
-            }
-        }
-
-        new_exemptions
-    } else if let Conclusion::Success(_) = report.conclusion {
-        SortedMap::new()
-    } else {
-        return Err(MinimizeUnauditedError::Unknown);
-    };
-
-    // Alright there's the new exemptions
-    store.config.exemptions = new_exemptions;
-
-    // Re-vet and ensure that imports are updated after changing exemptions.
-    store.maybe_update_imports_file(cfg, false);
 
     Ok(())
 }
@@ -1594,7 +1486,7 @@ fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(
         // Err(eyre!("report contains errors"))?;
         panic_any(ExitPanic(-1));
     } else {
-        store.imports = store.get_updated_imports_file(&report, false);
+        store.imports = store.get_updated_imports_file(&report.graph, &report.conclusion, false);
         store.commit()?;
     }
 

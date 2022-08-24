@@ -170,6 +170,21 @@ Specifies the exact version which should be exempted.
 
 Specifies the criteria covered by the exemption.
 
+#### `dependency-criteria`
+
+Allows overriding the criteria requirements for dependencies on a per-dependency basis.
+Similar in format to the [equivalent field](audit-entries.md#dependency-criteria) in audit entries.
+
+This serves the same purposes as the field on audit entries, allowing the
+exemption to relax or strengthen the requirements which it places on
+dependencies when it is used.
+
+This can be used when a crate still needs to be exempted (e.g. because it hasn't
+been audited enough to publish an audit), but it has been determined that a
+particular subtree should be held to different audit requirements. This may both
+be useful for dependencies which only need to be `safe-to-run`, or for adding
+extra requirements for specific dependencies of an exempted crate.
+
 #### `notes`
 
 Free-form string for recording rationale or other relevant information.
