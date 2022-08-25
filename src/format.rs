@@ -387,6 +387,8 @@ pub struct RemoteImport {
     pub url: String,
     /// A list of criteria that are implied by foreign criteria
     #[serde(rename = "criteria-map")]
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub criteria_map: Vec<CriteriaMapping>,
 }
 
