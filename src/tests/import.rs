@@ -69,7 +69,7 @@ fn new_peer_import() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -81,7 +81,7 @@ fn new_peer_import() {
         OTHER_FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: OTHER_FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -141,7 +141,7 @@ fn existing_peer_skip_import() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -195,7 +195,7 @@ fn existing_peer_remove_unused() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -283,7 +283,7 @@ fn existing_peer_import_delta_audit() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -295,7 +295,7 @@ fn existing_peer_import_delta_audit() {
         OTHER_FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: OTHER_FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -366,7 +366,7 @@ fn existing_peer_import_custom_criteria() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -428,7 +428,7 @@ fn new_audit_for_unused_criteria_basic() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -494,7 +494,7 @@ fn new_audit_for_unused_criteria_transitive() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -546,7 +546,7 @@ fn existing_peer_revoked_audit() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -607,7 +607,7 @@ fn existing_peer_add_violation() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -658,7 +658,7 @@ fn peer_audits_exemption_no_minimize() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -709,7 +709,7 @@ fn peer_audits_exemption_minimize() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -731,6 +731,86 @@ fn peer_audits_exemption_minimize() {
     let new = store.mock_commit();
 
     let output = diff_store_commits(&old, &new);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn peer_audits_import_exclusion() {
+    // (Pass) Exclusions in the config should make a crate's audits and
+    // violations appear to be revoked upstream, but audits for other crates
+    // shouldn't be impacted.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("transitive-third-party1");
+
+    let old_foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: [
+            (
+                "third-party2".to_owned(),
+                vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+            ),
+            (
+                "third-party1".to_owned(),
+                vec![violation("*".parse().unwrap(), SAFE_TO_DEPLOY)],
+            ),
+            (
+                "transitive-third-party1".to_owned(),
+                vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+            ),
+        ]
+        .into_iter()
+        .collect(),
+    };
+
+    let new_foreign_audits = old_foreign_audits.clone();
+
+    imports
+        .audits
+        .insert(FOREIGN.to_owned(), old_foreign_audits);
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            exclude: vec!["third-party1".to_owned(), "third-party2".to_owned()],
+            ..Default::default()
+        },
+    );
+
+    let store = Store::mock_online(
+        config,
+        audits,
+        imports,
+        vec![(FOREIGN.to_owned(), new_foreign_audits)],
+        true,
+    )
+    .unwrap();
+
+    let imported = store
+        .imported_audits()
+        .get(FOREIGN)
+        .expect("The remote should be present in `imported_audits`");
+
+    assert!(
+        !imported.audits.contains_key("third-party1"),
+        "The `third-party1` crate should be completely missing from `imported_audits`"
+    );
+    assert!(
+        !imported.audits.contains_key("third-party2"),
+        "The `third-party2` crate should be completely missing from `imported_audits`"
+    );
+    assert!(
+        imported.audits.contains_key("transitive-third-party1"),
+        "The `transitive-third-party1` crate should still be present in `imported_audits`"
+    );
+
+    let output = get_imports_file_changes(&metadata, &store, false);
     insta::assert_snapshot!(output);
 }
 

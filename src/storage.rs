@@ -197,10 +197,10 @@ impl Store {
         // If this command isn't locked, and the network is available, fetch the
         // live state of imported audits.
         let live_imports = if let (false, Some(network)) = (cfg.cli.locked, network) {
-            let imported_audits = tokio::runtime::Handle::current()
+            let fetched_audits = tokio::runtime::Handle::current()
                 .block_on(fetch_imported_audits(network, &config))?;
             let live_imports =
-                process_imported_audits(imported_audits, &imports, allow_criteria_changes)?;
+                process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
             Some(live_imports)
         } else {
             None
@@ -249,7 +249,7 @@ impl Store {
         allow_criteria_changes: bool,
     ) -> Result<Self, CriteriaChangeErrors> {
         let live_imports =
-            process_imported_audits(fetched_audits, &imports, allow_criteria_changes)?;
+            process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
         Ok(Self {
             lock: None,
             config,
@@ -504,15 +504,49 @@ impl Store {
             }
         }
 
+        // If we're locked, and therefore not fetching new live imports,
+        // validate that our imports.lock is in sync with config.toml.
+        let imports_lock_outdated = self
+            .imports_lock_outdated()
+            .then_some(StoreValidateError::ImportsLockOutdated);
+
         let errors = invalid_criteria_errors
             .into_iter()
             .map(StoreValidateError::InvalidCriteria)
+            .chain(imports_lock_outdated)
             .collect::<Vec<_>>();
         if !errors.is_empty() {
             return Err(StoreValidateErrors { errors });
         }
 
         Ok(())
+    }
+
+    fn imports_lock_outdated(&self) -> bool {
+        // If we have live imports, we're going to be updating imports.lock, so
+        // it's OK if it's out-of-date with regard to the config.
+        if self.live_imports.is_some() {
+            return false;
+        }
+
+        // We must have the exact same set of imports, otherwise an import has
+        // been added or removed and we're out of date.
+        if self.config.imports.keys().ne(self.imports.audits.keys()) {
+            return true;
+        }
+
+        for (import_name, config) in &self.config.imports {
+            let audits_file = self.imports.audits.get(import_name).unwrap();
+            // If we have any excluded crates in the imports.lock, it is out of
+            // date and needs to be regenerated.
+            for crate_name in &config.exclude {
+                if audits_file.audits.contains_key(crate_name) {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     /// Return an updated version of the `imports.lock` file taking into account
@@ -622,6 +656,7 @@ impl Store {
 /// description of the live state of imported audits.
 fn process_imported_audits(
     fetched_audits: Vec<(ImportName, AuditsFile)>,
+    config_file: &ConfigFile,
     imports_lock: &ImportsFile,
     allow_criteria_changes: bool,
 ) -> Result<ImportsFile, CriteriaChangeErrors> {
@@ -630,6 +665,17 @@ fn process_imported_audits(
     };
     let mut changed_criteria = Vec::new();
     for (import_name, mut audits_file) in fetched_audits {
+        let config = config_file
+            .imports
+            .get(&import_name)
+            .expect("fetched audit without config?");
+
+        // Remove any excluded audits from the live copy. We'll effectively
+        // pretend they don't exist upstream.
+        for excluded in &config.exclude {
+            audits_file.audits.remove(excluded);
+        }
+
         // By default all audits read from the network are fresh.
         for audit_entry in audits_file.audits.values_mut().flat_map(|v| v.iter_mut()) {
             audit_entry.is_fresh_import = true;

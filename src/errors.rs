@@ -245,6 +245,9 @@ pub enum StoreValidateError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     InvalidCriteria(InvalidCriteriaError),
+    #[error("imports.lock is out-of-date with respect to configuration")]
+    #[diagnostic(help("run `cargo vet` without --locked to update imports"))]
+    ImportsLockOutdated,
 }
 
 #[derive(Debug, Error, Diagnostic)]

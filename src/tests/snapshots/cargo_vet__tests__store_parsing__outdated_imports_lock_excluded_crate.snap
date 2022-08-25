@@ -1,0 +1,11 @@
+---
+source: src/tests/store_parsing.rs
+expression: acquire_errors
+---
+
+  × Your cargo-vet store (supply-chain) has consistency errors
+
+Error: 
+  × imports.lock is out-of-date with respect to configuration
+  help: run `cargo vet` without --locked to update imports
+

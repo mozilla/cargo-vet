@@ -2478,7 +2478,7 @@ fn builtin_simple_foreign_audited() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
     audits.audits.clear();
@@ -2504,7 +2504,7 @@ fn mock_simple_foreign_audited_pun_no_mapping() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
     audits.audits.clear();
@@ -2537,6 +2537,7 @@ fn mock_simple_foreign_audited_pun_mapped() {
                 ours: DEFAULT_CRIT.to_owned(),
                 theirs: vec![DEFAULT_CRIT.to_owned().into()],
             }],
+            ..Default::default()
         },
     );
     audits.audits.clear();
@@ -2570,13 +2571,14 @@ fn mock_simple_foreign_audited_pun_wrong_mapped() {
                 ours: DEFAULT_CRIT.to_owned(),
                 theirs: vec![DEFAULT_CRIT.to_owned().into()],
             }],
+            ..Default::default()
         },
     );
     config.imports.insert(
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: vec![],
+            ..Default::default()
         },
     );
 
@@ -2619,7 +2621,7 @@ fn builtin_simple_foreign_tag_team() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -2658,7 +2660,7 @@ fn builtin_simple_mega_foreign_tag_team() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
     imports.audits.insert(
@@ -2677,7 +2679,7 @@ fn builtin_simple_mega_foreign_tag_team() {
         OTHER_FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: OTHER_FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -2727,7 +2729,7 @@ fn builtin_simple_foreign_dep_criteria_fail() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -2787,7 +2789,7 @@ fn builtin_simple_foreign_dep_criteria_pass() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: Vec::new(),
+            ..Default::default()
         },
     );
 
