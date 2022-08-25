@@ -82,7 +82,7 @@ criteria = "safe-to-deploy"
 
 [[exemptions.hermit-abi]]
 version = "0.1.19"
-criteria = "safe-to-deploy"
+criteria = "safe-to-run"
 
 [[exemptions.http]]
 version = "0.2.6"

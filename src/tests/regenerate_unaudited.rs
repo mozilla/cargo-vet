@@ -30,7 +30,7 @@ fn builtin_simple_exemptions_not_a_real_dep_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!("builtin-simple-not-a-real-dep-regenerate", exemptions);
@@ -56,7 +56,7 @@ fn builtin_simple_deps_exemptions_overbroad_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!("builtin-simple-unaudited-overbroad-regenerate", exemptions);
@@ -85,7 +85,7 @@ fn builtin_complex_exemptions_twins_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!("builtin-simple-unaudited-twins-regenerate", exemptions);
@@ -114,7 +114,7 @@ fn builtin_complex_exemptions_partial_twins_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
@@ -150,7 +150,7 @@ fn builtin_simple_exemptions_in_delta_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!("builtin-simple-unaudited-in-delta-regenerate", exemptions);
@@ -183,7 +183,7 @@ fn builtin_simple_exemptions_in_full_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!("builtin-simple-unaudited-in-full-regenerate", exemptions);
@@ -214,7 +214,7 @@ fn builtin_simple_deps_exemptions_adds_uneeded_criteria_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
@@ -250,7 +250,7 @@ fn builtin_dev_detection_exemptions_adds_uneeded_criteria_indirect_regenerate() 
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
@@ -282,7 +282,7 @@ fn builtin_simple_exemptions_extra_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!("builtin-simple-unaudited-extra-regenerate", exemptions);
@@ -311,7 +311,7 @@ fn builtin_simple_exemptions_in_direct_full_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
@@ -371,7 +371,7 @@ fn builtin_simple_exemptions_nested_weaker_req_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
@@ -432,7 +432,7 @@ fn builtin_simple_exemptions_nested_stronger_req_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
@@ -461,7 +461,7 @@ fn builtin_simple_audit_as_default_root_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
@@ -494,7 +494,7 @@ fn builtin_simple_audit_as_weaker_root_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!("builtin-simple-audit-as-weaker-root-regenerate", exemptions);
@@ -522,7 +522,7 @@ fn builtin_simple_exemptions_larger_diff_regenerate() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!(
@@ -582,8 +582,169 @@ fn builtin_simple_exemptions_broaden_basic() {
 
     let mut store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
-    crate::resolver::regenerate_exemptions(&cfg, &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
 
     let exemptions = get_exemptions(&store);
     insta::assert_snapshot!("builtin-simple-exemptions-broaden-basic", exemptions);
+}
+
+#[test]
+fn builtin_simple_exemptions_regenerate_merge() {
+    // (Pass) minimize_exemptions will merge exemptions if it's allowed to.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.criteria.insert(
+        "criteria1".to_owned(),
+        CriteriaEntry {
+            description: Some(String::new()),
+            description_url: None,
+            implies: vec![SAFE_TO_DEPLOY.to_owned().into()],
+        },
+    );
+    audits.criteria.insert(
+        "criteria2".to_owned(),
+        CriteriaEntry {
+            description: Some(String::new()),
+            description_url: None,
+            implies: vec![SAFE_TO_DEPLOY.to_owned().into()],
+        },
+    );
+
+    audits.audits.insert(
+        "third-party1".to_owned(),
+        vec![full_audit_dep(
+            ver(DEFAULT_VER),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", ["criteria1", "criteria2"])],
+        )],
+    );
+
+    audits.audits.insert(
+        "transitive-third-party1".to_owned(),
+        vec![
+            delta_audit(ver(5), ver(DEFAULT_VER), "criteria1"),
+            delta_audit(ver(5), ver(DEFAULT_VER), "criteria2"),
+        ],
+    );
+    config.exemptions.insert(
+        "transitive-third-party1".to_owned(),
+        vec![
+            exemptions(ver(5), "criteria1"),
+            exemptions(ver(5), "criteria2"),
+        ],
+    );
+
+    let mut store = Store::mock(config, audits, imports);
+    let cfg = mock_cfg(&metadata);
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, true, false).unwrap();
+
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!("builtin-simple-exemptions-regenerate-merge", exemptions);
+}
+
+#[test]
+fn builtin_simple_exemptions_regenerate_merge_nonew() {
+    // (Pass) minimize_exemptions will not merge exemptions if it's not allowed to.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.criteria.insert(
+        "criteria1".to_owned(),
+        CriteriaEntry {
+            description: Some(String::new()),
+            description_url: None,
+            implies: vec![SAFE_TO_DEPLOY.to_owned().into()],
+        },
+    );
+    audits.criteria.insert(
+        "criteria2".to_owned(),
+        CriteriaEntry {
+            description: Some(String::new()),
+            description_url: None,
+            implies: vec![SAFE_TO_DEPLOY.to_owned().into()],
+        },
+    );
+
+    audits.audits.insert(
+        "third-party1".to_owned(),
+        vec![full_audit_dep(
+            ver(DEFAULT_VER),
+            SAFE_TO_DEPLOY,
+            [("transitive-third-party1", ["criteria1", "criteria2"])],
+        )],
+    );
+
+    audits.audits.insert(
+        "transitive-third-party1".to_owned(),
+        vec![
+            delta_audit(ver(5), ver(DEFAULT_VER), "criteria1"),
+            delta_audit(ver(5), ver(DEFAULT_VER), "criteria2"),
+        ],
+    );
+    config.exemptions.insert(
+        "transitive-third-party1".to_owned(),
+        vec![
+            exemptions(ver(5), "criteria1"),
+            exemptions(ver(5), "criteria2"),
+        ],
+    );
+
+    let mut store = Store::mock(config, audits, imports);
+    let cfg = mock_cfg(&metadata);
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, false, false).unwrap();
+
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!(
+        "builtin-simple-exemptions-regenerate-merge-nonew",
+        exemptions
+    );
+}
+
+#[test]
+fn builtin_simple_exemptions_regenerate_nonew_failed() {
+    // (Pass) minimize_exemptions will be a no-op if no new exemptions are
+    // allowed, and vet is failing.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_inited(&metadata);
+
+    config.exemptions.clear();
+
+    config.exemptions.insert(
+        "transitive-third-party1".to_owned(),
+        vec![
+            exemptions(ver(300), SAFE_TO_DEPLOY),
+            exemptions(ver(400), SAFE_TO_DEPLOY),
+        ],
+    );
+    config.exemptions.insert(
+        "third-party1".to_owned(),
+        vec![exemptions(ver(300), SAFE_TO_DEPLOY)],
+    );
+    config.exemptions.insert(
+        "random-crate".to_owned(),
+        vec![exemptions(ver(300), SAFE_TO_DEPLOY)],
+    );
+
+    let mut store = Store::mock(config, audits, imports);
+    let cfg = mock_cfg(&metadata);
+    crate::resolver::regenerate_exemptions(&cfg, &mut store, false, false).unwrap();
+
+    let exemptions = get_exemptions(&store);
+    insta::assert_snapshot!(
+        "builtin-simple-exemptions-regenerate-nonew-failed",
+        exemptions
+    );
 }

@@ -64,6 +64,12 @@ pub struct Cli {
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub frozen: bool,
 
+    /// Prevent commands such as `check` and `certify` from automatically
+    /// cleaning up unused exemptions.
+    #[clap(long, action)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    pub no_minimize_exemptions: bool,
+
     /// How verbose logging should be (log level)
     #[clap(long, action)]
     #[clap(default_value_t = LevelFilter::WARN)]
