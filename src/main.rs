@@ -23,7 +23,7 @@ use thiserror::Error;
 use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
-use crate::errors::{CommandError, DownloadError};
+use crate::errors::{CommandError, DownloadError, RegenerateExemptionsError};
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, Delta, DependencyCriteria,
     ExemptedDependency, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr,
@@ -612,9 +612,13 @@ fn cmd_certify(
 
     do_cmd_certify(out, cfg, sub_args, &mut store, network.as_ref(), last_fetch)?;
 
-    // Re-run the resolver after adding the new `certify`. This will be used to
-    // potentially update imports.
-    store.maybe_update_imports_file(cfg, false);
+    // Minimize exemptions after adding the new `certify`. This will be used to
+    // potentially update imports, and remove now-unnecessary exemptions.
+    // Explicitly disallow new exemptions so that exemptions are only updated
+    // once we start passing vet.
+    match resolver::regenerate_exemptions(cfg, &mut store, false, false) {
+        Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
+    }
 
     store.commit()?;
     Ok(())
@@ -1277,7 +1281,13 @@ fn cmd_regenerate_imports(
 
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), true)?;
-    store.maybe_update_imports_file(cfg, true);
+
+    // NOTE: Explicitly ignore the `ViolationConflict` error, as we still want
+    // to update imports in that case.
+    match resolver::regenerate_exemptions(cfg, &mut store, false, true) {
+        Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
+    }
+
     store.commit()?;
     Ok(())
 }
@@ -1346,7 +1356,7 @@ fn cmd_regenerate_exemptions(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
-    resolver::regenerate_exemptions(cfg, &mut store)?;
+    resolver::regenerate_exemptions(cfg, &mut store, true, false)?;
 
     // We were successful, commit the store
     store.commit()?;
@@ -1486,7 +1496,15 @@ fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(
         // Err(eyre!("report contains errors"))?;
         panic_any(ExitPanic(-1));
     } else {
-        store.imports = store.get_updated_imports_file(&report.graph, &report.conclusion, false);
+        if !cfg.cli.locked {
+            #[allow(clippy::single_match)]
+            match resolver::regenerate_exemptions(cfg, &mut store, false, false) {
+                Err(RegenerateExemptionsError::ViolationConflict) => {
+                    unreachable!("unexpeced violation conflict regenerating exemptions?")
+                }
+                Ok(()) => {}
+            }
+        }
         store.commit()?;
     }
 
@@ -1515,7 +1533,12 @@ fn cmd_fetch_imports(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
-    store.maybe_update_imports_file(cfg, true);
+    // NOTE: Explicitly ignore the `ViolationConflict` error, as we still want
+    // to update imports in that case.
+    match resolver::regenerate_exemptions(cfg, &mut store, false, true) {
+        Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
+    }
+
     store.commit()?;
 
     Ok(())

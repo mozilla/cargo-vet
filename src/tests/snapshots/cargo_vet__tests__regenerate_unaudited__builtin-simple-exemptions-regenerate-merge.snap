@@ -1,0 +1,11 @@
+---
+source: src/tests/regenerate_unaudited.rs
+expression: exemptions
+---
+[[transitive-third-party1]]
+version = "5.0.0"
+criteria = [
+    "criteria1",
+    "criteria2",
+]
+

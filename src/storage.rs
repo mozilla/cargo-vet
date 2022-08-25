@@ -637,19 +637,6 @@ impl Store {
 
         new_imports
     }
-
-    pub fn maybe_update_imports_file(&mut self, cfg: &Config, force_update: bool) {
-        let report = resolver::resolve(
-            &cfg.metadata,
-            cfg.cli.filter_graph.as_ref(),
-            self,
-            // Resolve depth only impacts error results, so we can use Shallow
-            // to do less work.
-            resolver::ResolveDepth::Shallow,
-        );
-        self.imports =
-            self.get_updated_imports_file(&report.graph, &report.conclusion, force_update);
-    }
 }
 
 /// Process imported audits from the network, generating a `LiveImports`

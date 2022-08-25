@@ -59,6 +59,10 @@ Do not fetch new imported audits
 Avoid the network entirely, requiring either that the cargo cache is populated or the
 dependencies are vendored. Requires --locked
 
+#### `--no-minimize-exemptions`
+Prevent commands such as `check` and `certify` from automatically cleaning up unused
+exemptions
+
 #### `--verbose <VERBOSE>`
 How verbose logging should be (log level)
 

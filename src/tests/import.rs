@@ -725,7 +725,7 @@ fn peer_audits_exemption_minimize() {
     // Capture the old imports before minimizing exemptions
     let old = store.mock_commit();
 
-    crate::resolver::regenerate_exemptions(&mock_cfg(&metadata), &mut store).unwrap();
+    crate::resolver::regenerate_exemptions(&mock_cfg(&metadata), &mut store, true, false).unwrap();
 
     // Capture after minimizing exemptions, and generate a diff.
     let new = store.mock_commit();
