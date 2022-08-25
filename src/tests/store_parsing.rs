@@ -108,3 +108,106 @@ implies = ["safe-to-deploy"]
     let acquire_errors = get_valid_store(config, audits, EMPTY_IMPORTS);
     insta::assert_snapshot!(acquire_errors);
 }
+
+#[test]
+fn test_outdated_imports_lock_extra_peer() {
+    let config = r##"
+[imports.peer1]
+url = "https://peer1.com"
+criteria-map = []
+
+"##;
+
+    let imports = r##"
+[[audits.peer1.audits.third-party1]]
+criteria = "safe-to-deploy"
+version = "10.0.0"
+
+[[audits.peer2.audits.third-party2]]
+criteria = "safe-to-deploy"
+version = "10.0.0"
+
+"##;
+
+    let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
+    insta::assert_snapshot!(acquire_errors);
+}
+
+#[test]
+fn test_outdated_imports_lock_missing_peer() {
+    let config = r##"
+[imports.peer1]
+url = "https://peer1.com"
+criteria-map = []
+
+[imports.peer2]
+url = "https://peer2.com"
+criteria-map = []
+
+"##;
+
+    let imports = r##"
+[[audits.peer1.audits.third-party1]]
+criteria = "safe-to-deploy"
+version = "10.0.0"
+
+"##;
+
+    let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
+    insta::assert_snapshot!(acquire_errors);
+}
+
+#[test]
+fn test_outdated_imports_lock_excluded_crate() {
+    let config = r##"
+[imports.peer1]
+url = "https://peer1.com"
+exclude = ["third-party1"]
+criteria-map = []
+
+"##;
+
+    let imports = r##"
+[[audits.peer1.audits.third-party1]]
+criteria = "safe-to-deploy"
+version = "10.0.0"
+
+[[audits.peer1.audits.third-party2]]
+criteria = "safe-to-deploy"
+version = "10.0.0"
+
+
+"##;
+
+    let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
+    insta::assert_snapshot!(acquire_errors);
+}
+
+#[test]
+fn test_outdated_imports_lock_ok() {
+    let config = r##"
+[imports.peer1]
+url = "https://peer1.com"
+exclude = ["third-party2"]
+criteria-map = []
+
+[imports.peer2]
+url = "https://peer1.com"
+criteria-map = []
+
+"##;
+
+    let imports = r##"
+[[audits.peer1.audits.third-party1]]
+criteria = "safe-to-deploy"
+version = "10.0.0"
+
+[[audits.peer2.audits.third-party2]]
+criteria = "safe-to-deploy"
+version = "10.0.0"
+
+"##;
+
+    let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
+    insta::assert_snapshot!(acquire_errors);
+}
