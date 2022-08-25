@@ -274,7 +274,7 @@ fn acquire(
 
         Err(e) => {
             if !error_contended(&e) {
-                Err(e)?;
+                return Err(e.into());
             }
         }
     }

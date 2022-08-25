@@ -9,7 +9,6 @@ config.toml:
  
  [imports.peer-company]
  url = "https://peercompany.co.uk"
- criteria-map = []
  
  [[exemptions.third-party1]]
  version = "10.0.0"

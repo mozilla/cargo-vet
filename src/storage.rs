@@ -712,7 +712,7 @@ fn process_imported_audits(
                     .map(|v| &mut v[..])
                     .unwrap_or(&mut []);
                 for existing_audit in existing_audits {
-                    for new_audit in &mut new_audits[..] {
+                    for new_audit in &mut *new_audits {
                         // Ignore `who` and `notes` for comparison, as they
                         // are not relevant semantically and might have been
                         // updated uneventfully.
@@ -1186,7 +1186,7 @@ impl Cache {
         // 0 = empty
         // 1 = some diff
         if status != 0 && status != 1 {
-            Err(CommandError::BadStatus(status))?;
+            return Err(CommandError::BadStatus(status).into());
         }
 
         let diffstat = String::from_utf8(out.stdout).map_err(CommandError::BadOutput)?;
@@ -1584,7 +1584,8 @@ where
                 source_code: Arc::new(NamedSource::new(file_name, string)),
                 span,
                 error,
-            })?
+            }
+            .into())
         }
     }
 }
