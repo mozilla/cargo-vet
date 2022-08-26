@@ -14,6 +14,7 @@ use errors::{
 };
 use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::join_all;
+use indicatif::ProgressDrawTarget;
 use lazy_static::lazy_static;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use network::Network;
@@ -29,7 +30,7 @@ use crate::format::{
     ExemptedDependency, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr,
     SortedMap, StoreInfo,
 };
-use crate::out::Out;
+use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
 use crate::resolver::{CriteriaMapper, CriteriaNamespace, DepGraph, ResolveDepth};
 use crate::storage::{Cache, Store};
 
@@ -199,7 +200,7 @@ fn real_main() -> Result<(), miette::Report> {
             .with_target(false)
             .without_time()
             .with_ansi(console::colors_enabled_stderr())
-            .with_writer(std::io::stderr)
+            .with_writer(StderrLogWriter::new)
             .init();
     }
 
@@ -255,6 +256,10 @@ fn real_main() -> Result<(), miette::Report> {
             .wrap_err("cargo vet panicked"),
         );
     }));
+
+    // Initialize the MULTIPROGRESS's draw target, so that future progress
+    // events are rendered to stderr.
+    MULTIPROGRESS.set_draw_target(ProgressDrawTarget::stderr());
 
     // Setup our output stream
     let out: Arc<dyn Out> = if let Some(output_path) = &cli.output_file {
@@ -325,10 +330,12 @@ fn real_main() -> Result<(), miette::Report> {
     info!("Running: {:#?}", cmd.cargo_command());
 
     // ERRORS: immediate fatal diagnostic
-    let metadata = cmd
-        .exec()
-        .into_diagnostic()
-        .wrap_err("'cargo metadata' exited unsuccessfully")?;
+    let metadata = {
+        let _spinner = indeterminate_spinner("Running", "`cargo metadata`");
+        cmd.exec()
+            .into_diagnostic()
+            .wrap_err("'cargo metadata' exited unsuccessfully")?
+    };
 
     // trace!("Got Metadata! {:#?}", metadata);
     trace!("Got Metadata!");
