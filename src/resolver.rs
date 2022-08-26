@@ -169,7 +169,7 @@ pub struct SuggestItem {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DiffRecommendation {
-    pub from: Version,
+    pub from: Option<Version>,
     pub to: Version,
     pub diffstat: DiffStat,
 }
@@ -334,12 +334,12 @@ pub enum SearchResult<'a> {
     /// We failed to find any path, criteria not valid.
     Disconnected {
         /// Nodes we could reach from "root"
-        reachable_from_root: SortedSet<&'a Version>,
+        reachable_from_root: SortedSet<Option<&'a Version>>,
         /// Nodes we could reach from the "target"
         ///
         /// We will only ever fill in the other one, but on failure we run the algorithm
         /// in reverse and will merge that result into this value.
-        reachable_from_target: SortedSet<&'a Version>,
+        reachable_from_target: SortedSet<Option<&'a Version>>,
     },
 }
 
@@ -373,13 +373,13 @@ impl Caveats {
 ///
 /// There are two important versions in each AuditGraph:
 ///
-/// * The "root" version (0.0.0) which exists as a dummy node for full-audits
+/// * The "root" version (None) which exists as a dummy node for full-audits
 /// * The "target" version which is the current version of the package
 ///
 /// The edges are constructed as follows:
 ///
 /// * Delta Audits desugar directly to edges
-/// * Full Audits and Unaudited desugar to 0.0.0 -> Version
+/// * Full Audits and Unaudited desugar to None -> Some(Version)
 ///
 /// If there are multiple versions of a package in-tree, we analyze each individually
 /// so there is always one root and one target. All we want to know is if there exists
@@ -391,7 +391,7 @@ impl Caveats {
 /// we can't find the desired path in the forward graph, and is used to compute the
 /// reachability set of the target version for that criteria. That reachability is
 /// used for `suggest`.
-pub type AuditGraph<'a> = SortedMap<&'a Version, Vec<DeltaEdge<'a>>>;
+pub type AuditGraph<'a> = SortedMap<Option<&'a Version>, Vec<DeltaEdge<'a>>>;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum DeltaEdgeOrigin {
@@ -414,7 +414,7 @@ enum DeltaEdgeOrigin {
 #[derive(Debug, Clone)]
 pub struct DeltaEdge<'a> {
     /// The version this edge goes to.
-    version: &'a Version,
+    version: Option<&'a Version>,
     /// The criteria that this edge is valid for.
     criteria: CriteriaSet,
     /// Requirements that dependencies must satisfy for the edge to be valid.
@@ -1309,9 +1309,6 @@ impl<'a> DepGraph<'a> {
     }
 }
 
-// Dummy values for corner cases
-pub static ROOT_VERSION: Version = Version::new(0, 0, 0);
-
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ResolveDepth {
     Deep,
@@ -1605,16 +1602,17 @@ fn resolve_third_party<'a>(
 
     // Collect up all the deltas, their criteria, and dependency_criteria
     for (namespace, entry) in all_audits.clone() {
-        // For uniformity, model a Full Audit as `0.0.0 -> x.y.z`
+        // For uniformity, model a Full Audit as `None -> x.y.z`
         let (from_ver, to_ver, dependency_criteria) = match &entry.kind {
             AuditKind::Full {
                 version,
                 dependency_criteria,
-            } => (&ROOT_VERSION, version, dependency_criteria),
+            } => (None, version, dependency_criteria),
             AuditKind::Delta {
-                delta,
+                from,
+                to,
                 dependency_criteria,
-            } => (&delta.from, &delta.to, dependency_criteria),
+            } => (Some(from), to, dependency_criteria),
             AuditKind::Violation { .. } => {
                 violation_nodes.push((namespace.clone(), entry));
                 continue;
@@ -1640,17 +1638,20 @@ fn resolve_third_party<'a>(
         };
 
         forward_audits.entry(from_ver).or_default().push(DeltaEdge {
-            version: to_ver,
+            version: Some(to_ver),
             criteria: criteria.clone(),
             dependency_criteria: dependency_criteria.clone(),
             origin,
         });
-        backward_audits.entry(to_ver).or_default().push(DeltaEdge {
-            version: from_ver,
-            criteria,
-            dependency_criteria,
-            origin,
-        });
+        backward_audits
+            .entry(Some(to_ver))
+            .or_default()
+            .push(DeltaEdge {
+                version: from_ver,
+                criteria,
+                dependency_criteria,
+                origin,
+            });
     }
 
     // Reject forbidden packages (violations)
@@ -1729,8 +1730,8 @@ fn resolve_third_party<'a>(
                         );
                     }
                 }
-                AuditKind::Delta { delta, .. } => {
-                    if violation_range.matches(&delta.from) || violation_range.matches(&delta.to) {
+                AuditKind::Delta { from, to, .. } => {
+                    if violation_range.matches(from) || violation_range.matches(to) {
                         violations.entry(pkgidx).or_default().push(
                             ViolationConflict::AuditConflict {
                                 violation_source: violation_source.clone(),
@@ -1778,8 +1779,8 @@ fn resolve_third_party<'a>(
             if &allowed.version == package.version {
                 directly_exempted = true;
             }
-            let from_ver = &ROOT_VERSION;
-            let to_ver = &allowed.version;
+            let from_ver = None;
+            let to_ver = Some(&allowed.version);
             let criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
             let dependency_criteria: FastMap<_, _> = allowed
                 .dependency_criteria
@@ -1789,7 +1790,7 @@ fn resolve_third_party<'a>(
                 })
                 .collect();
 
-            // For simplicity, turn 'exemptions' entries into deltas from 0.0.0
+            // For simplicity, turn 'exemptions' entries into deltas from None.
             forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: to_ver,
                 criteria: criteria.clone(),
@@ -1810,8 +1811,8 @@ fn resolve_third_party<'a>(
     for criteria in criteria_mapper.all_criteria_iter() {
         let result = search_for_path(
             criteria,
-            &ROOT_VERSION,
-            package.version,
+            None,
+            Some(package.version),
             &forward_audits,
             graph,
             criteria_mapper,
@@ -1838,8 +1839,8 @@ fn resolve_third_party<'a>(
                 // can reach from the other side, so we have our candidates for suggestions.
                 let rev_result = search_for_path(
                     criteria,
-                    package.version,
-                    &ROOT_VERSION,
+                    Some(package.version),
+                    None,
                     &backward_audits,
                     graph,
                     criteria_mapper,
@@ -1939,8 +1940,8 @@ fn get_dependency_criteria_caveats(
 #[allow(clippy::too_many_arguments)]
 fn search_for_path<'a>(
     cur_criteria: &CriteriaSet,
-    from_version: &'a Version,
-    to_version: &'a Version,
+    from_version: Option<&'a Version>,
+    to_version: Option<&'a Version>,
     audit_graph: &AuditGraph<'a>,
     dep_graph: &DepGraph<'a>,
     criteria_mapper: &CriteriaMapper,
@@ -1952,7 +1953,7 @@ fn search_for_path<'a>(
     // cur_criteria.  Finding any path validates that we satisfy that criteria.
     //
     // All full-audits and exemptions have been "desugarred" to a delta from
-    // 0.0.0, meaning our graph now has exactly one source and one sink,
+    // None, meaning our graph now has exactly one source and one sink,
     // significantly simplifying the start and end conditions.
     //
     // Some edges have caveats which we want to avoid requiring, so we defer
@@ -1966,7 +1967,7 @@ fn search_for_path<'a>(
     // caveat) to fresh imports and even failed edges (the most-important
     // caveat).
     struct Node<'a> {
-        version: &'a Version,
+        version: Option<&'a Version>,
         caveats: Caveats,
         failed_deps: SortedMap<PackageIdx, CriteriaSet>,
     }
@@ -2032,13 +2033,13 @@ fn search_for_path<'a>(
 
         // Apply deltas to move along to the next layer of the search, adding it
         // to our queue.
-        let edges = audit_graph.get(version).map(|v| &v[..]).unwrap_or(&[]);
+        let edges = audit_graph.get(&version).map(|v| &v[..]).unwrap_or(&[]);
         for edge in edges {
             if !edge.criteria.contains(cur_criteria) {
                 // This edge never would have been useful to us.
                 continue;
             }
-            if visited.contains(edge.version) {
+            if visited.contains(&edge.version) {
                 // We've been to the target of this edge already.
                 continue;
             }
@@ -2583,8 +2584,8 @@ impl<'a> ResolveReport<'a> {
                     };
 
                     // Collect up the details of how we failed
-                    let mut from_root = None::<SortedSet<&Version>>;
-                    let mut from_target = None::<SortedSet<&Version>>;
+                    let mut from_root = None::<SortedSet<Option<&Version>>>;
+                    let mut from_target = None::<SortedSet<Option<&Version>>>;
                     for criteria_idx in audit_failure.criteria_failures.all().indices() {
                         let search_result = &result.search_results[criteria_idx];
                         if let SearchResult::Disconnected {
@@ -2638,8 +2639,8 @@ impl<'a> ResolveReport<'a> {
 
                             for closest in closest_below.into_iter().chain(closest_above) {
                                 candidates.insert(Delta {
-                                    from: closest.clone(),
-                                    to: dest.clone(),
+                                    from: closest.cloned(),
+                                    to: dest.unwrap().clone(),
                                 });
                             }
                         }
@@ -2647,8 +2648,8 @@ impl<'a> ResolveReport<'a> {
                         // If we're not allowing deltas, just try everything reachable from the target
                         for &dest in from_target.as_ref().unwrap() {
                             candidates.insert(Delta {
-                                from: ROOT_VERSION.clone(),
-                                to: dest.clone(),
+                                from: None,
+                                to: dest.unwrap().clone(),
                             });
                         }
                     }
@@ -2758,8 +2759,8 @@ impl<'a> ResolveReport<'a> {
                     reachable_from_target,
                 } = search_result
                 {
-                    if reachable_from_target.contains(to)
-                        && from.map_or(true, |v| reachable_from_root.contains(v))
+                    if reachable_from_target.contains(&Some(to))
+                        && from.map_or(true, |v| reachable_from_root.contains(&Some(v)))
                     {
                         criteria.set_criteria(criteria_idx);
                     }
@@ -2936,22 +2937,20 @@ impl Suggest {
                 .iter()
                 .map(|item| {
                     let package = &report.graph.nodes[item.package];
-                    let cmd = if item.suggested_diff.from == ROOT_VERSION {
-                        format!(
+                    let cmd = match &item.suggested_diff.from {
+                        Some(from) => format!(
+                            "cargo vet diff {} {} {}",
+                            package.name, from, item.suggested_diff.to
+                        ),
+                        None => format!(
                             "cargo vet inspect {} {}",
                             package.name, item.suggested_diff.to
-                        )
-                    } else {
-                        format!(
-                            "cargo vet diff {} {} {}",
-                            package.name, item.suggested_diff.from, item.suggested_diff.to
-                        )
+                        ),
                     };
                     let parents = format!("(used by {})", item.notable_parents);
-                    let diffstat = if item.suggested_diff.from == ROOT_VERSION {
-                        format!("({} lines)", item.suggested_diff.diffstat.count)
-                    } else {
-                        format!("({})", item.suggested_diff.diffstat.raw.trim())
+                    let diffstat = match &item.suggested_diff.from {
+                        Some(_) => format!("({})", item.suggested_diff.diffstat.raw.trim()),
+                        None => format!("({} lines)", item.suggested_diff.diffstat.count),
                     };
                     let style = if item.suggested_criteria.is_fully_unconfident() {
                         out.style().dim()
@@ -3122,8 +3121,8 @@ impl FailForViolationConflict {
                 AuditKind::Full { version, .. } => {
                     writeln!(out, "audit {version}");
                 }
-                AuditKind::Delta { delta, .. } => {
-                    writeln!(out, "audit {} -> {}", delta.from, delta.to);
+                AuditKind::Delta { from, to, .. } => {
+                    writeln!(out, "audit {} -> {}", from, to);
                 }
                 AuditKind::Violation { violation } => {
                     writeln!(out, "violation against {violation}");
@@ -3372,7 +3371,7 @@ pub fn regenerate_exemptions(
                     for potential in &mut potential_exemptions[..] {
                         if potential.is_special()
                             && potential.max_criteria.has_criteria(implied_idx)
-                            && reachable_from_target.contains(potential.version)
+                            && reachable_from_target.contains(&Some(potential.version))
                         {
                             // We found a "special" exemption which matches!
                             // Record the criteria we're using and that we found
@@ -3408,7 +3407,7 @@ pub fn regenerate_exemptions(
                 // satisfies what we're looking for.
                 for potential in &mut potential_exemptions[..] {
                     if potential.max_criteria.has_criteria(criteria_idx)
-                        && reachable_from_target.contains(potential.version)
+                        && reachable_from_target.contains(&Some(potential.version))
                     {
                         update_useful_criteria(
                             potential,

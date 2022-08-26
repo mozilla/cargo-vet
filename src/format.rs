@@ -8,10 +8,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use cargo_metadata::Version;
-use serde::{
-    de::{self, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 // Collections based on how we're using, so it's easier to swap them out.
 pub type FastMap<K, V> = HashMap<K, V>;
@@ -194,7 +191,8 @@ pub enum AuditKind {
         dependency_criteria: DependencyCriteria,
     },
     Delta {
-        delta: Delta,
+        from: Version,
+        to: Version,
         dependency_criteria: DependencyCriteria,
     },
     Violation {
@@ -212,10 +210,10 @@ pub enum AuditKind {
 /// ```
 pub type DependencyCriteria = SortedMap<PackageName, Vec<Spanned<CriteriaName>>>;
 
-/// A "VERSION -> VERSION"
+/// A "VERSION" or "VERSION -> VERSION"
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Delta {
-    pub from: Version,
+    pub from: Option<Version>,
     pub to: Version,
 }
 
@@ -224,28 +222,18 @@ impl<'de> Deserialize<'de> for Delta {
     where
         D: Deserializer<'de>,
     {
-        struct DeltaVisitor;
-        impl<'de> Visitor<'de> for DeltaVisitor {
-            type Value = Delta;
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a delta of the form 'VERSION -> VERSION'")
-            }
-            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                if let Some((from, to)) = s.split_once("->") {
-                    Ok(Delta {
-                        from: Version::parse(from.trim()).map_err(de::Error::custom)?,
-                        to: Version::parse(to.trim()).map_err(de::Error::custom)?,
-                    })
-                } else {
-                    Err(de::Error::invalid_value(de::Unexpected::Str(s), &self))
-                }
-            }
+        let s = <&str>::deserialize(deserializer)?;
+        if let Some((from, to)) = s.split_once("->") {
+            Ok(Delta {
+                from: Some(Version::parse(from.trim()).map_err(de::Error::custom)?),
+                to: Version::parse(to.trim()).map_err(de::Error::custom)?,
+            })
+        } else {
+            Ok(Delta {
+                from: None,
+                to: Version::parse(s.trim()).map_err(de::Error::custom)?,
+            })
         }
-
-        deserializer.deserialize_str(DeltaVisitor)
     }
 }
 
@@ -254,8 +242,10 @@ impl Serialize for Delta {
     where
         S: Serializer,
     {
-        let output = format!("{} -> {}", self.from, self.to);
-        serializer.serialize_str(&output)
+        match &self.from {
+            Some(from) => format!("{} -> {}", from, self.to).serialize(serializer),
+            None => self.to.serialize(serializer),
+        }
     }
 }
 
@@ -468,7 +458,28 @@ pub struct ImportsFile {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-pub type DiffCache = SortedMap<PackageName, SortedMap<Delta, DiffStat>>;
+/// The current DiffCache file format in a tagged enum.
+///
+/// If we fail to read the DiffCache it will be silently re-built, meaning that
+/// the version enum tag can be changed to force the DiffCache to be
+/// re-generated after a breaking change to the format, such as a change to how
+/// diffs are computed or identified.
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(tag = "version")]
+pub enum DiffCache {
+    #[serde(rename = "1")]
+    V1 {
+        diffs: SortedMap<PackageName, SortedMap<Delta, DiffStat>>,
+    },
+}
+
+impl Default for DiffCache {
+    fn default() -> Self {
+        DiffCache::V1 {
+            diffs: SortedMap::new(),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DiffStat {

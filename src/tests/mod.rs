@@ -13,8 +13,8 @@ use serde_json::{json, Value};
 use crate::{
     editor::Editor,
     format::{
-        AuditKind, CriteriaName, CriteriaStr, Delta, DependencyCriteria, FastMap, MetaConfig,
-        PackageName, PackageStr, PolicyEntry, SortedSet, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        AuditKind, CriteriaName, CriteriaStr, DependencyCriteria, FastMap, MetaConfig, PackageName,
+        PackageStr, PolicyEntry, SortedSet, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     init_files,
     out::Out,
@@ -306,13 +306,13 @@ fn exemptions_dep(
 }
 
 fn delta_audit(from: Version, to: Version, criteria: CriteriaStr) -> AuditEntry {
-    let delta = Delta { from, to };
     AuditEntry {
         who: None,
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Delta {
-            delta,
+            from,
+            to,
             dependency_criteria: DependencyCriteria::default(),
         },
         is_fresh_import: false,
@@ -331,13 +331,13 @@ fn delta_audit_dep(
         ),
     >,
 ) -> AuditEntry {
-    let delta = Delta { from, to };
     AuditEntry {
         who: None,
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Delta {
-            delta,
+            from,
+            to,
             dependency_criteria: dependency_criteria
                 .into_iter()
                 .map(|(k, v)| {

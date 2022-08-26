@@ -360,9 +360,8 @@ Each edge has a list of criteria is claims to certify, and dependency_criteria t
 dependencies of this package must satisfy for the edge to be considered "valid" (see
 the next section for details).
 
-There is an implicit Root Version which represents an empty package. As of this writing
-the Root Version is simply 0.0.0, but this isn't really correct and nodes should be more
-like `Option<Version>`.
+There is an implicit Root Version which represents an empty package, meaning that throughout
+much of the audit graph, versions are represented as `Option<Version>`.
 
 When trying to validate whether a particular version of a package is audited, we also add
 a Target Version to the graph (if it doesn't exist already).
@@ -768,10 +767,9 @@ This is slightly brain melty at first but nothing really needs to specially hand
 it Just Works.
 
 Any diff we recommend from the Root Version is "resugared" into recommending a full audit,
-(and is also computed by diffing against an empty directory). It should be impossible to
-recommend a diff *to* the Root Version because there should never be audits of the Root
-Version (barring the fact that we're sloppy right now and use 0.0.0 which totally can be
-published).
+(and is also computed by diffing against an empty directory). It is impossible
+to recommend a diff *to* the Root Version, because there cannot be audits of the
+Root Version.
 
 
 

@@ -912,7 +912,7 @@ impl Cache {
                 command_history_path: None,
                 diff_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_DIFFS),
                 state: Mutex::new(CacheState {
-                    diff_cache: DiffCache::new(),
+                    diff_cache: DiffCache::default(),
                     command_history: CommandHistory::default(),
                     fetched_packages: FastMap::new(),
                     diffed: FastMap::new(),
@@ -1032,10 +1032,6 @@ impl Cache {
         let path_res: Result<_, FetchError> = once_cell
             .get_or_try_init(|| async {
                 let root = self.root.as_ref().unwrap();
-
-                if *version == resolver::ROOT_VERSION {
-                    return Ok(root.join(CACHE_EMPTY_PACKAGE));
-                }
 
                 let dir_name = format!("{}-{}", package, version);
 
@@ -1229,8 +1225,8 @@ impl Cache {
             let mut guard = self.state.lock().unwrap();
 
             // Check if the value has already been cached.
-            if let Some(cached) = guard
-                .diff_cache
+            let DiffCache::V1 { diffs } = &guard.diff_cache;
+            if let Some(cached) = diffs
                 .get(package)
                 .and_then(|cache| cache.get(delta))
                 .cloned()
@@ -1243,7 +1239,10 @@ impl Cache {
                 // ERRORS: this warning really rides the line, I'm not sure if the user can/should care
                 warn!("Missing root, assuming we're in tests and mocking");
 
-                let from_len = delta.from.major * delta.from.major;
+                let from_len = match &delta.from {
+                    Some(from) => from.major * from.major,
+                    None => 0,
+                };
                 let to_len: u64 = delta.to.major * delta.to.major;
                 let diff = to_len as i64 - from_len as i64;
                 let count = diff.unsigned_abs();
@@ -1264,7 +1263,10 @@ impl Cache {
 
         let diffstat = once_cell
             .get_or_try_init(|| async {
-                let from = self.fetch_package(network, package, &delta.from).await?;
+                let from = match &delta.from {
+                    Some(from) => self.fetch_package(network, package, from).await?,
+                    None => self.root.as_ref().unwrap().join(CACHE_EMPTY_PACKAGE),
+                };
                 let to = self.fetch_package(network, package, &delta.to).await?;
 
                 // Have fetches, do a real diffstat
@@ -1273,8 +1275,8 @@ impl Cache {
                 // Record the cache result in the diffcache
                 {
                     let mut guard = self.state.lock().unwrap();
-                    guard
-                        .diff_cache
+                    let DiffCache::V1 { diffs } = &mut guard.diff_cache;
+                    diffs
                         .entry(package.to_string())
                         .or_insert(SortedMap::new())
                         .insert(delta.clone(), diffstat.clone());

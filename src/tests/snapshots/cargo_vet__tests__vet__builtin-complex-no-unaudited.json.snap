@@ -48,7 +48,7 @@ expression: json
               "count": 25,
               "raw": "+25"
             },
-            "from": "0.0.0",
+            "from": null,
             "to": "5.0.0"
           }
         },
@@ -63,7 +63,7 @@ expression: json
               "count": 100,
               "raw": "+100"
             },
-            "from": "0.0.0",
+            "from": null,
             "to": "10.0.0"
           }
         },
@@ -78,7 +78,7 @@ expression: json
               "count": 100,
               "raw": "+100"
             },
-            "from": "0.0.0",
+            "from": null,
             "to": "10.0.0"
           }
         },
@@ -93,7 +93,7 @@ expression: json
               "count": 100,
               "raw": "+100"
             },
-            "from": "0.0.0",
+            "from": null,
             "to": "10.0.0"
           }
         }
@@ -111,7 +111,7 @@ expression: json
             "count": 25,
             "raw": "+25"
           },
-          "from": "0.0.0",
+          "from": null,
           "to": "5.0.0"
         }
       },
@@ -126,7 +126,7 @@ expression: json
             "count": 100,
             "raw": "+100"
           },
-          "from": "0.0.0",
+          "from": null,
           "to": "10.0.0"
         }
       },
@@ -141,7 +141,7 @@ expression: json
             "count": 100,
             "raw": "+100"
           },
-          "from": "0.0.0",
+          "from": null,
           "to": "10.0.0"
         }
       },
@@ -156,7 +156,7 @@ expression: json
             "count": 100,
             "raw": "+100"
           },
-          "from": "0.0.0",
+          "from": null,
           "to": "10.0.0"
         }
       }
