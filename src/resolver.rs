@@ -81,7 +81,7 @@ use crate::format::{
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
-use crate::out::Out;
+use crate::out::{progress_bar, IncProgressOnDrop, Out};
 use crate::{
     AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
     GraphFilterQuery, PackageExt, Store,
@@ -2548,9 +2548,14 @@ impl<'a> ResolveReport<'a> {
 
         let cache = Cache::acquire(cfg)?;
 
+        let suggest_progress =
+            progress_bar("Suggesting", "relevant audits", fail.failures.len() as u64);
+
         let mut suggestions = tokio::runtime::Handle::current()
             .block_on(join_all(fail.failures.iter().map(
                 |(failure_idx, audit_failure)| async {
+                    let _guard = IncProgressOnDrop(&suggest_progress, 1);
+
                     let failure_idx = *failure_idx;
                     let package = &self.graph.nodes[failure_idx];
                     let result = &self.results[failure_idx];

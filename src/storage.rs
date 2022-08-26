@@ -33,6 +33,7 @@ use crate::{
         SortedMap, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
+    out::{progress_bar, IncProgressOnDrop},
     resolver::{self, Conclusion},
     serialization::{spanned::Spanned, to_formatted_toml},
     Config, PartialConfig,
@@ -737,7 +738,9 @@ async fn fetch_imported_audits(
     network: &Network,
     config: &ConfigFile,
 ) -> Result<Vec<(ImportName, AuditsFile)>, FetchAuditError> {
+    let progress_bar = progress_bar("Fetching", "imported audits", config.imports.len() as u64);
     try_join_all(config.imports.iter().map(|(name, import)| async {
+        let _guard = IncProgressOnDrop(&progress_bar, 1);
         let audit_file = fetch_imported_audit(network, name, &import.url).await?;
         Ok::<_, FetchAuditError>((name.clone(), audit_file))
     }))

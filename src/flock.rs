@@ -13,6 +13,7 @@ use std::path::{Display, Path, PathBuf};
 use sys::*;
 
 use crate::errors::FlockError;
+use crate::out::indeterminate_spinner;
 
 #[derive(Debug)]
 pub struct FileLock {
@@ -278,7 +279,8 @@ fn acquire(
             }
         }
     }
-    eprintln!("Blocking: waiting for file lock on {}", msg);
+
+    let _spinner = indeterminate_spinner("Blocking", format!("waiting for file lock on {}", msg));
 
     lock_block()?;
     return Ok(());
