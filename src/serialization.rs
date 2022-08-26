@@ -213,10 +213,17 @@ pub mod audit {
                     version,
                     dependency_criteria: val.dependency_criteria,
                 }),
-                (None, Some(delta), None) => Ok(AuditKind::Delta {
-                    delta,
-                    dependency_criteria: val.dependency_criteria,
-                }),
+                (None, Some(delta), None) => {
+                    if let Some(from) = delta.from {
+                        Ok(AuditKind::Delta {
+                            from,
+                            to: delta.to,
+                            dependency_criteria: val.dependency_criteria,
+                        })
+                    } else {
+                        Err("'delta' must be a delta of the form 'VERSION -> VERSION'".to_string())
+                    }
+                }
                 (None, None, Some(violation)) => {
                     if val.dependency_criteria.is_empty() {
                         Ok(AuditKind::Violation { violation })
@@ -249,9 +256,18 @@ pub mod audit {
                     dependency_criteria,
                 } => (Some(version), None, None, dependency_criteria),
                 AuditKind::Delta {
-                    delta,
+                    from,
+                    to,
                     dependency_criteria,
-                } => (None, Some(delta), None, dependency_criteria),
+                } => (
+                    None,
+                    Some(Delta {
+                        from: Some(from),
+                        to,
+                    }),
+                    None,
+                    dependency_criteria,
+                ),
                 AuditKind::Violation { violation } => {
                     (None, None, Some(violation), DependencyCriteria::new())
                 }

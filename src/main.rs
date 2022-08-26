@@ -25,7 +25,7 @@ use tracing::{error, info, trace, warn};
 use crate::cli::*;
 use crate::errors::{CommandError, DownloadError, RegenerateExemptionsError};
 use crate::format::{
-    AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, Delta, DependencyCriteria,
+    AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria,
     ExemptedDependency, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr,
     SortedMap, StoreInfo,
 };
@@ -668,10 +668,8 @@ fn do_cmd_certify(
         if let Some(v2) = &sub_args.version2 {
             // This is a delta audit
             AuditKind::Delta {
-                delta: Delta {
-                    from: v1.clone(),
-                    to: v2.clone(),
-                },
+                from: v1.clone(),
+                to: v2.clone(),
                 dependency_criteria,
             }
         } else {
@@ -691,10 +689,8 @@ fn do_cmd_certify(
             FetchCommand::Diff {
                 version1, version2, ..
             } => AuditKind::Delta {
-                delta: Delta {
-                    from: version1,
-                    to: version2,
-                },
+                from: version1,
+                to: version2,
                 dependency_criteria,
             },
         }
@@ -719,7 +715,7 @@ fn do_cmd_certify(
     let criteria_names = if sub_args.criteria.is_empty() {
         let (from, to) = match &kind {
             AuditKind::Full { version, .. } => (None, version),
-            AuditKind::Delta { delta, .. } => (Some(&delta.from), &delta.to),
+            AuditKind::Delta { from, to, .. } => (Some(from), to),
             _ => unreachable!(),
         };
 
@@ -738,7 +734,7 @@ fn do_cmd_certify(
             write!(out, "choose criteria to certify for {}", package);
             match &kind {
                 AuditKind::Full { version, .. } => write!(out, ":{}", version),
-                AuditKind::Delta { delta, .. } => write!(out, ":{} -> {}", delta.from, delta.to),
+                AuditKind::Delta { from, to, .. } => write!(out, ":{} -> {}", from, to),
                 AuditKind::Violation { .. } => unreachable!(),
             }
             writeln!(out);
@@ -832,8 +828,8 @@ fn do_cmd_certify(
         AuditKind::Full { version, .. } => {
             format!("version {}", version)
         }
-        AuditKind::Delta { delta, .. } => {
-            format!("the changes from version {} to {}", delta.from, delta.to)
+        AuditKind::Delta { from, to, .. } => {
+            format!("the changes from version {} to {}", from, to)
         }
         AuditKind::Violation { .. } => unreachable!(),
     };
