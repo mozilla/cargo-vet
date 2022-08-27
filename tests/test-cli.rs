@@ -55,7 +55,7 @@ fn test_version() {
     assert_eq!(stderr, "");
 
     let (name, ver) = stdout.split_once(' ').unwrap();
-    assert_eq!(name, "cargo-vet");
+    assert_eq!(name, "cargo-vet-vet");
     let mut ver_parts = ver.trim().split('.');
     ver_parts.next().unwrap().parse::<u8>().unwrap();
     ver_parts.next().unwrap().parse::<u8>().unwrap();

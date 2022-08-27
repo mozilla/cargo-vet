@@ -3,17 +3,47 @@ source: tests/test-cli.rs
 expression: format_outputs(&output)
 ---
 stdout:
-cargo-vet 0.3.0
+cargo-vet-vet 0.3.0
 Supply-chain security for Rust
 
 When run without a subcommand, `cargo vet` will invoke the `check` subcommand. See `cargo vet help
 check` for more details.
 
-USAGE:
+Usage:
     cargo vet [OPTIONS]
     cargo vet <SUBCOMMAND>
 
-OPTIONS:
+Subcommands:
+    check
+            \[default\] Check that the current project has been vetted
+    suggest
+            Suggest some low-hanging fruit to review
+    init
+            Initialize cargo-vet for your project
+    inspect
+            Fetch the source of a package
+    diff
+            Yield a diff against the last reviewed version
+    certify
+            Mark a package as audited
+    regenerate
+            Explicitly regenerate various pieces of information
+    add-exemption
+            Mark a package as exempted from review
+    record-violation
+            Declare that some versions of a package violate certain audit criteria
+    fmt
+            Reformat all of vet's files (in case you hand-edited them)
+    fetch-imports
+            Explicitly fetch the imports (foreign audit files)
+    dump-graph
+            Print the cargo build graph as understood by `cargo vet`
+    gc
+            Clean up old packages from the vet cache
+    help
+            Print this message or the help of the given subcommand(s)
+
+Options:
         --shallow
             Avoid suggesting audits for dependencies of unaudited dependencies.
             
@@ -125,36 +155,6 @@ GLOBAL OPTIONS:
             * `is_third_party($bool)`: whether the package is considered third-party by vet
             * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original
             graph
-
-SUBCOMMANDS:
-    check
-            \[default\] Check that the current project has been vetted
-    suggest
-            Suggest some low-hanging fruit to review
-    init
-            Initialize cargo-vet for your project
-    inspect
-            Fetch the source of a package
-    diff
-            Yield a diff against the last reviewed version
-    certify
-            Mark a package as audited
-    regenerate
-            Explicitly regenerate various pieces of information
-    add-exemption
-            Mark a package as exempted from review
-    record-violation
-            Declare that some versions of a package violate certain audit criteria
-    fmt
-            Reformat all of vet's files (in case you hand-edited them)
-    fetch-imports
-            Explicitly fetch the imports (foreign audit files)
-    dump-graph
-            Print the cargo build graph as understood by `cargo vet`
-    gc
-            Clean up old packages from the vet cache
-    help
-            Print this message or the help of the given subcommand(s)
 
 stderr:
 

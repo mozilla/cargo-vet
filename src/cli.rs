@@ -18,7 +18,6 @@ pub enum FakeCli {
 #[clap(version)]
 #[clap(bin_name = "cargo vet")]
 #[clap(args_conflicts_with_subcommands = true)]
-#[clap(global_setting(clap::AppSettings::DeriveDisplayOrder))]
 /// Supply-chain security for Rust
 ///
 /// When run without a subcommand, `cargo vet` will invoke the `check`
@@ -30,7 +29,7 @@ pub struct Cli {
 
     // Top-level flags
     /// Path to Cargo.toml
-    #[clap(long, name = "PATH", parse(from_os_str))]
+    #[clap(long, name = "PATH", value_parser)]
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub manifest_path: Option<PathBuf>,
 
@@ -48,7 +47,7 @@ pub struct Cli {
     pub no_default_features: bool,
 
     /// Space-separated list of features to activate
-    #[clap(long, action, require_value_delimiter = true, value_delimiter = ' ')]
+    #[clap(long, action, value_delimiter = ' ')]
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub features: Vec<String>,
 
@@ -73,7 +72,7 @@ pub struct Cli {
     /// How verbose logging should be (log level)
     #[clap(long, action)]
     #[clap(default_value_t = LevelFilter::WARN)]
-    #[clap(possible_values = ["off", "error", "warn", "info", "debug", "trace"])]
+    #[clap(value_parser = verbose_value_parser(["off", "error", "warn", "info", "debug", "trace"]))]
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub verbose: LevelFilter,
 
@@ -156,6 +155,52 @@ pub struct Cli {
     // `args_conflicts_with_subcommand`.
     #[clap(flatten)]
     pub check_args: CheckArgs,
+}
+
+fn verbose_value_parser(values: impl IntoIterator<Item = &'static str>) -> VerboseValuesParser {
+    VerboseValuesParser(values.into_iter().collect())
+}
+
+#[derive(Clone, Debug)]
+pub struct VerboseValuesParser(Vec<&'static str>);
+
+impl clap::builder::TypedValueParser for VerboseValuesParser {
+    type Value = LevelFilter;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<Self::Value, clap::Error> {
+        clap::builder::TypedValueParser::parse(self, cmd, arg, value.to_owned())
+    }
+
+    fn parse(
+        &self,
+        _cmd: &clap::Command,
+        _arg: Option<&clap::Arg>,
+        value: std::ffi::OsString,
+    ) -> Result<Self::Value, clap::Error> {
+        let value = value
+            .into_string()
+            .map_err(|_| clap::Error::raw(clap::error::ErrorKind::InvalidUtf8, "invalid utf8"))?;
+
+        value.parse().map_err(|_e| {
+            clap::Error::raw(
+                clap::error::ErrorKind::InvalidValue,
+                format!("must be one of {:?}", self.0),
+            )
+        })
+    }
+
+    fn possible_values(
+        &self,
+    ) -> Option<Box<dyn Iterator<Item = clap::builder::PossibleValue> + '_>> {
+        Some(Box::new(
+            self.0.iter().map(|s| clap::builder::PossibleValue::from(s)),
+        ))
+    }
 }
 
 #[derive(Subcommand)]

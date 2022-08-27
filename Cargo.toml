@@ -18,7 +18,7 @@ exclude = [
 
 [dependencies]
 cargo_metadata = "0.14.2"
-clap = { version = "3.2.6", features = ["derive"] }
+clap = { git="https://github.com/clap-rs/clap", features = ["derive"] }
 clap-cargo = "0.9.1"
 console = "0.15.0"
 crates-index = { version = "0.18.8", default-features = false }
