@@ -1625,22 +1625,17 @@ fn cmd_help_md(
             // Use a trailing colon to indicate a heading
             if let Some(heading) = line.strip_suffix(':') {
                 if !line.starts_with(' ') {
-                    // SCREAMING headers are Main headings
-                    if heading.to_ascii_uppercase() == heading {
-                        in_subcommands_listing = heading == "SUBCOMMANDS";
-                        in_usage = heading == "USAGE";
-                        in_global_options = heading == "GLOBAL OPTIONS";
+                    in_subcommands_listing = heading == "Subcommands";
+                    in_usage = heading == "Usage";
+                    in_global_options = heading == "GLOBAL OPTIONS";
 
-                        writeln!(out, "### {heading}");
+                    writeln!(out, "### {heading}");
 
-                        if in_global_options && !is_full_command {
-                            writeln!(
-                                out,
-                                "This subcommand accepts all the [global options](#global-options)"
-                            );
-                        }
-                    } else {
-                        writeln!(out, "### {heading}");
+                    if in_global_options && !is_full_command {
+                        writeln!(
+                            out,
+                            "This subcommand accepts all the [global options](#global-options)"
+                        );
                     }
                     continue;
                 }
