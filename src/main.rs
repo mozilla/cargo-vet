@@ -1649,11 +1649,13 @@ fn cmd_help_md(
             if in_subcommands_listing && !line.starts_with("     ") {
                 // subcommand names are list items
                 let own_subcommand_name = line.trim();
-                write!(
-                    out,
-                    "* [{own_subcommand_name}](#{app_name}-{own_subcommand_name}): "
-                );
-                continue;
+                if !own_subcommand_name.is_empty() {
+                    write!(
+                        out,
+                        "* [{own_subcommand_name}](#{app_name}-{own_subcommand_name}): "
+                    );
+                    continue;
+                }
             }
             // The rest is indented, get rid of that
             let line = line.trim();

@@ -37,7 +37,8 @@ cargo vet <SUBCOMMAND>
 * [dump-graph](#cargo-vet-dump-graph): Print the cargo build graph as understood by `cargo vet`
 * [gc](#cargo-vet-gc): Clean up old packages from the vet cache
 * [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
-* [](#cargo-vet-): ### Options
+
+### Options
 #### `--shallow`
 Avoid suggesting audits for dependencies of unaudited dependencies.
 
@@ -411,7 +412,8 @@ cargo vet regenerate [OPTIONS] <SUBCOMMAND>
 * [imports](#cargo-vet-imports): Regenerate your imports and accept changes to criteria
 * [audit-as-crates-io](#cargo-vet-audit-as-crates-io): Regenerate you audit-as-crates-io entries to make `check` pass
 * [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
-* [](#cargo-vet-): ### Options
+
+### Options
 #### `-h, --help`
 Print help information
 
