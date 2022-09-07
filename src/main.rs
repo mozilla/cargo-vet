@@ -20,6 +20,7 @@ use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use network::Network;
 use reqwest::Url;
 use serde::de::Deserialize;
+use serialization::spanned::Spanned;
 use thiserror::Error;
 use tracing::{error, info, trace, warn};
 
@@ -705,12 +706,19 @@ fn do_cmd_certify(
         return Err(CertifyError::CouldntGuessVersion(package));
     };
 
-    let (username, who) = if let Some(who) = &sub_args.who {
-        (who.clone(), Some(who.clone()))
-    } else {
+    let (username, who) = if sub_args.who.is_empty() {
         let user_info = get_user_info()?;
         let who = format!("{} <{}>", user_info.username, user_info.email);
-        (user_info.username, Some(who))
+        (user_info.username, vec![Spanned::from(who)])
+    } else {
+        (
+            sub_args.who.join(", "),
+            sub_args
+                .who
+                .iter()
+                .map(|w| Spanned::from(w.clone()))
+                .collect(),
+        )
     };
 
     let criteria_mapper = CriteriaMapper::new(
@@ -1102,12 +1110,19 @@ fn cmd_record_violation(
         violation: sub_args.versions.clone(),
     };
 
-    let (_username, who) = if let Some(who) = &sub_args.who {
-        (who.clone(), Some(who.clone()))
-    } else {
+    let (_username, who) = if sub_args.who.is_empty() {
         let user_info = get_user_info()?;
         let who = format!("{} <{}>", user_info.username, user_info.email);
-        (user_info.username, Some(who))
+        (user_info.username, vec![Spanned::from(who)])
+    } else {
+        (
+            sub_args.who.join(", "),
+            sub_args
+                .who
+                .iter()
+                .map(|w| Spanned::from(w.clone()))
+                .collect(),
+        )
     };
 
     let notes = sub_args.notes.clone();

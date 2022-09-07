@@ -155,7 +155,7 @@ pub struct CriteriaEntry {
 #[serde(try_from = "serialization::audit::AuditEntryAll")]
 #[serde(into = "serialization::audit::AuditEntryAll")]
 pub struct AuditEntry {
-    pub who: Option<String>,
+    pub who: Vec<Spanned<String>>,
     pub criteria: Vec<Spanned<CriteriaName>>,
     pub kind: AuditKind,
     pub notes: Option<String>,

@@ -3134,8 +3134,15 @@ impl FailForViolationConflict {
                 }
             }
             writeln!(out, "      criteria: {:?}", entry.criteria);
-            if let Some(who) = &entry.who {
-                writeln!(out, "      who: {who}");
+            for (idx, who) in entry.who.iter().enumerate() {
+                if idx == 0 {
+                    write!(out, "      who: {who}");
+                } else {
+                    write!(out, ", {who}");
+                }
+            }
+            if !entry.who.is_empty() {
+                writeln!(out, "");
             }
             if let Some(notes) = &entry.notes {
                 writeln!(out, "      notes: {notes}");

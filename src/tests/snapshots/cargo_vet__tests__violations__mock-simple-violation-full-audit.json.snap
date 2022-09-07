@@ -13,8 +13,7 @@ expression: json
             "delta": null,
             "notes": null,
             "version": "3.0.0",
-            "violation": null,
-            "who": null
+            "violation": null
           },
           "audit_source": "Local",
           "violation": {
@@ -22,8 +21,7 @@ expression: json
             "delta": null,
             "notes": null,
             "version": null,
-            "violation": "=3.0.0",
-            "who": null
+            "violation": "=3.0.0"
           },
           "violation_source": "Local"
         }
@@ -35,8 +33,7 @@ expression: json
             "delta": "3.0.0 -> 5.0.0",
             "notes": null,
             "version": null,
-            "violation": null,
-            "who": null
+            "violation": null
           },
           "audit_source": "Local",
           "violation": {
@@ -44,8 +41,7 @@ expression: json
             "delta": null,
             "notes": null,
             "version": null,
-            "violation": "=3.0.0",
-            "who": null
+            "violation": "=3.0.0"
           },
           "violation_source": "Local"
         }

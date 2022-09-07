@@ -23,10 +23,15 @@ version = "0.1.0"
 notes = "test for basic resolution"
 
 [[audits.base64]]
+who = "Person One <personone@example.com>"
 criteria = "safe-to-deploy"
 version = "0.5.0"
 
 [[audits.base64]]
+who = [
+    "Person One <personone@example.com>",
+    "Person Two <persontwo@example.com>",
+]
 criteria = "safe-to-deploy"
 delta = "0.1.0 -> 0.4.0"
 

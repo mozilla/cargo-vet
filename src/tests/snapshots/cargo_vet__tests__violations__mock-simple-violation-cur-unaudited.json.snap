@@ -18,8 +18,7 @@ expression: json
             "delta": null,
             "notes": null,
             "version": null,
-            "violation": "=10",
-            "who": null
+            "violation": "=10"
           },
           "violation_source": "Local"
         }
