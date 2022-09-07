@@ -459,7 +459,7 @@ pub struct CertifyArgs {
     ///
     /// If not provided, we will collect this information from the local git.
     #[clap(long, action)]
-    pub who: Option<String>,
+    pub who: Vec<String>,
     /// A free-form string to include with the new audit entry
     ///
     /// If not provided, there will be no notes.
@@ -494,7 +494,7 @@ pub struct RecordViolationArgs {
     ///
     /// If not provided, we will collect this information from the local git.
     #[clap(long, action)]
-    pub who: Option<String>,
+    pub who: Vec<String>,
     /// A free-form string to include with the new forbid entry
     ///
     /// If not provided, there will be no notes.

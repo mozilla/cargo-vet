@@ -190,7 +190,10 @@ pub mod audit {
 
     #[derive(Serialize, Deserialize)]
     pub struct AuditEntryAll {
-        who: Option<String>,
+        #[serde(default)]
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(with = "string_or_vec")]
+        who: Vec<Spanned<String>>,
         #[serde(default)]
         #[serde(with = "string_or_vec")]
         criteria: Vec<Spanned<CriteriaName>>,
@@ -617,7 +620,7 @@ mod test {
             "test".to_owned(),
             vec![
                 AuditEntry {
-                    who: None,
+                    who: vec![],
                     criteria: vec!["long-criteria".to_owned().into()],
                     kind: AuditKind::Full {
                         version: "1.0.0".parse().unwrap(),
@@ -627,7 +630,7 @@ mod test {
                     is_fresh_import: false, // ignored
                 },
                 AuditEntry {
-                    who: None,
+                    who: vec![],
                     criteria: vec!["short-criteria".to_owned().into()],
                     kind: AuditKind::Full {
                         version: "1.0.0".parse().unwrap(),

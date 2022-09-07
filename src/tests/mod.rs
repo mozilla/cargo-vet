@@ -307,7 +307,7 @@ fn exemptions_dep(
 
 fn delta_audit(from: Version, to: Version, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
-        who: None,
+        who: vec![],
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Delta {
@@ -332,7 +332,7 @@ fn delta_audit_dep(
     >,
 ) -> AuditEntry {
     AuditEntry {
-        who: None,
+        who: vec![],
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Delta {
@@ -354,7 +354,7 @@ fn delta_audit_dep(
 
 fn full_audit(version: Version, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
-        who: None,
+        who: vec![],
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Full {
@@ -370,7 +370,7 @@ fn full_audit_m(
     criteria: impl IntoIterator<Item = impl Into<CriteriaName>>,
 ) -> AuditEntry {
     AuditEntry {
-        who: None,
+        who: vec![],
         notes: None,
         criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         kind: AuditKind::Full {
@@ -392,7 +392,7 @@ fn full_audit_dep(
     >,
 ) -> AuditEntry {
     AuditEntry {
-        who: None,
+        who: vec![],
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Full {
@@ -413,7 +413,7 @@ fn full_audit_dep(
 
 fn violation_hard(version: VersionReq) -> AuditEntry {
     AuditEntry {
-        who: None,
+        who: vec![],
         notes: None,
         criteria: vec![SAFE_TO_RUN.to_string().into()],
         kind: AuditKind::Violation { violation: version },
@@ -423,7 +423,7 @@ fn violation_hard(version: VersionReq) -> AuditEntry {
 #[allow(dead_code)]
 fn violation(version: VersionReq, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
-        who: None,
+        who: vec![],
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Violation { violation: version },
@@ -436,7 +436,7 @@ fn violation_m(
     criteria: impl IntoIterator<Item = impl Into<CriteriaName>>,
 ) -> AuditEntry {
     AuditEntry {
-        who: None,
+        who: vec![],
         notes: None,
         criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         kind: AuditKind::Violation { violation: version },
