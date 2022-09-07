@@ -2703,16 +2703,9 @@ fn builtin_simple_foreign_dep_criteria_fail() {
     imports.audits.insert(
         FOREIGN.to_owned(),
         AuditsFile {
-            criteria: [(
-                DEFAULT_CRIT.to_owned(),
-                CriteriaEntry {
-                    description: Some("nice".to_owned()),
-                    description_url: None,
-                    implies: Vec::new(),
-                },
-            )]
-            .into_iter()
-            .collect(),
+            criteria: [(DEFAULT_CRIT.to_owned(), criteria("nice"))]
+                .into_iter()
+                .collect(),
             audits: [(
                 "third-party1".to_owned(),
                 vec![full_audit_dep(
@@ -2757,16 +2750,9 @@ fn builtin_simple_foreign_dep_criteria_pass() {
     imports.audits.insert(
         FOREIGN.to_owned(),
         AuditsFile {
-            criteria: [(
-                DEFAULT_CRIT.to_owned(),
-                CriteriaEntry {
-                    description: Some("nice".to_owned()),
-                    description_url: None,
-                    implies: Vec::new(),
-                },
-            )]
-            .into_iter()
-            .collect(),
+            criteria: [(DEFAULT_CRIT.to_owned(), criteria("nice"))]
+                .into_iter()
+                .collect(),
             audits: [
                 (
                     "third-party1".to_owned(),

@@ -1,0 +1,40 @@
+---
+source: src/tests/aggregate.rs
+expression: output
+---
+
+[criteria.criteria1]
+description = "Criteria 1"
+aggregated-from = [
+    "https://elsewhere.example.com/audits.toml",
+    "https://source1.example.com/supply_chain/audits.toml",
+]
+
+[criteria.criteria2]
+description = "Criteria 2"
+aggregated-from = "https://source1.example.com/supply_chain/audits.toml"
+
+[criteria.criteria3]
+description = "Criteria 3"
+aggregated-from = "https://source2.example.com/supply_chain/audits.toml"
+
+[[audits.package1]]
+criteria = "criteria1"
+version = "10.0.0"
+aggregated-from = "https://source1.example.com/supply_chain/audits.toml"
+
+[[audits.package1]]
+criteria = "criteria2"
+version = "10.0.0"
+aggregated-from = "https://source1.example.com/supply_chain/audits.toml"
+
+[[audits.package1]]
+criteria = "criteria3"
+version = "10.0.0"
+aggregated-from = "https://source2.example.com/supply_chain/audits.toml"
+
+[[audits.package2]]
+criteria = "criteria1"
+version = "10.0.0"
+aggregated-from = "https://source2.example.com/supply_chain/audits.toml"
+

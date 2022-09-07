@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::{BufRead, BufReader};
 use std::ops::Deref;
 use std::panic::panic_any;
 use std::sync::{Arc, Mutex};
@@ -9,15 +10,19 @@ use cargo_metadata::{Metadata, Package, Version};
 use clap::{CommandFactory, Parser};
 use console::Term;
 use errors::{
-    AuditAsError, AuditAsErrors, CacheAcquireError, CertifyError, NeedsAuditAsError,
-    NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors, UserInfoError,
+    AggregateCriteriaDescription, AggregateCriteriaDescriptionMismatchError,
+    AggregateCriteriaImplies, AggregateError, AggregateErrors, AggregateImpliesMismatchError,
+    AuditAsError, AuditAsErrors, CacheAcquireError, CertifyError, FetchAuditError, LoadTomlError,
+    NeedsAuditAsError, NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors,
+    TomlParseError, UserInfoError,
 };
 use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
-use futures_util::future::join_all;
+use futures_util::future::{join_all, try_join_all};
 use indicatif::ProgressDrawTarget;
 use lazy_static::lazy_static;
-use miette::{miette, Context, Diagnostic, IntoDiagnostic};
+use miette::{miette, Context, Diagnostic, IntoDiagnostic, NamedSource, SourceOffset};
 use network::Network;
+use out::{progress_bar, IncProgressOnDrop};
 use reqwest::Url;
 use serde::de::Deserialize;
 use serialization::spanned::Spanned;
@@ -290,6 +295,7 @@ fn real_main() -> Result<(), miette::Report> {
     };
 
     match &partial_cfg.cli.command {
+        Some(Aggregate(sub_args)) => return cmd_aggregate(&out, &partial_cfg, sub_args),
         Some(HelpMarkdown(sub_args)) => return cmd_help_md(&out, &partial_cfg, sub_args),
         Some(Gc(sub_args)) => return cmd_gc(&out, &partial_cfg, sub_args),
         _ => {
@@ -445,7 +451,7 @@ fn real_main() -> Result<(), miette::Report> {
         Some(Regenerate(AuditAsCratesIo(sub_args))) => {
             cmd_regenerate_audit_as(&out, &cfg, sub_args)
         }
-        Some(HelpMarkdown(_)) | Some(Gc(_)) => unreachable!("handled earlier"),
+        Some(Aggregate(_)) | Some(HelpMarkdown(_)) | Some(Gc(_)) => unreachable!("handled earlier"),
     }
 }
 
@@ -930,6 +936,7 @@ fn do_cmd_certify(
             .collect(),
         who,
         notes,
+        aggregated_from: vec![],
         is_fresh_import: false,
     };
 
@@ -1158,6 +1165,7 @@ fn cmd_record_violation(
         criteria,
         who,
         notes,
+        aggregated_from: vec![],
         is_fresh_import: false,
     };
 
@@ -1560,6 +1568,158 @@ fn cmd_fetch_imports(
     store.commit()?;
 
     Ok(())
+}
+
+fn cmd_aggregate(
+    out: &Arc<dyn Out>,
+    cfg: &PartialConfig,
+    sub_args: &AggregateArgs,
+) -> Result<(), miette::Report> {
+    let network =
+        Network::acquire(cfg).ok_or_else(|| miette!("cannot aggregate imports when --frozen"))?;
+
+    let mut urls = Vec::new();
+    {
+        let sources_file = BufReader::new(
+            File::open(&sub_args.sources)
+                .into_diagnostic()
+                .wrap_err("failed to open sources file")?,
+        );
+        for line_result in sources_file.lines() {
+            let line = line_result
+                .into_diagnostic()
+                .wrap_err("failed to read sources file")?;
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                // Ignore comment and empty lines.
+                continue;
+            }
+            urls.push(
+                Url::parse(trimmed)
+                    .into_diagnostic()
+                    .wrap_err_with(|| format!("failed to parse url: {:?}", trimmed))?,
+            );
+        }
+    }
+
+    let progress_bar = progress_bar("Fetching", "source audits", urls.len() as u64);
+    let sources = tokio::runtime::Handle::current()
+        .block_on(try_join_all(urls.into_iter().map(|url| async {
+            let _guard = IncProgressOnDrop(&progress_bar, 1);
+            let url_string = url.to_string();
+            let audit_bytes = network.download(url).await?;
+            let audit_string = String::from_utf8(audit_bytes).map_err(LoadTomlError::from)?;
+            let audit_source = Arc::new(NamedSource::new(url_string.clone(), audit_string.clone()));
+            let audit_file: AuditsFile = toml::de::from_str(&audit_string)
+                .map_err(|error| {
+                    let (line, col) = error.line_col().unwrap_or((0, 0));
+                    TomlParseError {
+                        source_code: audit_source,
+                        span: SourceOffset::from_location(&audit_string, line + 1, col + 1),
+                        error,
+                    }
+                })
+                .map_err(LoadTomlError::from)?;
+            Ok::<_, FetchAuditError>((url_string, audit_file))
+        })))
+        .into_diagnostic()?;
+
+    let merged_audits = do_aggregate_audits(sources).into_diagnostic()?;
+    let document = serialization::to_formatted_toml(merged_audits).into_diagnostic()?;
+    write!(out, "{}", document);
+    Ok(())
+}
+
+fn do_aggregate_audits(sources: Vec<(String, AuditsFile)>) -> Result<AuditsFile, AggregateErrors> {
+    let mut errors = Vec::new();
+    let mut aggregate = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: SortedMap::new(),
+    };
+
+    for (source, audit_file) in sources {
+        // Add each criteria from the original source, managing duplicates by
+        // ensuring that their descriptions map 1:1.
+        for (criteria_name, mut criteria_entry) in audit_file.criteria {
+            match aggregate.criteria.entry(criteria_name) {
+                std::collections::btree_map::Entry::Vacant(vacant) => {
+                    criteria_entry.aggregated_from.push(source.clone().into());
+                    vacant.insert(criteria_entry);
+                }
+                std::collections::btree_map::Entry::Occupied(occupied) => {
+                    let prev_source = occupied
+                        .get()
+                        .aggregated_from
+                        .last()
+                        .map(|s| s.to_string())
+                        .unwrap_or_default();
+                    // NOTE: We don't record the new `aggregated_from` chain in
+                    // this case, as we already have a chain for the existing
+                    // entry which we don't want to clobber. This means that
+                    // source order in the `sources.list` file can impact where
+                    // your criteria are credited to originate from.
+                    if occupied.get().description != criteria_entry.description
+                        || occupied.get().description_url != criteria_entry.description_url
+                    {
+                        errors.push(AggregateError::CriteriaDescriptionMismatch(
+                            AggregateCriteriaDescriptionMismatchError {
+                                criteria_name: occupied.key().to_owned(),
+                                first: AggregateCriteriaDescription {
+                                    source: prev_source.clone(),
+                                    description: occupied.get().description.clone(),
+                                    description_url: occupied.get().description_url.clone(),
+                                },
+                                second: AggregateCriteriaDescription {
+                                    source: source.clone(),
+                                    description: criteria_entry.description.clone(),
+                                    description_url: criteria_entry.description_url.clone(),
+                                },
+                            },
+                        ))
+                    }
+                    if occupied.get().implies != criteria_entry.implies {
+                        errors.push(AggregateError::ImpliesMismatch(
+                            AggregateImpliesMismatchError {
+                                criteria_name: occupied.key().to_owned(),
+                                first: AggregateCriteriaImplies {
+                                    source: prev_source.clone(),
+                                    implies: occupied
+                                        .get()
+                                        .implies
+                                        .iter()
+                                        .map(|c| c.to_string())
+                                        .collect(),
+                                },
+                                second: AggregateCriteriaImplies {
+                                    source: source.clone(),
+                                    implies: criteria_entry
+                                        .implies
+                                        .iter()
+                                        .map(|c| c.to_string())
+                                        .collect(),
+                                },
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+        for (package_name, audits) in audit_file.audits {
+            aggregate
+                .audits
+                .entry(package_name)
+                .or_default()
+                .extend(audits.into_iter().map(|mut audit_entry| {
+                    audit_entry.aggregated_from.push(source.clone().into());
+                    audit_entry
+                }));
+        }
+    }
+    if errors.is_empty() {
+        Ok(aggregate)
+    } else {
+        Err(AggregateErrors { errors })
+    }
 }
 
 fn cmd_dump_graph(

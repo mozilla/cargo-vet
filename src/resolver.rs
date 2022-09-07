@@ -3142,7 +3142,7 @@ impl FailForViolationConflict {
                 }
             }
             if !entry.who.is_empty() {
-                writeln!(out, "");
+                writeln!(out);
             }
             if let Some(notes) = &entry.notes {
                 writeln!(out, "      notes: {notes}");

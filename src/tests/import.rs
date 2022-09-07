@@ -337,16 +337,9 @@ fn existing_peer_import_custom_criteria() {
     };
 
     let new_foreign_audits = AuditsFile {
-        criteria: [(
-            "fuzzed".to_string(),
-            CriteriaEntry {
-                implies: vec![],
-                description: Some("fuzzed".to_string()),
-                description_url: None,
-            },
-        )]
-        .into_iter()
-        .collect(),
+        criteria: [("fuzzed".to_string(), criteria("fuzzed"))]
+            .into_iter()
+            .collect(),
         audits: [(
             "third-party2".to_owned(),
             vec![
@@ -395,16 +388,9 @@ fn new_audit_for_unused_criteria_basic() {
     let metadata = mock.metadata();
     let (mut config, audits, mut imports) = builtin_files_full_audited(&metadata);
     let old_foreign_audits = AuditsFile {
-        criteria: [(
-            "fuzzed".to_string(),
-            CriteriaEntry {
-                implies: vec![],
-                description: Some("fuzzed".to_string()),
-                description_url: None,
-            },
-        )]
-        .into_iter()
-        .collect(),
+        criteria: [("fuzzed".to_string(), criteria("fuzzed"))]
+            .into_iter()
+            .collect(),
         audits: [(
             "third-party2".to_owned(),
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -457,16 +443,9 @@ fn new_audit_for_unused_criteria_transitive() {
     let metadata = mock.metadata();
     let (mut config, audits, mut imports) = builtin_files_full_audited(&metadata);
     let old_foreign_audits = AuditsFile {
-        criteria: [(
-            "fuzzed".to_string(),
-            CriteriaEntry {
-                implies: vec![],
-                description: Some("fuzzed".to_string()),
-                description_url: None,
-            },
-        )]
-        .into_iter()
-        .collect(),
+        criteria: [("fuzzed".to_string(), criteria("fuzzed"))]
+            .into_iter()
+            .collect(),
         audits: [(
             "third-party1".to_owned(),
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],

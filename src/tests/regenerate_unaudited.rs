@@ -600,19 +600,11 @@ fn builtin_simple_exemptions_regenerate_merge() {
 
     audits.criteria.insert(
         "criteria1".to_owned(),
-        CriteriaEntry {
-            description: Some(String::new()),
-            description_url: None,
-            implies: vec![SAFE_TO_DEPLOY.to_owned().into()],
-        },
+        criteria_implies("", [SAFE_TO_DEPLOY]),
     );
     audits.criteria.insert(
         "criteria2".to_owned(),
-        CriteriaEntry {
-            description: Some(String::new()),
-            description_url: None,
-            implies: vec![SAFE_TO_DEPLOY.to_owned().into()],
-        },
+        criteria_implies("", [SAFE_TO_DEPLOY]),
     );
 
     audits.audits.insert(
@@ -659,19 +651,11 @@ fn builtin_simple_exemptions_regenerate_merge_nonew() {
 
     audits.criteria.insert(
         "criteria1".to_owned(),
-        CriteriaEntry {
-            description: Some(String::new()),
-            description_url: None,
-            implies: vec![SAFE_TO_DEPLOY.to_owned().into()],
-        },
+        criteria_implies("", [SAFE_TO_DEPLOY]),
     );
     audits.criteria.insert(
         "criteria2".to_owned(),
-        CriteriaEntry {
-            description: Some(String::new()),
-            description_url: None,
-            implies: vec![SAFE_TO_DEPLOY.to_owned().into()],
-        },
+        criteria_implies("", [SAFE_TO_DEPLOY]),
     );
 
     audits.audits.insert(
