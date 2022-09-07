@@ -148,6 +148,12 @@ pub struct CriteriaEntry {
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec")]
     pub implies: Vec<Spanned<CriteriaName>>,
+    /// Chain of sources this criteria was aggregated from, most recent last.
+    #[serde(rename = "aggregated-from")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    #[serde(with = "serialization::string_or_vec")]
+    pub aggregated_from: Vec<Spanned<String>>,
 }
 
 /// This is conceptually an enum
@@ -159,6 +165,8 @@ pub struct AuditEntry {
     pub criteria: Vec<Spanned<CriteriaName>>,
     pub kind: AuditKind,
     pub notes: Option<String>,
+    /// Chain of sources this audit was aggregated from, most recent last.
+    pub aggregated_from: Vec<Spanned<String>>,
     /// A non-serialized member which indicates whether this audit is a "fresh"
     /// audit. This will be set for all audits imported found in the remote
     /// audits file which aren't also found in the local `imports.lock` cache.

@@ -38,6 +38,7 @@ macro_rules! assert_report_snapshot {
     }};
 }
 
+mod aggregate;
 mod audit_as_crates_io;
 mod certify;
 mod import;
@@ -68,6 +69,7 @@ lazy_static::lazy_static! {
             Box::new(
                 miette::MietteHandlerOpts::new()
                     .graphical_theme(graphical_theme)
+                    .width(80)
                     .build()
             )
         })).expect("Failed to initialize error handler");
@@ -315,6 +317,7 @@ fn delta_audit(from: Version, to: Version, criteria: CriteriaStr) -> AuditEntry 
             to,
             dependency_criteria: DependencyCriteria::default(),
         },
+        aggregated_from: vec![],
         is_fresh_import: false,
     }
 }
@@ -348,6 +351,7 @@ fn delta_audit_dep(
                 })
                 .collect(),
         },
+        aggregated_from: vec![],
         is_fresh_import: false,
     }
 }
@@ -361,6 +365,7 @@ fn full_audit(version: Version, criteria: CriteriaStr) -> AuditEntry {
             version,
             dependency_criteria: DependencyCriteria::default(),
         },
+        aggregated_from: vec![],
         is_fresh_import: false,
     }
 }
@@ -377,6 +382,7 @@ fn full_audit_m(
             version,
             dependency_criteria: DependencyCriteria::default(),
         },
+        aggregated_from: vec![],
         is_fresh_import: false,
     }
 }
@@ -407,6 +413,7 @@ fn full_audit_dep(
                 })
                 .collect(),
         },
+        aggregated_from: vec![],
         is_fresh_import: false,
     }
 }
@@ -417,6 +424,7 @@ fn violation_hard(version: VersionReq) -> AuditEntry {
         notes: None,
         criteria: vec![SAFE_TO_RUN.to_string().into()],
         kind: AuditKind::Violation { violation: version },
+        aggregated_from: vec![],
         is_fresh_import: false,
     }
 }
@@ -427,6 +435,7 @@ fn violation(version: VersionReq, criteria: CriteriaStr) -> AuditEntry {
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Violation { violation: version },
+        aggregated_from: vec![],
         is_fresh_import: false,
     }
 }
@@ -440,6 +449,7 @@ fn violation_m(
         notes: None,
         criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         kind: AuditKind::Violation { violation: version },
+        aggregated_from: vec![],
         is_fresh_import: false,
     }
 }
@@ -487,6 +497,27 @@ fn dep_policy(
             })
             .collect(),
         ..default_policy()
+    }
+}
+
+fn criteria(description: &str) -> CriteriaEntry {
+    CriteriaEntry {
+        description: Some(description.to_owned()),
+        description_url: None,
+        implies: vec![],
+        aggregated_from: vec![],
+    }
+}
+
+fn criteria_implies(
+    description: &str,
+    implies: impl IntoIterator<Item = impl Into<CriteriaName>>,
+) -> CriteriaEntry {
+    CriteriaEntry {
+        description: Some(description.to_owned()),
+        description_url: None,
+        implies: implies.into_iter().map(|s| s.into().into()).collect(),
+        aggregated_from: vec![],
     }
 }
 
@@ -917,36 +948,14 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     audits.criteria = SortedMap::from_iter(vec![
         (
             "strong-reviewed".to_string(),
-            CriteriaEntry {
-                implies: vec!["reviewed".to_string().into()],
-                description: Some("strongly reviewed".to_string()),
-                description_url: None,
-            },
+            criteria_implies("strongly reviewed", ["reviewed"]),
         ),
         (
             "reviewed".to_string(),
-            CriteriaEntry {
-                implies: vec!["weak-reviewed".to_string().into()],
-                description: Some("reviewed".to_string()),
-                description_url: None,
-            },
+            criteria_implies("reviewed", ["weak-reviewed"]),
         ),
-        (
-            "weak-reviewed".to_string(),
-            CriteriaEntry {
-                implies: vec![],
-                description: Some("weakly reviewed".to_string()),
-                description_url: None,
-            },
-        ),
-        (
-            "fuzzed".to_string(),
-            CriteriaEntry {
-                implies: vec![],
-                description: Some("fuzzed".to_string()),
-                description_url: None,
-            },
-        ),
+        ("weak-reviewed".to_string(), criteria("weakly reviewed")),
+        ("fuzzed".to_string(), criteria("fuzzed")),
     ]);
 
     // Make the root packages use our custom criteria instead of the builtins

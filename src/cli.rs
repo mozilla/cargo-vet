@@ -322,6 +322,15 @@ pub enum Commands {
     #[clap(disable_version_flag = true)]
     FetchImports(FetchImportsArgs),
 
+    /// Fetch and merge audits from multiple sources into a single `audits.toml`
+    /// file.
+    ///
+    /// Will fetch the audits from each URL in the provided file, combining them
+    /// into a single file. Custom criteria will be merged by-name, and must
+    /// have identical descriptions in each source audit file.
+    #[clap(disable_version_flag = true)]
+    Aggregate(AggregateArgs),
+
     /// Print the cargo build graph as understood by `cargo vet`
     ///
     /// This is a debugging command, the output's format is not guaranteed.
@@ -569,6 +578,13 @@ pub struct RegenerateImportsArgs {}
 
 #[derive(clap::Args)]
 pub struct RegenerateAuditAsCratesIoArgs {}
+
+#[derive(clap::Args)]
+pub struct AggregateArgs {
+    /// Path to a file containing a list of URLs to aggregate the audits from.
+    #[clap(action)]
+    pub sources: PathBuf,
+}
 
 #[derive(clap::Args)]
 pub struct HelpMarkdownArgs {}

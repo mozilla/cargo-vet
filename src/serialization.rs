@@ -206,6 +206,11 @@ pub mod audit {
         #[serde(default)]
         dependency_criteria: DependencyCriteria,
         notes: Option<String>,
+        #[serde(rename = "aggregated-from")]
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(with = "string_or_vec")]
+        #[serde(default)]
+        pub aggregated_from: Vec<Spanned<String>>,
     }
 
     impl TryFrom<AuditEntryAll> for AuditEntry {
@@ -244,6 +249,7 @@ pub mod audit {
                 notes: val.notes,
                 criteria: val.criteria,
                 kind: kind?,
+                aggregated_from: val.aggregated_from,
                 // By default, always read entries as non-fresh. The import code
                 // will set this flag to true for imported entries.
                 is_fresh_import: false,
@@ -283,6 +289,7 @@ pub mod audit {
                 delta,
                 violation,
                 dependency_criteria,
+                aggregated_from: val.aggregated_from,
             }
         }
     }
@@ -627,6 +634,7 @@ mod test {
                         dependency_criteria: dc_long,
                     },
                     notes: Some("notes go here!".to_owned()),
+                    aggregated_from: vec![],
                     is_fresh_import: false, // ignored
                 },
                 AuditEntry {
@@ -637,6 +645,7 @@ mod test {
                         dependency_criteria: dc_short,
                     },
                     notes: Some("notes go here!".to_owned()),
+                    aggregated_from: vec![],
                     is_fresh_import: true, // ignored
                 },
             ],

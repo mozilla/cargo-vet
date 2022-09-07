@@ -1,0 +1,32 @@
+---
+source: src/tests/aggregate.rs
+expression: output
+---
+
+  × there were errors aggregating source audit files
+
+Error: 
+  × criteria description mismatch for criteria1
+  │ https://source1.example.com/supply_chain/audits.toml:
+  │ Criteria 1
+  │ https://source2.example.com/supply_chain/audits.toml:
+  │ Criteria 1 (alt)
+Error: 
+  × criteria description mismatch for criteria2
+  │ https://source1.example.com/supply_chain/audits.toml:
+  │ Criteria 2
+  │ https://source2.example.com/supply_chain/audits.toml:
+  │ (URL) https://criteria2
+Error: 
+  × criteria description mismatch for criteria3
+  │ https://source1.example.com/supply_chain/audits.toml:
+  │ (URL) https://criteria3
+  │ https://source2.example.com/supply_chain/audits.toml:
+  │ (URL) https://criteria3.alt
+Error: 
+  × implied criteria mismatch for criteria3
+  │ https://source1.example.com/supply_chain/audits.toml:
+  │  - criteria2
+  │ https://source2.example.com/supply_chain/audits.toml:
+  │  - criteria1
+

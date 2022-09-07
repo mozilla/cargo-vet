@@ -4,7 +4,7 @@ use cargo_metadata::Version;
 use miette::{Diagnostic, NamedSource, SourceOffset, SourceSpan};
 use thiserror::Error;
 
-use crate::format::{ForeignCriteriaName, ImportName, PackageName};
+use crate::format::{CriteriaName, ForeignCriteriaName, ImportName, PackageName};
 
 pub type SourceFile = Arc<NamedSource>;
 
@@ -555,6 +555,82 @@ pub enum FlockError {
         #[source]
         std::io::Error,
     ),
+}
+
+//////////////////////////////////////////////////////////
+// AggregateErrors
+//////////////////////////////////////////////////////////
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("there were errors aggregating source audit files")]
+#[diagnostic()]
+pub struct AggregateErrors {
+    #[related]
+    pub errors: Vec<AggregateError>,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum AggregateError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CriteriaDescriptionMismatch(AggregateCriteriaDescriptionMismatchError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ImpliesMismatch(AggregateImpliesMismatchError),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+#[error("criteria description mismatch for {criteria_name}\n{first}\n{second}")]
+pub struct AggregateCriteriaDescriptionMismatchError {
+    pub criteria_name: CriteriaName,
+    pub first: AggregateCriteriaDescription,
+    pub second: AggregateCriteriaDescription,
+}
+
+#[derive(Debug)]
+pub struct AggregateCriteriaDescription {
+    pub source: String,
+    pub description: Option<String>,
+    pub description_url: Option<String>,
+}
+
+impl Display for AggregateCriteriaDescription {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if let Some(description) = &self.description {
+            write!(f, "{}:\n{}", self.source, description)
+        } else if let Some(description_url) = &self.description_url {
+            write!(f, "{}:\n(URL) {}", self.source, description_url)
+        } else {
+            write!(f, "{}:\n(no description)", self.source)
+        }
+    }
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+#[error("implied criteria mismatch for {criteria_name}\n{first}\n{second}")]
+pub struct AggregateImpliesMismatchError {
+    pub criteria_name: CriteriaName,
+    pub first: AggregateCriteriaImplies,
+    pub second: AggregateCriteriaImplies,
+}
+
+#[derive(Debug)]
+pub struct AggregateCriteriaImplies {
+    pub source: String,
+    pub implies: Vec<CriteriaName>,
+}
+
+impl Display for AggregateCriteriaImplies {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}:", self.source)?;
+        for implied in &self.implies {
+            write!(f, "\n - {}", implied)?;
+        }
+        Ok(())
+    }
 }
 
 //////////////////////////////////////////////////////////
