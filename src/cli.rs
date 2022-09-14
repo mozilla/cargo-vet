@@ -406,6 +406,16 @@ pub struct CheckArgs {
     /// certain of the requirements for to be emitted.
     #[clap(long, action)]
     pub shallow: bool,
+
+    /// When reporting suggestions, also generate a link to allow vet failures
+    /// to be certified using the web-based certify GUI.
+    ///
+    /// With json output, only the data portion of the URI will be printed.
+    ///
+    /// The output from the GUI can be passed into `cargo vet certify
+    /// --from-web-gui` to be applied.
+    #[clap(long, action)]
+    pub certify_web_gui: bool,
 }
 
 #[derive(clap::Args)]
@@ -483,6 +493,10 @@ pub struct CertifyArgs {
     /// talk about is part of your current build, but this flag disables that.
     #[clap(long, action)]
     pub force: bool,
+    /// Read a blob created by the GUI from stdin, and apply the relevant audits
+    /// to the tree. When this flag is passed, the command is non-interactive.
+    #[clap(long, action)]
+    pub from_gui: bool,
 }
 
 /// Forbids the given version

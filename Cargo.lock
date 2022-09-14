@@ -113,6 +113,7 @@ dependencies = [
 name = "cargo-vet"
 version = "0.3.0"
 dependencies = [
+ "base64",
  "cargo_metadata",
  "clap",
  "clap-cargo",

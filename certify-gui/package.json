@@ -1,0 +1,23 @@
+{
+  "name": "certify-gui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "prettier": "^2.7.1",
+    "sass": "^1.54.9",
+    "vite": "^3.1.0"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^2.1.0",
+    "bootstrap": "^5.2.1",
+    "pako": "^2.0.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
