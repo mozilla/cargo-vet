@@ -7,14 +7,14 @@ stdout:
 
 > This manual can be regenerated with `cargo vet help-markdown`
 
-Version: `cargo-vet 0.3.0`
+Version: `vet 0.3.0`
 
 Supply-chain security for Rust
 
 When run without a subcommand, `cargo vet` will invoke the `check` subcommand. See `cargo vet help
 check` for more details.
 
-### USAGE
+### Usage
 ```
 cargo vet [OPTIONS]
 ```
@@ -22,7 +22,23 @@ cargo vet [OPTIONS]
 cargo vet <SUBCOMMAND>
 ```
 
-### OPTIONS
+### Subcommands
+* [check](#cargo-vet-check): \[default\] Check that the current project has been vetted
+* [suggest](#cargo-vet-suggest): Suggest some low-hanging fruit to review
+* [init](#cargo-vet-init): Initialize cargo-vet for your project
+* [inspect](#cargo-vet-inspect): Fetch the source of a package
+* [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
+* [certify](#cargo-vet-certify): Mark a package as audited
+* [regenerate](#cargo-vet-regenerate): Explicitly regenerate various pieces of information
+* [add-exemption](#cargo-vet-add-exemption): Mark a package as exempted from review
+* [record-violation](#cargo-vet-record-violation): Declare that some versions of a package violate certain audit criteria
+* [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
+* [fetch-imports](#cargo-vet-fetch-imports): Explicitly fetch the imports (foreign audit files)
+* [dump-graph](#cargo-vet-dump-graph): Print the cargo build graph as understood by `cargo vet`
+* [gc](#cargo-vet-gc): Clean up old packages from the vet cache
+* [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
+
+### Options
 #### `--shallow`
 Avoid suggesting audits for dependencies of unaudited dependencies.
 
@@ -135,22 +151,6 @@ tested)
 * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original
 graph
 
-### SUBCOMMANDS
-* [check](#cargo-vet-check): \[default\] Check that the current project has been vetted
-* [suggest](#cargo-vet-suggest): Suggest some low-hanging fruit to review
-* [init](#cargo-vet-init): Initialize cargo-vet for your project
-* [inspect](#cargo-vet-inspect): Fetch the source of a package
-* [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
-* [certify](#cargo-vet-certify): Mark a package as audited
-* [regenerate](#cargo-vet-regenerate): Explicitly regenerate various pieces of information
-* [add-exemption](#cargo-vet-add-exemption): Mark a package as exempted from review
-* [record-violation](#cargo-vet-record-violation): Declare that some versions of a package violate certain audit criteria
-* [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
-* [fetch-imports](#cargo-vet-fetch-imports): Explicitly fetch the imports (foreign audit files)
-* [dump-graph](#cargo-vet-dump-graph): Print the cargo build graph as understood by `cargo vet`
-* [gc](#cargo-vet-gc): Clean up old packages from the vet cache
-* [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
-
 <br><br><br>
 ## cargo vet check
 \[default\] Check that the current project has been vetted
@@ -161,15 +161,15 @@ If the check fails due to lack of audits, we will do our best to explain why vet
 what should be done to fix it. This can involve a certain amount of guesswork, as there are many
 possible solutions and we only want to recommend the "best" one to keep things simple.
 
-Failures and suggestions can either be "Certain" or "Speculative". Speculative items are greyed
-out and sorted lower to indicate that the Certain entries should be looked at first. Speculative
-items are for packages that probably need audits too, but only appear as transitive dependencies of
+Failures and suggestions can either be "Certain" or "Speculative". Speculative items are greyed out
+and sorted lower to indicate that the Certain entries should be looked at first. Speculative items
+are for packages that probably need audits too, but only appear as transitive dependencies of
 Certain items.
 
 During review of Certain issues you may take various actions that change what's needed for the
-Speculative ones. For instance you may discover you're enabling a feature you don't need, and
-that's the only reason the Speculative package is in your tree. Or you may determine that the
-Certain package only needs to be safe-to-run, which may make the Speculative requirements weaker or
+Speculative ones. For instance you may discover you're enabling a feature you don't need, and that's
+the only reason the Speculative package is in your tree. Or you may determine that the Certain
+package only needs to be safe-to-run, which may make the Speculative requirements weaker or
 completely resolved. For these reasons we recommend fixing problems "top down", and Certain items
 are The Top.
 
@@ -183,12 +183,12 @@ exemptions necessary to make `check` pass (and remove uneeded ones). Ideally you
 this and prefer adding audits, but if you've done all the audits you plan on doing, that's the way
 to finish the job.
 
-### USAGE
+### Usage
 ```
 cargo vet check [OPTIONS]
 ```
 
-### OPTIONS
+### Options
 #### `--shallow`
 Avoid suggesting audits for dependencies of unaudited dependencies.
 
@@ -216,12 +216,12 @@ remove it while suggesting.
 See also `regenerate exemptions`, which can be used to "garbage collect" your backlog (if you run it
 while `check` is passing).
 
-### USAGE
+### Usage
 ```
 cargo vet suggest [OPTIONS]
 ```
 
-### OPTIONS
+### Options
 #### `--shallow`
 Avoid suggesting audits for dependencies of unaudited dependencies.
 
@@ -245,12 +245,12 @@ This will add `exemptions` and `audit-as-crates-io = false` for all packages tha
 At this point you can either configure your project further or start working on your review backlog
 with `suggest`.
 
-### USAGE
+### Usage
 ```
 cargo vet init [OPTIONS]
 ```
 
-### OPTIONS
+### Options
 #### `-h, --help`
 Print help information
 
@@ -261,22 +261,22 @@ This subcommand accepts all the [global options](#global-options)
 ## cargo vet inspect
 Fetch the source of a package
 
-We will attempt to guess what criteria you want to audit the package for based on the current check/
-suggest status, and show you the meaning of those criteria ahead of time.
+We will attempt to guess what criteria you want to audit the package for based on the current
+check/suggest status, and show you the meaning of those criteria ahead of time.
 
-### USAGE
+### Usage
 ```
 cargo vet inspect [OPTIONS] <PACKAGE> <VERSION>
 ```
 
-### ARGS
+### Arguments
 #### `<PACKAGE>`
 The package to inspect
 
 #### `<VERSION>`
 The version to inspect
 
-### OPTIONS
+### Options
 #### `--mode <MODE>`
 How to inspect the source
 
@@ -293,15 +293,15 @@ This subcommand accepts all the [global options](#global-options)
 ## cargo vet diff
 Yield a diff against the last reviewed version
 
-We will attempt to guess what criteria you want to audit the package for based on the current check/
-suggest status, and show you the meaning of those criteria ahead of time.
+We will attempt to guess what criteria you want to audit the package for based on the current
+check/suggest status, and show you the meaning of those criteria ahead of time.
 
-### USAGE
+### Usage
 ```
 cargo vet diff [OPTIONS] <PACKAGE> <VERSION1> <VERSION2>
 ```
 
-### ARGS
+### Arguments
 #### `<PACKAGE>`
 The package to diff
 
@@ -311,7 +311,7 @@ The base version to diff
 #### `<VERSION2>`
 The target version to diff
 
-### OPTIONS
+### Options
 #### `--mode <MODE>`
 How to inspect the source
 
@@ -341,12 +341,12 @@ on your backlog and instead use the recommendations of `suggest`.
 
 If this removes the need for an `exemption` will we automatically remove it.
 
-### USAGE
+### Usage
 ```
 cargo vet certify [OPTIONS] [ARGS]
 ```
 
-### ARGS
+### Arguments
 #### `<PACKAGE>`
 The package to certify as audited
 
@@ -356,7 +356,7 @@ The version to certify as audited
 #### `<VERSION2>`
 If present, instead certify a diff from version1->version2
 
-### OPTIONS
+### Options
 #### `--criteria <CRITERIA>`
 The criteria to certify for this audit
 
@@ -402,22 +402,23 @@ automatic if we agree they're boring/reliable enough.
 
 See the subcommands for specifics.
 
-### USAGE
+### Usage
 ```
 cargo vet regenerate [OPTIONS] <SUBCOMMAND>
 ```
 
-### OPTIONS
+### Subcommands
+* [exemptions](#cargo-vet-exemptions): Regenerate your exemptions to make `check` pass minimally
+* [imports](#cargo-vet-imports): Regenerate your imports and accept changes to criteria
+* [audit-as-crates-io](#cargo-vet-audit-as-crates-io): Regenerate you audit-as-crates-io entries to make `check` pass
+* [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
+
+### Options
 #### `-h, --help`
 Print help information
 
 ### GLOBAL OPTIONS
 This subcommand accepts all the [global options](#global-options)
-### SUBCOMMANDS
-* [exemptions](#cargo-vet-exemptions): Regenerate your exemptions to make `check` pass minimally
-* [imports](#cargo-vet-imports): Regenerate your imports and accept changes to criteria
-* [audit-as-crates-io](#cargo-vet-audit-as-crates-io): Regenerate you audit-as-crates-io entries to make `check` pass
-* [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 
 <br><br><br>
 ## cargo vet exemptions
@@ -427,16 +428,16 @@ This command can be used for two purposes: to force your supply-chain to pass `c
 currently failing, or to minimize/garbage-collect your exemptions when it's already passing. These
 are ultimately the same operation.
 
-We will try our best to preserve existing exemptions, removing only those that aren't needed,
-and adding only those that are needed. Exemptions that are overbroad may also be weakened (i.e.
+We will try our best to preserve existing exemptions, removing only those that aren't needed, and
+adding only those that are needed. Exemptions that are overbroad may also be weakened (i.e.
 safe-to-deploy may be reduced to safe-to-run).
 
-### USAGE
+### Usage
 ```
 cargo vet regenerate exemptions [OPTIONS]
 ```
 
-### OPTIONS
+### Options
 #### `-h, --help`
 Print help information
 
@@ -450,12 +451,12 @@ Regenerate your imports and accept changes to criteria
 This is equivalent to `cargo vet fetch-imports` but it won't produce an error if the descriptions of
 foreign criteria change.
 
-### USAGE
+### Usage
 ```
 cargo vet regenerate imports [OPTIONS]
 ```
 
-### OPTIONS
+### Options
 #### `-h, --help`
 Print help information
 
@@ -468,12 +469,12 @@ Regenerate you audit-as-crates-io entries to make `check` pass
 
 This will just set any problematic entries to `audit-as-crates-io = false`.
 
-### USAGE
+### Usage
 ```
 cargo vet regenerate audit-as-crates-io [OPTIONS]
 ```
 
-### OPTIONS
+### Options
 #### `-h, --help`
 Print help information
 
@@ -484,17 +485,52 @@ This subcommand accepts all the [global options](#global-options)
 ## cargo vet help
 Print this message or the help of the given subcommand(s)
 
-### USAGE
+### Usage
 ```
-cargo vet regenerate help [OPTIONS] [SUBCOMMAND]...
+cargo vet regenerate help [SUBCOMMAND]
 ```
 
-### ARGS
-#### `<SUBCOMMAND>...`
-The subcommand whose help message to display
+### Subcommands
+* [exemptions](#cargo-vet-exemptions): Regenerate your exemptions to make `check` pass minimally
+* [imports](#cargo-vet-imports): Regenerate your imports and accept changes to criteria
+* [audit-as-crates-io](#cargo-vet-audit-as-crates-io): Regenerate you audit-as-crates-io entries to make `check` pass
+* [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 
-### GLOBAL OPTIONS
-This subcommand accepts all the [global options](#global-options)
+<br><br><br>
+## cargo vet exemptions
+Regenerate your exemptions to make `check` pass minimally
+
+### Usage
+```
+cargo vet regenerate help exemptions
+```
+
+<br><br><br>
+## cargo vet imports
+Regenerate your imports and accept changes to criteria
+
+### Usage
+```
+cargo vet regenerate help imports
+```
+
+<br><br><br>
+## cargo vet audit-as-crates-io
+Regenerate you audit-as-crates-io entries to make `check` pass
+
+### Usage
+```
+cargo vet regenerate help audit-as-crates-io
+```
+
+<br><br><br>
+## cargo vet help
+Print this message or the help of the given subcommand(s)
+
+### Usage
+```
+cargo vet regenerate help help
+```
 
 <br><br><br>
 ## cargo vet add-exemption
@@ -508,19 +544,19 @@ necessary to make progress.
 unnecessary ones), so we recommend using that over `add-exemption`. This command mostly exists as
 "plumbing" for building tools on top of `cargo vet`.
 
-### USAGE
+### Usage
 ```
 cargo vet add-exemption [OPTIONS] <PACKAGE> <VERSION>
 ```
 
-### ARGS
+### Arguments
 #### `<PACKAGE>`
 The package to mark as exempted
 
 #### `<VERSION>`
 The version to mark as exempted
 
-### OPTIONS
+### Options
 #### `--criteria <CRITERIA>`
 The criteria to assume (trust)
 
@@ -576,19 +612,19 @@ When a violation *does* cause an integrity error, it's up to you and your peers 
 to do about it. There isn't yet a mechanism for dealing with disagreements with a peer's published
 violations.
 
-### USAGE
+### Usage
 ```
 cargo vet record-violation [OPTIONS] <PACKAGE> <VERSIONS>
 ```
 
-### ARGS
+### Arguments
 #### `<PACKAGE>`
 The package to forbid
 
 #### `<VERSIONS>`
 The versions to forbid
 
-### OPTIONS
+### Options
 #### `--criteria <CRITERIA>`
 The criteria that have failed to be satisfied.
 
@@ -623,12 +659,12 @@ Reformat all of vet's files (in case you hand-edited them)
 Most commands will implicitly do this, so this mostly exists as "plumbing" for building tools on top
 of vet, or in case you don't want to run another command.
 
-### USAGE
+### Usage
 ```
 cargo vet fmt [OPTIONS]
 ```
 
-### OPTIONS
+### Options
 #### `-h, --help`
 Print help information
 
@@ -642,12 +678,12 @@ Explicitly fetch the imports (foreign audit files)
 `cargo vet check` will implicitly do this, so this mostly exists as "plumbing" for building tools on
 top of vet.
 
-### USAGE
+### Usage
 ```
 cargo vet fetch-imports [OPTIONS]
 ```
 
-### OPTIONS
+### Options
 #### `-h, --help`
 Print help information
 
@@ -672,12 +708,12 @@ applied *before* doing any semantic analysis, so if you filter out a package and
 the problem will disappear. This can be used to bisect a problem if you get ambitious enough with
 your filters.
 
-### USAGE
+### Usage
 ```
 cargo vet dump-graph [OPTIONS]
 ```
 
-### OPTIONS
+### Options
 #### `--depth <DEPTH>`
 The depth of the graph to print (for a large project, the full graph is a HUGE MESS)
 
@@ -699,12 +735,12 @@ recognized by cargo-vet.
 
 In the future, many cargo-vet subcommands will implicitly do this.
 
-### USAGE
+### Usage
 ```
 cargo vet gc [OPTIONS]
 ```
 
-### OPTIONS
+### Options
 #### `--max-package-age-days <MAX_PACKAGE_AGE_DAYS>`
 Packages in the vet cache which haven't been used for this many days will be removed
 
@@ -724,17 +760,184 @@ This subcommand accepts all the [global options](#global-options)
 ## cargo vet help
 Print this message or the help of the given subcommand(s)
 
-### USAGE
+### Usage
 ```
-cargo vet help [OPTIONS] [SUBCOMMAND]...
+cargo vet help [SUBCOMMAND]
 ```
 
-### ARGS
-#### `<SUBCOMMAND>...`
-The subcommand whose help message to display
+### Subcommands
+* [check](#cargo-vet-check): \[default\] Check that the current project has been vetted
+* [suggest](#cargo-vet-suggest): Suggest some low-hanging fruit to review
+* [init](#cargo-vet-init): Initialize cargo-vet for your project
+* [inspect](#cargo-vet-inspect): Fetch the source of a package
+* [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
+* [certify](#cargo-vet-certify): Mark a package as audited
+* [regenerate](#cargo-vet-regenerate): Explicitly regenerate various pieces of information
+* [add-exemption](#cargo-vet-add-exemption): Mark a package as exempted from review
+* [record-violation](#cargo-vet-record-violation): Declare that some versions of a package violate certain audit criteria
+* [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
+* [fetch-imports](#cargo-vet-fetch-imports): Explicitly fetch the imports (foreign audit files)
+* [dump-graph](#cargo-vet-dump-graph): Print the cargo build graph as understood by `cargo vet`
+* [gc](#cargo-vet-gc): Clean up old packages from the vet cache
+* [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 
-### GLOBAL OPTIONS
-This subcommand accepts all the [global options](#global-options)
+<br><br><br>
+## cargo vet check
+\[default\] Check that the current project has been vetted
+
+### Usage
+```
+cargo vet help check
+```
+
+<br><br><br>
+## cargo vet suggest
+Suggest some low-hanging fruit to review
+
+### Usage
+```
+cargo vet help suggest
+```
+
+<br><br><br>
+## cargo vet init
+Initialize cargo-vet for your project
+
+### Usage
+```
+cargo vet help init
+```
+
+<br><br><br>
+## cargo vet inspect
+Fetch the source of a package
+
+### Usage
+```
+cargo vet help inspect
+```
+
+<br><br><br>
+## cargo vet diff
+Yield a diff against the last reviewed version
+
+### Usage
+```
+cargo vet help diff
+```
+
+<br><br><br>
+## cargo vet certify
+Mark a package as audited
+
+### Usage
+```
+cargo vet help certify
+```
+
+<br><br><br>
+## cargo vet regenerate
+Explicitly regenerate various pieces of information
+
+### Usage
+```
+cargo vet help regenerate [SUBCOMMAND]
+```
+
+### Subcommands
+* [exemptions](#cargo-vet-exemptions): Regenerate your exemptions to make `check` pass minimally
+* [imports](#cargo-vet-imports): Regenerate your imports and accept changes to criteria
+* [audit-as-crates-io](#cargo-vet-audit-as-crates-io): Regenerate you audit-as-crates-io entries to make `check` pass
+
+<br><br><br>
+## cargo vet exemptions
+Regenerate your exemptions to make `check` pass minimally
+
+### Usage
+```
+cargo vet help regenerate exemptions
+```
+
+<br><br><br>
+## cargo vet imports
+Regenerate your imports and accept changes to criteria
+
+### Usage
+```
+cargo vet help regenerate imports
+```
+
+<br><br><br>
+## cargo vet audit-as-crates-io
+Regenerate you audit-as-crates-io entries to make `check` pass
+
+### Usage
+```
+cargo vet help regenerate audit-as-crates-io
+```
+
+<br><br><br>
+## cargo vet add-exemption
+Mark a package as exempted from review
+
+### Usage
+```
+cargo vet help add-exemption
+```
+
+<br><br><br>
+## cargo vet record-violation
+Declare that some versions of a package violate certain audit criteria
+
+### Usage
+```
+cargo vet help record-violation
+```
+
+<br><br><br>
+## cargo vet fmt
+Reformat all of vet's files (in case you hand-edited them)
+
+### Usage
+```
+cargo vet help fmt
+```
+
+<br><br><br>
+## cargo vet fetch-imports
+Explicitly fetch the imports (foreign audit files)
+
+### Usage
+```
+cargo vet help fetch-imports
+```
+
+<br><br><br>
+## cargo vet dump-graph
+Print the cargo build graph as understood by `cargo vet`
+
+### Usage
+```
+cargo vet help dump-graph
+```
+
+<br><br><br>
+## cargo vet gc
+Clean up old packages from the vet cache
+
+### Usage
+```
+cargo vet help gc
+```
+
+<br><br><br>
+## cargo vet help
+Print this message or the help of the given subcommand(s)
+
+### Usage
+```
+cargo vet help help
+```
 
 
 stderr:

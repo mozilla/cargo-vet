@@ -1800,22 +1800,17 @@ fn cmd_help_md(
             // Use a trailing colon to indicate a heading
             if let Some(heading) = line.strip_suffix(':') {
                 if !line.starts_with(' ') {
-                    // SCREAMING headers are Main headings
-                    if heading.to_ascii_uppercase() == heading {
-                        in_subcommands_listing = heading == "SUBCOMMANDS";
-                        in_usage = heading == "USAGE";
-                        in_global_options = heading == "GLOBAL OPTIONS";
+                    in_subcommands_listing = heading == "Subcommands";
+                    in_usage = heading == "Usage";
+                    in_global_options = heading == "GLOBAL OPTIONS";
 
-                        writeln!(out, "### {heading}");
+                    writeln!(out, "### {heading}");
 
-                        if in_global_options && !is_full_command {
-                            writeln!(
-                                out,
-                                "This subcommand accepts all the [global options](#global-options)"
-                            );
-                        }
-                    } else {
-                        writeln!(out, "### {heading}");
+                    if in_global_options && !is_full_command {
+                        writeln!(
+                            out,
+                            "This subcommand accepts all the [global options](#global-options)"
+                        );
                     }
                     continue;
                 }
@@ -1829,11 +1824,13 @@ fn cmd_help_md(
             if in_subcommands_listing && !line.starts_with("     ") {
                 // subcommand names are list items
                 let own_subcommand_name = line.trim();
-                write!(
-                    out,
-                    "* [{own_subcommand_name}](#{app_name}-{own_subcommand_name}): "
-                );
-                continue;
+                if !own_subcommand_name.is_empty() {
+                    write!(
+                        out,
+                        "* [{own_subcommand_name}](#{app_name}-{own_subcommand_name}): "
+                    );
+                    continue;
+                }
             }
             // The rest is indented, get rid of that
             let line = line.trim();
