@@ -35,7 +35,7 @@ jobs:
       RUSTDOCFLAGS: -Dwarnings
     steps:
       - uses: actions/checkout@v2
-      - name: Run cargo clippy
+      - name: Run cargo doc
         run: |
           cargo doc --workspace --no-deps
 
