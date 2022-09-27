@@ -7,693 +7,2165 @@ stdout:
   "conclusion": "fail (vetting)",
   "failures": [
     {
-      "missing_criteria": [
-        "safe-to-deploy"
-      ],
       "name": "bumpalo",
-      "version": "3.9.1"
-    },
-    {
+      "version": "3.9.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "bytes",
-      "version": "1.1.0"
-    },
-    {
+      "version": "1.1.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "cc",
-      "version": "1.0.73"
-    },
-    {
+      "version": "1.0.73",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "cfg-if",
-      "version": "1.0.0"
-    },
-    {
+      "version": "1.0.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "core-foundation",
-      "version": "0.9.3"
-    },
-    {
+      "version": "0.9.3",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "core-foundation-sys",
-      "version": "0.8.3"
-    },
-    {
+      "version": "0.8.3",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "encoding_rs",
-      "version": "0.8.31"
-    },
-    {
+      "version": "0.8.31",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "fastrand",
-      "version": "1.7.0"
-    },
-    {
+      "version": "1.7.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "fnv",
-      "version": "1.0.7"
-    },
-    {
+      "version": "1.0.7",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "foreign-types",
-      "version": "0.3.2"
-    },
-    {
+      "version": "0.3.2",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "foreign-types-shared",
-      "version": "0.1.1"
-    },
-    {
+      "version": "0.1.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "form_urlencoded",
-      "version": "1.0.1"
-    },
-    {
+      "version": "1.0.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "futures-channel",
-      "version": "0.3.21"
-    },
-    {
+      "version": "0.3.21",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "futures-core",
-      "version": "0.3.21"
-    },
-    {
+      "version": "0.3.21",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "futures-sink",
-      "version": "0.3.21"
-    },
-    {
+      "version": "0.3.21",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "futures-task",
-      "version": "0.3.21"
-    },
-    {
+      "version": "0.3.21",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "futures-util",
-      "version": "0.3.21"
-    },
-    {
+      "version": "0.3.21",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "h2",
-      "version": "0.3.13"
-    },
-    {
+      "version": "0.3.13",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
-      "name": "hashbrown",
-      "version": "0.11.2"
+      ]
     },
     {
+      "name": "hashbrown",
+      "version": "0.11.2",
+      "missing_criteria": [
+        "safe-to-deploy"
+      ]
+    },
+    {
+      "name": "hermit-abi",
+      "version": "0.1.19",
       "missing_criteria": [
         "safe-to-run"
-      ],
-      "name": "hermit-abi",
-      "version": "0.1.19"
+      ]
     },
     {
-      "missing_criteria": [
-        "safe-to-deploy"
-      ],
       "name": "http",
-      "version": "0.2.6"
-    },
-    {
+      "version": "0.2.6",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "http-body",
-      "version": "0.4.4"
-    },
-    {
+      "version": "0.4.4",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "httparse",
-      "version": "1.7.0"
-    },
-    {
+      "version": "1.7.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "httpdate",
-      "version": "1.0.2"
-    },
-    {
+      "version": "1.0.2",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "hyper",
-      "version": "0.14.18"
-    },
-    {
+      "version": "0.14.18",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "hyper-tls",
-      "version": "0.5.0"
-    },
-    {
+      "version": "0.5.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "idna",
-      "version": "0.2.3"
-    },
-    {
+      "version": "0.2.3",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "indexmap",
-      "version": "1.8.1"
-    },
-    {
+      "version": "1.8.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "instant",
-      "version": "0.1.12"
-    },
-    {
+      "version": "0.1.12",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "ipnet",
-      "version": "2.4.0"
-    },
-    {
+      "version": "2.4.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "itoa",
-      "version": "1.0.1"
-    },
-    {
+      "version": "1.0.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "js-sys",
-      "version": "0.3.57"
-    },
-    {
+      "version": "0.3.57",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "lazy_static",
-      "version": "1.4.0"
-    },
-    {
+      "version": "1.4.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "libc",
-      "version": "0.2.123"
-    },
-    {
+      "version": "0.2.123",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "log",
-      "version": "0.4.16"
-    },
-    {
+      "version": "0.4.16",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "matches",
-      "version": "0.1.9"
-    },
-    {
+      "version": "0.1.9",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "memchr",
-      "version": "2.4.1"
-    },
-    {
+      "version": "2.4.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "mime",
-      "version": "0.3.16"
-    },
-    {
+      "version": "0.3.16",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "mio",
-      "version": "0.8.2"
-    },
-    {
+      "version": "0.8.2",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "miow",
-      "version": "0.3.7"
-    },
-    {
+      "version": "0.3.7",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "native-tls",
-      "version": "0.2.10"
-    },
-    {
+      "version": "0.2.10",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "ntapi",
-      "version": "0.3.7"
-    },
-    {
+      "version": "0.3.7",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "once_cell",
-      "version": "1.10.0"
-    },
-    {
+      "version": "1.10.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "openssl",
-      "version": "0.10.38"
-    },
-    {
+      "version": "0.10.38",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "openssl-probe",
-      "version": "0.1.5"
-    },
-    {
+      "version": "0.1.5",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "openssl-sys",
-      "version": "0.9.72"
-    },
-    {
+      "version": "0.9.72",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "os_str_bytes",
-      "version": "6.0.0"
-    },
-    {
+      "version": "6.0.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "percent-encoding",
-      "version": "2.1.0"
-    },
-    {
+      "version": "2.1.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "pin-project-lite",
-      "version": "0.2.8"
-    },
-    {
+      "version": "0.2.8",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "pin-utils",
-      "version": "0.1.0"
-    },
-    {
+      "version": "0.1.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "pkg-config",
-      "version": "0.3.25"
-    },
-    {
+      "version": "0.3.25",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "proc-macro2",
-      "version": "1.0.37"
-    },
-    {
+      "version": "1.0.37",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "quote",
-      "version": "1.0.18"
-    },
-    {
+      "version": "1.0.18",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "redox_syscall",
-      "version": "0.2.13"
-    },
-    {
+      "version": "0.2.13",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "remove_dir_all",
-      "version": "0.5.3"
-    },
-    {
+      "version": "0.5.3",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "reqwest",
-      "version": "0.11.10"
-    },
-    {
+      "version": "0.11.10",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "ryu",
-      "version": "1.0.9"
-    },
-    {
+      "version": "1.0.9",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "schannel",
-      "version": "0.1.19"
-    },
-    {
+      "version": "0.1.19",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "security-framework",
-      "version": "2.6.1"
-    },
-    {
+      "version": "2.6.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "security-framework-sys",
-      "version": "2.6.1"
-    },
-    {
+      "version": "2.6.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "serde",
-      "version": "1.0.136"
-    },
-    {
+      "version": "1.0.136",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "serde_json",
-      "version": "1.0.79"
-    },
-    {
+      "version": "1.0.79",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "serde_urlencoded",
-      "version": "0.7.1"
-    },
-    {
+      "version": "0.7.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "slab",
-      "version": "0.4.6"
-    },
-    {
+      "version": "0.4.6",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "socket2",
-      "version": "0.4.4"
-    },
-    {
+      "version": "0.4.4",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "syn",
-      "version": "1.0.91"
-    },
-    {
+      "version": "1.0.91",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "tempfile",
-      "version": "3.3.0"
-    },
-    {
+      "version": "3.3.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "termcolor",
-      "version": "1.1.3"
-    },
-    {
+      "version": "1.1.3",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "textwrap",
-      "version": "0.15.0"
-    },
-    {
+      "version": "0.15.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "tinyvec",
-      "version": "1.5.1"
-    },
-    {
+      "version": "1.5.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "tinyvec_macros",
-      "version": "0.1.0"
-    },
-    {
+      "version": "0.1.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "tokio",
-      "version": "1.17.0"
-    },
-    {
+      "version": "1.17.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "tokio-native-tls",
-      "version": "0.3.0"
-    },
-    {
+      "version": "0.3.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "tokio-util",
-      "version": "0.7.1"
-    },
-    {
+      "version": "0.7.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "tower-service",
-      "version": "0.3.1"
-    },
-    {
+      "version": "0.3.1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "tracing",
-      "version": "0.1.33"
-    },
-    {
+      "version": "0.1.33",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "tracing-attributes",
-      "version": "0.1.20"
-    },
-    {
+      "version": "0.1.20",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "tracing-core",
-      "version": "0.1.25"
-    },
-    {
+      "version": "0.1.25",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "try-lock",
-      "version": "0.2.3"
-    },
-    {
+      "version": "0.2.3",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "unicode-bidi",
-      "version": "0.3.7"
-    },
-    {
+      "version": "0.3.7",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "unicode-normalization",
-      "version": "0.1.19"
-    },
-    {
+      "version": "0.1.19",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "unicode-xid",
-      "version": "0.2.2"
-    },
-    {
+      "version": "0.2.2",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "url",
-      "version": "2.2.2"
-    },
-    {
+      "version": "2.2.2",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "vcpkg",
-      "version": "0.2.15"
-    },
-    {
+      "version": "0.2.15",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "want",
-      "version": "0.3.0"
-    },
-    {
+      "version": "0.3.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "wasi",
-      "version": "0.11.0+wasi-snapshot-preview1"
-    },
-    {
+      "version": "0.11.0+wasi-snapshot-preview1",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "wasm-bindgen",
-      "version": "0.2.80"
-    },
-    {
+      "version": "0.2.80",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "wasm-bindgen-backend",
-      "version": "0.2.80"
-    },
-    {
+      "version": "0.2.80",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "wasm-bindgen-futures",
-      "version": "0.4.30"
-    },
-    {
+      "version": "0.4.30",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "wasm-bindgen-macro",
-      "version": "0.2.80"
-    },
-    {
+      "version": "0.2.80",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "wasm-bindgen-macro-support",
-      "version": "0.2.80"
-    },
-    {
+      "version": "0.2.80",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "wasm-bindgen-shared",
-      "version": "0.2.80"
-    },
-    {
+      "version": "0.2.80",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "web-sys",
-      "version": "0.3.57"
-    },
-    {
+      "version": "0.3.57",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "winapi",
-      "version": "0.3.9"
-    },
-    {
+      "version": "0.3.9",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "winapi-i686-pc-windows-gnu",
-      "version": "0.4.0"
-    },
-    {
+      "version": "0.4.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "winapi-util",
-      "version": "0.1.5"
-    },
-    {
+      "version": "0.1.5",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "winapi-x86_64-pc-windows-gnu",
-      "version": "0.4.0"
-    },
-    {
+      "version": "0.4.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
+      ]
+    },
+    {
       "name": "winreg",
-      "version": "0.10.1"
+      "version": "0.10.1",
+      "missing_criteria": [
+        "safe-to-deploy"
+      ]
     }
   ],
   "suggest": {
+    "suggestions": [
+      {
+        "name": "hermit-abi",
+        "notable_parents": "atty",
+        "suggested_criteria": [
+          "safe-to-run"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.19",
+          "diffstat": {
+            "raw": " 11 files changed, 938 insertions(+)\n",
+            "count": 938
+          }
+        }
+      },
+      {
+        "name": "termcolor",
+        "notable_parents": "clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.1.3",
+          "diffstat": {
+            "raw": " 12 files changed, 2585 insertions(+)\n",
+            "count": 2585
+          }
+        }
+      },
+      {
+        "name": "os_str_bytes",
+        "notable_parents": "clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "6.0.0",
+          "diffstat": {
+            "raw": " 23 files changed, 2918 insertions(+)\n",
+            "count": 2918
+          }
+        }
+      },
+      {
+        "name": "textwrap",
+        "notable_parents": "clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.15.0",
+          "diffstat": {
+            "raw": " 18 files changed, 6165 insertions(+)\n",
+            "count": 6165
+          }
+        }
+      },
+      {
+        "name": "indexmap",
+        "notable_parents": "h2, clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.8.1",
+          "diffstat": {
+            "raw": " 33 files changed, 9452 insertions(+)\n",
+            "count": 9452
+          }
+        }
+      },
+      {
+        "name": "reqwest",
+        "notable_parents": "test-project",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.11.10",
+          "diffstat": {
+            "raw": " 63 files changed, 21663 insertions(+)\n",
+            "count": 21663
+          }
+        }
+      },
+      {
+        "name": "serde_json",
+        "notable_parents": "reqwest, test-project",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.79",
+          "diffstat": {
+            "raw": " 88 files changed, 22855 insertions(+)\n",
+            "count": 22855
+          }
+        }
+      },
+      {
+        "name": "tokio",
+        "notable_parents": "h2, hyper, reqwest, and 4 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.17.0",
+          "diffstat": {
+            "raw": " 405 files changed, 91278 insertions(+)\n",
+            "count": 91278
+          }
+        }
+      },
+      {
+        "name": "libc",
+        "notable_parents": "mio, atty, tokio, openssl, and 8 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.123",
+          "diffstat": {
+            "raw": " 217 files changed, 94067 insertions(+)\n",
+            "count": 94067
+          }
+        }
+      },
+      {
+        "name": "winapi",
+        "notable_parents": "mio, atty, miow, ntapi, and 7 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.9",
+          "diffstat": {
+            "raw": " 412 files changed, 181329 insertions(+)\n",
+            "count": 181329
+          }
+        }
+      },
+      {
+        "name": "tinyvec_macros",
+        "notable_parents": "tinyvec",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.0",
+          "diffstat": {
+            "raw": " 7 files changed, 87 insertions(+)\n",
+            "count": 87
+          }
+        }
+      },
+      {
+        "name": "matches",
+        "notable_parents": "url, idna, form_urlencoded",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.9",
+          "diffstat": {
+            "raw": " 7 files changed, 211 insertions(+)\n",
+            "count": 211
+          }
+        }
+      },
+      {
+        "name": "foreign-types-shared",
+        "notable_parents": "foreign-types",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.1",
+          "diffstat": {
+            "raw": " 6 files changed, 303 insertions(+)\n",
+            "count": 303
+          }
+        }
+      },
+      {
+        "name": "try-lock",
+        "notable_parents": "want",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.3",
+          "diffstat": {
+            "raw": " 8 files changed, 386 insertions(+)\n",
+            "count": 386
+          }
+        }
+      },
+      {
+        "name": "openssl-probe",
+        "notable_parents": "native-tls",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.5",
+          "diffstat": {
+            "raw": " 12 files changed, 456 insertions(+)\n",
+            "count": 456
+          }
+        }
+      },
+      {
+        "name": "tower-service",
+        "notable_parents": "hyper",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.1",
+          "diffstat": {
+            "raw": " 8 files changed, 507 insertions(+)\n",
+            "count": 507
+          }
+        }
+      },
+      {
+        "name": "wasm-bindgen-shared",
+        "notable_parents": "wasm-bindgen-backend, wasm-bindgen-macro-support",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.80",
+          "diffstat": {
+            "raw": " 8 files changed, 516 insertions(+)\n",
+            "count": 516
+          }
+        }
+      },
+      {
+        "name": "pin-utils",
+        "notable_parents": "futures-util",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.0",
+          "diffstat": {
+            "raw": " 15 files changed, 544 insertions(+)\n",
+            "count": 544
+          }
+        }
+      },
+      {
+        "name": "futures-sink",
+        "notable_parents": "h2, tokio-util",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.21",
+          "diffstat": {
+            "raw": " 8 files changed, 551 insertions(+)\n",
+            "count": 551
+          }
+        }
+      },
+      {
+        "name": "foreign-types",
+        "notable_parents": "openssl",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.2",
+          "diffstat": {
+            "raw": " 7 files changed, 584 insertions(+)\n",
+            "count": 584
+          }
+        }
+      },
+      {
+        "name": "cfg-if",
+        "notable_parents": "log, instant, openssl, and 5 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.0",
+          "diffstat": {
+            "raw": " 11 files changed, 588 insertions(+)\n",
+            "count": 588
+          }
+        }
+      },
+      {
+        "name": "remove_dir_all",
+        "notable_parents": "tempfile",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.5.3",
+          "diffstat": {
+            "raw": " 9 files changed, 598 insertions(+)\n",
+            "count": 598
+          }
+        }
+      },
+      {
+        "name": "instant",
+        "notable_parents": "fastrand",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.12",
+          "diffstat": {
+            "raw": " 14 files changed, 678 insertions(+)\n",
+            "count": 678
+          }
+        }
+      },
+      {
+        "name": "form_urlencoded",
+        "notable_parents": "url, serde_urlencoded",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.1",
+          "diffstat": {
+            "raw": " 7 files changed, 695 insertions(+)\n",
+            "count": 695
+          }
+        }
+      },
+      {
+        "name": "want",
+        "notable_parents": "hyper",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.0",
+          "diffstat": {
+            "raw": " 9 files changed, 703 insertions(+)\n",
+            "count": 703
+          }
+        }
+      },
+      {
+        "name": "percent-encoding",
+        "notable_parents": "url, reqwest, form_urlencoded",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "2.1.0",
+          "diffstat": {
+            "raw": " 7 files changed, 708 insertions(+)\n",
+            "count": 708
+          }
+        }
+      },
+      {
+        "name": "fnv",
+        "notable_parents": "h2, http",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.7",
+          "diffstat": {
+            "raw": " 10 files changed, 736 insertions(+)\n",
+            "count": 736
+          }
+        }
+      },
+      {
+        "name": "itoa",
+        "notable_parents": "http, hyper, serde_json, serde_urlencoded",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.1",
+          "diffstat": {
+            "raw": " 15 files changed, 796 insertions(+)\n",
+            "count": 796
+          }
+        }
+      },
+      {
+        "name": "lazy_static",
+        "notable_parents": "reqwest, schannel, and 3 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.4.0",
+          "diffstat": {
+            "raw": " 13 files changed, 882 insertions(+)\n",
+            "count": 882
+          }
+        }
+      },
+      {
+        "name": "httpdate",
+        "notable_parents": "hyper",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.2",
+          "diffstat": {
+            "raw": " 12 files changed, 1001 insertions(+)\n",
+            "count": 1001
+          }
+        }
+      },
+      {
+        "name": "winapi-util",
+        "notable_parents": "termcolor",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.5",
+          "diffstat": {
+            "raw": " 15 files changed, 1101 insertions(+)\n",
+            "count": 1101
+          }
+        }
+      },
+      {
+        "name": "winapi-i686-pc-windows-gnu",
+        "notable_parents": "winapi",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.4.0",
+          "diffstat": {
+            "raw": " 1392 files changed, 1133 insertions(+)\n",
+            "count": 1133
+          }
+        }
+      },
+      {
+        "name": "winapi-x86_64-pc-windows-gnu",
+        "notable_parents": "winapi",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.4.0",
+          "diffstat": {
+            "raw": " 1421 files changed, 1168 insertions(+)\n",
+            "count": 1168
+          }
+        }
+      },
+      {
+        "name": "futures-core",
+        "notable_parents": "h2, hyper, reqwest, and 3 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.21",
+          "diffstat": {
+            "raw": " 16 files changed, 1182 insertions(+)\n",
+            "count": 1182
+          }
+        }
+      },
+      {
+        "name": "futures-task",
+        "notable_parents": "futures-util",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.21",
+          "diffstat": {
+            "raw": " 16 files changed, 1187 insertions(+)\n",
+            "count": 1187
+          }
+        }
+      },
+      {
+        "name": "http-body",
+        "notable_parents": "hyper, reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.4.4",
+          "diffstat": {
+            "raw": " 19 files changed, 1262 insertions(+)\n",
+            "count": 1262
+          }
+        }
+      },
+      {
+        "name": "wasm-bindgen-macro",
+        "notable_parents": "wasm-bindgen",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.80",
+          "diffstat": {
+            "raw": " 46 files changed, 1275 insertions(+)\n",
+            "count": 1275
+          }
+        }
+      },
+      {
+        "name": "hyper-tls",
+        "notable_parents": "reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.5.0",
+          "diffstat": {
+            "raw": " 14 files changed, 1301 insertions(+)\n",
+            "count": 1301
+          }
+        }
+      },
+      {
+        "name": "wasm-bindgen-futures",
+        "notable_parents": "reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.4.30",
+          "diffstat": {
+            "raw": " 13 files changed, 1304 insertions(+)\n",
+            "count": 1304
+          }
+        }
+      },
+      {
+        "name": "fastrand",
+        "notable_parents": "tempfile",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.7.0",
+          "diffstat": {
+            "raw": " 12 files changed, 1375 insertions(+)\n",
+            "count": 1375
+          }
+        }
+      },
+      {
+        "name": "mime",
+        "notable_parents": "reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.16",
+          "diffstat": {
+            "raw": " 15 files changed, 1721 insertions(+)\n",
+            "count": 1721
+          }
+        }
+      },
+      {
+        "name": "pkg-config",
+        "notable_parents": "openssl-sys",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.25",
+          "diffstat": {
+            "raw": " 16 files changed, 1754 insertions(+)\n",
+            "count": 1754
+          }
+        }
+      },
+      {
+        "name": "tokio-native-tls",
+        "notable_parents": "reqwest, hyper-tls",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.0",
+          "diffstat": {
+            "raw": " 19 files changed, 1804 insertions(+)\n",
+            "count": 1804
+          }
+        }
+      },
+      {
+        "name": "wasm-bindgen-macro-support",
+        "notable_parents": "wasm-bindgen-macro",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.80",
+          "diffstat": {
+            "raw": " 7 files changed, 1966 insertions(+)\n",
+            "count": 1966
+          }
+        }
+      },
+      {
+        "name": "core-foundation-sys",
+        "notable_parents": "core-foundation, and 2 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.8.3",
+          "diffstat": {
+            "raw": " 28 files changed, 1971 insertions(+)\n",
+            "count": 1971
+          }
+        }
+      },
+      {
+        "name": "security-framework-sys",
+        "notable_parents": "native-tls, security-framework",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "2.6.1",
+          "diffstat": {
+            "raw": " 29 files changed, 2023 insertions(+)\n",
+            "count": 2023
+          }
+        }
+      },
+      {
+        "name": "unicode-xid",
+        "notable_parents": "syn, proc-macro2",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.2",
+          "diffstat": {
+            "raw": " 14 files changed, 2050 insertions(+)\n",
+            "count": 2050
+          }
+        }
+      },
+      {
+        "name": "serde_urlencoded",
+        "notable_parents": "reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.7.1",
+          "diffstat": {
+            "raw": " 19 files changed, 2127 insertions(+)\n",
+            "count": 2127
+          }
+        }
+      },
+      {
+        "name": "slab",
+        "notable_parents": "h2",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.4.6",
+          "diffstat": {
+            "raw": " 11 files changed, 2622 insertions(+)\n",
+            "count": 2622
+          }
+        }
+      },
+      {
+        "name": "wasm-bindgen-backend",
+        "notable_parents": "wasm-bindgen-macro-support",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.80",
+          "diffstat": {
+            "raw": " 11 files changed, 3019 insertions(+)\n",
+            "count": 3019
+          }
+        }
+      },
+      {
+        "name": "miow",
+        "notable_parents": "mio",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.7",
+          "diffstat": {
+            "raw": " 16 files changed, 3135 insertions(+)\n",
+            "count": 3135
+          }
+        }
+      },
+      {
+        "name": "wasi",
+        "notable_parents": "mio",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.11.0+wasi-snapshot-preview1",
+          "diffstat": {
+            "raw": " 17 files changed, 3309 insertions(+)\n",
+            "count": 3309
+          }
+        }
+      },
+      {
+        "name": "unicode-bidi",
+        "notable_parents": "idna",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.7",
+          "diffstat": {
+            "raw": " 23 files changed, 3398 insertions(+)\n",
+            "count": 3398
+          }
+        }
+      },
+      {
+        "name": "quote",
+        "notable_parents": "syn, and 4 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.18",
+          "diffstat": {
+            "raw": " 35 files changed, 3845 insertions(+)\n",
+            "count": 3845
+          }
+        }
+      },
+      {
+        "name": "redox_syscall",
+        "notable_parents": "tempfile",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.13",
+          "diffstat": {
+            "raw": " 32 files changed, 3897 insertions(+)\n",
+            "count": 3897
+          }
+        }
+      },
+      {
+        "name": "core-foundation",
+        "notable_parents": "security-framework",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.9.3",
+          "diffstat": {
+            "raw": " 28 files changed, 3960 insertions(+)\n",
+            "count": 3960
+          }
+        }
+      },
+      {
+        "name": "tracing-attributes",
+        "notable_parents": "tracing",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.20",
+          "diffstat": {
+            "raw": " 20 files changed, 3964 insertions(+)\n",
+            "count": 3964
+          }
+        }
+      },
+      {
+        "name": "ipnet",
+        "notable_parents": "reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "2.4.0",
+          "diffstat": {
+            "raw": " 15 files changed, 3980 insertions(+)\n",
+            "count": 3980
+          }
+        }
+      },
+      {
+        "name": "futures-channel",
+        "notable_parents": "hyper",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.21",
+          "diffstat": {
+            "raw": " 20 files changed, 3999 insertions(+)\n",
+            "count": 3999
+          }
+        }
+      },
+      {
+        "name": "tempfile",
+        "notable_parents": "native-tls",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "3.3.0",
+          "diffstat": {
+            "raw": " 24 files changed, 4066 insertions(+)\n",
+            "count": 4066
+          }
+        }
+      },
+      {
+        "name": "native-tls",
+        "notable_parents": "reqwest, hyper-tls, tokio-native-tls",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.10",
+          "diffstat": {
+            "raw": " 21 files changed, 4089 insertions(+)\n",
+            "count": 4089
+          }
+        }
+      },
+      {
+        "name": "once_cell",
+        "notable_parents": "openssl",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.10.0",
+          "diffstat": {
+            "raw": " 24 files changed, 4140 insertions(+)\n",
+            "count": 4140
+          }
+        }
+      },
+      {
+        "name": "winreg",
+        "notable_parents": "reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.10.1",
+          "diffstat": {
+            "raw": " 29 files changed, 4276 insertions(+)\n",
+            "count": 4276
+          }
+        }
+      },
+      {
+        "name": "ryu",
+        "notable_parents": "serde_json, serde_urlencoded",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.9",
+          "diffstat": {
+            "raw": " 37 files changed, 4531 insertions(+)\n",
+            "count": 4531
+          }
+        }
+      },
+      {
+        "name": "schannel",
+        "notable_parents": "native-tls",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.19",
+          "diffstat": {
+            "raw": " 34 files changed, 4607 insertions(+)\n",
+            "count": 4607
+          }
+        }
+      },
+      {
+        "name": "log",
+        "notable_parents": "mio, want, reqwest, and 2 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.4.16",
+          "diffstat": {
+            "raw": " 21 files changed, 5632 insertions(+)\n",
+            "count": 5632
+          }
+        }
+      },
+      {
+        "name": "proc-macro2",
+        "notable_parents": "syn, quote, and 3 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.37",
+          "diffstat": {
+            "raw": " 22 files changed, 5702 insertions(+)\n",
+            "count": 5702
+          }
+        }
+      },
+      {
+        "name": "socket2",
+        "notable_parents": "hyper, tokio",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.4.4",
+          "diffstat": {
+            "raw": " 13 files changed, 6018 insertions(+)\n",
+            "count": 6018
+          }
+        }
+      },
+      {
+        "name": "pin-project-lite",
+        "notable_parents": "hyper, tokio, reqwest, and 4 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.8",
+          "diffstat": {
+            "raw": " 72 files changed, 6107 insertions(+)\n",
+            "count": 6107
+          }
+        }
+      },
+      {
+        "name": "tracing-core",
+        "notable_parents": "tracing",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.25",
+          "diffstat": {
+            "raw": " 28 files changed, 6163 insertions(+)\n",
+            "count": 6163
+          }
+        }
+      },
+      {
+        "name": "cc",
+        "notable_parents": "openssl-sys",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.73",
+          "diffstat": {
+            "raw": " 22 files changed, 6671 insertions(+)\n",
+            "count": 6671
+          }
+        }
+      },
+      {
+        "name": "httparse",
+        "notable_parents": "hyper",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.7.0",
+          "diffstat": {
+            "raw": " 20 files changed, 7265 insertions(+)\n",
+            "count": 7265
+          }
+        }
+      },
+      {
+        "name": "memchr",
+        "notable_parents": "tokio, os_str_bytes",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "2.4.1",
+          "diffstat": {
+            "raw": " 48 files changed, 8718 insertions(+)\n",
+            "count": 8718
+          }
+        }
+      },
+      {
+        "name": "bytes",
+        "notable_parents": "h2, http, hyper, tokio, and 4 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.1.0",
+          "diffstat": {
+            "raw": " 45 files changed, 9213 insertions(+)\n",
+            "count": 9213
+          }
+        }
+      },
+      {
+        "name": "openssl-sys",
+        "notable_parents": "openssl, native-tls",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.9.72",
+          "diffstat": {
+            "raw": " 48 files changed, 9484 insertions(+)\n",
+            "count": 9484
+          }
+        }
+      },
+      {
+        "name": "security-framework",
+        "notable_parents": "native-tls",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "2.6.1",
+          "diffstat": {
+            "raw": " 45 files changed, 9776 insertions(+)\n",
+            "count": 9776
+          }
+        }
+      },
+      {
+        "name": "bumpalo",
+        "notable_parents": "wasm-bindgen-backend",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "3.9.1",
+          "diffstat": {
+            "raw": " 19 files changed, 10106 insertions(+)\n",
+            "count": 10106
+          }
+        }
+      },
+      {
+        "name": "tracing",
+        "notable_parents": "h2, hyper, tokio-util",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.33",
+          "diffstat": {
+            "raw": " 34 files changed, 10957 insertions(+)\n",
+            "count": 10957
+          }
+        }
+      },
+      {
+        "name": "mio",
+        "notable_parents": "tokio",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.8.2",
+          "diffstat": {
+            "raw": " 65 files changed, 11882 insertions(+)\n",
+            "count": 11882
+          }
+        }
+      },
+      {
+        "name": "js-sys",
+        "notable_parents": "reqwest, web-sys, wasm-bindgen-futures",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.57",
+          "diffstat": {
+            "raw": " 63 files changed, 12875 insertions(+)\n",
+            "count": 12875
+          }
+        }
+      },
+      {
+        "name": "tokio-util",
+        "notable_parents": "h2",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.7.1",
+          "diffstat": {
+            "raw": " 67 files changed, 13877 insertions(+)\n",
+            "count": 13877
+          }
+        }
+      },
+      {
+        "name": "hashbrown",
+        "notable_parents": "indexmap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.11.2",
+          "diffstat": {
+            "raw": " 33 files changed, 14609 insertions(+)\n",
+            "count": 14609
+          }
+        }
+      },
+      {
+        "name": "serde",
+        "notable_parents": "reqwest, serde_json, serde_urlencoded",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.136",
+          "diffstat": {
+            "raw": " 29 files changed, 16148 insertions(+)\n",
+            "count": 16148
+          }
+        }
+      },
+      {
+        "name": "url",
+        "notable_parents": "reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "2.2.2",
+          "diffstat": {
+            "raw": " 17 files changed, 16350 insertions(+)\n",
+            "count": 16350
+          }
+        }
+      },
+      {
+        "name": "tinyvec",
+        "notable_parents": "unicode-normalization",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.5.1",
+          "diffstat": {
+            "raw": " 27 files changed, 16758 insertions(+)\n",
+            "count": 16758
+          }
+        }
+      },
+      {
+        "name": "http",
+        "notable_parents": "h2, hyper, reqwest, http-body",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.6",
+          "diffstat": {
+            "raw": " 41 files changed, 16826 insertions(+)\n",
+            "count": 16826
+          }
+        }
+      },
+      {
+        "name": "wasm-bindgen",
+        "notable_parents": "js-sys, reqwest, web-sys, wasm-bindgen-futures",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.80",
+          "diffstat": {
+            "raw": " 243 files changed, 20978 insertions(+)\n",
+            "count": 20978
+          }
+        }
+      },
+      {
+        "name": "ntapi",
+        "notable_parents": "mio",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.7",
+          "diffstat": {
+            "raw": " 44 files changed, 21234 insertions(+)\n",
+            "count": 21234
+          }
+        }
+      },
+      {
+        "name": "futures-util",
+        "notable_parents": "h2, hyper, reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.21",
+          "diffstat": {
+            "raw": " 187 files changed, 25074 insertions(+)\n",
+            "count": 25074
+          }
+        }
+      },
+      {
+        "name": "hyper",
+        "notable_parents": "reqwest, hyper-tls",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.14.18",
+          "diffstat": {
+            "raw": " 72 files changed, 25617 insertions(+)\n",
+            "count": 25617
+          }
+        }
+      },
+      {
+        "name": "h2",
+        "notable_parents": "hyper, reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.13",
+          "diffstat": {
+            "raw": " 66 files changed, 26066 insertions(+)\n",
+            "count": 26066
+          }
+        }
+      },
+      {
+        "name": "syn",
+        "notable_parents": "tracing-attributes, and 2 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": "1.0.0",
+          "to": "1.0.91",
+          "diffstat": {
+            "raw": " 93 files changed, 21776 insertions(+), 6701 deletions(-)\n",
+            "count": 28477
+          }
+        }
+      },
+      {
+        "name": "unicode-normalization",
+        "notable_parents": "idna",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.19",
+          "diffstat": {
+            "raw": " 26 files changed, 28628 insertions(+)\n",
+            "count": 28628
+          }
+        }
+      },
+      {
+        "name": "openssl",
+        "notable_parents": "native-tls",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.10.38",
+          "diffstat": {
+            "raw": " 85 files changed, 28634 insertions(+)\n",
+            "count": 28634
+          }
+        }
+      },
+      {
+        "name": "idna",
+        "notable_parents": "url",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.3",
+          "diffstat": {
+            "raw": " 19 files changed, 32538 insertions(+)\n",
+            "count": 32538
+          }
+        }
+      },
+      {
+        "name": "vcpkg",
+        "notable_parents": "openssl-sys",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.15",
+          "diffstat": {
+            "raw": " 834 files changed, 42648 insertions(+)\n",
+            "count": 42648
+          }
+        }
+      },
+      {
+        "name": "web-sys",
+        "notable_parents": "reqwest, wasm-bindgen-futures",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.57",
+          "diffstat": {
+            "raw": " 2203 files changed, 197014 insertions(+)\n",
+            "count": 197014
+          }
+        }
+      },
+      {
+        "name": "encoding_rs",
+        "notable_parents": "reqwest",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.8.31",
+          "diffstat": {
+            "raw": " 104 files changed, 507252 insertions(+)\n",
+            "count": 507252
+          }
+        }
+      }
+    ],
     "suggest_by_criteria": {
       "safe-to-deploy": [
         {
@@ -703,12 +2175,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 2585,
-              "raw": " 12 files changed, 2585 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.1.3"
+            "to": "1.1.3",
+            "diffstat": {
+              "raw": " 12 files changed, 2585 insertions(+)\n",
+              "count": 2585
+            }
           }
         },
         {
@@ -718,12 +2190,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 2918,
-              "raw": " 23 files changed, 2918 insertions(+)\n"
-            },
             "from": null,
-            "to": "6.0.0"
+            "to": "6.0.0",
+            "diffstat": {
+              "raw": " 23 files changed, 2918 insertions(+)\n",
+              "count": 2918
+            }
           }
         },
         {
@@ -733,12 +2205,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 6165,
-              "raw": " 18 files changed, 6165 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.15.0"
+            "to": "0.15.0",
+            "diffstat": {
+              "raw": " 18 files changed, 6165 insertions(+)\n",
+              "count": 6165
+            }
           }
         },
         {
@@ -748,12 +2220,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 9452,
-              "raw": " 33 files changed, 9452 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.8.1"
+            "to": "1.8.1",
+            "diffstat": {
+              "raw": " 33 files changed, 9452 insertions(+)\n",
+              "count": 9452
+            }
           }
         },
         {
@@ -763,12 +2235,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 21663,
-              "raw": " 63 files changed, 21663 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.11.10"
+            "to": "0.11.10",
+            "diffstat": {
+              "raw": " 63 files changed, 21663 insertions(+)\n",
+              "count": 21663
+            }
           }
         },
         {
@@ -778,12 +2250,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 22855,
-              "raw": " 88 files changed, 22855 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.79"
+            "to": "1.0.79",
+            "diffstat": {
+              "raw": " 88 files changed, 22855 insertions(+)\n",
+              "count": 22855
+            }
           }
         },
         {
@@ -793,12 +2265,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 91278,
-              "raw": " 405 files changed, 91278 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.17.0"
+            "to": "1.17.0",
+            "diffstat": {
+              "raw": " 405 files changed, 91278 insertions(+)\n",
+              "count": 91278
+            }
           }
         },
         {
@@ -808,12 +2280,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 94067,
-              "raw": " 217 files changed, 94067 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.123"
+            "to": "0.2.123",
+            "diffstat": {
+              "raw": " 217 files changed, 94067 insertions(+)\n",
+              "count": 94067
+            }
           }
         },
         {
@@ -823,12 +2295,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 181329,
-              "raw": " 412 files changed, 181329 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.9"
+            "to": "0.3.9",
+            "diffstat": {
+              "raw": " 412 files changed, 181329 insertions(+)\n",
+              "count": 181329
+            }
           }
         },
         {
@@ -838,12 +2310,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 87,
-              "raw": " 7 files changed, 87 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.0"
+            "to": "0.1.0",
+            "diffstat": {
+              "raw": " 7 files changed, 87 insertions(+)\n",
+              "count": 87
+            }
           }
         },
         {
@@ -853,12 +2325,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 211,
-              "raw": " 7 files changed, 211 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.9"
+            "to": "0.1.9",
+            "diffstat": {
+              "raw": " 7 files changed, 211 insertions(+)\n",
+              "count": 211
+            }
           }
         },
         {
@@ -868,12 +2340,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 303,
-              "raw": " 6 files changed, 303 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.1"
+            "to": "0.1.1",
+            "diffstat": {
+              "raw": " 6 files changed, 303 insertions(+)\n",
+              "count": 303
+            }
           }
         },
         {
@@ -883,12 +2355,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 386,
-              "raw": " 8 files changed, 386 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.3"
+            "to": "0.2.3",
+            "diffstat": {
+              "raw": " 8 files changed, 386 insertions(+)\n",
+              "count": 386
+            }
           }
         },
         {
@@ -898,12 +2370,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 456,
-              "raw": " 12 files changed, 456 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.5"
+            "to": "0.1.5",
+            "diffstat": {
+              "raw": " 12 files changed, 456 insertions(+)\n",
+              "count": 456
+            }
           }
         },
         {
@@ -913,12 +2385,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 507,
-              "raw": " 8 files changed, 507 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.1"
+            "to": "0.3.1",
+            "diffstat": {
+              "raw": " 8 files changed, 507 insertions(+)\n",
+              "count": 507
+            }
           }
         },
         {
@@ -928,12 +2400,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 516,
-              "raw": " 8 files changed, 516 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.80"
+            "to": "0.2.80",
+            "diffstat": {
+              "raw": " 8 files changed, 516 insertions(+)\n",
+              "count": 516
+            }
           }
         },
         {
@@ -943,12 +2415,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 544,
-              "raw": " 15 files changed, 544 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.0"
+            "to": "0.1.0",
+            "diffstat": {
+              "raw": " 15 files changed, 544 insertions(+)\n",
+              "count": 544
+            }
           }
         },
         {
@@ -958,12 +2430,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 551,
-              "raw": " 8 files changed, 551 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.21"
+            "to": "0.3.21",
+            "diffstat": {
+              "raw": " 8 files changed, 551 insertions(+)\n",
+              "count": 551
+            }
           }
         },
         {
@@ -973,12 +2445,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 584,
-              "raw": " 7 files changed, 584 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.2"
+            "to": "0.3.2",
+            "diffstat": {
+              "raw": " 7 files changed, 584 insertions(+)\n",
+              "count": 584
+            }
           }
         },
         {
@@ -988,12 +2460,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 588,
-              "raw": " 11 files changed, 588 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.0"
+            "to": "1.0.0",
+            "diffstat": {
+              "raw": " 11 files changed, 588 insertions(+)\n",
+              "count": 588
+            }
           }
         },
         {
@@ -1003,12 +2475,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 598,
-              "raw": " 9 files changed, 598 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.5.3"
+            "to": "0.5.3",
+            "diffstat": {
+              "raw": " 9 files changed, 598 insertions(+)\n",
+              "count": 598
+            }
           }
         },
         {
@@ -1018,12 +2490,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 678,
-              "raw": " 14 files changed, 678 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.12"
+            "to": "0.1.12",
+            "diffstat": {
+              "raw": " 14 files changed, 678 insertions(+)\n",
+              "count": 678
+            }
           }
         },
         {
@@ -1033,12 +2505,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 695,
-              "raw": " 7 files changed, 695 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.1"
+            "to": "1.0.1",
+            "diffstat": {
+              "raw": " 7 files changed, 695 insertions(+)\n",
+              "count": 695
+            }
           }
         },
         {
@@ -1048,12 +2520,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 703,
-              "raw": " 9 files changed, 703 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.0"
+            "to": "0.3.0",
+            "diffstat": {
+              "raw": " 9 files changed, 703 insertions(+)\n",
+              "count": 703
+            }
           }
         },
         {
@@ -1063,12 +2535,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 708,
-              "raw": " 7 files changed, 708 insertions(+)\n"
-            },
             "from": null,
-            "to": "2.1.0"
+            "to": "2.1.0",
+            "diffstat": {
+              "raw": " 7 files changed, 708 insertions(+)\n",
+              "count": 708
+            }
           }
         },
         {
@@ -1078,12 +2550,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 736,
-              "raw": " 10 files changed, 736 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.7"
+            "to": "1.0.7",
+            "diffstat": {
+              "raw": " 10 files changed, 736 insertions(+)\n",
+              "count": 736
+            }
           }
         },
         {
@@ -1093,12 +2565,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 796,
-              "raw": " 15 files changed, 796 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.1"
+            "to": "1.0.1",
+            "diffstat": {
+              "raw": " 15 files changed, 796 insertions(+)\n",
+              "count": 796
+            }
           }
         },
         {
@@ -1108,12 +2580,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 882,
-              "raw": " 13 files changed, 882 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.4.0"
+            "to": "1.4.0",
+            "diffstat": {
+              "raw": " 13 files changed, 882 insertions(+)\n",
+              "count": 882
+            }
           }
         },
         {
@@ -1123,12 +2595,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1001,
-              "raw": " 12 files changed, 1001 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.2"
+            "to": "1.0.2",
+            "diffstat": {
+              "raw": " 12 files changed, 1001 insertions(+)\n",
+              "count": 1001
+            }
           }
         },
         {
@@ -1138,12 +2610,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1101,
-              "raw": " 15 files changed, 1101 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.5"
+            "to": "0.1.5",
+            "diffstat": {
+              "raw": " 15 files changed, 1101 insertions(+)\n",
+              "count": 1101
+            }
           }
         },
         {
@@ -1153,12 +2625,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1133,
-              "raw": " 1392 files changed, 1133 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.4.0"
+            "to": "0.4.0",
+            "diffstat": {
+              "raw": " 1392 files changed, 1133 insertions(+)\n",
+              "count": 1133
+            }
           }
         },
         {
@@ -1168,12 +2640,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1168,
-              "raw": " 1421 files changed, 1168 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.4.0"
+            "to": "0.4.0",
+            "diffstat": {
+              "raw": " 1421 files changed, 1168 insertions(+)\n",
+              "count": 1168
+            }
           }
         },
         {
@@ -1183,12 +2655,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1182,
-              "raw": " 16 files changed, 1182 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.21"
+            "to": "0.3.21",
+            "diffstat": {
+              "raw": " 16 files changed, 1182 insertions(+)\n",
+              "count": 1182
+            }
           }
         },
         {
@@ -1198,12 +2670,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1187,
-              "raw": " 16 files changed, 1187 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.21"
+            "to": "0.3.21",
+            "diffstat": {
+              "raw": " 16 files changed, 1187 insertions(+)\n",
+              "count": 1187
+            }
           }
         },
         {
@@ -1213,12 +2685,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1262,
-              "raw": " 19 files changed, 1262 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.4.4"
+            "to": "0.4.4",
+            "diffstat": {
+              "raw": " 19 files changed, 1262 insertions(+)\n",
+              "count": 1262
+            }
           }
         },
         {
@@ -1228,12 +2700,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1275,
-              "raw": " 46 files changed, 1275 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.80"
+            "to": "0.2.80",
+            "diffstat": {
+              "raw": " 46 files changed, 1275 insertions(+)\n",
+              "count": 1275
+            }
           }
         },
         {
@@ -1243,12 +2715,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1301,
-              "raw": " 14 files changed, 1301 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.5.0"
+            "to": "0.5.0",
+            "diffstat": {
+              "raw": " 14 files changed, 1301 insertions(+)\n",
+              "count": 1301
+            }
           }
         },
         {
@@ -1258,12 +2730,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1304,
-              "raw": " 13 files changed, 1304 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.4.30"
+            "to": "0.4.30",
+            "diffstat": {
+              "raw": " 13 files changed, 1304 insertions(+)\n",
+              "count": 1304
+            }
           }
         },
         {
@@ -1273,12 +2745,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1375,
-              "raw": " 12 files changed, 1375 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.7.0"
+            "to": "1.7.0",
+            "diffstat": {
+              "raw": " 12 files changed, 1375 insertions(+)\n",
+              "count": 1375
+            }
           }
         },
         {
@@ -1288,12 +2760,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1721,
-              "raw": " 15 files changed, 1721 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.16"
+            "to": "0.3.16",
+            "diffstat": {
+              "raw": " 15 files changed, 1721 insertions(+)\n",
+              "count": 1721
+            }
           }
         },
         {
@@ -1303,12 +2775,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1754,
-              "raw": " 16 files changed, 1754 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.25"
+            "to": "0.3.25",
+            "diffstat": {
+              "raw": " 16 files changed, 1754 insertions(+)\n",
+              "count": 1754
+            }
           }
         },
         {
@@ -1318,12 +2790,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1804,
-              "raw": " 19 files changed, 1804 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.0"
+            "to": "0.3.0",
+            "diffstat": {
+              "raw": " 19 files changed, 1804 insertions(+)\n",
+              "count": 1804
+            }
           }
         },
         {
@@ -1333,12 +2805,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1966,
-              "raw": " 7 files changed, 1966 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.80"
+            "to": "0.2.80",
+            "diffstat": {
+              "raw": " 7 files changed, 1966 insertions(+)\n",
+              "count": 1966
+            }
           }
         },
         {
@@ -1348,12 +2820,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 1971,
-              "raw": " 28 files changed, 1971 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.8.3"
+            "to": "0.8.3",
+            "diffstat": {
+              "raw": " 28 files changed, 1971 insertions(+)\n",
+              "count": 1971
+            }
           }
         },
         {
@@ -1363,12 +2835,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 2023,
-              "raw": " 29 files changed, 2023 insertions(+)\n"
-            },
             "from": null,
-            "to": "2.6.1"
+            "to": "2.6.1",
+            "diffstat": {
+              "raw": " 29 files changed, 2023 insertions(+)\n",
+              "count": 2023
+            }
           }
         },
         {
@@ -1378,12 +2850,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 2050,
-              "raw": " 14 files changed, 2050 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.2"
+            "to": "0.2.2",
+            "diffstat": {
+              "raw": " 14 files changed, 2050 insertions(+)\n",
+              "count": 2050
+            }
           }
         },
         {
@@ -1393,12 +2865,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 2127,
-              "raw": " 19 files changed, 2127 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.7.1"
+            "to": "0.7.1",
+            "diffstat": {
+              "raw": " 19 files changed, 2127 insertions(+)\n",
+              "count": 2127
+            }
           }
         },
         {
@@ -1408,12 +2880,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 2622,
-              "raw": " 11 files changed, 2622 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.4.6"
+            "to": "0.4.6",
+            "diffstat": {
+              "raw": " 11 files changed, 2622 insertions(+)\n",
+              "count": 2622
+            }
           }
         },
         {
@@ -1423,12 +2895,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 3019,
-              "raw": " 11 files changed, 3019 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.80"
+            "to": "0.2.80",
+            "diffstat": {
+              "raw": " 11 files changed, 3019 insertions(+)\n",
+              "count": 3019
+            }
           }
         },
         {
@@ -1438,12 +2910,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 3135,
-              "raw": " 16 files changed, 3135 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.7"
+            "to": "0.3.7",
+            "diffstat": {
+              "raw": " 16 files changed, 3135 insertions(+)\n",
+              "count": 3135
+            }
           }
         },
         {
@@ -1453,12 +2925,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 3309,
-              "raw": " 17 files changed, 3309 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.11.0+wasi-snapshot-preview1"
+            "to": "0.11.0+wasi-snapshot-preview1",
+            "diffstat": {
+              "raw": " 17 files changed, 3309 insertions(+)\n",
+              "count": 3309
+            }
           }
         },
         {
@@ -1468,12 +2940,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 3398,
-              "raw": " 23 files changed, 3398 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.7"
+            "to": "0.3.7",
+            "diffstat": {
+              "raw": " 23 files changed, 3398 insertions(+)\n",
+              "count": 3398
+            }
           }
         },
         {
@@ -1483,12 +2955,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 3845,
-              "raw": " 35 files changed, 3845 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.18"
+            "to": "1.0.18",
+            "diffstat": {
+              "raw": " 35 files changed, 3845 insertions(+)\n",
+              "count": 3845
+            }
           }
         },
         {
@@ -1498,12 +2970,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 3897,
-              "raw": " 32 files changed, 3897 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.13"
+            "to": "0.2.13",
+            "diffstat": {
+              "raw": " 32 files changed, 3897 insertions(+)\n",
+              "count": 3897
+            }
           }
         },
         {
@@ -1513,12 +2985,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 3960,
-              "raw": " 28 files changed, 3960 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.9.3"
+            "to": "0.9.3",
+            "diffstat": {
+              "raw": " 28 files changed, 3960 insertions(+)\n",
+              "count": 3960
+            }
           }
         },
         {
@@ -1528,12 +3000,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 3964,
-              "raw": " 20 files changed, 3964 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.20"
+            "to": "0.1.20",
+            "diffstat": {
+              "raw": " 20 files changed, 3964 insertions(+)\n",
+              "count": 3964
+            }
           }
         },
         {
@@ -1543,12 +3015,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 3980,
-              "raw": " 15 files changed, 3980 insertions(+)\n"
-            },
             "from": null,
-            "to": "2.4.0"
+            "to": "2.4.0",
+            "diffstat": {
+              "raw": " 15 files changed, 3980 insertions(+)\n",
+              "count": 3980
+            }
           }
         },
         {
@@ -1558,12 +3030,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 3999,
-              "raw": " 20 files changed, 3999 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.21"
+            "to": "0.3.21",
+            "diffstat": {
+              "raw": " 20 files changed, 3999 insertions(+)\n",
+              "count": 3999
+            }
           }
         },
         {
@@ -1573,12 +3045,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 4066,
-              "raw": " 24 files changed, 4066 insertions(+)\n"
-            },
             "from": null,
-            "to": "3.3.0"
+            "to": "3.3.0",
+            "diffstat": {
+              "raw": " 24 files changed, 4066 insertions(+)\n",
+              "count": 4066
+            }
           }
         },
         {
@@ -1588,12 +3060,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 4089,
-              "raw": " 21 files changed, 4089 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.10"
+            "to": "0.2.10",
+            "diffstat": {
+              "raw": " 21 files changed, 4089 insertions(+)\n",
+              "count": 4089
+            }
           }
         },
         {
@@ -1603,12 +3075,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 4140,
-              "raw": " 24 files changed, 4140 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.10.0"
+            "to": "1.10.0",
+            "diffstat": {
+              "raw": " 24 files changed, 4140 insertions(+)\n",
+              "count": 4140
+            }
           }
         },
         {
@@ -1618,12 +3090,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 4276,
-              "raw": " 29 files changed, 4276 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.10.1"
+            "to": "0.10.1",
+            "diffstat": {
+              "raw": " 29 files changed, 4276 insertions(+)\n",
+              "count": 4276
+            }
           }
         },
         {
@@ -1633,12 +3105,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 4531,
-              "raw": " 37 files changed, 4531 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.9"
+            "to": "1.0.9",
+            "diffstat": {
+              "raw": " 37 files changed, 4531 insertions(+)\n",
+              "count": 4531
+            }
           }
         },
         {
@@ -1648,12 +3120,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 4607,
-              "raw": " 34 files changed, 4607 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.19"
+            "to": "0.1.19",
+            "diffstat": {
+              "raw": " 34 files changed, 4607 insertions(+)\n",
+              "count": 4607
+            }
           }
         },
         {
@@ -1663,12 +3135,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 5632,
-              "raw": " 21 files changed, 5632 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.4.16"
+            "to": "0.4.16",
+            "diffstat": {
+              "raw": " 21 files changed, 5632 insertions(+)\n",
+              "count": 5632
+            }
           }
         },
         {
@@ -1678,12 +3150,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 5702,
-              "raw": " 22 files changed, 5702 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.37"
+            "to": "1.0.37",
+            "diffstat": {
+              "raw": " 22 files changed, 5702 insertions(+)\n",
+              "count": 5702
+            }
           }
         },
         {
@@ -1693,12 +3165,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 6018,
-              "raw": " 13 files changed, 6018 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.4.4"
+            "to": "0.4.4",
+            "diffstat": {
+              "raw": " 13 files changed, 6018 insertions(+)\n",
+              "count": 6018
+            }
           }
         },
         {
@@ -1708,12 +3180,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 6107,
-              "raw": " 72 files changed, 6107 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.8"
+            "to": "0.2.8",
+            "diffstat": {
+              "raw": " 72 files changed, 6107 insertions(+)\n",
+              "count": 6107
+            }
           }
         },
         {
@@ -1723,12 +3195,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 6163,
-              "raw": " 28 files changed, 6163 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.25"
+            "to": "0.1.25",
+            "diffstat": {
+              "raw": " 28 files changed, 6163 insertions(+)\n",
+              "count": 6163
+            }
           }
         },
         {
@@ -1738,12 +3210,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 6671,
-              "raw": " 22 files changed, 6671 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.73"
+            "to": "1.0.73",
+            "diffstat": {
+              "raw": " 22 files changed, 6671 insertions(+)\n",
+              "count": 6671
+            }
           }
         },
         {
@@ -1753,12 +3225,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 7265,
-              "raw": " 20 files changed, 7265 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.7.0"
+            "to": "1.7.0",
+            "diffstat": {
+              "raw": " 20 files changed, 7265 insertions(+)\n",
+              "count": 7265
+            }
           }
         },
         {
@@ -1768,12 +3240,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 8718,
-              "raw": " 48 files changed, 8718 insertions(+)\n"
-            },
             "from": null,
-            "to": "2.4.1"
+            "to": "2.4.1",
+            "diffstat": {
+              "raw": " 48 files changed, 8718 insertions(+)\n",
+              "count": 8718
+            }
           }
         },
         {
@@ -1783,12 +3255,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 9213,
-              "raw": " 45 files changed, 9213 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.1.0"
+            "to": "1.1.0",
+            "diffstat": {
+              "raw": " 45 files changed, 9213 insertions(+)\n",
+              "count": 9213
+            }
           }
         },
         {
@@ -1798,12 +3270,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 9484,
-              "raw": " 48 files changed, 9484 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.9.72"
+            "to": "0.9.72",
+            "diffstat": {
+              "raw": " 48 files changed, 9484 insertions(+)\n",
+              "count": 9484
+            }
           }
         },
         {
@@ -1813,12 +3285,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 9776,
-              "raw": " 45 files changed, 9776 insertions(+)\n"
-            },
             "from": null,
-            "to": "2.6.1"
+            "to": "2.6.1",
+            "diffstat": {
+              "raw": " 45 files changed, 9776 insertions(+)\n",
+              "count": 9776
+            }
           }
         },
         {
@@ -1828,12 +3300,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 10106,
-              "raw": " 19 files changed, 10106 insertions(+)\n"
-            },
             "from": null,
-            "to": "3.9.1"
+            "to": "3.9.1",
+            "diffstat": {
+              "raw": " 19 files changed, 10106 insertions(+)\n",
+              "count": 10106
+            }
           }
         },
         {
@@ -1843,12 +3315,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 10957,
-              "raw": " 34 files changed, 10957 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.33"
+            "to": "0.1.33",
+            "diffstat": {
+              "raw": " 34 files changed, 10957 insertions(+)\n",
+              "count": 10957
+            }
           }
         },
         {
@@ -1858,12 +3330,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 11882,
-              "raw": " 65 files changed, 11882 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.8.2"
+            "to": "0.8.2",
+            "diffstat": {
+              "raw": " 65 files changed, 11882 insertions(+)\n",
+              "count": 11882
+            }
           }
         },
         {
@@ -1873,12 +3345,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 12875,
-              "raw": " 63 files changed, 12875 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.57"
+            "to": "0.3.57",
+            "diffstat": {
+              "raw": " 63 files changed, 12875 insertions(+)\n",
+              "count": 12875
+            }
           }
         },
         {
@@ -1888,12 +3360,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 13877,
-              "raw": " 67 files changed, 13877 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.7.1"
+            "to": "0.7.1",
+            "diffstat": {
+              "raw": " 67 files changed, 13877 insertions(+)\n",
+              "count": 13877
+            }
           }
         },
         {
@@ -1903,12 +3375,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 14609,
-              "raw": " 33 files changed, 14609 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.11.2"
+            "to": "0.11.2",
+            "diffstat": {
+              "raw": " 33 files changed, 14609 insertions(+)\n",
+              "count": 14609
+            }
           }
         },
         {
@@ -1918,12 +3390,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 16148,
-              "raw": " 29 files changed, 16148 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.0.136"
+            "to": "1.0.136",
+            "diffstat": {
+              "raw": " 29 files changed, 16148 insertions(+)\n",
+              "count": 16148
+            }
           }
         },
         {
@@ -1933,12 +3405,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 16350,
-              "raw": " 17 files changed, 16350 insertions(+)\n"
-            },
             "from": null,
-            "to": "2.2.2"
+            "to": "2.2.2",
+            "diffstat": {
+              "raw": " 17 files changed, 16350 insertions(+)\n",
+              "count": 16350
+            }
           }
         },
         {
@@ -1948,12 +3420,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 16758,
-              "raw": " 27 files changed, 16758 insertions(+)\n"
-            },
             "from": null,
-            "to": "1.5.1"
+            "to": "1.5.1",
+            "diffstat": {
+              "raw": " 27 files changed, 16758 insertions(+)\n",
+              "count": 16758
+            }
           }
         },
         {
@@ -1963,12 +3435,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 16826,
-              "raw": " 41 files changed, 16826 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.6"
+            "to": "0.2.6",
+            "diffstat": {
+              "raw": " 41 files changed, 16826 insertions(+)\n",
+              "count": 16826
+            }
           }
         },
         {
@@ -1978,12 +3450,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 20978,
-              "raw": " 243 files changed, 20978 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.80"
+            "to": "0.2.80",
+            "diffstat": {
+              "raw": " 243 files changed, 20978 insertions(+)\n",
+              "count": 20978
+            }
           }
         },
         {
@@ -1993,12 +3465,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 21234,
-              "raw": " 44 files changed, 21234 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.7"
+            "to": "0.3.7",
+            "diffstat": {
+              "raw": " 44 files changed, 21234 insertions(+)\n",
+              "count": 21234
+            }
           }
         },
         {
@@ -2008,12 +3480,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 25074,
-              "raw": " 187 files changed, 25074 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.21"
+            "to": "0.3.21",
+            "diffstat": {
+              "raw": " 187 files changed, 25074 insertions(+)\n",
+              "count": 25074
+            }
           }
         },
         {
@@ -2023,12 +3495,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 25617,
-              "raw": " 72 files changed, 25617 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.14.18"
+            "to": "0.14.18",
+            "diffstat": {
+              "raw": " 72 files changed, 25617 insertions(+)\n",
+              "count": 25617
+            }
           }
         },
         {
@@ -2038,12 +3510,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 26066,
-              "raw": " 66 files changed, 26066 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.13"
+            "to": "0.3.13",
+            "diffstat": {
+              "raw": " 66 files changed, 26066 insertions(+)\n",
+              "count": 26066
+            }
           }
         },
         {
@@ -2053,12 +3525,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 28477,
-              "raw": " 93 files changed, 21776 insertions(+), 6701 deletions(-)\n"
-            },
             "from": "1.0.0",
-            "to": "1.0.91"
+            "to": "1.0.91",
+            "diffstat": {
+              "raw": " 93 files changed, 21776 insertions(+), 6701 deletions(-)\n",
+              "count": 28477
+            }
           }
         },
         {
@@ -2068,12 +3540,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 28628,
-              "raw": " 26 files changed, 28628 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.19"
+            "to": "0.1.19",
+            "diffstat": {
+              "raw": " 26 files changed, 28628 insertions(+)\n",
+              "count": 28628
+            }
           }
         },
         {
@@ -2083,12 +3555,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 28634,
-              "raw": " 85 files changed, 28634 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.10.38"
+            "to": "0.10.38",
+            "diffstat": {
+              "raw": " 85 files changed, 28634 insertions(+)\n",
+              "count": 28634
+            }
           }
         },
         {
@@ -2098,12 +3570,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 32538,
-              "raw": " 19 files changed, 32538 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.3"
+            "to": "0.2.3",
+            "diffstat": {
+              "raw": " 19 files changed, 32538 insertions(+)\n",
+              "count": 32538
+            }
           }
         },
         {
@@ -2113,12 +3585,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 42648,
-              "raw": " 834 files changed, 42648 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.2.15"
+            "to": "0.2.15",
+            "diffstat": {
+              "raw": " 834 files changed, 42648 insertions(+)\n",
+              "count": 42648
+            }
           }
         },
         {
@@ -2128,12 +3600,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 197014,
-              "raw": " 2203 files changed, 197014 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.3.57"
+            "to": "0.3.57",
+            "diffstat": {
+              "raw": " 2203 files changed, 197014 insertions(+)\n",
+              "count": 197014
+            }
           }
         },
         {
@@ -2143,12 +3615,12 @@ stdout:
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 507252,
-              "raw": " 104 files changed, 507252 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.8.31"
+            "to": "0.8.31",
+            "diffstat": {
+              "raw": " 104 files changed, 507252 insertions(+)\n",
+              "count": 507252
+            }
           }
         }
       ],
@@ -2160,1488 +3632,16 @@ stdout:
             "safe-to-run"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 938,
-              "raw": " 11 files changed, 938 insertions(+)\n"
-            },
             "from": null,
-            "to": "0.1.19"
+            "to": "0.1.19",
+            "diffstat": {
+              "raw": " 11 files changed, 938 insertions(+)\n",
+              "count": 938
+            }
           }
         }
       ]
     },
-    "suggestions": [
-      {
-        "name": "hermit-abi",
-        "notable_parents": "atty",
-        "suggested_criteria": [
-          "safe-to-run"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 938,
-            "raw": " 11 files changed, 938 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.19"
-        }
-      },
-      {
-        "name": "termcolor",
-        "notable_parents": "clap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 2585,
-            "raw": " 12 files changed, 2585 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.1.3"
-        }
-      },
-      {
-        "name": "os_str_bytes",
-        "notable_parents": "clap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 2918,
-            "raw": " 23 files changed, 2918 insertions(+)\n"
-          },
-          "from": null,
-          "to": "6.0.0"
-        }
-      },
-      {
-        "name": "textwrap",
-        "notable_parents": "clap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 6165,
-            "raw": " 18 files changed, 6165 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.15.0"
-        }
-      },
-      {
-        "name": "indexmap",
-        "notable_parents": "h2, clap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 9452,
-            "raw": " 33 files changed, 9452 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.8.1"
-        }
-      },
-      {
-        "name": "reqwest",
-        "notable_parents": "test-project",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 21663,
-            "raw": " 63 files changed, 21663 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.11.10"
-        }
-      },
-      {
-        "name": "serde_json",
-        "notable_parents": "reqwest, test-project",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 22855,
-            "raw": " 88 files changed, 22855 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.79"
-        }
-      },
-      {
-        "name": "tokio",
-        "notable_parents": "h2, hyper, reqwest, and 4 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 91278,
-            "raw": " 405 files changed, 91278 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.17.0"
-        }
-      },
-      {
-        "name": "libc",
-        "notable_parents": "mio, atty, tokio, openssl, and 8 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 94067,
-            "raw": " 217 files changed, 94067 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.123"
-        }
-      },
-      {
-        "name": "winapi",
-        "notable_parents": "mio, atty, miow, ntapi, and 7 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 181329,
-            "raw": " 412 files changed, 181329 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.9"
-        }
-      },
-      {
-        "name": "tinyvec_macros",
-        "notable_parents": "tinyvec",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 87,
-            "raw": " 7 files changed, 87 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.0"
-        }
-      },
-      {
-        "name": "matches",
-        "notable_parents": "url, idna, form_urlencoded",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 211,
-            "raw": " 7 files changed, 211 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.9"
-        }
-      },
-      {
-        "name": "foreign-types-shared",
-        "notable_parents": "foreign-types",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 303,
-            "raw": " 6 files changed, 303 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.1"
-        }
-      },
-      {
-        "name": "try-lock",
-        "notable_parents": "want",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 386,
-            "raw": " 8 files changed, 386 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.3"
-        }
-      },
-      {
-        "name": "openssl-probe",
-        "notable_parents": "native-tls",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 456,
-            "raw": " 12 files changed, 456 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.5"
-        }
-      },
-      {
-        "name": "tower-service",
-        "notable_parents": "hyper",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 507,
-            "raw": " 8 files changed, 507 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.1"
-        }
-      },
-      {
-        "name": "wasm-bindgen-shared",
-        "notable_parents": "wasm-bindgen-backend, wasm-bindgen-macro-support",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 516,
-            "raw": " 8 files changed, 516 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.80"
-        }
-      },
-      {
-        "name": "pin-utils",
-        "notable_parents": "futures-util",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 544,
-            "raw": " 15 files changed, 544 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.0"
-        }
-      },
-      {
-        "name": "futures-sink",
-        "notable_parents": "h2, tokio-util",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 551,
-            "raw": " 8 files changed, 551 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.21"
-        }
-      },
-      {
-        "name": "foreign-types",
-        "notable_parents": "openssl",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 584,
-            "raw": " 7 files changed, 584 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.2"
-        }
-      },
-      {
-        "name": "cfg-if",
-        "notable_parents": "log, instant, openssl, and 5 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 588,
-            "raw": " 11 files changed, 588 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.0"
-        }
-      },
-      {
-        "name": "remove_dir_all",
-        "notable_parents": "tempfile",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 598,
-            "raw": " 9 files changed, 598 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.5.3"
-        }
-      },
-      {
-        "name": "instant",
-        "notable_parents": "fastrand",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 678,
-            "raw": " 14 files changed, 678 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.12"
-        }
-      },
-      {
-        "name": "form_urlencoded",
-        "notable_parents": "url, serde_urlencoded",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 695,
-            "raw": " 7 files changed, 695 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.1"
-        }
-      },
-      {
-        "name": "want",
-        "notable_parents": "hyper",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 703,
-            "raw": " 9 files changed, 703 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.0"
-        }
-      },
-      {
-        "name": "percent-encoding",
-        "notable_parents": "url, reqwest, form_urlencoded",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 708,
-            "raw": " 7 files changed, 708 insertions(+)\n"
-          },
-          "from": null,
-          "to": "2.1.0"
-        }
-      },
-      {
-        "name": "fnv",
-        "notable_parents": "h2, http",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 736,
-            "raw": " 10 files changed, 736 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.7"
-        }
-      },
-      {
-        "name": "itoa",
-        "notable_parents": "http, hyper, serde_json, serde_urlencoded",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 796,
-            "raw": " 15 files changed, 796 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.1"
-        }
-      },
-      {
-        "name": "lazy_static",
-        "notable_parents": "reqwest, schannel, and 3 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 882,
-            "raw": " 13 files changed, 882 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.4.0"
-        }
-      },
-      {
-        "name": "httpdate",
-        "notable_parents": "hyper",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1001,
-            "raw": " 12 files changed, 1001 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.2"
-        }
-      },
-      {
-        "name": "winapi-util",
-        "notable_parents": "termcolor",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1101,
-            "raw": " 15 files changed, 1101 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.5"
-        }
-      },
-      {
-        "name": "winapi-i686-pc-windows-gnu",
-        "notable_parents": "winapi",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1133,
-            "raw": " 1392 files changed, 1133 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.4.0"
-        }
-      },
-      {
-        "name": "winapi-x86_64-pc-windows-gnu",
-        "notable_parents": "winapi",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1168,
-            "raw": " 1421 files changed, 1168 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.4.0"
-        }
-      },
-      {
-        "name": "futures-core",
-        "notable_parents": "h2, hyper, reqwest, and 3 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1182,
-            "raw": " 16 files changed, 1182 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.21"
-        }
-      },
-      {
-        "name": "futures-task",
-        "notable_parents": "futures-util",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1187,
-            "raw": " 16 files changed, 1187 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.21"
-        }
-      },
-      {
-        "name": "http-body",
-        "notable_parents": "hyper, reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1262,
-            "raw": " 19 files changed, 1262 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.4.4"
-        }
-      },
-      {
-        "name": "wasm-bindgen-macro",
-        "notable_parents": "wasm-bindgen",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1275,
-            "raw": " 46 files changed, 1275 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.80"
-        }
-      },
-      {
-        "name": "hyper-tls",
-        "notable_parents": "reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1301,
-            "raw": " 14 files changed, 1301 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.5.0"
-        }
-      },
-      {
-        "name": "wasm-bindgen-futures",
-        "notable_parents": "reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1304,
-            "raw": " 13 files changed, 1304 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.4.30"
-        }
-      },
-      {
-        "name": "fastrand",
-        "notable_parents": "tempfile",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1375,
-            "raw": " 12 files changed, 1375 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.7.0"
-        }
-      },
-      {
-        "name": "mime",
-        "notable_parents": "reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1721,
-            "raw": " 15 files changed, 1721 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.16"
-        }
-      },
-      {
-        "name": "pkg-config",
-        "notable_parents": "openssl-sys",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1754,
-            "raw": " 16 files changed, 1754 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.25"
-        }
-      },
-      {
-        "name": "tokio-native-tls",
-        "notable_parents": "reqwest, hyper-tls",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1804,
-            "raw": " 19 files changed, 1804 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.0"
-        }
-      },
-      {
-        "name": "wasm-bindgen-macro-support",
-        "notable_parents": "wasm-bindgen-macro",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1966,
-            "raw": " 7 files changed, 1966 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.80"
-        }
-      },
-      {
-        "name": "core-foundation-sys",
-        "notable_parents": "core-foundation, and 2 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 1971,
-            "raw": " 28 files changed, 1971 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.8.3"
-        }
-      },
-      {
-        "name": "security-framework-sys",
-        "notable_parents": "native-tls, security-framework",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 2023,
-            "raw": " 29 files changed, 2023 insertions(+)\n"
-          },
-          "from": null,
-          "to": "2.6.1"
-        }
-      },
-      {
-        "name": "unicode-xid",
-        "notable_parents": "syn, proc-macro2",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 2050,
-            "raw": " 14 files changed, 2050 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.2"
-        }
-      },
-      {
-        "name": "serde_urlencoded",
-        "notable_parents": "reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 2127,
-            "raw": " 19 files changed, 2127 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.7.1"
-        }
-      },
-      {
-        "name": "slab",
-        "notable_parents": "h2",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 2622,
-            "raw": " 11 files changed, 2622 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.4.6"
-        }
-      },
-      {
-        "name": "wasm-bindgen-backend",
-        "notable_parents": "wasm-bindgen-macro-support",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3019,
-            "raw": " 11 files changed, 3019 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.80"
-        }
-      },
-      {
-        "name": "miow",
-        "notable_parents": "mio",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3135,
-            "raw": " 16 files changed, 3135 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.7"
-        }
-      },
-      {
-        "name": "wasi",
-        "notable_parents": "mio",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3309,
-            "raw": " 17 files changed, 3309 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.11.0+wasi-snapshot-preview1"
-        }
-      },
-      {
-        "name": "unicode-bidi",
-        "notable_parents": "idna",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3398,
-            "raw": " 23 files changed, 3398 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.7"
-        }
-      },
-      {
-        "name": "quote",
-        "notable_parents": "syn, and 4 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3845,
-            "raw": " 35 files changed, 3845 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.18"
-        }
-      },
-      {
-        "name": "redox_syscall",
-        "notable_parents": "tempfile",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3897,
-            "raw": " 32 files changed, 3897 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.13"
-        }
-      },
-      {
-        "name": "core-foundation",
-        "notable_parents": "security-framework",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3960,
-            "raw": " 28 files changed, 3960 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.9.3"
-        }
-      },
-      {
-        "name": "tracing-attributes",
-        "notable_parents": "tracing",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3964,
-            "raw": " 20 files changed, 3964 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.20"
-        }
-      },
-      {
-        "name": "ipnet",
-        "notable_parents": "reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3980,
-            "raw": " 15 files changed, 3980 insertions(+)\n"
-          },
-          "from": null,
-          "to": "2.4.0"
-        }
-      },
-      {
-        "name": "futures-channel",
-        "notable_parents": "hyper",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 3999,
-            "raw": " 20 files changed, 3999 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.21"
-        }
-      },
-      {
-        "name": "tempfile",
-        "notable_parents": "native-tls",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 4066,
-            "raw": " 24 files changed, 4066 insertions(+)\n"
-          },
-          "from": null,
-          "to": "3.3.0"
-        }
-      },
-      {
-        "name": "native-tls",
-        "notable_parents": "reqwest, hyper-tls, tokio-native-tls",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 4089,
-            "raw": " 21 files changed, 4089 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.10"
-        }
-      },
-      {
-        "name": "once_cell",
-        "notable_parents": "openssl",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 4140,
-            "raw": " 24 files changed, 4140 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.10.0"
-        }
-      },
-      {
-        "name": "winreg",
-        "notable_parents": "reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 4276,
-            "raw": " 29 files changed, 4276 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.10.1"
-        }
-      },
-      {
-        "name": "ryu",
-        "notable_parents": "serde_json, serde_urlencoded",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 4531,
-            "raw": " 37 files changed, 4531 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.9"
-        }
-      },
-      {
-        "name": "schannel",
-        "notable_parents": "native-tls",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 4607,
-            "raw": " 34 files changed, 4607 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.19"
-        }
-      },
-      {
-        "name": "log",
-        "notable_parents": "mio, want, reqwest, and 2 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 5632,
-            "raw": " 21 files changed, 5632 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.4.16"
-        }
-      },
-      {
-        "name": "proc-macro2",
-        "notable_parents": "syn, quote, and 3 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 5702,
-            "raw": " 22 files changed, 5702 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.37"
-        }
-      },
-      {
-        "name": "socket2",
-        "notable_parents": "hyper, tokio",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 6018,
-            "raw": " 13 files changed, 6018 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.4.4"
-        }
-      },
-      {
-        "name": "pin-project-lite",
-        "notable_parents": "hyper, tokio, reqwest, and 4 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 6107,
-            "raw": " 72 files changed, 6107 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.8"
-        }
-      },
-      {
-        "name": "tracing-core",
-        "notable_parents": "tracing",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 6163,
-            "raw": " 28 files changed, 6163 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.25"
-        }
-      },
-      {
-        "name": "cc",
-        "notable_parents": "openssl-sys",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 6671,
-            "raw": " 22 files changed, 6671 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.73"
-        }
-      },
-      {
-        "name": "httparse",
-        "notable_parents": "hyper",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 7265,
-            "raw": " 20 files changed, 7265 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.7.0"
-        }
-      },
-      {
-        "name": "memchr",
-        "notable_parents": "tokio, os_str_bytes",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 8718,
-            "raw": " 48 files changed, 8718 insertions(+)\n"
-          },
-          "from": null,
-          "to": "2.4.1"
-        }
-      },
-      {
-        "name": "bytes",
-        "notable_parents": "h2, http, hyper, tokio, and 4 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 9213,
-            "raw": " 45 files changed, 9213 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.1.0"
-        }
-      },
-      {
-        "name": "openssl-sys",
-        "notable_parents": "openssl, native-tls",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 9484,
-            "raw": " 48 files changed, 9484 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.9.72"
-        }
-      },
-      {
-        "name": "security-framework",
-        "notable_parents": "native-tls",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 9776,
-            "raw": " 45 files changed, 9776 insertions(+)\n"
-          },
-          "from": null,
-          "to": "2.6.1"
-        }
-      },
-      {
-        "name": "bumpalo",
-        "notable_parents": "wasm-bindgen-backend",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 10106,
-            "raw": " 19 files changed, 10106 insertions(+)\n"
-          },
-          "from": null,
-          "to": "3.9.1"
-        }
-      },
-      {
-        "name": "tracing",
-        "notable_parents": "h2, hyper, tokio-util",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 10957,
-            "raw": " 34 files changed, 10957 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.33"
-        }
-      },
-      {
-        "name": "mio",
-        "notable_parents": "tokio",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 11882,
-            "raw": " 65 files changed, 11882 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.8.2"
-        }
-      },
-      {
-        "name": "js-sys",
-        "notable_parents": "reqwest, web-sys, wasm-bindgen-futures",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 12875,
-            "raw": " 63 files changed, 12875 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.57"
-        }
-      },
-      {
-        "name": "tokio-util",
-        "notable_parents": "h2",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 13877,
-            "raw": " 67 files changed, 13877 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.7.1"
-        }
-      },
-      {
-        "name": "hashbrown",
-        "notable_parents": "indexmap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 14609,
-            "raw": " 33 files changed, 14609 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.11.2"
-        }
-      },
-      {
-        "name": "serde",
-        "notable_parents": "reqwest, serde_json, serde_urlencoded",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 16148,
-            "raw": " 29 files changed, 16148 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.0.136"
-        }
-      },
-      {
-        "name": "url",
-        "notable_parents": "reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 16350,
-            "raw": " 17 files changed, 16350 insertions(+)\n"
-          },
-          "from": null,
-          "to": "2.2.2"
-        }
-      },
-      {
-        "name": "tinyvec",
-        "notable_parents": "unicode-normalization",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 16758,
-            "raw": " 27 files changed, 16758 insertions(+)\n"
-          },
-          "from": null,
-          "to": "1.5.1"
-        }
-      },
-      {
-        "name": "http",
-        "notable_parents": "h2, hyper, reqwest, http-body",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 16826,
-            "raw": " 41 files changed, 16826 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.6"
-        }
-      },
-      {
-        "name": "wasm-bindgen",
-        "notable_parents": "js-sys, reqwest, web-sys, wasm-bindgen-futures",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 20978,
-            "raw": " 243 files changed, 20978 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.80"
-        }
-      },
-      {
-        "name": "ntapi",
-        "notable_parents": "mio",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 21234,
-            "raw": " 44 files changed, 21234 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.7"
-        }
-      },
-      {
-        "name": "futures-util",
-        "notable_parents": "h2, hyper, reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 25074,
-            "raw": " 187 files changed, 25074 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.21"
-        }
-      },
-      {
-        "name": "hyper",
-        "notable_parents": "reqwest, hyper-tls",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 25617,
-            "raw": " 72 files changed, 25617 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.14.18"
-        }
-      },
-      {
-        "name": "h2",
-        "notable_parents": "hyper, reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 26066,
-            "raw": " 66 files changed, 26066 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.13"
-        }
-      },
-      {
-        "name": "syn",
-        "notable_parents": "tracing-attributes, and 2 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 28477,
-            "raw": " 93 files changed, 21776 insertions(+), 6701 deletions(-)\n"
-          },
-          "from": "1.0.0",
-          "to": "1.0.91"
-        }
-      },
-      {
-        "name": "unicode-normalization",
-        "notable_parents": "idna",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 28628,
-            "raw": " 26 files changed, 28628 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.1.19"
-        }
-      },
-      {
-        "name": "openssl",
-        "notable_parents": "native-tls",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 28634,
-            "raw": " 85 files changed, 28634 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.10.38"
-        }
-      },
-      {
-        "name": "idna",
-        "notable_parents": "url",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 32538,
-            "raw": " 19 files changed, 32538 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.3"
-        }
-      },
-      {
-        "name": "vcpkg",
-        "notable_parents": "openssl-sys",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 42648,
-            "raw": " 834 files changed, 42648 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.2.15"
-        }
-      },
-      {
-        "name": "web-sys",
-        "notable_parents": "reqwest, wasm-bindgen-futures",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 197014,
-            "raw": " 2203 files changed, 197014 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.3.57"
-        }
-      },
-      {
-        "name": "encoding_rs",
-        "notable_parents": "reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 507252,
-            "raw": " 104 files changed, 507252 insertions(+)\n"
-          },
-          "from": null,
-          "to": "0.8.31"
-        }
-      }
-    ],
     "total_lines": 1742618
   }
 }

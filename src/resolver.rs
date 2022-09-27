@@ -65,8 +65,7 @@ use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
 use core::fmt;
 use futures_util::future::join_all;
 use miette::IntoDiagnostic;
-use serde::Serialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::mem;
@@ -76,7 +75,9 @@ use tracing::{error, trace, trace_span};
 use crate::errors::{RegenerateExemptionsError, SuggestError};
 use crate::format::{
     self, AuditKind, AuditsFile, CriteriaName, CriteriaStr, Delta, DependencyCriteria, DiffStat,
-    ExemptedDependency, ImportName, PackageName, PackageStr, PolicyEntry, RemoteImport,
+    ExemptedDependency, ImportName, JsonPackage, JsonReport, JsonReportConclusion,
+    JsonReportFailForVet, JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest,
+    JsonSuggestItem, JsonVetFailure, PackageName, PackageStr, PolicyEntry, RemoteImport,
     SAFE_TO_DEPLOY, SAFE_TO_RUN,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
@@ -137,7 +138,7 @@ pub struct FailForVet {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ViolationConflict {
     UnauditedConflict {
         violation_source: CriteriaNamespace,
@@ -167,7 +168,7 @@ pub struct SuggestItem {
     pub notable_parents: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffRecommendation {
     pub from: Option<Version>,
     pub to: Version,
@@ -192,7 +193,7 @@ pub struct CriteriaFailureSet {
     pub all: CriteriaSet,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum CriteriaNamespace {
     Local,
     Foreign(ImportName),
@@ -2813,61 +2814,100 @@ impl<'a> ResolveReport<'a> {
     pub fn print_json(
         &self,
         out: &Arc<dyn Out>,
-        _cfg: &Config,
         suggest: Option<&Suggest>,
     ) -> Result<(), miette::Report> {
-        let result = match &self.conclusion {
-            Conclusion::Success(success) => {
-                let json_package = |pkgidx: &PackageIdx| {
-                    let package = &self.graph.nodes[*pkgidx];
-                    json!({
-                        "name": package.name,
-                        "version": package.version,
+        let result = JsonReport {
+            conclusion: match &self.conclusion {
+                Conclusion::Success(success) => {
+                    let json_package = |pkgidx: &PackageIdx| {
+                        let package = &self.graph.nodes[*pkgidx];
+                        JsonPackage {
+                            name: package.name.to_owned(),
+                            version: package.version.clone(),
+                        }
+                    };
+                    JsonReportConclusion::Success(JsonReportSuccess {
+                        vetted_fully: success.vetted_fully.iter().map(json_package).collect(),
+                        vetted_partially: success
+                            .vetted_partially
+                            .iter()
+                            .map(json_package)
+                            .collect(),
+                        vetted_with_exemptions: success
+                            .vetted_with_exemptions
+                            .iter()
+                            .map(json_package)
+                            .collect(),
                     })
-                };
-                json!({
-                    "conclusion": "success",
-                    "vetted_fully": success.vetted_fully.iter().map(json_package).collect::<Vec<_>>(),
-                    "vetted_partially": success.vetted_partially.iter().map(json_package).collect::<Vec<_>>(),
-                    "vetted_with_exemptions": success.vetted_with_exemptions.iter().map(json_package).collect::<Vec<_>>(),
-                })
-            }
-            Conclusion::FailForViolationConflict(fail) => json!({
-                "conclusion": "fail (violation)",
-                "violations": fail.violations.iter().map(|(pkgidx, violations)| {
-                    let package = &self.graph.nodes[*pkgidx];
-                    let key = format!("{}:{}", package.name, package.version);
-                    (key, violations)
-                }).collect::<SortedMap<_,_>>(),
-            }),
-            Conclusion::FailForVet(fail) => {
-                // FIXME: How to report confidence for suggested criteria?
-                let json_suggest_item = |item: &SuggestItem| {
-                    let package = &self.graph.nodes[item.package];
-                    json!({
-                        "name": package.name,
-                        "notable_parents": item.notable_parents,
-                        "suggested_criteria": self.criteria_mapper.all_criteria_names(&item.suggested_criteria).collect::<Vec<_>>(),
-                        "suggested_diff": item.suggested_diff,
+                }
+                Conclusion::FailForViolationConflict(fail) => {
+                    JsonReportConclusion::FailForViolationConflict(
+                        JsonReportFailForViolationConflict {
+                            violations: fail
+                                .violations
+                                .iter()
+                                .map(|(pkgidx, violations)| {
+                                    let package = &self.graph.nodes[*pkgidx];
+                                    let key = format!("{}:{}", package.name, package.version);
+                                    (key, violations.clone())
+                                })
+                                .collect(),
+                        },
+                    )
+                }
+                Conclusion::FailForVet(fail) => {
+                    // FIXME: How to report confidence for suggested criteria?
+                    let json_suggest_item = |item: &SuggestItem| {
+                        let package = &self.graph.nodes[item.package];
+                        JsonSuggestItem {
+                            name: package.name.to_owned(),
+                            notable_parents: item.notable_parents.to_owned(),
+                            suggested_criteria: self
+                                .criteria_mapper
+                                .all_criteria_names(&item.suggested_criteria)
+                                .map(|s| s.to_owned())
+                                .collect(),
+                            suggested_diff: item.suggested_diff.clone(),
+                        }
+                    };
+                    JsonReportConclusion::FailForVet(JsonReportFailForVet {
+                        failures: fail
+                            .failures
+                            .iter()
+                            .map(|(&pkgidx, audit_fail)| {
+                                let package = &self.graph.nodes[pkgidx];
+                                JsonVetFailure {
+                                    name: package.name.to_owned(),
+                                    version: package.version.clone(),
+                                    missing_criteria: self
+                                        .criteria_mapper
+                                        .all_criteria_names(&audit_fail.criteria_failures)
+                                        .map(|s| s.to_owned())
+                                        .collect(),
+                                }
+                            })
+                            .collect(),
+                        suggest: suggest.as_ref().map(|suggest| JsonSuggest {
+                            suggestions: suggest
+                                .suggestions
+                                .iter()
+                                .map(json_suggest_item)
+                                .collect(),
+                            suggest_by_criteria: suggest
+                                .suggestions_by_criteria
+                                .iter()
+                                .map(|(criteria, items)| {
+                                    (
+                                        criteria.to_owned(),
+                                        items.iter().map(json_suggest_item).collect::<Vec<_>>(),
+                                    )
+                                })
+                                .collect(),
+                            total_lines: suggest.total_lines,
+                        }),
                     })
-                };
-                json!({
-                    "conclusion": "fail (vetting)",
-                    "failures": fail.failures.iter().map(|(&pkgidx, audit_fail)| {
-                        let package = &self.graph.nodes[pkgidx];
-                        json!({
-                            "name": package.name,
-                            "version": package.version,
-                            "missing_criteria": self.criteria_mapper.all_criteria_names(&audit_fail.criteria_failures).collect::<Vec<_>>(),
-                        })
-                    }).collect::<Vec<_>>(),
-                    "suggest": suggest.map(|suggest| json!({
-                        "suggestions": suggest.suggestions.iter().map(json_suggest_item).collect::<Vec<_>>(),
-                        "suggest_by_criteria": suggest.suggestions_by_criteria.iter().map(|(criteria, items)| (criteria, items.iter().map(json_suggest_item).collect::<Vec<_>>())).collect::<SortedMap<_,_>>(),
-                        "total_lines": suggest.total_lines,
-                    })),
-                })
-            }
+                }
+            },
         };
 
         serde_json::to_writer_pretty(&**out, &result).into_diagnostic()?;
