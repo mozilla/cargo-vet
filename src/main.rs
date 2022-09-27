@@ -1281,7 +1281,7 @@ fn cmd_suggest(
         OutputFormat::Human => report
             .print_suggest_human(out, cfg, suggest.as_ref())
             .into_diagnostic()?,
-        OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
+        OutputFormat::Json => report.print_json(out, suggest.as_ref())?,
     }
 
     Ok(())
@@ -1514,7 +1514,7 @@ fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(
         OutputFormat::Human => report
             .print_human(out, cfg, suggest.as_ref())
             .into_diagnostic()?,
-        OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
+        OutputFormat::Json => report.print_json(out, suggest.as_ref())?,
     }
 
     // Only save imports if we succeeded, to avoid any modifications on error.

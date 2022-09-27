@@ -1,5 +1,6 @@
 //! Details of the file formats used by cargo vet
 
+use crate::resolver::{DiffRecommendation, ViolationConflict};
 use crate::serialization::spanned::Spanned;
 use crate::{flock::Filesystem, serialization};
 use core::{cmp, fmt};
@@ -531,4 +532,117 @@ impl FetchCommand {
 pub struct CommandHistory {
     #[serde(flatten)]
     pub last_fetch: Option<FetchCommand>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+//                                                                                //
+//                                                                                //
+//                                                                                //
+//                             <json report output>                               //
+//                                                                                //
+//                                                                                //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+
+/// cargo-vet's `--output-format=json` for `check` and `suggest` on:
+///
+/// * success
+/// * audit failure
+/// * violation conflicts
+///
+/// Other errors like i/o or supply-chain integrity issues will show
+/// up as miette-style json errors.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonReport {
+    #[serde(flatten)]
+    pub conclusion: JsonReportConclusion,
+}
+
+/// The conclusion of running `check` or `suggest`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "conclusion")]
+pub enum JsonReportConclusion {
+    /// Success! Everything's Good.
+    #[serde(rename = "success")]
+    Success(JsonReportSuccess),
+    /// The violations and audits/exemptions are contradictory!
+    #[serde(rename = "fail (violation)")]
+    FailForViolationConflict(JsonReportFailForViolationConflict),
+    /// The audit failed, here's why and what to do.
+    #[serde(rename = "fail (vetting)")]
+    FailForVet(JsonReportFailForVet),
+}
+
+/// Success! Everything is audited!
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonReportSuccess {
+    /// These packages are fully vetted
+    pub vetted_fully: Vec<JsonPackage>,
+    /// These packages are partially vetted (some audits but relies on an `exemption`).
+    pub vetted_partially: Vec<JsonPackage>,
+    /// These packages are exempted
+    pub vetted_with_exemptions: Vec<JsonPackage>,
+}
+
+/// Failure! The violations and audits/exemptions are contradictory!
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonReportFailForViolationConflict {
+    /// These packages have the following conflicts
+    pub violations: SortedMap<PackageAndVersion, Vec<ViolationConflict>>,
+}
+
+/// Failure! You need more audits!
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonReportFailForVet {
+    /// Here are the problems we found
+    pub failures: Vec<JsonVetFailure>,
+    /// And here are the fixes we recommend
+    pub suggest: Option<JsonSuggest>,
+}
+
+/// Suggested fixes for a FailForVet
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonSuggest {
+    /// Here are the suggestions sorted in the order of priority
+    pub suggestions: Vec<JsonSuggestItem>,
+    /// The same set of suggestions but grouped by the criteria (lists) needed to audit them
+    pub suggest_by_criteria: SortedMap<String, Vec<JsonSuggestItem>>,
+    /// The total number of lines you would need to review to resolve this
+    pub total_lines: u64,
+}
+
+/// This specific package needed the following criteria but doesn't have them!
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonVetFailure {
+    /// The name of the package
+    pub name: PackageName,
+    /// The version of the package
+    pub version: Version,
+    /// The missing criteria
+    pub missing_criteria: Vec<CriteriaName>,
+}
+
+/// We recommend auditing the following package
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonSuggestItem {
+    /// The name of the package
+    pub name: PackageName,
+    /// Any notable parents the package has (can be helpful in giving context to the user)
+    pub notable_parents: String,
+    /// The criteria we recommend auditing the package for
+    pub suggested_criteria: Vec<CriteriaName>,
+    /// The diff (or full version) we recommend auditing
+    pub suggested_diff: DiffRecommendation,
+}
+
+/// A string of the form "package:version"
+pub type PackageAndVersion = String;
+
+/// A Package
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonPackage {
+    /// Name of the package
+    pub name: PackageName,
+    /// Version of the package
+    pub version: Version,
 }

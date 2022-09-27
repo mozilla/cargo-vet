@@ -8,19 +8,19 @@ expression: json
     "third-party1:10.0.0": [
       {
         "UnauditedConflict": {
-          "exemptions": {
-            "criteria": "reviewed",
-            "notes": null,
-            "version": "10.0.0"
-          },
+          "violation_source": "Local",
           "violation": {
             "criteria": "weak-reviewed",
-            "delta": null,
-            "notes": null,
             "version": null,
-            "violation": "=10"
+            "delta": null,
+            "violation": "=10",
+            "notes": null
           },
-          "violation_source": "Local"
+          "exemptions": {
+            "version": "10.0.0",
+            "criteria": "reviewed",
+            "notes": null
+          }
         }
       }
     ]

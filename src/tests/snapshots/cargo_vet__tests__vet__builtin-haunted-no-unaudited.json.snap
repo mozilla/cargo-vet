@@ -6,21 +6,53 @@ expression: json
   "conclusion": "fail (vetting)",
   "failures": [
     {
+      "name": "third-dev",
+      "version": "10.0.0",
       "missing_criteria": [
         "safe-to-run"
-      ],
-      "name": "third-dev",
-      "version": "10.0.0"
+      ]
     },
     {
+      "name": "third-normal",
+      "version": "10.0.0",
       "missing_criteria": [
         "safe-to-deploy"
-      ],
-      "name": "third-normal",
-      "version": "10.0.0"
+      ]
     }
   ],
   "suggest": {
+    "suggestions": [
+      {
+        "name": "third-dev",
+        "notable_parents": "first",
+        "suggested_criteria": [
+          "safe-to-run"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "10.0.0",
+          "diffstat": {
+            "raw": "+100",
+            "count": 100
+          }
+        }
+      },
+      {
+        "name": "third-normal",
+        "notable_parents": "first",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "10.0.0",
+          "diffstat": {
+            "raw": "+100",
+            "count": 100
+          }
+        }
+      }
+    ],
     "suggest_by_criteria": {
       "safe-to-deploy": [
         {
@@ -30,12 +62,12 @@ expression: json
             "safe-to-deploy"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 100,
-              "raw": "+100"
-            },
             "from": null,
-            "to": "10.0.0"
+            "to": "10.0.0",
+            "diffstat": {
+              "raw": "+100",
+              "count": 100
+            }
           }
         }
       ],
@@ -47,48 +79,16 @@ expression: json
             "safe-to-run"
           ],
           "suggested_diff": {
-            "diffstat": {
-              "count": 100,
-              "raw": "+100"
-            },
             "from": null,
-            "to": "10.0.0"
+            "to": "10.0.0",
+            "diffstat": {
+              "raw": "+100",
+              "count": 100
+            }
           }
         }
       ]
     },
-    "suggestions": [
-      {
-        "name": "third-dev",
-        "notable_parents": "first",
-        "suggested_criteria": [
-          "safe-to-run"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 100,
-            "raw": "+100"
-          },
-          "from": null,
-          "to": "10.0.0"
-        }
-      },
-      {
-        "name": "third-normal",
-        "notable_parents": "first",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "diffstat": {
-            "count": 100,
-            "raw": "+100"
-          },
-          "from": null,
-          "to": "10.0.0"
-        }
-      }
-    ],
     "total_lines": 200
   }
 }

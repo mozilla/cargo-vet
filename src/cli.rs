@@ -678,7 +678,9 @@ pub enum FetchMode {
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum OutputFormat {
+    /// Print output in a human-readable form.
     Human,
+    /// Print output in a machine-readable form with minimal extra context.
     Json,
 }
 
