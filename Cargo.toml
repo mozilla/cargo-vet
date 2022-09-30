@@ -20,7 +20,7 @@ exclude = [
 cargo_metadata = "0.14.2"
 clap = { version = "3.2.6", features = ["derive"] }
 clap-cargo = "0.9.1"
-console = "0.15.0"
+console = "0.15.2"
 crates-index = { version = "0.18.8", default-features = false }
 dirs = "4.0.0"
 filetime = "0.2.16"
