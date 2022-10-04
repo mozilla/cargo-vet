@@ -509,7 +509,7 @@ impl Store {
         // validate that our imports.lock is in sync with config.toml.
         let imports_lock_outdated = self
             .imports_lock_outdated()
-            .then(|| StoreValidateError::ImportsLockOutdated);
+            .then_some(StoreValidateError::ImportsLockOutdated);
 
         let errors = invalid_criteria_errors
             .into_iter()
