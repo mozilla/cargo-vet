@@ -147,6 +147,7 @@ graph
 * [record-violation](#cargo-vet-record-violation): Declare that some versions of a package violate certain audit criteria
 * [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
 * [fetch-imports](#cargo-vet-fetch-imports): Explicitly fetch the imports (foreign audit files)
+* [aggregate](#cargo-vet-aggregate): Fetch and merge audits from multiple sources into a single `audits.toml` file
 * [dump-graph](#cargo-vet-dump-graph): Print the cargo build graph as understood by `cargo vet`
 * [gc](#cargo-vet-gc): Clean up old packages from the vet cache
 * [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
@@ -646,6 +647,29 @@ top of vet.
 ```
 cargo vet fetch-imports [OPTIONS]
 ```
+
+### OPTIONS
+#### `-h, --help`
+Print help information
+
+### GLOBAL OPTIONS
+This subcommand accepts all the [global options](#global-options)
+
+<br><br><br>
+## cargo vet aggregate
+Fetch and merge audits from multiple sources into a single `audits.toml` file.
+
+Will fetch the audits from each URL in the provided file, combining them into a single file. Custom
+criteria will be merged by-name, and must have identical descriptions in each source audit file.
+
+### USAGE
+```
+cargo vet aggregate [OPTIONS] <SOURCES>
+```
+
+### ARGS
+#### `<SOURCES>`
+Path to a file containing a list of URLs to aggregate the audits from
 
 ### OPTIONS
 #### `-h, --help`

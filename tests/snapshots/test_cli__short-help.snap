@@ -70,6 +70,8 @@ SUBCOMMANDS:
     record-violation    Declare that some versions of a package violate certain audit criteria
     fmt                 Reformat all of vet's files (in case you hand-edited them)
     fetch-imports       Explicitly fetch the imports (foreign audit files)
+    aggregate           Fetch and merge audits from multiple sources into a single `audits.toml`
+                            file
     dump-graph          Print the cargo build graph as understood by `cargo vet`
     gc                  Clean up old packages from the vet cache
     help                Print this message or the help of the given subcommand(s)
