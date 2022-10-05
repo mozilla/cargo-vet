@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Run cargo test
         run: |
-          cargo test --workspace --examples --bins
+          cargo test --workspace --all-targets
 
   vet:
     runs-on: ubuntu-latest
