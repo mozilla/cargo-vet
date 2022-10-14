@@ -1,7 +1,8 @@
 use super::*;
 
 fn get_audit_as_crates_io(cfg: &Config, store: &Store) -> String {
-    let res = crate::check_audit_as_crates_io(cfg, store);
+    let mut cache = crate::storage::Cache::acquire(cfg).unwrap();
+    let res = crate::check_audit_as_crates_io(cfg, store, &mut cache);
     match res {
         Ok(()) => String::new(),
         Err(e) => format!("{:?}", miette::Report::new(e)),
@@ -9,7 +10,8 @@ fn get_audit_as_crates_io(cfg: &Config, store: &Store) -> String {
 }
 
 fn get_audit_as_crates_io_json(cfg: &Config, store: &Store) -> String {
-    let res = crate::check_audit_as_crates_io(cfg, store);
+    let mut cache = crate::storage::Cache::acquire(cfg).unwrap();
+    let res = crate::check_audit_as_crates_io(cfg, store, &mut cache);
     match res {
         Ok(()) => String::new(),
         Err(e) => {
@@ -231,4 +233,26 @@ fn cycle_audit_as_crates_io() {
 
     let output = get_audit_as_crates_io(&cfg, &store);
     insta::assert_snapshot!("cycle-audit-as-crates-io", output);
+}
+
+#[test]
+fn audit_as_crates_io_need_update() {
+    // The "root" and "first" packages don't have their versions on crates.io
+    // until the index is updated. If an `audit_as_crates_io` entry requires
+    // `first` to be on crates.io, and it's not, we'll do an update, which
+    // should reveal that `root` also needs to be audited.
+
+    let _enter = TEST_RUNTIME.enter();
+
+    let mock = MockMetadata::haunted_tree();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
+    config
+        .policy
+        .insert("first".to_owned(), audit_as_policy(Some(true)));
+    let store = Store::mock(config, audits, imports);
+    let cfg = mock_cfg(&metadata);
+
+    let output = get_audit_as_crates_io(&cfg, &store);
+    insta::assert_snapshot!("audit-as-crates-io-need-update", output);
 }
