@@ -1342,7 +1342,8 @@ fn fix_audit_as(cfg: &Config, store: &mut Store) -> Result<(), CacheAcquireError
     // NOTE: In the future this might require Network, but for now `cargo metadata` is a precondition
     // and guarantees a fully populated and up to date index, so we can just rely on that and know
     // this is Networkless.
-    let issues = check_audit_as_crates_io(cfg, store);
+    let mut cache = Cache::acquire(cfg)?;
+    let issues = check_audit_as_crates_io(cfg, store, &mut cache);
     if let Err(AuditAsErrors { errors }) = issues {
         for error in errors {
             match error {
@@ -1366,7 +1367,6 @@ fn fix_audit_as(cfg: &Config, store: &mut Store) -> Result<(), CacheAcquireError
                             .audit_as_crates_io = Some(false);
                     }
                 }
-                AuditAsError::CacheAcquire(err) => return Err(err),
             }
         }
     }
@@ -1487,7 +1487,8 @@ fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(
 
     if !cfg.cli.locked {
         // Check if any of our first-parties are in the crates.io registry
-        check_audit_as_crates_io(cfg, &store)?;
+        let mut cache = Cache::acquire(cfg).into_diagnostic()?;
+        check_audit_as_crates_io(cfg, &store, &mut cache)?;
     }
 
     // DO THE THING!!!!
@@ -2026,14 +2027,20 @@ fn first_party_packages_strict<'a>(
         .filter(move |package| !package.is_third_party(&empty_policy))
 }
 
-fn check_audit_as_crates_io(cfg: &Config, store: &Store) -> Result<(), AuditAsErrors> {
-    let cache = Cache::acquire(cfg).map_err(|e| AuditAsErrors {
-        errors: vec![AuditAsError::CacheAcquire(e)],
-    })?;
+fn check_audit_as_crates_io(
+    cfg: &Config,
+    store: &Store,
+    cache: &mut Cache,
+) -> Result<(), AuditAsErrors> {
+    // If we don't have a registry, we can't check audit-as-crates-io.
+    if !cache.has_registry() {
+        return Ok(());
+    }
+
     let mut needs_audit_as_entry = vec![];
     let mut shouldnt_be_audit_as = vec![];
 
-    'packages: for package in first_party_packages_strict(&cfg.metadata, &store.config) {
+    for package in first_party_packages_strict(&cfg.metadata, &store.config) {
         let audit_policy = store
             .config
             .policy
@@ -2055,13 +2062,21 @@ fn check_audit_as_crates_io(cfg: &Config, store: &Store) -> Result<(), AuditAsEr
                     });
                 }
                 // Now that we've found a version match, we're done with this package
-                continue 'packages;
+                continue;
             }
         }
 
         // If we reach this point, then we couldn't find a matching package in the registry,
         // So any `audit-as-crates-io = true` is an error that should be corrected
         if audit_policy == Some(true) {
+            // We found a crate which someone thought was on crates-io, but
+            // doesn't appear to be according to our local index.
+            // Before reporting an error, ensure the index is up to date,
+            // and restart if it was not.
+            if cache.ensure_index_up_to_date() {
+                return check_audit_as_crates_io(cfg, store, cache);
+            }
+
             shouldnt_be_audit_as.push(ShouldntBeAuditAsError {
                 package: package.name.clone(),
                 version: package.version.clone(),

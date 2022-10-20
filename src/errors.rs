@@ -29,10 +29,6 @@ pub enum AuditAsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ShouldntBeAuditAs(ShouldntBeAuditAsErrors),
-    // FIXME: we should probably just make the caller pass this in?
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    CacheAcquire(CacheAcquireError),
 }
 
 #[derive(Debug, Error, Diagnostic)]

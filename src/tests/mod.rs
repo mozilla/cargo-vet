@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     ffi::OsString,
     fmt, fs, io,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -110,8 +110,9 @@ struct MockDependency {
     version: Version,
 }
 
-pub struct MockRegistry {
+pub struct MockIndex {
     packages: FastMap<PackageStr<'static>, Vec<MockRegistryVersion>>,
+    path: PathBuf,
 }
 
 struct MockRegistryVersion {
@@ -127,9 +128,12 @@ fn reg_ver(pub_ver: u64) -> MockRegistryVersion {
     }
 }
 
-impl MockRegistry {
-    pub fn testing_cinematic_universe() -> Self {
-        Self {
+// The `MockIndex` type should provide the same interface as the
+// `crates_index::Index` type, as it is used in place of that type in test
+// builds.
+impl MockIndex {
+    pub fn new_cargo_default() -> Result<Self, crates_index::Error> {
+        Ok(Self {
             packages: [
                 ("root-package", vec![reg_ver(DEFAULT_VER)]),
                 ("third-party1", vec![reg_ver(DEFAULT_VER)]),
@@ -157,12 +161,26 @@ impl MockRegistry {
                 ("dev-cycle-indirect", vec![reg_ver(DEFAULT_VER)]),
                 ("third-normal", vec![reg_ver(DEFAULT_VER)]),
                 ("third-dev", vec![reg_ver(DEFAULT_VER)]),
+                ("first", vec![reg_ver(1)]),
             ]
             .into_iter()
             .collect(),
-        }
+            path: Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("/tests/mock-registry/index/testing-cinematic-universe"),
+        })
     }
-    pub fn package(&self, name: PackageStr) -> Option<crates_index::Crate> {
+    pub fn update(&mut self) -> Result<(), crates_index::Error> {
+        if self.packages.contains_key("new-package") {
+            return Ok(()); // already updated
+        }
+        self.packages.insert("root", vec![reg_ver(DEFAULT_VER)]);
+        self.packages
+            .get_mut("first")
+            .unwrap()
+            .push(reg_ver(DEFAULT_VER));
+        Ok(())
+    }
+    pub fn crate_(&self, name: PackageStr) -> Option<crates_index::Crate> {
         use std::io::Write;
 
         let package_entry = self.packages.get(name)?;
@@ -221,6 +239,9 @@ impl MockRegistry {
         let result = crates_index::Crate::from_slice(&package_file)
             .expect("failed to parse mock crates index file");
         Some(result)
+    }
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 }
 

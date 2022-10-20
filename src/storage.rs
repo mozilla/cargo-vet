@@ -9,7 +9,6 @@ use std::{
 };
 
 use cargo_metadata::Version;
-use crates_index::Index;
 use flate2::read::GzDecoder;
 use futures_util::future::try_join_all;
 use miette::{NamedSource, SourceOffset};
@@ -33,11 +32,19 @@ use crate::{
         SortedMap, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
-    out::{progress_bar, IncProgressOnDrop},
+    out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
     resolver::{self, Conclusion},
     serialization::{spanned::Spanned, to_formatted_toml},
     Config, PartialConfig,
 };
+
+/// The type to use for accessing information from crates.io.
+#[cfg(not(test))]
+type CratesIndex = crates_index::Index;
+
+/// When running tests, a mock index is used instead of the real one.
+#[cfg(test)]
+type CratesIndex = crate::tests::MockIndex;
 
 // tmp cache for various shenanigans
 const CACHE_DIFF_CACHE: &str = "diff-cache.toml";
@@ -818,11 +825,13 @@ async fn fetch_imported_audit(
 /// A Registry in CARGO_HOME (usually the crates.io one)
 pub struct CargoRegistry {
     /// The queryable index
-    index: Index,
+    index: CratesIndex,
     /// The base path all registries share (`$CARGO_HOME/registry`)
     base_dir: PathBuf,
     /// The name of the registry (`github.com-1ecc6299db9ec823`)
     registry: OsString,
+    /// Whether or not the index is known to be up-to-date
+    index_up_to_date: bool,
 }
 
 impl CargoRegistry {
@@ -905,12 +914,19 @@ impl Drop for Cache {
 impl Cache {
     /// Acquire the cache
     pub fn acquire(cfg: &PartialConfig) -> Result<Self, CacheAcquireError> {
+        // Try to get the cargo registry
+        let cargo_registry = find_cargo_registry();
+        if let Err(e) = &cargo_registry {
+            // ERRORS: this warning really rides the line, I'm not sure if the user can/should care
+            warn!("Couldn't find cargo registry: {e}");
+        }
+
         if cfg.mock_cache {
             // We're in unit tests, everything should be mocked and not touch real caches
             return Ok(Cache {
                 _lock: None,
                 root: None,
-                cargo_registry: None,
+                cargo_registry: cargo_registry.ok(),
                 diff_cache_path: None,
                 command_history_path: None,
                 diff_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_DIFFS),
@@ -968,13 +984,6 @@ impl Cache {
             .and_then(|f| load_json(f).ok())
             .unwrap_or_default();
 
-        // Try to get the cargo registry
-        let cargo_registry = find_cargo_registry();
-        if let Err(e) = &cargo_registry {
-            // ERRORS: this warning really rides the line, I'm not sure if the user can/should care
-            warn!("Couldn't find cargo registry: {e}");
-        }
-
         Ok(Self {
             _lock: Some(lock),
             root: Some(root),
@@ -991,25 +1000,46 @@ impl Cache {
         })
     }
 
+    /// Check if the Cache has access to the registry or information about the
+    /// crates.io index.
+    pub fn has_registry(&self) -> bool {
+        self.cargo_registry.is_some()
+    }
+
+    /// Ensures that the local copy of the crates.io index has the most
+    /// up-to-date information about what crates are available.
+    ///
+    /// Returns `true` if the state of the index may have been changed by this
+    /// call, and `false` if the index is already up-to-date.
+    pub fn ensure_index_up_to_date(&mut self) -> bool {
+        let reg = match &mut self.cargo_registry {
+            Some(reg) => reg,
+            None => return false,
+        };
+        if reg.index_up_to_date {
+            return false;
+        }
+        let _spinner = indeterminate_spinner("Updating", "registry index");
+        reg.index_up_to_date = true;
+        match reg.index.update() {
+            Ok(()) => true,
+            Err(e) => {
+                warn!("Couldn't update cargo index: {e}");
+                false
+            }
+        }
+    }
+
     /// Gets any information the crates.io index has on this package, locally
-    /// with no downloads. The fact that we invoke `cargo metadata` on startup
-    /// means the index should be as populated as we're able to get it.
+    /// with no downloads. The index may be out of date, however a caller can
+    /// use `ensure_index_up_to_date` to make sure it is up to date before
+    /// calling this method.
     ///
     /// However this may do some expensive disk i/o, so ideally we should do
     /// some bulk processing of this later. For now let's get it working...
-    #[cfg(not(test))]
     pub fn query_package_from_index(&self, name: PackageStr) -> Option<crates_index::Crate> {
         let reg = self.cargo_registry.as_ref()?;
         reg.index.crate_(name)
-    }
-
-    #[cfg(test)]
-    pub fn query_package_from_index(&self, name: PackageStr) -> Option<crates_index::Crate> {
-        if let Some(reg) = self.cargo_registry.as_ref() {
-            reg.index.crate_(name)
-        } else {
-            crate::tests::MockRegistry::testing_cinematic_universe().package(name)
-        }
     }
 
     #[tracing::instrument(skip(self, network), err)]
@@ -1545,7 +1575,7 @@ fn find_cargo_registry() -> Result<CargoRegistry, crates_index::Error> {
     // ERRORS: all of this is genuinely fallible internal workings
     // but if these path adjustments don't work then something is very fundamentally wrong
 
-    let index = Index::new_cargo_default()?;
+    let index = CratesIndex::new_cargo_default()?;
 
     let base_dir = index.path().parent().unwrap().parent().unwrap().to_owned();
     let registry = index.path().file_name().unwrap().to_owned();
@@ -1554,6 +1584,7 @@ fn find_cargo_registry() -> Result<CargoRegistry, crates_index::Error> {
         index,
         base_dir,
         registry,
+        index_up_to_date: false,
     })
 }
 
