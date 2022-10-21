@@ -32,7 +32,7 @@ lazy_static = "1.4.0"
 libc = "0.2"
 nom = "7.1.1"
 reqwest = { version = "0.11.10", default-features = false, features = ["rustls-tls"] }
-serde = "1.0.136"
+serde = "1.0.146"
 serde_json = "1.0.82"
 tar = { version = "0.4.26", default-features = false }
 tempfile = "3.3.0"
