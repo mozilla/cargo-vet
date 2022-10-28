@@ -20,7 +20,7 @@ use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::{join_all, try_join_all};
 use indicatif::ProgressDrawTarget;
 use lazy_static::lazy_static;
-use miette::{miette, Context, Diagnostic, IntoDiagnostic, NamedSource, SourceOffset};
+use miette::{miette, Context, Diagnostic, IntoDiagnostic, SourceOffset};
 use network::Network;
 use out::{progress_bar, IncProgressOnDrop};
 use reqwest::Url;
@@ -30,7 +30,7 @@ use thiserror::Error;
 use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
-use crate::errors::{CommandError, DownloadError, RegenerateExemptionsError};
+use crate::errors::{CommandError, DownloadError, RegenerateExemptionsError, SourceFile};
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria,
     ExemptedDependency, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr,
@@ -1610,7 +1610,7 @@ fn cmd_aggregate(
             let url_string = url.to_string();
             let audit_bytes = network.download(url).await?;
             let audit_string = String::from_utf8(audit_bytes).map_err(LoadTomlError::from)?;
-            let audit_source = Arc::new(NamedSource::new(url_string.clone(), audit_string.clone()));
+            let audit_source = SourceFile::new(&url_string, audit_string.clone());
             let audit_file: AuditsFile = toml::de::from_str(&audit_string)
                 .map_err(|error| {
                     let (line, col) = error.line_col().unwrap_or((0, 0));

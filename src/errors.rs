@@ -1,12 +1,77 @@
-use std::{ffi::OsString, fmt::Display, path::PathBuf, string::FromUtf8Error, sync::Arc};
+use std::{
+    ffi::OsString,
+    fmt::{Debug, Display},
+    path::PathBuf,
+    string::FromUtf8Error,
+    sync::Arc,
+};
 
 use cargo_metadata::Version;
-use miette::{Diagnostic, NamedSource, SourceOffset, SourceSpan};
+use miette::{Diagnostic, MietteSpanContents, SourceCode, SourceOffset, SourceSpan};
 use thiserror::Error;
 
 use crate::format::{CriteriaName, ForeignCriteriaName, ImportName, PackageName};
 
-pub type SourceFile = Arc<NamedSource>;
+#[derive(Eq, PartialEq)]
+struct SourceFileInner {
+    name: String,
+    source: String,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct SourceFile {
+    inner: Arc<SourceFileInner>,
+}
+
+impl SourceFile {
+    pub fn new_empty(name: &str) -> Self {
+        Self::new(name, String::new())
+    }
+    pub fn new(name: &str, source: String) -> Self {
+        SourceFile {
+            inner: Arc::new(SourceFileInner {
+                name: name.to_owned(),
+                source,
+            }),
+        }
+    }
+    pub fn name(&self) -> &str {
+        &self.inner.name
+    }
+    pub fn source(&self) -> &str {
+        &self.inner.source
+    }
+}
+
+impl SourceCode for SourceFile {
+    fn read_span<'a>(
+        &'a self,
+        span: &SourceSpan,
+        context_lines_before: usize,
+        context_lines_after: usize,
+    ) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
+        let contents = self
+            .source()
+            .read_span(span, context_lines_before, context_lines_after)?;
+        Ok(Box::new(MietteSpanContents::new_named(
+            self.name().to_owned(),
+            contents.data(),
+            *contents.span(),
+            contents.line(),
+            contents.column(),
+            contents.line_count(),
+        )))
+    }
+}
+
+impl Debug for SourceFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SourceFile")
+            .field("name", &self.name())
+            .field("source", &self.source())
+            .finish()
+    }
+}
 
 ///////////////////////////////////////////////////////////
 // AuditAsErrors
@@ -212,16 +277,12 @@ pub struct CriteriaChangeErrors {
     pub errors: Vec<CriteriaChangeError>,
 }
 #[derive(Debug, Error, Diagnostic)]
-// FIXME: it would be rad if this was a diff!
-#[error(
-    "{import_name}'s '{criteria_name}' criteria changed from\n\n{old_desc}\n\nto\n\n{new_desc}\n"
-)]
+#[error("{import_name}'s '{criteria_name}' criteria changed:\n\n{unified_diff}")]
 #[diagnostic(help("Run `cargo vet regenerate imports` to accept this new definition"))]
 pub struct CriteriaChangeError {
     pub import_name: ImportName,
     pub criteria_name: ForeignCriteriaName,
-    pub old_desc: String,
-    pub new_desc: String,
+    pub unified_diff: String,
 }
 
 ////////////////////////////////////////////////////////////
@@ -241,6 +302,9 @@ pub enum StoreValidateError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     InvalidCriteria(InvalidCriteriaError),
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    BadFormat(BadFormatError),
     #[error("imports.lock is out-of-date with respect to configuration")]
     #[diagnostic(help("run `cargo vet` without --locked to update imports"))]
     ImportsLockOutdated,
@@ -256,6 +320,13 @@ pub struct InvalidCriteriaError {
     pub span: SourceSpan,
     pub invalid: String,
     pub valid_names: Arc<Vec<String>>,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("A file in the store is not correctly formatted:\n\n{unified_diff}")]
+#[diagnostic(help("run `cargo vet` without --locked to reformat files in the store"))]
+pub struct BadFormatError {
+    pub unified_diff: String,
 }
 
 //////////////////////////////////////////////////////////
@@ -691,28 +762,6 @@ pub enum LoadJsonError {
     ),
 }
 
-#[derive(Debug, Error, Diagnostic)]
-#[non_exhaustive]
-pub enum StoreJsonError {
-    #[error(transparent)]
-    JsonSerialize(#[from] serde_json::Error),
-    #[error("couldn't store json")]
-    IoError(
-        #[from]
-        #[source]
-        std::io::Error,
-    ),
-}
+pub type StoreJsonError = serde_json::Error;
 
-#[derive(Debug, Error, Diagnostic)]
-#[non_exhaustive]
-pub enum StoreTomlError {
-    #[error(transparent)]
-    TomlSerialize(#[from] toml_edit::ser::Error),
-    #[error("couldn't store toml")]
-    IoError(
-        #[from]
-        #[source]
-        std::io::Error,
-    ),
-}
+pub type StoreTomlError = toml_edit::ser::Error;

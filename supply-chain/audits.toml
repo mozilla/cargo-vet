@@ -47,3 +47,12 @@ criteria = "safe-to-deploy"
 version = "1.4.0"
 notes = "I have read over the macros, and audited the unsafe code."
 
+[[audits.similar]]
+who = "Nika Layzell <nika@thelayzells.com>"
+criteria = "safe-to-deploy"
+version = "2.2.0"
+notes = """
+Algorithm crate implemented entirely in safe rust. Does no platform-specific
+logic, only implementing diffing and string manipulation algorithms.
+"""
+

@@ -401,4 +401,3 @@ criteria = "safe-to-deploy"
 [[exemptions.winreg]]
 version = "0.10.1"
 criteria = "safe-to-deploy"
-

@@ -1,0 +1,20 @@
+---
+source: src/tests/import.rs
+expression: "format!(\"{:?}\", error)"
+---
+
+  × Some of your imported audits changed their criteria descriptions
+
+Error: 
+  × peer-company's 'example' criteria changed:
+  │ 
+  │ @@ -1,4 +1,4 @@
+  │  Example criteria description
+  │ -First line
+  │ -Second line
+  │ +First new line
+  │  Third line
+  │ +Fourth line
+  │ 
+  help: Run `cargo vet regenerate imports` to accept this new definition
+
