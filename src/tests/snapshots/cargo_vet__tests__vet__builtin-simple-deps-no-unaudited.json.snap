@@ -65,7 +65,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "build-proc-macro",
@@ -81,7 +82,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "dev",
@@ -97,7 +99,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "dev-proc-macro",
@@ -113,7 +116,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "normal",
@@ -129,7 +133,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "proc-macro",
@@ -145,7 +150,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       }
     ],
     "suggest_by_criteria": {
@@ -164,7 +170,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "build-proc-macro",
@@ -180,7 +187,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "normal",
@@ -196,7 +204,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "proc-macro",
@@ -212,7 +221,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         }
       ],
       "safe-to-run": [
@@ -230,7 +240,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "dev-proc-macro",
@@ -246,7 +257,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         }
       ]
     },

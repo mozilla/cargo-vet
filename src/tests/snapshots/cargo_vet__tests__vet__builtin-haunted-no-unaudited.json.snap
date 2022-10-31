@@ -37,7 +37,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "third-normal",
@@ -53,7 +54,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       }
     ],
     "suggest_by_criteria": {
@@ -72,7 +74,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         }
       ],
       "safe-to-run": [
@@ -90,7 +93,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         }
       ]
     },

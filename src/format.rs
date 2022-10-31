@@ -751,6 +751,8 @@ pub struct JsonSuggestItem {
     /// The diff (or full version) we recommend auditing
     // FIXME(SCHEMA): we probably shouldn't expose this internal type
     pub suggested_diff: DiffRecommendation,
+    /// Whether the suggestion is confident or a guess (de-emphasize guesses)
+    pub confident: bool,
 }
 
 /// A string of the form "package:version"

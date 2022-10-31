@@ -19,13 +19,6 @@ expression: json
       "missing_criteria": [
         "strong-reviewed"
       ]
-    },
-    {
-      "name": "transitive-third-party1",
-      "version": "10.0.0",
-      "missing_criteria": [
-        "strong-reviewed"
-      ]
     }
   ],
   "suggest": {
@@ -44,7 +37,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "third-party2",
@@ -60,23 +54,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
-      },
-      {
-        "name": "transitive-third-party1",
-        "notable_parents": "third-party1",
-        "suggested_criteria": [
-          "strong-reviewed"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "10.0.0",
-          "diffstat": {
-            "insertions": 100,
-            "deletions": 0,
-            "files_changed": 1
-          }
-        }
+        },
+        "confident": true
       }
     ],
     "suggest_by_criteria": {
@@ -95,7 +74,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "third-party2",
@@ -111,26 +91,11 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
-        },
-        {
-          "name": "transitive-third-party1",
-          "notable_parents": "third-party1",
-          "suggested_criteria": [
-            "strong-reviewed"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "10.0.0",
-            "diffstat": {
-              "insertions": 100,
-              "deletions": 0,
-              "files_changed": 1
-            }
-          }
+          },
+          "confident": true
         }
       ]
     },
-    "total_lines": 300
+    "total_lines": 200
   }
 }
