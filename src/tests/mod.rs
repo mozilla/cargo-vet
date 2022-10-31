@@ -1115,11 +1115,11 @@ fn get_reports(metadata: &Metadata, report: ResolveReport) -> (String, String) {
 
     let human_output = BasicTestOutput::new();
     report
-        .print_human(&human_output.clone().as_dyn(), &cfg, suggest.as_ref())
+        .print_human(&human_output.clone().as_dyn(), &cfg, suggest.as_ref(), None)
         .unwrap();
     let json_output = BasicTestOutput::new();
     report
-        .print_json(&json_output.clone().as_dyn(), &cfg, suggest.as_ref())
+        .print_json(&json_output.clone().as_dyn(), &cfg, suggest.as_ref(), None)
         .unwrap();
     (human_output.to_string(), json_output.to_string())
 }

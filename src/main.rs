@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::ops::Deref;
 use std::panic::panic_any;
 use std::sync::{Arc, Mutex};
@@ -16,7 +16,7 @@ use errors::{
     NeedsAuditAsError, NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors,
     TomlParseError, UserInfoError,
 };
-use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
+use format::{CertifyGuiOutput, CriteriaName, CriteriaStr, PackageName, PolicyEntry};
 use futures_util::future::{join_all, try_join_all};
 use indicatif::ProgressDrawTarget;
 use lazy_static::lazy_static;
@@ -621,10 +621,14 @@ fn cmd_certify(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
-    // Grab the last fetch and immediately drop the cache
-    let last_fetch = Cache::acquire(cfg)?.get_last_fetch();
+    if sub_args.from_gui {
+        do_gui_certify(sub_args, &mut store)?;
+    } else {
+        // Grab the last fetch and immediately drop the cache
+        let last_fetch = Cache::acquire(cfg)?.get_last_fetch();
 
-    do_cmd_certify(out, cfg, sub_args, &mut store, network.as_ref(), last_fetch)?;
+        do_cmd_certify(out, cfg, sub_args, &mut store, network.as_ref(), last_fetch)?;
+    }
 
     // Minimize exemptions after adding the new `certify`. This will be used to
     // potentially update imports, and remove now-unnecessary exemptions.
@@ -969,6 +973,70 @@ fn do_cmd_certify(
     Ok(())
 }
 
+fn do_gui_certify(sub_args: &CertifyArgs, store: &mut Store) -> Result<(), miette::Report> {
+    let mut input = String::new();
+    std::io::stdin()
+        .read_to_string(&mut input)
+        .into_diagnostic()?;
+
+    let result = CertifyGuiOutput::from_base64(input.trim())
+        .into_diagnostic()
+        .context("failed to parse output")?;
+
+    let (_username, who) = if sub_args.who.is_empty() {
+        let user_info = get_user_info()?;
+        let who = format!("{} <{}>", user_info.username, user_info.email);
+        (user_info.username, vec![Spanned::from(who)])
+    } else {
+        (
+            sub_args.who.join(", "),
+            sub_args
+                .who
+                .iter()
+                .map(|w| Spanned::from(w.clone()))
+                .collect(),
+        )
+    };
+
+    // FIXME: Actually do validation!
+    for audit in result.audits {
+        let kind = if let Some(from) = audit.delta.from {
+            AuditKind::Delta {
+                from,
+                to: audit.delta.to,
+                dependency_criteria: SortedMap::new(),
+            }
+        } else {
+            AuditKind::Full {
+                version: audit.delta.to,
+                dependency_criteria: SortedMap::new(),
+            }
+        };
+
+        let new_entry = AuditEntry {
+            kind,
+            criteria: audit.criteria.into_iter().map(|s| s.into()).collect(),
+            who: who.clone(),
+            notes: if audit.notes.trim().is_empty() {
+                None
+            } else {
+                Some(audit.notes.trim().to_owned())
+            },
+            aggregated_from: vec![],
+            is_fresh_import: false,
+        };
+
+        store
+            .audits
+            .audits
+            .entry(audit.name)
+            .or_insert(vec![])
+            .push(new_entry);
+    }
+
+    Ok(())
+}
+
 /// Attempt to guess which criteria are being certified for a given package and
 /// audit kind.
 ///
@@ -1281,7 +1349,7 @@ fn cmd_suggest(
         OutputFormat::Human => report
             .print_suggest_human(out, cfg, suggest.as_ref())
             .into_diagnostic()?,
-        OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
+        OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref(), None)?,
     }
 
     Ok(())
@@ -1503,18 +1571,29 @@ fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(
         },
     );
 
-    // Bare `cargo vet` shouldn't suggest in CI
-    let suggest = if !cfg.cli.locked {
+    // Bare `cargo vet` shouldn't suggest in CI, unless we need to in order to
+    // provide the certify web GUI
+    let suggest = if !cfg.cli.locked || sub_args.certify_web_gui {
         report.compute_suggest(cfg, network.as_ref(), true)?
+    } else {
+        None
+    };
+
+    let web_gui_input = if sub_args.certify_web_gui {
+        suggest
+            .as_ref()
+            .map(|suggest| report.compute_certify_gui_input(&store, network.as_ref(), suggest))
     } else {
         None
     };
 
     match cfg.cli.output_format {
         OutputFormat::Human => report
-            .print_human(out, cfg, suggest.as_ref())
+            .print_human(out, cfg, suggest.as_ref(), web_gui_input.as_ref())
             .into_diagnostic()?,
-        OutputFormat::Json => report.print_json(out, cfg, suggest.as_ref())?,
+        OutputFormat::Json => {
+            report.print_json(out, cfg, suggest.as_ref(), web_gui_input.as_ref())?
+        }
     }
 
     // Only save imports if we succeeded, to avoid any modifications on error.

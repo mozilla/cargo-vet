@@ -75,16 +75,16 @@ use tracing::{error, trace, trace_span};
 
 use crate::errors::{RegenerateExemptionsError, SuggestError};
 use crate::format::{
-    self, AuditKind, AuditsFile, CriteriaName, CriteriaStr, Delta, DependencyCriteria, DiffStat,
-    ExemptedDependency, ImportName, PackageName, PackageStr, PolicyEntry, RemoteImport,
-    SAFE_TO_DEPLOY, SAFE_TO_RUN,
+    self, AuditKind, AuditsFile, CertifyGuiCriteria, CertifyGuiInput, CertifyGuiSuggestedAudit,
+    CriteriaName, CriteriaStr, Delta, DependencyCriteria, DiffStat, ExemptedDependency, ImportName,
+    PackageName, PackageStr, PolicyEntry, RemoteImport, SAFE_TO_DEPLOY, SAFE_TO_RUN,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
 use crate::out::{progress_bar, IncProgressOnDrop, Out};
 use crate::{
-    AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
-    GraphFilterQuery, PackageExt, Store,
+    eula_for_criteria, AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter,
+    GraphFilterProperty, GraphFilterQuery, PackageExt, Store,
 };
 
 /// A report of the results of running `resolve`.
@@ -2779,17 +2779,89 @@ impl<'a> ResolveReport<'a> {
             .collect()
     }
 
+    pub fn compute_certify_gui_input(
+        &self,
+        store: &Store,
+        network: Option<&Network>,
+        suggest: &Suggest,
+    ) -> CertifyGuiInput {
+        let fetch_progress = progress_bar(
+            "Fetching",
+            "criteria descriptions",
+            store.audits.criteria.len() as u64,
+        );
+        let fetch_progress = &fetch_progress;
+
+        CertifyGuiInput {
+            criteria: tokio::runtime::Handle::current().block_on(join_all(
+                self.criteria_mapper
+                    .list
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, ci)| ci.namespace == CriteriaNamespace::Local)
+                    .map(|(criteria_idx, ci)| async move {
+                        let _guard = IncProgressOnDrop(fetch_progress, 1);
+
+                        CertifyGuiCriteria {
+                            name: ci.raw_name.clone(),
+                            implied_by: self
+                                .criteria_mapper
+                                .implied_criteria
+                                .iter()
+                                .enumerate()
+                                .filter(|&(inner_idx, implies)| {
+                                    inner_idx != criteria_idx
+                                        && implies.has_criteria(criteria_idx)
+                                        && self.criteria_mapper.list[inner_idx].namespace
+                                            == CriteriaNamespace::Local
+                                })
+                                .map(|(inner_idx, _)| {
+                                    self.criteria_mapper.list[inner_idx].raw_name.clone()
+                                })
+                                .collect(),
+                            description: eula_for_criteria(
+                                network,
+                                &store.audits.criteria,
+                                &ci.raw_name,
+                            )
+                            .await,
+                        }
+                    }),
+            )),
+            audits: suggest
+                .suggestions
+                .iter()
+                .map(|suggestion| {
+                    let package = &self.graph.nodes[suggestion.package];
+                    CertifyGuiSuggestedAudit {
+                        name: package.name.to_owned(),
+                        delta: Delta {
+                            from: suggestion.suggested_diff.from.clone(),
+                            to: suggestion.suggested_diff.to.clone(),
+                        },
+                        initial_criteria: self
+                            .criteria_mapper
+                            .criteria_names(suggestion.suggested_criteria.all())
+                            .map(|s| s.to_owned())
+                            .collect(),
+                    }
+                })
+                .collect(),
+        }
+    }
+
     /// Print a full human-readable report
     pub fn print_human(
         &self,
         out: &Arc<dyn Out>,
         cfg: &Config,
         suggest: Option<&Suggest>,
+        web_gui_input: Option<&CertifyGuiInput>,
     ) -> Result<(), std::io::Error> {
         match &self.conclusion {
             Conclusion::Success(res) => res.print_human(out, self, cfg),
             Conclusion::FailForViolationConflict(res) => res.print_human(out, self, cfg),
-            Conclusion::FailForVet(res) => res.print_human(out, self, cfg, suggest),
+            Conclusion::FailForVet(res) => res.print_human(out, self, cfg, suggest, web_gui_input),
         }
     }
 
@@ -2815,6 +2887,7 @@ impl<'a> ResolveReport<'a> {
         out: &Arc<dyn Out>,
         _cfg: &Config,
         suggest: Option<&Suggest>,
+        web_gui_input: Option<&CertifyGuiInput>,
     ) -> Result<(), miette::Report> {
         let result = match &self.conclusion {
             Conclusion::Success(success) => {
@@ -2866,6 +2939,7 @@ impl<'a> ResolveReport<'a> {
                         "suggest_by_criteria": suggest.suggestions_by_criteria.iter().map(|(criteria, items)| (criteria, items.iter().map(json_suggest_item).collect::<Vec<_>>())).collect::<SortedMap<_,_>>(),
                         "total_lines": suggest.total_lines,
                     })),
+                    "certify_web_gui_data": web_gui_input.and_then(|input| input.to_base64().ok()),
                 })
             }
         };
@@ -3008,6 +3082,7 @@ impl FailForVet {
         report: &ResolveReport,
         _cfg: &Config,
         suggest: Option<&Suggest>,
+        web_gui_input: Option<&CertifyGuiInput>,
     ) -> Result<(), std::io::Error> {
         writeln!(out, "Vetting Failed!");
         writeln!(out);
@@ -3055,6 +3130,15 @@ impl FailForVet {
         if let Some(suggest) = suggest {
             writeln!(out);
             suggest.print_human(out, report)?;
+        }
+
+        if let Some(blob) = web_gui_input.and_then(|input| input.to_base64().ok()) {
+            writeln!(out);
+            writeln!(
+                out,
+                "Certify Web GUI: https://mozilla.github.io/cargo-vet/certify-gui#{}",
+                blob
+            )
         }
 
         Ok(())

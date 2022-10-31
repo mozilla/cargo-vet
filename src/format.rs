@@ -4,6 +4,7 @@ use crate::serialization::spanned::Spanned;
 use crate::{flock::Filesystem, serialization};
 use core::{cmp, fmt};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -531,4 +532,78 @@ impl FetchCommand {
 pub struct CommandHistory {
     #[serde(flatten)]
     pub last_fetch: Option<FetchCommand>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+//                                                                                //
+//                                                                                //
+//                                                                                //
+//                              vet gui i/o format                                //
+//                                                                                //
+//                                                                                //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CertifyGuiInput {
+    pub criteria: Vec<CertifyGuiCriteria>,
+    pub audits: Vec<CertifyGuiSuggestedAudit>,
+}
+
+impl CertifyGuiInput {
+    pub fn to_base64(&self) -> Result<String, std::io::Error> {
+        // NOTE: Currently we always compress with `gzip;`, but we'll include
+        // the compression format in the payload so that we can change in the
+        // future and keep compatibility.
+        let mut compressed = b"gzip;"[..].to_owned();
+        let mut encoder =
+            flate2::write::GzEncoder::new(&mut compressed, flate2::Compression::default());
+        serde_json::to_writer(&mut encoder, self)?;
+        encoder.finish()?;
+        Ok(base64::encode(compressed))
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CertifyGuiCriteria {
+    pub name: CriteriaName,
+    #[serde(rename = "impliedBy")]
+    pub implied_by: Vec<CriteriaName>,
+    pub description: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CertifyGuiSuggestedAudit {
+    pub name: PackageName,
+    pub delta: Delta,
+    #[serde(rename = "initialCriteria")]
+    pub initial_criteria: Vec<CriteriaName>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CertifyGuiOutput {
+    pub audits: Vec<CertifyGuiCertifiedAudit>,
+}
+
+impl CertifyGuiOutput {
+    pub fn from_base64(src: &str) -> Result<CertifyGuiOutput, std::io::Error> {
+        let bytes = base64::decode(src.trim())
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+        let compressed = bytes
+            .strip_prefix(b"gzip;")
+            .ok_or(std::io::ErrorKind::InvalidInput)?;
+        let mut decoder = flate2::read::GzDecoder::new(compressed);
+        let mut string = String::new();
+        decoder.read_to_string(&mut string)?;
+        eprintln!("string: {:?}", string);
+        Ok(serde_json::from_str(&string)?)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CertifyGuiCertifiedAudit {
+    pub name: PackageName,
+    pub delta: Delta,
+    pub criteria: Vec<CriteriaName>,
+    pub notes: String,
 }

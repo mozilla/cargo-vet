@@ -16,10 +16,17 @@ jobs:
         mkdir mdbook
         curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.14/mdbook-v0.4.14-x86_64-unknown-linux-gnu.tar.gz | tar -xz --directory=./mdbook
         echo `pwd`/mdbook >> $GITHUB_PATH
-    - name: Deploy GitHub Pages
+    - name: Build Certify GUI
+      run: |
+        cd certify-gui
+        npm install
+        npm run build
+    - name: Build Book
       run: |
         cd book
         mdbook build
+    - name: Deploy GitHub Pages
+      run: |
         git worktree add gh-pages gh-pages
         git config user.name "Deploy from CI"
         git config user.email ""
@@ -27,7 +34,8 @@ jobs:
         # Delete the ref to avoid keeping history.
         git update-ref -d refs/heads/gh-pages
         rm -rf *
-        mv ../book/* .
+        mv ../book/book/* .
+        cp -r ../certify-gui/dist certify-gui
         git add .
         git commit -m "Deploy $GITHUB_SHA to gh-pages"
         git push --force

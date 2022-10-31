@@ -3,6 +3,7 @@ source: src/tests/vet.rs
 expression: json
 ---
 {
+  "certify_web_gui_data": null,
   "conclusion": "fail (vetting)",
   "failures": [
     {
