@@ -1524,8 +1524,8 @@ fn cmd_check(
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store);
 
-    // Bare `cargo vet` shouldn't suggest in CI
-    let suggest = if !cfg.cli.locked {
+    // Bare `cargo vet` shouldn't suggest in CI (unless you want --output-format=json-full)
+    let suggest = if !cfg.cli.locked || cfg.cli.output_format == OutputFormat::JsonFull {
         report.compute_suggest(cfg, network.as_ref(), true)?
     } else {
         None
