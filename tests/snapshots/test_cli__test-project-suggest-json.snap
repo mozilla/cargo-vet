@@ -4,6 +4,7 @@ expression: format_outputs(&output)
 ---
 stdout:
 {
+  "context": null,
   "conclusion": "fail (vetting)",
   "failures": [
     {

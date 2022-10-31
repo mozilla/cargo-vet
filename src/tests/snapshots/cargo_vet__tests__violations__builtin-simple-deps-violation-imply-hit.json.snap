@@ -3,6 +3,7 @@ source: src/tests/violations.rs
 expression: json
 ---
 {
+  "context": null,
   "conclusion": "fail (violation)",
   "violations": {
     "dev:10.0.0": [

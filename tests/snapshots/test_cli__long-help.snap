@@ -63,7 +63,7 @@ GLOBAL OPTIONS:
             The format of the output
             
             [default: human]
-            [possible values: human, json]
+            [possible values: human, json, json-full]
 
         --diff-cache <DIFF_CACHE>
             Use the following path as the diff-cache

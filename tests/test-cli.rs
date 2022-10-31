@@ -233,6 +233,35 @@ fn test_project_suggest_json() {
 }
 
 #[test]
+fn test_project_suggest_json_full() {
+    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-project");
+    let bin = env!("CARGO_BIN_EXE_cargo-vet");
+    let output = Command::new(bin)
+        .current_dir(&project)
+        .arg("vet")
+        .arg("suggest")
+        .arg("--diff-cache")
+        .arg("../diff-cache.toml")
+        .arg("--manifest-path")
+        .arg("Cargo.toml")
+        .arg("--output-format=json-full")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .unwrap();
+
+    // Currently doesn't make sense to snapshot this as it contains an absolute path :(
+    // Should we make it "relative to the workspace root"?
+    // Bleugh that's extra work for someone using us to figure out.
+    // We could "sanitize" the path..?
+    //
+    // insta::assert_snapshot!(format_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
+}
+
+#[test]
 fn test_project_dump_graph_full_json() {
     let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")

@@ -3,6 +3,7 @@ source: src/tests/vet.rs
 expression: json
 ---
 {
+  "context": null,
   "conclusion": "success",
   "vetted_fully": [],
   "vetted_partially": [],
