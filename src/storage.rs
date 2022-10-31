@@ -11,15 +11,16 @@ use std::{
 use cargo_metadata::Version;
 use flate2::read::GzDecoder;
 use futures_util::future::try_join_all;
-use miette::{NamedSource, SourceOffset};
+use miette::SourceOffset;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
+use similar::{udiff::unified_diff, Algorithm};
 use tar::Archive;
 use tracing::{error, info, log::warn, trace};
 
 use crate::{
     errors::{
-        CacheAcquireError, CacheCommitError, CommandError, CriteriaChangeError,
+        BadFormatError, CacheAcquireError, CacheCommitError, CommandError, CriteriaChangeError,
         CriteriaChangeErrors, DiffError, DownloadError, FetchAndDiffError, FetchAuditError,
         FetchError, FlockError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError,
         SourceFile, StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError,
@@ -165,9 +166,9 @@ impl Store {
                 audits: SortedMap::new(),
             },
             live_imports: None,
-            config_src: Arc::new(NamedSource::new(CONFIG_TOML, "")),
-            audits_src: Arc::new(NamedSource::new(AUDITS_TOML, "")),
-            imports_src: Arc::new(NamedSource::new(IMPORTS_LOCK, "")),
+            config_src: SourceFile::new_empty(CONFIG_TOML),
+            audits_src: SourceFile::new_empty(AUDITS_TOML),
+            imports_src: SourceFile::new_empty(IMPORTS_LOCK),
         })
     }
 
@@ -226,7 +227,7 @@ impl Store {
         };
 
         // Check that the store isn't corrupt
-        store.validate()?;
+        store.validate(cfg.cli.locked)?;
 
         Ok(store)
     }
@@ -240,9 +241,9 @@ impl Store {
             imports,
             audits,
             live_imports: None,
-            config_src: Arc::new(NamedSource::new(CONFIG_TOML, "")),
-            audits_src: Arc::new(NamedSource::new(AUDITS_TOML, "")),
-            imports_src: Arc::new(NamedSource::new(IMPORTS_LOCK, "")),
+            config_src: SourceFile::new_empty(CONFIG_TOML),
+            audits_src: SourceFile::new_empty(AUDITS_TOML),
+            imports_src: SourceFile::new_empty(IMPORTS_LOCK),
         }
     }
 
@@ -264,9 +265,9 @@ impl Store {
             imports,
             audits,
             live_imports: Some(live_imports),
-            config_src: Arc::new(NamedSource::new(CONFIG_TOML, "")),
-            audits_src: Arc::new(NamedSource::new(AUDITS_TOML, "")),
-            imports_src: Arc::new(NamedSource::new(IMPORTS_LOCK, "")),
+            config_src: SourceFile::new_empty(CONFIG_TOML),
+            audits_src: SourceFile::new_empty(AUDITS_TOML),
+            imports_src: SourceFile::new_empty(IMPORTS_LOCK),
         })
     }
 
@@ -275,6 +276,7 @@ impl Store {
         config: &str,
         audits: &str,
         imports: &str,
+        check_file_formatting: bool,
     ) -> Result<Self, StoreAcquireError> {
         let (config_src, config): (_, ConfigFile) = load_toml(CONFIG_TOML, config.as_bytes())?;
         let (audits_src, audits): (_, AuditsFile) = load_toml(AUDITS_TOML, audits.as_bytes())?;
@@ -291,7 +293,7 @@ impl Store {
             imports_src,
         };
 
-        store.validate()?;
+        store.validate(check_file_formatting)?;
 
         Ok(store)
     }
@@ -340,12 +342,12 @@ impl Store {
         // TODO: make this truly transactional?
         // (With a dir rename? Does that work with the lock? Fine because it's already closed?)
         if let Some(lock) = self.lock {
-            let audits = lock.write_audits()?;
-            let config = lock.write_config()?;
-            let imports = lock.write_imports()?;
-            store_audits(audits, self.audits)?;
-            store_config(config, self.config)?;
-            store_imports(imports, self.imports)?;
+            let mut audits = lock.write_audits()?;
+            let mut config = lock.write_config()?;
+            let mut imports = lock.write_imports()?;
+            audits.write_all(store_audits(self.audits)?.as_bytes())?;
+            config.write_all(store_config(self.config)?.as_bytes())?;
+            imports.write_all(store_imports(self.imports)?.as_bytes())?;
         }
         Ok(())
     }
@@ -354,17 +356,19 @@ impl Store {
     /// Doesn't take `self` by value so that it can continue to be used.
     #[cfg(test)]
     pub fn mock_commit(&self) -> SortedMap<String, String> {
-        let mut audits = Vec::new();
-        let mut config = Vec::new();
-        let mut imports = Vec::new();
-        store_audits(&mut audits, self.audits.clone()).unwrap();
-        store_config(&mut config, self.config.clone()).unwrap();
-        store_imports(&mut imports, self.imports.clone()).unwrap();
-
         [
-            (AUDITS_TOML.to_owned(), String::from_utf8(audits).unwrap()),
-            (CONFIG_TOML.to_owned(), String::from_utf8(config).unwrap()),
-            (IMPORTS_LOCK.to_owned(), String::from_utf8(imports).unwrap()),
+            (
+                AUDITS_TOML.to_owned(),
+                store_audits(self.audits.clone()).unwrap(),
+            ),
+            (
+                CONFIG_TOML.to_owned(),
+                store_config(self.config.clone()).unwrap(),
+            ),
+            (
+                IMPORTS_LOCK.to_owned(),
+                store_imports(self.imports.clone()).unwrap(),
+            ),
         ]
         .into_iter()
         .collect()
@@ -372,7 +376,7 @@ impl Store {
 
     /// Validate the store's integrity
     #[allow(clippy::for_kv_map)]
-    pub fn validate(&self) -> Result<(), StoreValidateErrors> {
+    pub fn validate(&self, check_file_formatting: bool) -> Result<(), StoreValidateErrors> {
         // ERRORS: ideally these are all gathered diagnostics, want to report as many errors
         // at once as possible!
 
@@ -512,6 +516,46 @@ impl Store {
             }
         }
 
+        // If requested, verify that files in the store are correctly formatted
+        // and have no unrecognized fields. We don't want to be reformatting
+        // them or dropping unused fields while in CI, as those changes will be
+        // ignored.
+        let mut bad_format_errors = Vec::new();
+        if check_file_formatting {
+            for (name, old, new) in [
+                (
+                    CONFIG_TOML,
+                    self.config_src.source(),
+                    store_config(self.config.clone())
+                        .unwrap_or_else(|_| self.config_src.source().to_owned()),
+                ),
+                (
+                    AUDITS_TOML,
+                    self.audits_src.source(),
+                    store_audits(self.audits.clone())
+                        .unwrap_or_else(|_| self.audits_src.source().to_owned()),
+                ),
+                (
+                    IMPORTS_LOCK,
+                    self.imports_src.source(),
+                    store_imports(self.imports.clone())
+                        .unwrap_or_else(|_| self.imports_src.source().to_owned()),
+                ),
+            ] {
+                if old.trim_end() != new.trim_end() {
+                    bad_format_errors.push(BadFormatError {
+                        unified_diff: unified_diff(
+                            Algorithm::Myers,
+                            old,
+                            &new,
+                            3,
+                            Some((&format!("old/{name}"), &format!("new/{name}"))),
+                        ),
+                    });
+                }
+            }
+        }
+
         // If we're locked, and therefore not fetching new live imports,
         // validate that our imports.lock is in sync with config.toml.
         let imports_lock_outdated = self
@@ -522,6 +566,11 @@ impl Store {
             .into_iter()
             .map(StoreValidateError::InvalidCriteria)
             .chain(imports_lock_outdated)
+            .chain(
+                bad_format_errors
+                    .into_iter()
+                    .map(StoreValidateError::BadFormat),
+            )
             .collect::<Vec<_>>();
         if !errors.is_empty() {
             return Err(StoreValidateErrors { errors });
@@ -690,8 +739,13 @@ fn process_imported_audits(
                             changed_criteria.push(CriteriaChangeError {
                                 import_name: import_name.clone(),
                                 criteria_name: criteria_name.to_owned(),
-                                old_desc: old_desc.clone(),
-                                new_desc: new_desc.clone(),
+                                unified_diff: unified_diff(
+                                    Algorithm::Myers,
+                                    old_desc,
+                                    new_desc,
+                                    5,
+                                    None,
+                                ),
                             });
                         }
                     }
@@ -768,7 +822,7 @@ async fn fetch_imported_audit(
     })?;
     let audit_bytes = network.download(parsed_url).await?;
     let audit_string = String::from_utf8(audit_bytes).map_err(LoadTomlError::from)?;
-    let audit_source = Arc::new(NamedSource::new(name, audit_string.clone()));
+    let audit_source = SourceFile::new(name, audit_string.clone());
     let mut audit_file: AuditsFile = toml::de::from_str(&audit_string)
         .map_err(|error| {
             let (line, col) = error.line_col().unwrap_or((0, 0));
@@ -886,10 +940,8 @@ impl Drop for Cache {
         if let Some(diff_cache_path) = &self.diff_cache_path {
             // Write back the diff_cache
             if let Err(err) = || -> Result<(), CacheCommitError> {
-                store_diff_cache(
-                    File::create(diff_cache_path)?,
-                    mem::take(&mut state.diff_cache),
-                )?;
+                let diff_cache = store_diff_cache(mem::take(&mut state.diff_cache))?;
+                fs::write(diff_cache_path, diff_cache)?;
                 Ok(())
             }() {
                 error!("error writing back changes to diff-cache: {:?}", err);
@@ -898,10 +950,8 @@ impl Drop for Cache {
         if let Some(command_history_path) = &self.command_history_path {
             // Write back the command_history
             if let Err(err) = || -> Result<(), CacheCommitError> {
-                store_command_history(
-                    File::create(command_history_path)?,
-                    mem::take(&mut state.command_history),
-                )?;
+                let command_history = store_command_history(mem::take(&mut state.command_history))?;
+                fs::write(command_history_path, command_history)?;
                 Ok(())
             }() {
                 error!("error writing back changes to diff-cache: {:?}", err);
@@ -1595,16 +1645,15 @@ where
     let mut reader = BufReader::new(reader);
     let mut string = String::new();
     reader.read_to_string(&mut string)?;
-    let result = toml::de::from_str(&string);
-    // We defer the NamedSource creation into each branch because the error path wants to
-    // have access to the input string, but NamedSource consumes and erases it.
+    let source_code = SourceFile::new(file_name, string);
+    let result = toml::de::from_str(source_code.source());
     match result {
-        Ok(toml) => Ok((Arc::new(NamedSource::new(file_name, string)), toml)),
+        Ok(toml) => Ok((source_code, toml)),
         Err(error) => {
             let (line, col) = error.line_col().unwrap_or((0, 0));
-            let span = SourceOffset::from_location(&string, line + 1, col);
+            let span = SourceOffset::from_location(source_code.source(), line + 1, col);
             Err(TomlParseError {
-                source_code: Arc::new(NamedSource::new(file_name, string)),
+                source_code,
                 span,
                 error,
             }
@@ -1612,14 +1661,12 @@ where
         }
     }
 }
-fn store_toml<T>(mut writer: impl Write, heading: &str, val: T) -> Result<(), StoreTomlError>
+fn store_toml<T>(heading: &str, val: T) -> Result<String, StoreTomlError>
 where
     T: Serialize,
 {
-    // FIXME: do this in a temp file and swap it into place to avoid corruption?
     let toml_document = to_formatted_toml(val)?;
-    writeln!(writer, "{}{}", heading, toml_document)?;
-    Ok(())
+    Ok(format!("{}{}", heading, toml_document))
 }
 fn load_json<T>(reader: impl Read) -> Result<T, LoadJsonError>
 where
@@ -1631,17 +1678,15 @@ where
     let json = serde_json::from_str(&string).map_err(|error| JsonParseError { error })?;
     Ok(json)
 }
-fn store_json<T>(mut writer: impl Write, val: T) -> Result<(), StoreJsonError>
+fn store_json<T>(val: T) -> Result<String, StoreJsonError>
 where
     T: Serialize,
 {
-    // FIXME: do this in a temp file and swap it into place to avoid corruption?
     let json_string = serde_json::to_string(&val)?;
-    writeln!(writer, "{}", json_string)?;
-    Ok(())
+    Ok(json_string)
 }
 
-fn store_audits(writer: impl Write, mut audits: AuditsFile) -> Result<(), StoreTomlError> {
+fn store_audits(mut audits: AuditsFile) -> Result<String, StoreTomlError> {
     let heading = r###"
 # cargo-vet audits file
 "###;
@@ -1650,10 +1695,9 @@ fn store_audits(writer: impl Write, mut audits: AuditsFile) -> Result<(), StoreT
         .values_mut()
         .for_each(|entries| entries.sort());
 
-    store_toml(writer, heading, audits)?;
-    Ok(())
+    store_toml(heading, audits)
 }
-fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), StoreTomlError> {
+fn store_config(mut config: ConfigFile) -> Result<String, StoreTomlError> {
     config
         .exemptions
         .values_mut()
@@ -1663,27 +1707,20 @@ fn store_config(writer: impl Write, mut config: ConfigFile) -> Result<(), StoreT
 # cargo-vet config file
 "###;
 
-    store_toml(writer, heading, config)?;
-    Ok(())
+    store_toml(heading, config)
 }
-fn store_imports(writer: impl Write, imports: ImportsFile) -> Result<(), StoreTomlError> {
+fn store_imports(imports: ImportsFile) -> Result<String, StoreTomlError> {
     let heading = r###"
 # cargo-vet imports lock
 "###;
 
-    store_toml(writer, heading, imports)?;
-    Ok(())
+    store_toml(heading, imports)
 }
-fn store_diff_cache(writer: impl Write, diff_cache: DiffCache) -> Result<(), StoreTomlError> {
+fn store_diff_cache(diff_cache: DiffCache) -> Result<String, StoreTomlError> {
     let heading = "";
 
-    store_toml(writer, heading, diff_cache)?;
-    Ok(())
+    store_toml(heading, diff_cache)
 }
-fn store_command_history(
-    writer: impl Write,
-    command_history: CommandHistory,
-) -> Result<(), StoreJsonError> {
-    store_json(writer, command_history)?;
-    Ok(())
+fn store_command_history(command_history: CommandHistory) -> Result<String, StoreJsonError> {
+    store_json(command_history)
 }

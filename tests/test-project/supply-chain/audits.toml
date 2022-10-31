@@ -84,4 +84,3 @@ notes = "test for partial delta criteria"
 criteria = "safe-to-deploy"
 delta = "0.2.0 -> 0.3.7"
 notes = "test for delta to unaudited"
-

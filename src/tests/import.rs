@@ -793,6 +793,72 @@ fn peer_audits_import_exclusion() {
     insta::assert_snapshot!(output);
 }
 
+#[test]
+fn existing_peer_updated_description() {
+    // (Pass) If we've previously imported from a peer, and a criteria
+    // description changed, we get an error with details.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    let old_foreign_audits = AuditsFile {
+        criteria: [(
+            "example".to_string(),
+            criteria(
+                "Example criteria description\n\
+                First line\n\
+                Second line\n\
+                Third line\n",
+            ),
+        )]
+        .into_iter()
+        .collect(),
+        audits: SortedMap::new(),
+    };
+
+    let new_foreign_audits = AuditsFile {
+        criteria: [(
+            "example".to_string(),
+            criteria(
+                "Example criteria description\n\
+                First new line\n\
+                Third line\n\
+                Fourth line\n",
+            ),
+        )]
+        .into_iter()
+        .collect(),
+        audits: SortedMap::new(),
+    };
+
+    imports
+        .audits
+        .insert(FOREIGN.to_owned(), old_foreign_audits);
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            ..Default::default()
+        },
+    );
+
+    let error = match Store::mock_online(
+        config,
+        audits,
+        imports,
+        vec![(FOREIGN.to_owned(), new_foreign_audits)],
+        false,
+    ) {
+        Ok(_) => panic!("expected store creation to fail due to updated criteria"),
+        Err(err) => miette::Report::from(err),
+    };
+    insta::assert_snapshot!("existing_peer_updated_description", format!("{:?}", error));
+}
+
 // Other tests worth adding:
 //
 // - used edges with dependency-criteria should cause criteria to be imported

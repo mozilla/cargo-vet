@@ -7,10 +7,11 @@ expression: acquire_errors
 
 Error: 
   × 'bad' is not a valid criteria name
-   ╭─[audits.toml:3:1]
- 3 │ version = "1.0.0"
- 4 │ criteria = "bad"
+   ╭─[audits.toml:4:1]
+ 4 │ [[audits.serde]]
+ 5 │ criteria = "bad"
    ·            ─────
+ 6 │ version = "1.0.0"
    ╰────
   help: the possible criteria are ["safe-to-run", "safe-to-deploy"]
 
