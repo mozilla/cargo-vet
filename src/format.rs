@@ -588,6 +588,7 @@ pub struct JsonReportSuccess {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonReportFailForViolationConflict {
     /// These packages have the following conflicts
+    // FIXME(SCHEMA): we probably shouldn't expose this internal type
     pub violations: SortedMap<PackageAndVersion, Vec<ViolationConflict>>,
 }
 
@@ -606,6 +607,7 @@ pub struct JsonSuggest {
     /// Here are the suggestions sorted in the order of priority
     pub suggestions: Vec<JsonSuggestItem>,
     /// The same set of suggestions but grouped by the criteria (lists) needed to audit them
+    // FIXME(SCHEMA): this is kinda redundant? do consumers want this?
     pub suggest_by_criteria: SortedMap<String, Vec<JsonSuggestItem>>,
     /// The total number of lines you would need to review to resolve this
     pub total_lines: u64,
@@ -628,10 +630,12 @@ pub struct JsonSuggestItem {
     /// The name of the package
     pub name: PackageName,
     /// Any notable parents the package has (can be helpful in giving context to the user)
+    // FIXME(SCHEMA): we probably shouldn't expose this as a String
     pub notable_parents: String,
     /// The criteria we recommend auditing the package for
     pub suggested_criteria: Vec<CriteriaName>,
     /// The diff (or full version) we recommend auditing
+    // FIXME(SCHEMA): we probably shouldn't expose this internal type
     pub suggested_diff: DiffRecommendation,
 }
 
