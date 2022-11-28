@@ -490,7 +490,7 @@ pub fn init_files(
 
     // This is the hard one
     let config = {
-        let mut dependencies = SortedMap::new();
+        let mut dependencies = SortedMap::<PackageName, Vec<ExemptedDependency>>::new();
         let graph = DepGraph::new(metadata, filter_graph, None);
         for package in &graph.nodes {
             if !package.is_third_party {
@@ -512,7 +512,7 @@ pub fn init_files(
             };
             dependencies
                 .entry(package.name.to_string())
-                .or_insert(vec![])
+                .or_default()
                 .push(item);
         }
         ConfigFile {
@@ -944,7 +944,7 @@ fn do_cmd_certify(
         .audits
         .audits
         .entry(package.clone())
-        .or_insert(vec![])
+        .or_default()
         .push(new_entry);
 
     // If we're submitting a full audit, look for a matching exemption entry to remove
@@ -1173,7 +1173,7 @@ fn cmd_record_violation(
         .audits
         .audits
         .entry(sub_args.package.clone())
-        .or_insert(vec![])
+        .or_default()
         .push(new_entry);
 
     store.commit()?;
@@ -1247,7 +1247,7 @@ fn cmd_add_exemption(
         .config
         .exemptions
         .entry(sub_args.package.clone())
-        .or_insert(vec![])
+        .or_default()
         .push(new_entry);
 
     store.commit()?;
@@ -2054,7 +2054,7 @@ fn check_audit_as_crates_io(
         if let Some(index_entry) = cache.query_package_from_index(&package.name) {
             if storage::exact_version(&index_entry, &package.version).is_some() {
                 // We found a version of this package in the registry!
-                if audit_policy == None {
+                if audit_policy.is_none() {
                     // At this point, having no policy is an error
                     needs_audit_as_entry.push(NeedsAuditAsError {
                         package: package.name.clone(),

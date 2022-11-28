@@ -1363,7 +1363,7 @@ impl Cache {
                     let DiffCache::V1 { diffs } = &mut guard.diff_cache;
                     diffs
                         .entry(package.to_string())
-                        .or_insert(SortedMap::new())
+                        .or_default()
                         .insert(delta.clone(), diffstat.clone());
                 }
 

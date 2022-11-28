@@ -14,7 +14,7 @@ fn mock_simple_violation_cur_exemptions() {
     audits
         .audits
         .entry("third-party1".to_string())
-        .or_insert(vec![])
+        .or_default()
         .push(violation(violation_ver, "weak-reviewed"));
 
     let store = Store::mock(config, audits, imports);
