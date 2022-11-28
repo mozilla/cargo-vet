@@ -247,7 +247,7 @@ pub enum StoreAcquireError {
     Validate(#[from] StoreValidateErrors),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    FetchAuditError(#[from] FetchAuditError),
+    FetchAuditError(#[from] Box<FetchAuditError>),
     #[diagnostic(transparent)]
     #[error(transparent)]
     CriteriaChange(#[from] CriteriaChangeErrors),
@@ -561,7 +561,7 @@ pub enum FetchAuditError {
 pub enum DownloadError {
     #[error("failed to start download of {url}")]
     FailedToStartDownload {
-        url: reqwest::Url,
+        url: Box<reqwest::Url>,
         #[source]
         error: reqwest::Error,
     },
@@ -573,7 +573,7 @@ pub enum DownloadError {
     },
     #[error("failed to read download from {url}")]
     FailedToReadDownload {
-        url: reqwest::Url,
+        url: Box<reqwest::Url>,
         #[source]
         error: reqwest::Error,
     },
@@ -591,7 +591,7 @@ pub enum DownloadError {
     },
     #[error("Download wasn't valid utf8: {url}")]
     InvalidText {
-        url: reqwest::Url,
+        url: Box<reqwest::Url>,
         #[source]
         error: FromUtf8Error,
     },
