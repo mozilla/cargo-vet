@@ -1989,7 +1989,7 @@ async fn eula_for_criteria(
     if let Some(network) = network {
         if let Ok(eula) = network.download(url.clone()).await.and_then(|bytes| {
             String::from_utf8(bytes).map_err(|error| DownloadError::InvalidText {
-                url: url.clone(),
+                url: Box::new(url.clone()),
                 error,
             })
         }) {

@@ -76,7 +76,7 @@ impl Network {
                 .await
                 .and_then(|res| res.error_for_status())
                 .map_err(|error| DownloadError::FailedToStartDownload {
-                    url: url.clone(),
+                    url: Box::new(url.clone()),
                     error,
                 })?;
 
@@ -91,7 +91,7 @@ impl Network {
                 res.chunk()
                     .await
                     .map_err(|error| DownloadError::FailedToReadDownload {
-                        url: url.clone(),
+                        url: Box::new(url.clone()),
                         error,
                     })?
             {
@@ -136,7 +136,7 @@ impl Network {
             .await
             .and_then(|res| res.error_for_status())
             .map_err(|error| DownloadError::FailedToStartDownload {
-                url: url.clone(),
+                url: Box::new(url.clone()),
                 error,
             })?;
 
@@ -145,7 +145,7 @@ impl Network {
             res.chunk()
                 .await
                 .map_err(|error| DownloadError::FailedToReadDownload {
-                    url: url.clone(),
+                    url: Box::new(url.clone()),
                     error,
                 })?
         {

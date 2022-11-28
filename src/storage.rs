@@ -798,12 +798,14 @@ fn process_imported_audits(
 async fn fetch_imported_audits(
     network: &Network,
     config: &ConfigFile,
-) -> Result<Vec<(ImportName, AuditsFile)>, FetchAuditError> {
+) -> Result<Vec<(ImportName, AuditsFile)>, Box<FetchAuditError>> {
     let progress_bar = progress_bar("Fetching", "imported audits", config.imports.len() as u64);
     try_join_all(config.imports.iter().map(|(name, import)| async {
         let _guard = IncProgressOnDrop(&progress_bar, 1);
-        let audit_file = fetch_imported_audit(network, name, &import.url).await?;
-        Ok::<_, FetchAuditError>((name.clone(), audit_file))
+        let audit_file = fetch_imported_audit(network, name, &import.url)
+            .await
+            .map_err(Box::new)?;
+        Ok::<_, Box<FetchAuditError>>((name.clone(), audit_file))
     }))
     .await
 }
@@ -863,7 +865,7 @@ async fn fetch_imported_audit(
                 let bytes = network.download(url.clone()).await?;
                 let description =
                     String::from_utf8(bytes).map_err(|error| DownloadError::InvalidText {
-                        url: url.clone(),
+                        url: Box::new(url.clone()),
                         error,
                     })?;
 
