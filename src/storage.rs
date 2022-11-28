@@ -558,9 +558,11 @@ impl Store {
 
         // If we're locked, and therefore not fetching new live imports,
         // validate that our imports.lock is in sync with config.toml.
-        let imports_lock_outdated = self
-            .imports_lock_outdated()
-            .then_some(StoreValidateError::ImportsLockOutdated);
+        let imports_lock_outdated = if self.imports_lock_outdated() {
+            Some(StoreValidateError::ImportsLockOutdated)
+        } else {
+            None
+        };
 
         let errors = invalid_criteria_errors
             .into_iter()
