@@ -1026,7 +1026,7 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
         if package.is_third_party(&config.policy) {
             audited
                 .entry(package.name.clone())
-                .or_insert(vec![])
+                .or_default()
                 .push(full_audit(package.version.clone(), DEFAULT_CRIT));
         }
     }
@@ -1055,7 +1055,7 @@ fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
         if package.is_third_party(&config.policy) {
             audited
                 .entry(package.name.clone())
-                .or_insert(vec![])
+                .or_default()
                 .push(full_audit(package.version.clone(), SAFE_TO_DEPLOY));
         }
     }
@@ -1069,13 +1069,10 @@ fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile
     let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for (name, entries) in std::mem::take(&mut config.exemptions) {
         for entry in entries {
-            audited
-                .entry(name.clone())
-                .or_insert(vec![])
-                .push(full_audit_m(
-                    entry.version,
-                    entry.criteria.iter().map(|s| &**s).collect::<Vec<_>>(),
-                ));
+            audited.entry(name.clone()).or_default().push(full_audit_m(
+                entry.version,
+                entry.criteria.iter().map(|s| &**s).collect::<Vec<_>>(),
+            ));
         }
     }
     audits.audits = audited;
