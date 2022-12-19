@@ -1,0 +1,46 @@
+---
+source: src/tests/import.rs
+expression: "crate::serialization::to_formatted_toml(&result.audit_file).unwrap().to_string()"
+---
+
+[criteria.example]
+description = "Example criteria description"
+
+[criteria.example2]
+description = "example2"
+
+[criteria.example3]
+description = "example2"
+implies = "safe-to-deploy"
+
+[[audits.crate-a]]
+criteria = "safe-to-deploy"
+version = "10.0.0"
+notes = "should parse correctly"
+
+[[audits.crate-a]]
+criteria = "safe-to-deploy"
+version = "10.0.0"
+dependency-criteria = { foo = "example" }
+notes = "should parse correctly"
+
+[[audits.crate-c]]
+criteria = "example2"
+version = "10.0.0"
+notes = "will not be removed"
+
+[[audits.crate-c]]
+criteria = ["example2", "example3"]
+version = "10.0.0"
+notes = "will not be removed"
+
+[[audits.crate-c]]
+criteria = "example2"
+delta = "1.0.0 -> 10.0.0"
+notes = "will not be removed"
+
+[[audits.crate-c]]
+criteria = "safe-to-deploy"
+violation = "=5.0.0"
+notes = "will not be removed"
+

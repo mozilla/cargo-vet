@@ -814,6 +814,148 @@ fn peer_audits_import_exclusion() {
     insta::assert_snapshot!(output);
 }
 
+#[test]
+fn foreign_audit_file_to_local() {
+    let _enter = TEST_RUNTIME.enter();
+
+    let foreign_audit_file = crate::format::ForeignAuditsFile {
+        criteria: [
+            (
+                "example".to_string(),
+                toml::toml! {
+                    description = "Example criteria description"
+                },
+            ),
+            (
+                "example2".to_string(),
+                toml::toml! {
+                    implies = "unknown-criteria"
+                    description = "example2"
+                },
+            ),
+            (
+                "example3".to_string(),
+                toml::toml! {
+                    description = "example2"
+                    implies = ["safe-to-deploy", "will-not-parse"]
+                    unknown = "ignored unknown field"
+                },
+            ),
+            (
+                "will-not-parse".to_string(),
+                toml::toml! {
+                    implies = [{ not = "a string" }]
+                    description = "will be ignored"
+                },
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        audits: [
+            (
+                "crate-a".to_string(),
+                vec![
+                    toml::toml! {
+                        criteria = "safe-to-deploy"
+                        version = "10.0.0"
+                        notes = "should parse correctly"
+                    },
+                    toml::toml! {
+                        criteria = "unknown-criteria"
+                        version = "10.0.0"
+                        notes = "will be removed"
+                    },
+                    toml::toml! {
+                        criteria = "example"
+                        version = "invalid"
+                        notes = "will be removed"
+                    },
+                    toml::toml! {
+                        criteria = "will-not-parse"
+                        version = "10.0.0"
+                        notes = "will be removed"
+                    },
+                    toml::toml! {
+                        criteria = "safe-to-deploy"
+                        version = "10.0.0"
+                        dependency-criteria = { foo = "unknown-criteria" }
+                        notes = "will be removed"
+                    },
+                    toml::toml! {
+                        criteria = "safe-to-deploy"
+                        version = "10.0.0"
+                        dependency-criteria = { foo = ["example", "unknown-criteria"] }
+                        notes = "will be removed"
+                    },
+                    toml::toml! {
+                        criteria = "safe-to-deploy"
+                        version = "10.0.0"
+                        dependency-criteria = { foo = "example" }
+                        notes = "should parse correctly"
+                    },
+                    toml::toml! {
+                        criteria = "safe-to-deploy"
+                        violation = "invalid"
+                        notes = "will be removed"
+                    },
+                ],
+            ),
+            (
+                "crate-b".to_string(),
+                vec![toml::toml! {
+                    criteria = "example"
+                    version = "invalid"
+                    notes = "will be removed, along with the entire crate"
+                }],
+            ),
+            (
+                "crate-c".to_string(),
+                vec![
+                    toml::toml! {
+                        criteria = "example2"
+                        version = "10.0.0"
+                        notes = "will not be removed"
+                    },
+                    toml::toml! {
+                        criteria = ["example2", "example3"]
+                        version = "10.0.0"
+                        notes = "will not be removed"
+                    },
+                    toml::toml! {
+                        criteria = "example2"
+                        delta = "1.0.0 -> 10.0.0"
+                        notes = "will not be removed"
+                    },
+                    toml::toml! {
+                        criteria = "safe-to-deploy"
+                        violation = "=5.0.0"
+                        notes = "will not be removed"
+                    },
+                ],
+            ),
+        ]
+        .into_iter()
+        .collect(),
+    };
+
+    let mut result = crate::storage::foreign_audit_file_to_local(foreign_audit_file);
+    result.ignored_criteria.sort();
+    result.ignored_audits.sort();
+
+    assert_eq!(result.ignored_criteria, &["will-not-parse"]);
+    assert_eq!(
+        result.ignored_audits,
+        &["crate-a", "crate-a", "crate-a", "crate-a", "crate-a", "crate-a", "crate-b"]
+    );
+
+    insta::assert_snapshot!(
+        "foreign_audit_file_to_local",
+        crate::serialization::to_formatted_toml(&result.audit_file)
+            .unwrap()
+            .to_string()
+    );
+}
+
 // Other tests worth adding:
 //
 // - used edges with dependency-criteria should cause criteria to be imported

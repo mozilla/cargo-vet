@@ -376,9 +376,24 @@ where
     Ok(toml_document)
 }
 
+/// Deserialize the given data structure from a toml::Value, without falling
+/// over due to Spanned failing to parse.
+pub fn parse_from_value<T>(value: toml::Value) -> Result<T, toml::de::Error>
+where
+    T: for<'a> Deserialize<'a>,
+{
+    spanned::DISABLE_SPANNED_DESERIALIZATION.with(|disabled| {
+        let prev = disabled.replace(true);
+        let rv = T::deserialize(value);
+        disabled.set(prev);
+        rv
+    })
+}
+
 pub mod spanned {
     use std::{
         borrow::Borrow,
+        cell::Cell,
         cmp::Ordering,
         fmt::{self, Display},
         hash::{Hash, Hasher},
@@ -386,11 +401,16 @@ pub mod spanned {
     };
 
     use miette::SourceSpan;
-    use serde::{ser, Deserialize};
+    use serde::{de, ser};
+
+    thread_local! {
+        /// Hack to work around `toml::Spanned` failing to be deserialized when
+        /// used with the `toml::Value` deserializer.
+        pub(super) static DISABLE_SPANNED_DESERIALIZATION: Cell<bool> = Cell::new(false);
+    }
 
     /// A spanned value, indicating the range at which it is defined in the source.
-    #[derive(Clone, Default, Deserialize)]
-    #[serde(from = "toml::Spanned<T>")]
+    #[derive(Clone, Default)]
     pub struct Spanned<T> {
         start: usize,
         end: usize,
@@ -559,6 +579,19 @@ pub mod spanned {
                 end: value.end(),
                 value: value.into_inner(),
             }
+        }
+    }
+
+    impl<'de, T: de::Deserialize<'de>> de::Deserialize<'de> for Spanned<T> {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: de::Deserializer<'de>,
+        {
+            Ok(if DISABLE_SPANNED_DESERIALIZATION.with(|d| d.get()) {
+                T::deserialize(deserializer)?.into()
+            } else {
+                toml::Spanned::<T>::deserialize(deserializer)?.into()
+            })
         }
     }
 
