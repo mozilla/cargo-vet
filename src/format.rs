@@ -136,6 +136,15 @@ pub struct AuditsFile {
     pub audits: AuditedDependencies,
 }
 
+/// Foreign audits.toml with unparsed entries and audits. Should have the same
+/// structure as `AuditsFile`, but with individual audits and criteria unparsed.
+#[derive(serde::Deserialize, Clone)]
+pub struct ForeignAuditsFile {
+    #[serde(default)]
+    pub criteria: SortedMap<CriteriaName, toml::Value>,
+    pub audits: SortedMap<PackageName, Vec<toml::Value>>,
+}
+
 /// Information on a Criteria
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct CriteriaEntry {
