@@ -73,12 +73,10 @@ lazy_static::lazy_static! {
         })).expect("Failed to initialize error handler");
 
         tracing_subscriber::fmt::fmt()
-            .with_max_level(tracing::level_filters::LevelFilter::OFF)
-            // Toggle this on for tracing in tests
-            // .with_max_level(tracing::level_filters::LevelFilter::TRACE)
+            .with_max_level(tracing::level_filters::LevelFilter::TRACE)
             .with_target(false)
             .without_time()
-            .with_writer(std::io::stderr)
+            .with_writer(tracing_subscriber::fmt::writer::TestWriter::new())
             .init();
 
         tokio::runtime::Runtime::new().unwrap()
