@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use cargo_metadata::Version;
+use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 // Collections based on how we're using, so it's easier to swap them out.
@@ -231,18 +232,34 @@ impl<'de> Deserialize<'de> for Delta {
     where
         D: Deserializer<'de>,
     {
-        let s = <&str>::deserialize(deserializer)?;
-        if let Some((from, to)) = s.split_once("->") {
-            Ok(Delta {
-                from: Some(Version::parse(from.trim()).map_err(de::Error::custom)?),
-                to: Version::parse(to.trim()).map_err(de::Error::custom)?,
-            })
-        } else {
-            Ok(Delta {
-                from: None,
-                to: Version::parse(s.trim()).map_err(de::Error::custom)?,
-            })
+        struct DeltaVisitor;
+
+        impl<'de> Visitor<'de> for DeltaVisitor {
+            type Value = Delta;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("version -> version delta")
+            }
+
+            fn visit_str<E>(self, string: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                if let Some((from, to)) = string.split_once("->") {
+                    Ok(Delta {
+                        from: Some(Version::parse(from.trim()).map_err(de::Error::custom)?),
+                        to: Version::parse(to.trim()).map_err(de::Error::custom)?,
+                    })
+                } else {
+                    Ok(Delta {
+                        from: None,
+                        to: Version::parse(string.trim()).map_err(de::Error::custom)?,
+                    })
+                }
+            }
         }
+
+        deserializer.deserialize_str(DeltaVisitor)
     }
 }
 
