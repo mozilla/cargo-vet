@@ -28,14 +28,15 @@ use crate::{
     },
     flock::{FileLock, Filesystem},
     format::{
-        AuditKind, AuditsFile, CommandHistory, ConfigFile, CriteriaName, Delta, DiffCache,
-        DiffStat, FastMap, FetchCommand, ImportName, ImportsFile, MetaConfig, PackageStr,
-        SortedMap, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        self, AuditEntry, AuditKind, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
+        CriteriaEntry, CriteriaName, Delta, DiffCache, DiffStat, FastMap, FetchCommand,
+        ForeignAuditsFile, ImportName, ImportsFile, MetaConfig, PackageName, PackageStr, SortedMap,
+        SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
     resolver::{self, Conclusion},
-    serialization::{spanned::Spanned, to_formatted_toml},
+    serialization::{parse_from_value, spanned::Spanned, to_formatted_toml},
     Config, PartialConfig,
 };
 
@@ -257,6 +258,19 @@ impl Store {
         fetched_audits: Vec<(ImportName, AuditsFile)>,
         allow_criteria_changes: bool,
     ) -> Result<Self, CriteriaChangeErrors> {
+        // For extra checking of import serialization, serialize the fetched
+        // audits, convert them to a ForeignAuditsFile, and then deserialize
+        // them back into an AuditsFile to ensure they round-trip through
+        // that process successfully, as the parsing codepaths are different.
+        for (_, original_file) in &fetched_audits {
+            let orig_toml = to_formatted_toml(original_file).unwrap().to_string();
+            let result = foreign_audit_file_to_local(toml::de::from_str(&orig_toml).unwrap());
+            assert_eq!(result.ignored_criteria, Vec::<String>::new());
+            assert_eq!(result.ignored_audits, Vec::<String>::new());
+            let new_toml = to_formatted_toml(&result.audit_file).unwrap().to_string();
+            assert_eq!(new_toml, orig_toml);
+        }
+
         let live_imports =
             process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
         Ok(Self {
@@ -827,7 +841,13 @@ async fn fetch_imported_audit(
     let audit_bytes = network.download(parsed_url).await?;
     let audit_string = String::from_utf8(audit_bytes).map_err(LoadTomlError::from)?;
     let audit_source = SourceFile::new(name, audit_string.clone());
-    let mut audit_file: AuditsFile = toml::de::from_str(&audit_string)
+
+    // Attempt to parse each criteria and audit independently, to allow
+    // recovering from parsing or validation errors on a per-entry basis when
+    // importing audits. This reduces the risk of an upstream vendor adopting a
+    // new cargo-vet feature breaking projects still using an older version of
+    // cargo-vet.
+    let foreign_audit_file: ForeignAuditsFile = toml::de::from_str(&audit_string)
         .map_err(|error| {
             let (line, col) = error.line_col().unwrap_or((0, 0));
             TomlParseError {
@@ -837,6 +857,35 @@ async fn fetch_imported_audit(
             }
         })
         .map_err(LoadTomlError::from)?;
+    let ForeignAuditFileToLocalResult {
+        mut audit_file,
+        ignored_criteria,
+        ignored_audits,
+    } = foreign_audit_file_to_local(foreign_audit_file);
+    if !ignored_criteria.is_empty() {
+        warn!(
+            "Ignored {} invalid criteria entries when importing from '{}'\n\
+            These criteria may have been made with a more recent version of cargo-vet",
+            ignored_criteria.len(),
+            name
+        );
+        info!(
+            "The following criteria were ignored when importing from '{}': {:?}",
+            name, ignored_criteria
+        );
+    }
+    if !ignored_audits.is_empty() {
+        warn!(
+            "Ignored {} invalid audits when importing from '{}'\n\
+            These audits may have been made with a more recent version of cargo-vet",
+            ignored_audits.len(),
+            name
+        );
+        info!(
+            "Audits for the following packages were ignored when importing from '{}': {:?}",
+            name, ignored_audits
+        );
+    }
 
     // Eagerly fetch all descriptions for criteria in the imported audits file,
     // and store them inline. We'll error out if any of these descriptions are
@@ -878,6 +927,120 @@ async fn fetch_imported_audit(
     .await?;
 
     Ok(audit_file)
+}
+
+pub(crate) struct ForeignAuditFileToLocalResult {
+    pub audit_file: AuditsFile,
+    pub ignored_criteria: Vec<CriteriaName>,
+    pub ignored_audits: Vec<PackageName>,
+}
+
+fn is_known_criteria(valid_criteria: &[CriteriaName], criteria_name: &CriteriaName) -> bool {
+    criteria_name == format::SAFE_TO_RUN
+        || criteria_name == format::SAFE_TO_DEPLOY
+        || valid_criteria.contains(criteria_name)
+}
+
+/// Convert a foreign audits file into a local audits file, ignoring any entries
+/// which could not be interpreted, due to issues such as being created with a
+/// newer version of cargo-vet.
+pub(crate) fn foreign_audit_file_to_local(
+    foreign_audit_file: ForeignAuditsFile,
+) -> ForeignAuditFileToLocalResult {
+    let mut ignored_criteria = Vec::new();
+    let mut criteria: SortedMap<CriteriaName, CriteriaEntry> = foreign_audit_file
+        .criteria
+        .into_iter()
+        .filter_map(|(criteria, value)| match parse_imported_criteria(value) {
+            Some(entry) => Some((criteria, entry)),
+            None => {
+                ignored_criteria.push(criteria);
+                None
+            }
+        })
+        .collect();
+    let valid_criteria: Vec<CriteriaName> = criteria.keys().cloned().collect();
+
+    // Remove any unknown criteria from implies sets, to ensure we don't run
+    // into errors later on in the resolver.
+    for entry in criteria.values_mut() {
+        entry
+            .implies
+            .retain(|criteria_name| is_known_criteria(&valid_criteria, criteria_name));
+    }
+
+    let mut ignored_audits = Vec::new();
+    let audits: AuditedDependencies = foreign_audit_file
+        .audits
+        .into_iter()
+        .map(|(package, audits)| {
+            let parsed: Vec<_> = audits
+                .into_iter()
+                .filter_map(|value| match parse_imported_audit(&valid_criteria, value) {
+                    Some(audit) => Some(audit),
+                    None => {
+                        ignored_audits.push(package.clone());
+                        None
+                    }
+                })
+                .collect();
+            (package, parsed)
+        })
+        .filter(|(_, audits)| !audits.is_empty())
+        .collect();
+
+    ForeignAuditFileToLocalResult {
+        audit_file: AuditsFile { criteria, audits },
+        ignored_criteria,
+        ignored_audits,
+    }
+}
+
+/// Parse an unparsed criteria entry, validating and returning it.
+fn parse_imported_criteria(value: toml::Value) -> Option<CriteriaEntry> {
+    parse_from_value(value)
+        .map_err(|err| info!("imported criteria parsing failed due to {err}"))
+        .ok()
+}
+
+/// Parse an unparsed audit entry, validating and returning it.
+fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> Option<AuditEntry> {
+    let mut audit: AuditEntry = parse_from_value(value)
+        .map_err(|err| info!("imported audit parsing failed due to {err}"))
+        .ok()?;
+
+    // Remove any unrecognized criteria to avoid later errors caused by being
+    // unable to find criteria, and ignore the entry if it names no known
+    // criteria.
+    audit
+        .criteria
+        .retain(|criteria_name| is_known_criteria(valid_criteria, criteria_name));
+    if audit.criteria.is_empty() {
+        info!("imported audit parsing failed due to no known criteria");
+        return None;
+    }
+
+    // If any dependency criteria name an unknown criteria, ignore the audit.
+    match &audit.kind {
+        AuditKind::Delta {
+            dependency_criteria,
+            ..
+        }
+        | AuditKind::Full {
+            dependency_criteria,
+            ..
+        } => {
+            for criteria_name in dependency_criteria.values().flatten() {
+                if !is_known_criteria(valid_criteria, criteria_name) {
+                    info!("imported audit parsing failed due to unknown dependency criteria: {criteria_name}");
+                    return None;
+                }
+            }
+        }
+        _ => {}
+    }
+
+    Some(audit)
 }
 
 /// A Registry in CARGO_HOME (usually the crates.io one)
