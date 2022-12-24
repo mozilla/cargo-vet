@@ -14,9 +14,9 @@ use errors::{
     AggregateCriteriaImplies, AggregateError, AggregateErrors, AggregateImpliesMismatchError,
     AuditAsError, AuditAsErrors, CacheAcquireError, CertifyError, FetchAuditError, LoadTomlError,
     NeedsAuditAsError, NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors,
-    TomlParseError, UserInfoError,
+    TomlParseError, UnusedAuditAsError, UnusedAuditAsErrors, UserInfoError,
 };
-use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry};
+use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry, SortedSet};
 use futures_util::future::{join_all, try_join_all};
 use indicatif::ProgressDrawTarget;
 use lazy_static::lazy_static;
@@ -1367,6 +1367,15 @@ fn fix_audit_as(cfg: &Config, store: &mut Store) -> Result<(), CacheAcquireError
                             .audit_as_crates_io = Some(false);
                     }
                 }
+                AuditAsError::UnusedAuditAs(unuseds) => {
+                    for err in unuseds.errors {
+                        // XXX: consider removing the policy completely if
+                        // there's nothing left in it anymore?
+                        if let Some(policy) = store.config.policy.get_mut(&err.package) {
+                            policy.audit_as_crates_io = None;
+                        }
+                    }
+                }
             }
         }
     }
@@ -2040,7 +2049,17 @@ fn check_audit_as_crates_io(
     let mut needs_audit_as_entry = vec![];
     let mut shouldnt_be_audit_as = vec![];
 
+    let mut unused_audit_as: SortedSet<PackageName> = store
+        .config
+        .policy
+        .iter()
+        .filter(|(_, policy)| policy.audit_as_crates_io.is_some())
+        .map(|(name, _)| name.clone())
+        .collect();
+
     for package in first_party_packages_strict(&cfg.metadata, &store.config) {
+        unused_audit_as.remove(&package.name);
+
         let audit_policy = store
             .config
             .policy
@@ -2084,7 +2103,10 @@ fn check_audit_as_crates_io(
         }
     }
 
-    if !needs_audit_as_entry.is_empty() || !shouldnt_be_audit_as.is_empty() {
+    if !needs_audit_as_entry.is_empty()
+        || !shouldnt_be_audit_as.is_empty()
+        || !unused_audit_as.is_empty()
+    {
         let mut errors = vec![];
         if !needs_audit_as_entry.is_empty() {
             errors.push(AuditAsError::NeedsAuditAs(NeedsAuditAsErrors {
@@ -2095,6 +2117,14 @@ fn check_audit_as_crates_io(
             errors.push(AuditAsError::ShouldntBeAuditAs(ShouldntBeAuditAsErrors {
                 errors: shouldnt_be_audit_as,
             }));
+        }
+        if !unused_audit_as.is_empty() {
+            errors.push(AuditAsError::UnusedAuditAs(UnusedAuditAsErrors {
+                errors: unused_audit_as
+                    .into_iter()
+                    .map(|package| UnusedAuditAsError { package })
+                    .collect(),
+            }))
         }
         return Err(AuditAsErrors { errors });
     }
