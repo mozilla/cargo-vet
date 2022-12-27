@@ -46,9 +46,11 @@ fn simple_audit_as_crates_io_all_true() {
     let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
 
     for package in &mock.packages {
-        config
-            .policy
-            .insert(package.name.to_owned(), audit_as_policy(Some(true)));
+        if package.is_first_party {
+            config
+                .policy
+                .insert(package.name.to_owned(), audit_as_policy(Some(true)));
+        }
     }
 
     let store = Store::mock(config, audits, imports);
@@ -67,9 +69,11 @@ fn simple_audit_as_crates_io_all_false() {
     let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
 
     for package in &mock.packages {
-        config
-            .policy
-            .insert(package.name.to_owned(), audit_as_policy(Some(false)));
+        if package.is_first_party {
+            config
+                .policy
+                .insert(package.name.to_owned(), audit_as_policy(Some(false)));
+        }
     }
 
     let store = Store::mock(config, audits, imports);
@@ -102,9 +106,11 @@ fn complex_audit_as_crates_io_all_true() {
     let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
 
     for package in &mock.packages {
-        config
-            .policy
-            .insert(package.name.to_owned(), audit_as_policy(Some(true)));
+        if package.is_first_party {
+            config
+                .policy
+                .insert(package.name.to_owned(), audit_as_policy(Some(true)));
+        }
     }
 
     let store = Store::mock(config, audits, imports);
@@ -123,9 +129,11 @@ fn complex_audit_as_crates_io_all_false() {
     let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
 
     for package in &mock.packages {
-        config
-            .policy
-            .insert(package.name.to_owned(), audit_as_policy(Some(false)));
+        if package.is_first_party {
+            config
+                .policy
+                .insert(package.name.to_owned(), audit_as_policy(Some(false)));
+        }
     }
 
     let store = Store::mock(config, audits, imports);
@@ -255,4 +263,25 @@ fn audit_as_crates_io_need_update() {
 
     let output = get_audit_as_crates_io(&cfg, &store);
     insta::assert_snapshot!("audit-as-crates-io-need-update", output);
+}
+
+#[test]
+fn audit_as_crates_io_non_first_party() {
+    let _enter = TEST_RUNTIME.enter();
+
+    let mock = MockMetadata::complex();
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
+
+    for package in &mock.packages {
+        config
+            .policy
+            .insert(package.name.to_owned(), audit_as_policy(Some(false)));
+    }
+
+    let store = Store::mock(config, audits, imports);
+    let cfg = mock_cfg(&metadata);
+
+    let output = get_audit_as_crates_io(&cfg, &store);
+    insta::assert_snapshot!("audit-as-crates-io-non-first-party", output);
 }

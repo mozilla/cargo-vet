@@ -1,0 +1,14 @@
+---
+source: src/tests/audit_as_crates_io.rs
+expression: output
+---
+
+  × There are some issues with your policy.audit-as-crates-io entries
+
+Error: 
+  × some audit-as-crates-io policies don't match first-party crates
+  │   third-core
+  │   thirdA
+  │   thirdAB
+  help: Remove the audit-as-crates-io entries
+

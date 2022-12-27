@@ -94,6 +94,9 @@ pub enum AuditAsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ShouldntBeAuditAs(ShouldntBeAuditAsErrors),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnusedAuditAs(UnusedAuditAsErrors),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -128,6 +131,22 @@ impl Display for ShouldntBeAuditAsErrors {
     }
 }
 
+#[derive(Debug, Error, Diagnostic)]
+#[diagnostic(help("Remove the audit-as-crates-io entries"))]
+pub struct UnusedAuditAsErrors {
+    pub errors: Vec<UnusedAuditAsError>,
+}
+
+impl Display for UnusedAuditAsErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("some audit-as-crates-io policies don't match first-party crates")?;
+        for e in &self.errors {
+            f.write_fmt(format_args!("\n  {}", e))?
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Error)]
 #[error("{package}:{version}")]
 pub struct NeedsAuditAsError {
@@ -140,6 +159,12 @@ pub struct NeedsAuditAsError {
 pub struct ShouldntBeAuditAsError {
     pub package: PackageName,
     pub version: Version,
+}
+
+#[derive(Debug, Error)]
+#[error("{package}")]
+pub struct UnusedAuditAsError {
+    pub package: PackageName,
 }
 
 ///////////////////////////////////////////////////////////
