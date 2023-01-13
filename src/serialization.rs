@@ -152,7 +152,8 @@ pub mod string_or_vec_or_none {
     }
 }
 
-/// Allows the Vec<String> map value in dependency-criteria to support string_or_vec semantics.
+/// Allows the `Vec<String>` map value in dependency-criteria to support
+/// `string_or_vec` semantics.
 pub mod dependency_criteria {
     use crate::format::{CriteriaName, PackageName};
 

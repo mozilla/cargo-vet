@@ -434,8 +434,8 @@ impl Store {
         let valid_criteria = Arc::new(
             self.audits
                 .criteria
-                .iter()
-                .map(|(c, _)| &**c)
+                .keys()
+                .map(|c| &**c)
                 .chain([SAFE_TO_RUN, SAFE_TO_DEPLOY])
                 .map(|name| name.to_string())
                 .collect::<Vec<_>>(),
@@ -1216,7 +1216,7 @@ impl Cache {
 
         let packages_src = root.join(CACHE_REGISTRY_SRC);
         fs::create_dir_all(&packages_src).map_err(|error| CacheAcquireError::Src {
-            target: empty.clone(),
+            target: packages_src.clone(),
             error,
         })?;
 
@@ -1390,7 +1390,7 @@ impl Cache {
                         network.download_and_persist(url, &fetched_package).await?;
 
                         let fetched_package_ = fetched_package.clone();
-                        tokio::task::spawn_blocking(move || File::open(&fetched_package_))
+                        tokio::task::spawn_blocking(move || File::open(fetched_package_))
                             .await
                             .expect("failed to join")
                             .map_err(|error| FetchError::OpenCached {
