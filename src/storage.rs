@@ -1053,8 +1053,8 @@ fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> 
 /// diff` to place the paths we want to ignore first in the diff output, then
 /// specify `--skip-to` to skip past them.
 pub struct DiffFilterConfig {
-    paths: Vec<PathBuf>,
-    skip_to: Option<PathBuf>,
+    paths: Vec<String>,
+    skip_to: Option<String>,
 }
 
 impl DiffFilterConfig {
@@ -1062,26 +1062,19 @@ impl DiffFilterConfig {
     /// flag for `git diff` to perform filtering.
     pub fn write_order_file(&self, order_file: &mut impl io::Write) -> io::Result<()> {
         for file in self.paths.iter().chain(&self.skip_to) {
-            writeln!(
-                order_file,
-                "{}",
-                file.to_str().ok_or_else(|| io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "path is not valid utf-8"
-                ))?
-            )?;
+            order_file.write_all(file.as_bytes())?;
         }
         Ok(())
     }
 
     /// Get the path which should be passed to the `--skip-to` flag for `git
     /// diff` to perform filtering.
-    pub fn skip_to(&self) -> &Path {
+    pub fn skip_to(&self) -> &str {
         // If we have no `skip_to`, it means that files were only removed, so
         // skip to the first removed file.
         match &self.skip_to {
             Some(skip_to) => skip_to,
-            None => Path::new("/dev/null"),
+            None => "/dev/null",
         }
     }
 }
@@ -1470,7 +1463,7 @@ impl Cache {
             deletions: 0,
         };
         let mut filter_config = DiffFilterConfig {
-            paths: DIFF_SKIP_PATHS.iter().map(|p| version2.join(p)).collect(),
+            paths: Vec::new(),
             skip_to: None,
         };
 
@@ -1491,10 +1484,11 @@ impl Cache {
                     .strip_prefix(version2)
                     .map_err(DiffError::UnexpectedPath)?;
                 if DIFF_SKIP_PATHS.iter().any(|p| Path::new(p) == to_path) {
+                    filter_config.paths.push(to_s.to_owned());
                     continue;
                 }
                 if filter_config.skip_to.is_none() {
-                    filter_config.skip_to = Some(version2.join(to_path));
+                    filter_config.skip_to = Some(to_s.to_owned());
                 }
             }
 
