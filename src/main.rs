@@ -1484,8 +1484,11 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
         .into_diagnostic()?;
 
     std::process::Command::new("git")
+        .arg("-c")
+        .arg("core.safecrlf=false")
         .arg("diff")
         .arg("--no-index")
+        .arg("--ignore-cr-at-eol")
         .arg("-O")
         .arg(orderfile.path())
         .arg("--skip-to")

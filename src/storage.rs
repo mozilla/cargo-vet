@@ -1441,6 +1441,7 @@ impl Cache {
 
         let out = tokio::process::Command::new("git")
             .arg("diff")
+            .arg("--ignore-cr-at-eol")
             .arg("--no-index")
             .arg("--numstat")
             .arg("-z")
