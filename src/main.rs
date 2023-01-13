@@ -26,11 +26,14 @@ use out::{progress_bar, IncProgressOnDrop};
 use reqwest::Url;
 use serde::de::Deserialize;
 use serialization::spanned::Spanned;
+use tempfile::NamedTempFile;
 use thiserror::Error;
 use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
-use crate::errors::{CommandError, DownloadError, RegenerateExemptionsError, SourceFile};
+use crate::errors::{
+    CommandError, DownloadError, FetchAndDiffError, RegenerateExemptionsError, SourceFile,
+};
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria,
     ExemptedDependency, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr,
@@ -1404,7 +1407,7 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
     let version2 = &sub_args.version2;
     let package = &*sub_args.package;
 
-    let (fetched1, fetched2) = {
+    let (fetched1, fetched2, filter_config) = {
         let network = Network::acquire(cfg);
         let store = Store::acquire(cfg, network.as_ref(), false)?;
         let cache = Cache::acquire(cfg)?;
@@ -1448,10 +1451,12 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
             // that could be disorienting.
             let (pkgs, eulas) = tokio::join!(
                 async {
-                    tokio::try_join!(
+                    let (pkg1, pkg2) = tokio::try_join!(
                         cache.fetch_package(network.as_ref(), package, version1),
                         cache.fetch_package(network.as_ref(), package, version2)
-                    )
+                    )?;
+                    let (_, filter_config) = cache.diffstat_package(&pkg1, &pkg2).await?;
+                    Ok::<_, FetchAndDiffError>((pkg1, pkg2, filter_config))
                 },
                 prompt_criteria_eulas(
                     out,
@@ -1471,11 +1476,20 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
 
     writeln!(out);
 
-    // FIXME: mask out .cargo_vcs_info.json
+    // Create a temporary orderfile with the computed values in order to skip
+    // diffs which we want to ignore using --skip-to.
+    let mut orderfile = NamedTempFile::new().into_diagnostic()?;
+    filter_config
+        .write_order_file(&mut orderfile)
+        .into_diagnostic()?;
 
     std::process::Command::new("git")
         .arg("diff")
         .arg("--no-index")
+        .arg("-O")
+        .arg(orderfile.path())
+        .arg("--skip-to")
+        .arg(filter_config.skip_to())
         .arg(&fetched1)
         .arg(&fetched2)
         .status()

@@ -46,8 +46,9 @@ expression: json
           "from": null,
           "to": "10.0.0",
           "diffstat": {
-            "raw": "+100",
-            "count": 100
+            "insertions": 100,
+            "deletions": 0,
+            "files_changed": 1
           }
         }
       },
@@ -61,8 +62,9 @@ expression: json
           "from": null,
           "to": "10.0.0",
           "diffstat": {
-            "raw": "+100",
-            "count": 100
+            "insertions": 100,
+            "deletions": 0,
+            "files_changed": 1
           }
         }
       },
@@ -76,8 +78,9 @@ expression: json
           "from": null,
           "to": "10.0.0",
           "diffstat": {
-            "raw": "+100",
-            "count": 100
+            "insertions": 100,
+            "deletions": 0,
+            "files_changed": 1
           }
         }
       },
@@ -91,8 +94,9 @@ expression: json
           "from": null,
           "to": "10.0.0",
           "diffstat": {
-            "raw": "+100",
-            "count": 100
+            "insertions": 100,
+            "deletions": 0,
+            "files_changed": 1
           }
         }
       }
@@ -109,8 +113,9 @@ expression: json
             "from": null,
             "to": "10.0.0",
             "diffstat": {
-              "raw": "+100",
-              "count": 100
+              "insertions": 100,
+              "deletions": 0,
+              "files_changed": 1
             }
           }
         },
@@ -124,8 +129,9 @@ expression: json
             "from": null,
             "to": "10.0.0",
             "diffstat": {
-              "raw": "+100",
-              "count": 100
+              "insertions": 100,
+              "deletions": 0,
+              "files_changed": 1
             }
           }
         }
@@ -141,8 +147,9 @@ expression: json
             "from": null,
             "to": "10.0.0",
             "diffstat": {
-              "raw": "+100",
-              "count": 100
+              "insertions": 100,
+              "deletions": 0,
+              "files_changed": 1
             }
           }
         },
@@ -156,8 +163,9 @@ expression: json
             "from": null,
             "to": "10.0.0",
             "diffstat": {
-              "raw": "+100",
-              "count": 100
+              "insertions": 100,
+              "deletions": 0,
+              "files_changed": 1
             }
           }
         }

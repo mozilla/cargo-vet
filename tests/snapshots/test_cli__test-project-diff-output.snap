@@ -1,0 +1,220 @@
+---
+source: tests/test-cli.rs
+expression: formatted
+---
+stdout:
+You are about to diff versions 1.0.90 and 1.0.91 of 'syn'
+Other software projects may rely on this audit. Ask for help if you're not sure.
+
+(press ENTER to inspect locally)
+index d6d7b5c..5dda6e6 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -13,7 +13,7 @@
+ edition = "2018"
+ rust-version = "1.31"
+ name = "syn"
+-version = "1.0.90"
++version = "1.0.91"
+ authors = ["David Tolnay <dtolnay@gmail.com>"]
+ include = [
+     "/benches/**",
+index 3ae869d..baa1f4e 100644
+--- a/Cargo.toml.orig
++++ b/Cargo.toml.orig
+@@ -1,6 +1,6 @@
+ [package]
+ name = "syn"
+-version = "1.0.90" # don't forget to update html_root_url and syn.json
++version = "1.0.91" # don't forget to update html_root_url and syn.json
+ authors = ["David Tolnay <dtolnay@gmail.com>"]
+ license = "MIT OR Apache-2.0"
+ description = "Parser for Rust source code"
+index b6d0616..276c016 100644
+--- a/expr.rs
++++ b/expr.rs
+@@ -1603,27 +1603,7 @@ pub(crate) mod parsing {
+ 
+                 let member: Member = input.parse()?;
+                 let turbofish = if member.is_named() && input.peek(Token![::]) {
+-                    Some(MethodTurbofish {
+-                        colon2_token: input.parse()?,
+-                        lt_token: input.parse()?,
+-                        args: {
+-                            let mut args = Punctuated::new();
+-                            loop {
+-                                if input.peek(Token![>]) {
+-                                    break;
+-                                }
+-                                let value = input.call(generic_method_argument)?;
+-                                args.push_value(value);
+-                                if input.peek(Token![>]) {
+-                                    break;
+-                                }
+-                                let punct = input.parse()?;
+-                                args.push_punct(punct);
+-                            }
+-                            args
+-                        },
+-                        gt_token: input.parse()?,
+-                    })
++                    Some(input.parse::<MethodTurbofish>()?)
+                 } else {
+                     None
+                 };
+@@ -2099,18 +2079,49 @@ pub(crate) mod parsing {
+     }
+ 
+     #[cfg(feature = "full")]
+-    fn generic_method_argument(input: ParseStream) -> Result<GenericMethodArgument> {
+-        if input.peek(Lit) {
+-            let lit = input.parse()?;
+-            return Ok(GenericMethodArgument::Const(Expr::Lit(lit)));
+-        }
++    #[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
++    impl Parse for GenericMethodArgument {
++        fn parse(input: ParseStream) -> Result<Self> {
++            if input.peek(Lit) {
++                let lit = input.parse()?;
++                return Ok(GenericMethodArgument::Const(Expr::Lit(lit)));
++            }
++
++            if input.peek(token::Brace) {
++                let block: ExprBlock = input.parse()?;
++                return Ok(GenericMethodArgument::Const(Expr::Block(block)));
++            }
+ 
+-        if input.peek(token::Brace) {
+-            let block: ExprBlock = input.parse()?;
+-            return Ok(GenericMethodArgument::Const(Expr::Block(block)));
++            input.parse().map(GenericMethodArgument::Type)
+         }
++    }
+ 
+-        input.parse().map(GenericMethodArgument::Type)
++    #[cfg(feature = "full")]
++    #[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
++    impl Parse for MethodTurbofish {
++        fn parse(input: ParseStream) -> Result<Self> {
++            Ok(MethodTurbofish {
++                colon2_token: input.parse()?,
++                lt_token: input.parse()?,
++                args: {
++                    let mut args = Punctuated::new();
++                    loop {
++                        if input.peek(Token![>]) {
++                            break;
++                        }
++                        let value: GenericMethodArgument = input.parse()?;
++                        args.push_value(value);
++                        if input.peek(Token![>]) {
++                            break;
++                        }
++                        let punct = input.parse()?;
++                        args.push_punct(punct);
++                    }
++                    args
++                },
++                gt_token: input.parse()?,
++            })
++        }
+     }
+ 
+     #[cfg(feature = "full")]
+@@ -2277,18 +2288,19 @@ pub(crate) mod parsing {
+     }
+ 
+     impl_by_parsing_expr! {
+-        ExprCall, Call, "expected function call expression",
+-        ExprMethodCall, MethodCall, "expected method call expression",
+-        ExprTuple, Tuple, "expected tuple expression",
+-        ExprBinary, Binary, "expected binary operation",
+-        ExprCast, Cast, "expected cast expression",
+-        ExprType, Type, "expected type ascription expression",
+         ExprAssign, Assign, "expected assignment expression",
+         ExprAssignOp, AssignOp, "expected compound assignment expression",
++        ExprAwait, Await, "expected await expression",
++        ExprBinary, Binary, "expected binary operation",
++        ExprCall, Call, "expected function call expression",
++        ExprCast, Cast, "expected cast expression",
+         ExprField, Field, "expected struct field access",
+         ExprIndex, Index, "expected indexing expression",
++        ExprMethodCall, MethodCall, "expected method call expression",
+         ExprRange, Range, "expected range expression",
+         ExprTry, Try, "expected try expression",
++        ExprTuple, Tuple, "expected tuple expression",
++        ExprType, Type, "expected type ascription expression",
+     }
+ 
+     #[cfg(feature = "full")]
+@@ -3346,14 +3358,22 @@ pub(crate) mod printing {
+ 
+     #[cfg(feature = "full")]
+     #[cfg_attr(doc_cfg, doc(cfg(feature = "printing")))]
+-    impl ToTokens for ExprRange {
++    impl ToTokens for RangeLimits {
+         fn to_tokens(&self, tokens: &mut TokenStream) {
+-            outer_attrs_to_tokens(&self.attrs, tokens);
+-            self.from.to_tokens(tokens);
+-            match &self.limits {
++            match self {
+                 RangeLimits::HalfOpen(t) => t.to_tokens(tokens),
+                 RangeLimits::Closed(t) => t.to_tokens(tokens),
+             }
++        }
++    }
++
++    #[cfg(feature = "full")]
++    #[cfg_attr(doc_cfg, doc(cfg(feature = "printing")))]
++    impl ToTokens for ExprRange {
++        fn to_tokens(&self, tokens: &mut TokenStream) {
++            outer_attrs_to_tokens(&self.attrs, tokens);
++            self.from.to_tokens(tokens);
++            self.limits.to_tokens(tokens);
+             self.to.to_tokens(tokens);
+         }
+     }
+index a7d750b..b59a8df 100644
+--- a/lib.rs
++++ b/lib.rs
+@@ -250,7 +250,7 @@
+ //!   dynamic library libproc_macro from rustc toolchain.
+ 
+ // Syn types in rustdoc of other crates get linked to here.
+-#![doc(html_root_url = "https://docs.rs/syn/1.0.90")]
++#![doc(html_root_url = "https://docs.rs/syn/1.0.91")]
+ #![cfg_attr(doc_cfg, feature(doc_cfg))]
+ #![allow(non_camel_case_types)]
+ // Ignored clippy lints.
+index f0ed628..0cf5cf5 100644
+--- a/lookahead.rs
++++ b/lookahead.rs
+@@ -18,6 +18,9 @@ use std::cell::RefCell;
+ /// [`ParseStream::peek`]: crate::parse::ParseBuffer::peek
+ /// [`ParseStream::lookahead1`]: crate::parse::ParseBuffer::lookahead1
+ ///
++/// Consuming tokens from the source stream after constructing a lookahead
++/// object does not also advance the lookahead object.
++///
+ /// # Example
+ ///
+ /// ```
+index 630bf9d..fa0818c 100644
+--- a/pat.rs
++++ b/pat.rs
+@@ -878,10 +878,7 @@ mod printing {
+         fn to_tokens(&self, tokens: &mut TokenStream) {
+             tokens.append_all(self.attrs.outer());
+             self.lo.to_tokens(tokens);
+-            match &self.limits {
+-                RangeLimits::HalfOpen(t) => t.to_tokens(tokens),
+-                RangeLimits::Closed(t) => t.to_tokens(tokens),
+-            }
++            self.limits.to_tokens(tokens);
+             self.hi.to_tokens(tokens);
+         }
+     }
+
+Use |cargo vet certify| to record your audit.
+stderr:
+ WARN unable to determine likely criteria, this may not be a relevant audit for this project.

@@ -1,7 +1,7 @@
 use std::{
     ffi::OsString,
     fmt::{Debug, Display},
-    path::PathBuf,
+    path::{PathBuf, StripPrefixError},
     string::FromUtf8Error,
     sync::Arc,
 };
@@ -463,6 +463,10 @@ pub enum DiffError {
         #[source]
         CommandError,
     ),
+    #[error("Diff command produced an unexpected path")]
+    UnexpectedPath(#[source] StripPrefixError),
+    #[error("Diff command produced invalid output")]
+    InvalidOutput,
 }
 
 //////////////////////////////////////////////////////////

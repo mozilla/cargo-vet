@@ -502,15 +502,15 @@ pub struct ImportsFile {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "version")]
 pub enum DiffCache {
-    #[serde(rename = "1")]
-    V1 {
+    #[serde(rename = "2")]
+    V2 {
         diffs: SortedMap<PackageName, SortedMap<Delta, DiffStat>>,
     },
 }
 
 impl Default for DiffCache {
     fn default() -> Self {
-        DiffCache::V1 {
+        DiffCache::V2 {
             diffs: SortedMap::new(),
         }
     }
@@ -518,8 +518,28 @@ impl Default for DiffCache {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DiffStat {
-    pub raw: String,
-    pub count: u64,
+    pub insertions: u64,
+    pub deletions: u64,
+    pub files_changed: u64,
+}
+
+impl DiffStat {
+    pub fn count(&self) -> u64 {
+        self.insertions + self.deletions
+    }
+}
+
+impl fmt::Display for DiffStat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} files changed", self.files_changed)?;
+        if self.insertions > 0 {
+            write!(f, ", {} insertions(+)", self.insertions)?;
+        }
+        if self.deletions > 0 {
+            write!(f, ", {} deletions(-)", self.deletions)?;
+        }
+        Ok(())
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

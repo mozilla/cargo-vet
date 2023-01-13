@@ -2688,7 +2688,7 @@ impl<'a> ResolveReport<'a> {
                         suggested_diff: diffstats
                             .into_iter()
                             .flatten()
-                            .min_by_key(|diff| diff.diffstat.count)?,
+                            .min_by_key(|diff| diff.diffstat.count())?,
                         suggested_criteria: audit_failure.criteria_failures.clone(),
                         notable_parents,
                     })
@@ -2700,12 +2700,12 @@ impl<'a> ResolveReport<'a> {
 
         let total_lines = suggestions
             .iter()
-            .map(|s| s.suggested_diff.diffstat.count)
+            .map(|s| s.suggested_diff.diffstat.count())
             .sum();
 
         suggestions.sort_by_key(|item| self.graph.nodes[item.package].version);
         suggestions.sort_by_key(|item| self.graph.nodes[item.package].name);
-        suggestions.sort_by_key(|item| item.suggested_diff.diffstat.count);
+        suggestions.sort_by_key(|item| item.suggested_diff.diffstat.count());
         suggestions.sort_by_key(|item| item.suggested_criteria.is_fully_unconfident());
 
         let mut suggestions_by_criteria = SortedMap::<CriteriaName, Vec<SuggestItem>>::new();
@@ -2994,8 +2994,8 @@ impl Suggest {
                     };
                     let parents = format!("(used by {})", item.notable_parents);
                     let diffstat = match &item.suggested_diff.from {
-                        Some(_) => format!("({})", item.suggested_diff.diffstat.raw.trim()),
-                        None => format!("({} lines)", item.suggested_diff.diffstat.count),
+                        Some(_) => format!("({})", item.suggested_diff.diffstat),
+                        None => format!("({} lines)", item.suggested_diff.diffstat.count()),
                     };
                     let style = if item.suggested_criteria.is_fully_unconfident() {
                         out.style().dim()

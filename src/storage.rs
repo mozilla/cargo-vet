@@ -79,6 +79,9 @@ const AUDITS_TOML: &str = "audits.toml";
 const CONFIG_TOML: &str = "config.toml";
 const IMPORTS_LOCK: &str = "imports.lock";
 
+// Files which are skipped when counting changes for diffs.
+const DIFF_SKIP_PATHS: &[&str] = &["Cargo.lock", ".cargo_vcs_info.json", ".cargo-ok"];
+
 // FIXME: This is a completely arbitrary number, and may be too high or too low.
 const MAX_CONCURRENT_DIFFS: usize = 40;
 
@@ -1043,6 +1046,46 @@ fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> 
     Some(audit)
 }
 
+/// Helper type used to track information required to filter `git diff` output
+/// to match the filtering we do with diffstat.
+///
+/// This is done by using the `-O` (orderfile) and `--skip-to` arguments to `git
+/// diff` to place the paths we want to ignore first in the diff output, then
+/// specify `--skip-to` to skip past them.
+pub struct DiffFilterConfig {
+    paths: Vec<PathBuf>,
+    skip_to: Option<PathBuf>,
+}
+
+impl DiffFilterConfig {
+    /// Write out the contents of the orderfile which must be passed to the `-O`
+    /// flag for `git diff` to perform filtering.
+    pub fn write_order_file(&self, order_file: &mut impl io::Write) -> io::Result<()> {
+        for file in self.paths.iter().chain(&self.skip_to) {
+            writeln!(
+                order_file,
+                "{}",
+                file.to_str().ok_or_else(|| io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "path is not valid utf-8"
+                ))?
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Get the path which should be passed to the `--skip-to` flag for `git
+    /// diff` to perform filtering.
+    pub fn skip_to(&self) -> &Path {
+        // If we have no `skip_to`, it means that files were only removed, so
+        // skip to the first removed file.
+        match &self.skip_to {
+            Some(skip_to) => skip_to,
+            None => Path::new("/dev/null"),
+        }
+    }
+}
+
 /// A Registry in CARGO_HOME (usually the crates.io one)
 pub struct CargoRegistry {
     /// The queryable index
@@ -1388,11 +1431,11 @@ impl Cache {
     }
 
     #[tracing::instrument(skip_all, err)]
-    async fn diffstat_package(
+    pub async fn diffstat_package(
         &self,
         version1: &Path,
         version2: &Path,
-    ) -> Result<DiffStat, DiffError> {
+    ) -> Result<(DiffStat, DiffFilterConfig), DiffError> {
         let _permit = self
             .diff_semaphore
             .acquire()
@@ -1402,13 +1445,12 @@ impl Cache {
         // ERRORS: all of this is properly fallible internal workings, we can fail
         // to diffstat some packages and still produce some useful output
         trace!("diffstating {version1:#?} {version2:#?}");
-        // FIXME: mask out .cargo_vcs_info.json
-        // FIXME: look into libgit2 vs just calling git
 
         let out = tokio::process::Command::new("git")
             .arg("diff")
             .arg("--no-index")
-            .arg("--shortstat")
+            .arg("--numstat")
+            .arg("-z")
             .arg(version1)
             .arg(version2)
             .output()
@@ -1422,39 +1464,56 @@ impl Cache {
             return Err(CommandError::BadStatus(status).into());
         }
 
-        let diffstat = String::from_utf8(out.stdout).map_err(CommandError::BadOutput)?;
-
-        let count = if diffstat.is_empty() {
-            0
-        } else {
-            // 3 files changed, 9 insertions(+), 3 deletions(-)
-            let mut parts = diffstat.split(',');
-            parts.next().unwrap(); // Discard files
-
-            fn parse_diffnum(part: Option<&str>) -> Option<u64> {
-                part?.trim().split_once(' ')?.0.parse().ok()
-            }
-
-            let added: u64 = parse_diffnum(parts.next()).unwrap_or(0);
-            let removed: u64 = parse_diffnum(parts.next()).unwrap_or(0);
-
-            // ERRORS: Arguably this should just be an error but it's more of a
-            // "have I completely misunderstood this format, if so let me know"
-            // panic, so the assert *is* what I want..?
-            assert_eq!(
-                parts.next(),
-                None,
-                "diffstat had more parts than expected? {}",
-                diffstat
-            );
-
-            added + removed
+        let mut diffstat = DiffStat {
+            files_changed: 0,
+            insertions: 0,
+            deletions: 0,
+        };
+        let mut filter_config = DiffFilterConfig {
+            paths: DIFF_SKIP_PATHS.iter().map(|p| version2.join(p)).collect(),
+            skip_to: None,
         };
 
-        Ok(DiffStat {
-            raw: diffstat,
-            count,
-        })
+        // Thanks to the `-z` flag the output takes the rough format of:
+        // "{INSERTED}\t{DELETED}\t\0{FROM_PATH}\0{TO_PATH}\0" for each file
+        // being diffed. If the file was added or removed one of the sides will
+        // be "/dev/null", even on Windows. Binary files use "-" for the
+        // inserted & deleted counts.
+        let output = String::from_utf8(out.stdout).map_err(CommandError::BadOutput)?;
+        let mut chunks = output.split('\0');
+        while let (Some(changes_s), Some(_from_s), Some(to_s)) =
+            (chunks.next(), chunks.next(), chunks.next())
+        {
+            // Check if the 'to' path is one of the files which is ignored. We
+            // can only filter on 'to' paths, so don't bother checking 'from'.
+            if to_s != "/dev/null" {
+                let to_path = Path::new(to_s)
+                    .strip_prefix(version2)
+                    .map_err(DiffError::UnexpectedPath)?;
+                if DIFF_SKIP_PATHS.iter().any(|p| Path::new(p) == to_path) {
+                    continue;
+                }
+                if filter_config.skip_to.is_none() {
+                    filter_config.skip_to = Some(version2.join(to_path));
+                }
+            }
+
+            diffstat.files_changed += 1;
+
+            match changes_s.trim().split_once('\t') {
+                Some(("-", "-")) => {} // binary diff
+                Some((insertions_s, deletions_s)) => {
+                    diffstat.insertions += insertions_s
+                        .parse::<u64>()
+                        .map_err(|_| DiffError::InvalidOutput)?;
+                    diffstat.deletions += deletions_s
+                        .parse::<u64>()
+                        .map_err(|_| DiffError::InvalidOutput)?;
+                }
+                None => Err(DiffError::InvalidOutput)?,
+            };
+        }
+        Ok((diffstat, filter_config))
     }
 
     #[tracing::instrument(skip(self, network), err)]
@@ -1475,7 +1534,7 @@ impl Cache {
             let mut guard = self.state.lock().unwrap();
 
             // Check if the value has already been cached.
-            let DiffCache::V1 { diffs } = &guard.diff_cache;
+            let DiffCache::V2 { diffs } = &guard.diff_cache;
             if let Some(cached) = diffs
                 .get(package)
                 .and_then(|cache| cache.get(delta))
@@ -1496,12 +1555,11 @@ impl Cache {
                 let to_len: u64 = delta.to.major * delta.to.major;
                 let diff = to_len as i64 - from_len as i64;
                 let count = diff.unsigned_abs();
-                let raw = if diff < 0 {
-                    format!("-{}", count)
-                } else {
-                    format!("+{}", count)
-                };
-                return Ok(DiffStat { raw, count });
+                return Ok(DiffStat {
+                    files_changed: 1,
+                    insertions: if diff > 0 { count } else { 0 },
+                    deletions: if diff < 0 { count } else { 0 },
+                });
             }
 
             guard
@@ -1520,12 +1578,12 @@ impl Cache {
                 let to = self.fetch_package(network, package, &delta.to).await?;
 
                 // Have fetches, do a real diffstat
-                let diffstat = self.diffstat_package(&from, &to).await?;
+                let (diffstat, _) = self.diffstat_package(&from, &to).await?;
 
                 // Record the cache result in the diffcache
                 {
                     let mut guard = self.state.lock().unwrap();
-                    let DiffCache::V1 { diffs } = &mut guard.diff_cache;
+                    let DiffCache::V2 { diffs } = &mut guard.diff_cache;
                     diffs
                         .entry(package.to_string())
                         .or_default()
