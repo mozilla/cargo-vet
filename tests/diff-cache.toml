@@ -1,1759 +1,496 @@
-version = "1"
-
-[diffs.alsa."0.4.3"]
-raw = """
- 23 files changed, 12197 insertions(+)
-"""
-count = 12197
-
-[diffs.anyhow."1.0.52"]
-raw = """
- 49 files changed, 6219 insertions(+)
-"""
-count = 6219
-
-[diffs.app_units."0.7.1"]
-raw = """
- 8 files changed, 507 insertions(+)
-"""
-count = 507
-
-[diffs.arbitrary."1.0.3"]
-raw = """
- 19 files changed, 3159 insertions(+)
-"""
-count = 3159
-
-[diffs.arrayref."0.3.6"]
-raw = """
- 13 files changed, 986 insertions(+)
-"""
-count = 986
-
-[diffs.arrayvec."0.5.2"]
-raw = """
- 22 files changed, 3776 insertions(+)
-"""
-count = 3776
-
-[diffs.arrayvec."0.7.2"]
-raw = """
- 22 files changed, 3998 insertions(+)
-"""
-count = 3998
-
-[diffs.ash."0.37.0+1.3.209"]
-raw = """
- 91 files changed, 112995 insertions(+)
-"""
-count = 112995
-
-[diffs.async-trait."0.1.52"]
-raw = """
- 42 files changed, 3626 insertions(+)
-"""
-count = 3626
-
-[diffs.atomic_refcell."0.1.8"]
-raw = """
- 9 files changed, 720 insertions(+)
-"""
-count = 720
-
-[diffs.atty."0.2.14"]
-raw = """
- 12 files changed, 508 insertions(+)
-"""
-count = 508
-
-[diffs.audio_thread_priority."0.26.1"]
-raw = """
- 17 files changed, 2069 insertions(+)
-"""
-count = 2069
-
-[diffs.authenticator."0.3.1"]
-raw = """
- 86 files changed, 10263 insertions(+)
-"""
-count = 10263
-
-[diffs.base64."0.10.1"]
-raw = """
- 27 files changed, 5450 insertions(+)
-"""
-count = 5450
-
-[diffs.base64."0.12.3"]
-raw = """
- 31 files changed, 7929 insertions(+)
-"""
-count = 7929
-
-[diffs.bincode."1.3.3"]
-raw = """
- 24 files changed, 5153 insertions(+)
-"""
-count = 5153
-
-[diffs.bindgen."0.56.0"]
-raw = """
- 56 files changed, 27831 insertions(+)
-"""
-count = 27831
-
-[diffs.bit-set."0.5.2"]
-raw = """
- 11 files changed, 1786 insertions(+)
-"""
-count = 1786
-
-[diffs.bitflags."1.3.2"]
-raw = """
- 39 files changed, 3004 insertions(+)
-"""
-count = 3004
-
-[diffs.bitflags_serde_shim."0.2.2"]
-raw = """
- 4 files changed, 174 insertions(+)
-"""
-count = 174
-
-[diffs.bitreader."0.3.5"]
-raw = """
- 11 files changed, 1106 insertions(+)
-"""
-count = 1106
-
-[diffs.block."0.1.6"]
-raw = """
- 5 files changed, 493 insertions(+)
-"""
-count = 493
-
-[diffs.build-parallel."0.1.2"]
-raw = """
- 6 files changed, 284 insertions(+)
-"""
-count = 284
+version = "2"
 
 [diffs.bumpalo."3.9.1"]
-raw = """
- 19 files changed, 10106 insertions(+)
-"""
-count = 10106
-
-[diffs.byteorder."1.4.3"]
-raw = """
- 15 files changed, 6460 insertions(+)
-"""
-count = 6460
-
-[diffs.bytes."0.5.6"]
-raw = """
- 44 files changed, 8795 insertions(+)
-"""
-count = 8795
+insertions = 10099
+deletions = 0
+files_changed = 17
 
 [diffs.bytes."1.1.0"]
-raw = """
- 45 files changed, 9213 insertions(+)
-"""
-count = 9213
-
-[diffs.cc."1.0.72"]
-raw = """
- 22 files changed, 6650 insertions(+)
-"""
-count = 6650
+insertions = 9207
+deletions = 0
+files_changed = 43
 
 [diffs.cc."1.0.73"]
-raw = """
- 22 files changed, 6671 insertions(+)
-"""
-count = 6671
-
-[diffs.cfg-if."0.1.10"]
-raw = """
- 11 files changed, 585 insertions(+)
-"""
-count = 585
+insertions = 6554
+deletions = 0
+files_changed = 19
 
 [diffs.cfg-if."1.0.0"]
-raw = """
- 11 files changed, 588 insertions(+)
-"""
-count = 588
-
-[diffs.cfg_aliases."0.1.1"]
-raw = """
- 9 files changed, 572 insertions(+)
-"""
-count = 572
-
-[diffs.chrono."0.4.19"]
-raw = """
- 43 files changed, 21364 insertions(+)
-"""
-count = 21364
-
-[diffs.clap."3.0.10"]
-raw = """
- 112 files changed, 30563 insertions(+)
-"""
-count = 30563
-
-[diffs.codespan-reporting."0.11.1"]
-raw = """
- 112 files changed, 7370 insertions(+)
-"""
-count = 7370
-
-[diffs.comedy."0.2.0"]
-raw = """
- 11 files changed, 1258 insertions(+)
-"""
-count = 1258
-
-[diffs.cookie."0.12.0"]
-raw = """
- 20 files changed, 3581 insertions(+)
-"""
-count = 3581
-
-[diffs.copyless."0.1.5"]
-raw = """
- 15 files changed, 498 insertions(+)
-"""
-count = 498
-
-[diffs.core-foundation."0.9.2"]
-raw = """
- 28 files changed, 3950 insertions(+)
-"""
-count = 3950
+insertions = 582
+deletions = 0
+files_changed = 9
 
 [diffs.core-foundation."0.9.3"]
-raw = """
- 28 files changed, 3960 insertions(+)
-"""
-count = 3960
+insertions = 3953
+deletions = 0
+files_changed = 26
 
 [diffs.core-foundation-sys."0.8.3"]
-raw = """
- 28 files changed, 1971 insertions(+)
-"""
-count = 1971
-
-[diffs.core-graphics."0.22.3"]
-raw = """
- 27 files changed, 3893 insertions(+)
-"""
-count = 3893
-
-[diffs.core-graphics-types."0.1.1"]
-raw = """
- 7 files changed, 297 insertions(+)
-"""
-count = 297
-
-[diffs.core-text."19.2.0"]
-raw = """
- 20 files changed, 2175 insertions(+)
-"""
-count = 2175
-
-[diffs.coremidi-sys."3.0.1"]
-raw = """
- 12 files changed, 1144 insertions(+)
-"""
-count = 1144
-
-[diffs.cose-c."0.1.5"]
-raw = """
- 7 files changed, 541 insertions(+)
-"""
-count = 541
-
-[diffs.cranelift-codegen."0.74.0"]
-raw = """
- 197 files changed, 122486 insertions(+)
-"""
-count = 122486
-
-[diffs.cranelift-wasm."0.74.0"]
-raw = """
- 72 files changed, 75262 insertions(+)
-"""
-count = 75262
-
-[diffs.crossbeam-channel."0.5.4"]
-raw = """
- 44 files changed, 20248 insertions(+)
-"""
-count = 20248
-
-[diffs.cssparser."0.29.2"]
-raw = """
- 26 files changed, 7500 insertions(+)
-"""
-count = 7500
-
-[diffs.cstr."0.2.9"]
-raw = """
- 25 files changed, 605 insertions(+)
-"""
-count = 605
-
-[diffs.darling."0.13.1"]
-raw = """
- 39 files changed, 2356 insertions(+)
-"""
-count = 2356
-
-[diffs.derive_more."0.99.11"]
-raw = """
- 67 files changed, 10748 insertions(+)
-"""
-count = 10748
-
-[diffs.dirs."2.0.2"]
-raw = """
- 15 files changed, 888 insertions(+)
-"""
-count = 888
-
-[diffs.dns-parser."0.8.0"]
-raw = """
- 44 files changed, 3006 insertions(+)
-"""
-count = 3006
-
-[diffs.dogear."0.4.0"]
-raw = """
- 16 files changed, 8372 insertions(+)
-"""
-count = 8372
-
-[diffs.dwrote."0.11.0"]
-raw = """
- 28 files changed, 3177 insertions(+)
-"""
-count = 3177
-
-[diffs.encoding_c."0.9.8"]
-raw = """
- 16 files changed, 3963 insertions(+)
-"""
-count = 3963
-
-[diffs.encoding_c_mem."0.2.6"]
-raw = """
- 14 files changed, 2495 insertions(+)
-"""
-count = 2495
-
-[diffs.encoding_rs."0.8.22"]
-raw = """
- 102 files changed, 506887 insertions(+)
-"""
-count = 506887
+insertions = 1965
+deletions = 0
+files_changed = 26
 
 [diffs.encoding_rs."0.8.31"]
-raw = """
- 104 files changed, 507252 insertions(+)
-"""
-count = 507252
-
-[diffs.enumset."1.0.8"]
-raw = """
- 16 files changed, 1979 insertions(+)
-"""
-count = 1979
-
-[diffs.env_logger."0.8.4"]
-raw = """
- 26 files changed, 4661 insertions(+)
-"""
-count = 4661
-
-[diffs.etagere."0.2.6"]
-raw = """
- 10 files changed, 2347 insertions(+)
-"""
-count = 2347
-
-[diffs.euclid."0.22.6"]
-raw = """
- 32 files changed, 16357 insertions(+)
-"""
-count = 16357
-
-[diffs.fallible_collections."0.4.2"]
-raw = """
- 21 files changed, 7560 insertions(+)
-"""
-count = 7560
+insertions = 507245
+deletions = 0
+files_changed = 102
 
 [diffs.fastrand."1.7.0"]
-raw = """
- 12 files changed, 1375 insertions(+)
-"""
-count = 1375
-
-[diffs.ffi-support."0.4.4"]
-raw = """
- 18 files changed, 3952 insertions(+)
-"""
-count = 3952
-
-[diffs.filetime_win."0.2.0"]
-raw = """
- 8 files changed, 564 insertions(+)
-"""
-count = 564
-
-[diffs.fluent."0.16.0"]
-raw = """
- 8 files changed, 519 insertions(+)
-"""
-count = 519
-
-[diffs.fluent-bundle."0.15.2"]
-raw = """
- 29 files changed, 4238 insertions(+)
-"""
-count = 4238
-
-[diffs.fluent-fallback."0.6.0"]
-raw = """
- 29 files changed, 3102 insertions(+)
-"""
-count = 3102
-
-[diffs.fluent-langneg."0.13.0"]
-raw = """
- 11 files changed, 1329 insertions(+)
-"""
-count = 1329
-
-[diffs.fluent-pseudo."0.3.1"]
-raw = """
- 8 files changed, 464 insertions(+)
-"""
-count = 464
+insertions = 1368
+deletions = 0
+files_changed = 10
 
 [diffs.fnv."1.0.7"]
-raw = """
- 10 files changed, 736 insertions(+)
-"""
-count = 736
+insertions = 730
+deletions = 0
+files_changed = 8
 
 [diffs.foreign-types."0.3.2"]
-raw = """
- 7 files changed, 584 insertions(+)
-"""
-count = 584
+insertions = 583
+deletions = 0
+files_changed = 6
 
 [diffs.foreign-types-shared."0.1.1"]
-raw = """
- 6 files changed, 303 insertions(+)
-"""
-count = 303
+insertions = 302
+deletions = 0
+files_changed = 5
 
 [diffs.form_urlencoded."1.0.1"]
-raw = """
- 7 files changed, 695 insertions(+)
-"""
-count = 695
-
-[diffs.freetype."0.7.0"]
-raw = """
- 17 files changed, 3042 insertions(+)
-"""
-count = 3042
-
-[diffs.fuchsia-zircon."0.3.3"]
-raw = """
- 26 files changed, 2871 insertions(+)
-"""
-count = 2871
-
-[diffs.fuchsia-zircon-sys."0.3.3"]
-raw = """
- 7 files changed, 1427 insertions(+)
-"""
-count = 1427
-
-[diffs.futures."0.3.19"]
-raw = """
- 65 files changed, 8382 insertions(+)
-"""
-count = 8382
-
-[diffs.futures-channel."0.3.19"]
-raw = """
- 20 files changed, 3958 insertions(+)
-"""
-count = 3958
+insertions = 689
+deletions = 0
+files_changed = 5
 
 [diffs.futures-channel."0.3.21"]
-raw = """
- 20 files changed, 3999 insertions(+)
-"""
-count = 3999
+insertions = 3992
+deletions = 0
+files_changed = 18
 
 [diffs.futures-core."0.3.21"]
-raw = """
- 16 files changed, 1182 insertions(+)
-"""
-count = 1182
+insertions = 1175
+deletions = 0
+files_changed = 14
 
 [diffs.futures-sink."0.3.21"]
-raw = """
- 8 files changed, 551 insertions(+)
-"""
-count = 551
-
-[diffs.futures-task."0.3.19"]
-raw = """
- 16 files changed, 1188 insertions(+)
-"""
-count = 1188
+insertions = 544
+deletions = 0
+files_changed = 6
 
 [diffs.futures-task."0.3.21"]
-raw = """
- 16 files changed, 1187 insertions(+)
-"""
-count = 1187
+insertions = 1180
+deletions = 0
+files_changed = 14
 
 [diffs.futures-util."0.3.21"]
-raw = """
- 187 files changed, 25074 insertions(+)
-"""
-count = 25074
-
-[diffs.fxhash."0.2.1"]
-raw = """
- 7 files changed, 539 insertions(+)
-"""
-count = 539
-
-[diffs.gleam."0.13.1"]
-raw = """
- 16 files changed, 5765 insertions(+)
-"""
-count = 5765
-
-[diffs.glean."44.0.0"]
-raw = """
- 48 files changed, 7386 insertions(+)
-"""
-count = 7386
-
-[diffs.glean-ffi."44.0.0"]
-raw = """
- 33 files changed, 4131 insertions(+)
-"""
-count = 4131
-
-[diffs.glow."0.11.2"]
-raw = """
- 18 files changed, 47092 insertions(+)
-"""
-count = 47092
-
-[diffs.glsl."4.1.1"]
-raw = """
- 22 files changed, 10218 insertions(+)
-"""
-count = 10218
-
-[diffs.glslopt."0.1.9"]
-raw = """
- 309 files changed, 184134 insertions(+)
-"""
-count = 184134
-
-[diffs.goblin."0.1.3"]
-raw = """
- 61 files changed, 17285 insertions(+)
-"""
-count = 17285
-
-[diffs.gpu-alloc."0.5.2"]
-raw = """
- 15 files changed, 2557 insertions(+)
-"""
-count = 2557
-
-[diffs.gpu-descriptor."0.2.1"]
-raw = """
- 6 files changed, 708 insertions(+)
-"""
-count = 708
-
-[diffs.guid_win."0.2.0"]
-raw = """
- 8 files changed, 481 insertions(+)
-"""
-count = 481
+insertions = 25067
+deletions = 0
+files_changed = 185
 
 [diffs.h2."0.3.13"]
-raw = """
- 66 files changed, 26066 insertions(+)
-"""
-count = 26066
+insertions = 25417
+deletions = 0
+files_changed = 63
 
 [diffs.hashbrown."0.11.2"]
-raw = """
- 33 files changed, 14609 insertions(+)
-"""
-count = 14609
+insertions = 14603
+deletions = 0
+files_changed = 31
 
 [diffs.hermit-abi."0.1.19"]
-raw = """
- 11 files changed, 938 insertions(+)
-"""
-count = 938
-
-[diffs.hexf-parse."0.2.1"]
-raw = """
- 5 files changed, 572 insertions(+)
-"""
-count = 572
-
-[diffs.http."0.2.5"]
-raw = """
- 41 files changed, 16823 insertions(+)
-"""
-count = 16823
+insertions = 932
+deletions = 0
+files_changed = 9
 
 [diffs.http."0.2.6"]
-raw = """
- 41 files changed, 16826 insertions(+)
-"""
-count = 16826
+insertions = 16819
+deletions = 0
+files_changed = 39
 
 [diffs.http-body."0.4.4"]
-raw = """
- 19 files changed, 1262 insertions(+)
-"""
-count = 1262
+insertions = 1256
+deletions = 0
+files_changed = 17
 
 [diffs.httparse."1.7.0"]
-raw = """
- 20 files changed, 7265 insertions(+)
-"""
-count = 7265
+insertions = 7258
+deletions = 0
+files_changed = 18
 
 [diffs.httpdate."1.0.2"]
-raw = """
- 12 files changed, 1001 insertions(+)
-"""
-count = 1001
-
-[diffs.hyper."0.13.6"]
-raw = """
- 59 files changed, 19743 insertions(+)
-"""
-count = 19743
+insertions = 995
+deletions = 0
+files_changed = 10
 
 [diffs.hyper."0.14.18"]
-raw = """
- 72 files changed, 25617 insertions(+)
-"""
-count = 25617
+insertions = 24841
+deletions = 0
+files_changed = 69
 
 [diffs.hyper-tls."0.5.0"]
-raw = """
- 14 files changed, 1301 insertions(+)
-"""
-count = 1301
+insertions = 673
+deletions = 0
+files_changed = 11
 
 [diffs.idna."0.2.3"]
-raw = """
- 19 files changed, 32538 insertions(+)
-"""
-count = 32538
-
-[diffs.indexmap."1.6.2"]
-raw = """
- 31 files changed, 8568 insertions(+)
-"""
-count = 8568
+insertions = 32532
+deletions = 0
+files_changed = 17
 
 [diffs.indexmap."1.8.1"]
-raw = """
- 33 files changed, 9452 insertions(+)
-"""
-count = 9452
-
-[diffs.inherent."0.1.6"]
-raw = """
- 24 files changed, 924 insertions(+)
-"""
-count = 924
-
-[diffs.inplace_it."0.3.3"]
-raw = """
- 26 files changed, 1269 insertions(+)
-"""
-count = 1269
+insertions = 9445
+deletions = 0
+files_changed = 31
 
 [diffs.instant."0.1.12"]
-raw = """
- 14 files changed, 678 insertions(+)
-"""
-count = 678
-
-[diffs.intl-memoizer."0.5.1"]
-raw = """
- 10 files changed, 608 insertions(+)
-"""
-count = 608
-
-[diffs.iovec."0.1.4"]
-raw = """
- 18 files changed, 804 insertions(+)
-"""
-count = 804
+insertions = 672
+deletions = 0
+files_changed = 12
 
 [diffs.ipnet."2.4.0"]
-raw = """
- 15 files changed, 3980 insertions(+)
-"""
-count = 3980
-
-[diffs.itertools."0.8.2"]
-raw = """
- 66 files changed, 13607 insertions(+)
-"""
-count = 13607
-
-[diffs.itoa."0.4.8"]
-raw = """
- 15 files changed, 964 insertions(+)
-"""
-count = 964
+insertions = 3973
+deletions = 0
+files_changed = 13
 
 [diffs.itoa."1.0.1"]
-raw = """
- 15 files changed, 796 insertions(+)
-"""
-count = 796
+insertions = 789
+deletions = 0
+files_changed = 13
 
 [diffs.js-sys."0.3.57"]
-raw = """
- 63 files changed, 12875 insertions(+)
-"""
-count = 12875
-
-[diffs.khronos-egl."4.1.0"]
-raw = """
- 19 files changed, 4036 insertions(+)
-"""
-count = 4036
+insertions = 12874
+deletions = 0
+files_changed = 62
 
 [diffs.lazy_static."1.4.0"]
-raw = """
- 13 files changed, 882 insertions(+)
-"""
-count = 882
-
-[diffs.libc."0.2.112"]
-raw = """
- 205 files changed, 91329 insertions(+)
-"""
-count = 91329
+insertions = 876
+deletions = 0
+files_changed = 11
 
 [diffs.libc."0.2.123"]
-raw = """
- 217 files changed, 94067 insertions(+)
-"""
-count = 94067
-
-[diffs.libloading."0.5.2"]
-raw = """
- 23 files changed, 1679 insertions(+)
-"""
-count = 1679
-
-[diffs.libloading."0.7.2"]
-raw = """
- 25 files changed, 2835 insertions(+)
-"""
-count = 2835
-
-[diffs.lmdb-rkv-sys."0.11.2"]
-raw = """
- 43 files changed, 18970 insertions(+)
-"""
-count = 18970
-
-[diffs.log."0.4.14"]
-raw = """
- 21 files changed, 4965 insertions(+)
-"""
-count = 4965
+insertions = 94060
+deletions = 0
+files_changed = 215
 
 [diffs.log."0.4.16"]
-raw = """
- 21 files changed, 5632 insertions(+)
-"""
-count = 5632
-
-[diffs.malloc_size_of_derive."0.1.2"]
-raw = """
- 8 files changed, 426 insertions(+)
-"""
-count = 426
+insertions = 5625
+deletions = 0
+files_changed = 19
 
 [diffs.matches."0.1.9"]
-raw = """
- 7 files changed, 211 insertions(+)
-"""
-count = 211
-
-[diffs.memalloc."0.1.0"]
-raw = """
- 6 files changed, 233 insertions(+)
-"""
-count = 233
+insertions = 210
+deletions = 0
+files_changed = 6
 
 [diffs.memchr."2.4.1"]
-raw = """
- 48 files changed, 8718 insertions(+)
-"""
-count = 8718
-
-[diffs.memmap2."0.2.3"]
-raw = """
- 16 files changed, 2571 insertions(+)
-"""
-count = 2571
-
-[diffs.memmap2."0.3.1"]
-raw = """
- 16 files changed, 2748 insertions(+)
-"""
-count = 2748
-
-[diffs.memoffset."0.5.6"]
-raw = """
- 14 files changed, 889 insertions(+)
-"""
-count = 889
+insertions = 8712
+deletions = 0
+files_changed = 46
 
 [diffs.mime."0.3.16"]
-raw = """
- 15 files changed, 1721 insertions(+)
-"""
-count = 1721
+insertions = 1715
+deletions = 0
+files_changed = 13
 
 [diffs.mio."0.8.2"]
-raw = """
- 65 files changed, 11882 insertions(+)
-"""
-count = 11882
-
-[diffs.mio-extras."2.0.6"]
-raw = """
- 15 files changed, 2311 insertions(+)
-"""
-count = 2311
+insertions = 11719
+deletions = 0
+files_changed = 62
 
 [diffs.miow."0.3.7"]
-raw = """
- 16 files changed, 3135 insertions(+)
-"""
-count = 3135
+insertions = 3129
+deletions = 0
+files_changed = 14
 
 [diffs.native-tls."0.2.10"]
-raw = """
- 21 files changed, 4089 insertions(+)
-"""
-count = 4089
-
-[diffs.net2."0.2.37"]
-raw = """
- 22 files changed, 3296 insertions(+)
-"""
-count = 3296
-
-[diffs.new_debug_unreachable."1.0.4"]
-raw = """
- 12 files changed, 193 insertions(+)
-"""
-count = 193
-
-[diffs.nix."0.15.0"]
-raw = """
- 97 files changed, 26548 insertions(+)
-"""
-count = 26548
+insertions = 3715
+deletions = 0
+files_changed = 18
 
 [diffs.ntapi."0.3.7"]
-raw = """
- 44 files changed, 21234 insertions(+)
-"""
-count = 21234
-
-[diffs.num-derive."0.3.3"]
-raw = """
- 20 files changed, 1799 insertions(+)
-"""
-count = 1799
-
-[diffs.num-integer."0.1.44"]
-raw = """
- 18 files changed, 3420 insertions(+)
-"""
-count = 3420
-
-[diffs.num-traits."0.2.14"]
-raw = """
- 28 files changed, 7965 insertions(+)
-"""
-count = 7965
-
-[diffs.num_cpus."1.13.1"]
-raw = """
- 26 files changed, 1577 insertions(+)
-"""
-count = 1577
-
-[diffs.objc."0.2.7"]
-raw = """
- 28 files changed, 2906 insertions(+)
-"""
-count = 2906
-
-[diffs.once_cell."1.9.0"]
-raw = """
- 24 files changed, 4126 insertions(+)
-"""
-count = 4126
+insertions = 21227
+deletions = 0
+files_changed = 42
 
 [diffs.once_cell."1.10.0"]
-raw = """
- 24 files changed, 4140 insertions(+)
-"""
-count = 4140
+insertions = 3766
+deletions = 0
+files_changed = 21
 
 [diffs.openssl."0.10.38"]
-raw = """
- 85 files changed, 28634 insertions(+)
-"""
-count = 28634
+insertions = 28435
+deletions = 0
+files_changed = 82
 
 [diffs.openssl-probe."0.1.5"]
-raw = """
- 12 files changed, 456 insertions(+)
-"""
-count = 456
+insertions = 442
+deletions = 0
+files_changed = 9
 
 [diffs.openssl-sys."0.9.72"]
-raw = """
- 48 files changed, 9484 insertions(+)
-"""
-count = 9484
-
-[diffs.origin-trial-token."0.1.0"]
-raw = """
- 7 files changed, 429 insertions(+)
-"""
-count = 429
+insertions = 9477
+deletions = 0
+files_changed = 46
 
 [diffs.os_str_bytes."6.0.0"]
-raw = """
- 23 files changed, 2918 insertions(+)
-"""
-count = 2918
-
-[diffs.owning_ref."0.4.1"]
-raw = """
- 10 files changed, 2177 insertions(+)
-"""
-count = 2177
-
-[diffs.parking_lot."0.11.1"]
-raw = """
- 25 files changed, 5561 insertions(+)
-"""
-count = 5561
+insertions = 2911
+deletions = 0
+files_changed = 21
 
 [diffs.percent-encoding."2.1.0"]
-raw = """
- 7 files changed, 708 insertions(+)
-"""
-count = 708
-
-[diffs.phf."0.8.0"]
-raw = """
- 7 files changed, 517 insertions(+)
-"""
-count = 517
-
-[diffs.phf_codegen."0.8.0"]
-raw = """
- 5 files changed, 356 insertions(+)
-"""
-count = 356
-
-[diffs.pin-project-lite."0.2.7"]
-raw = """
- 72 files changed, 6247 insertions(+)
-"""
-count = 6247
+insertions = 702
+deletions = 0
+files_changed = 5
 
 [diffs.pin-project-lite."0.2.8"]
-raw = """
- 72 files changed, 6107 insertions(+)
-"""
-count = 6107
+insertions = 6100
+deletions = 0
+files_changed = 70
 
 [diffs.pin-utils."0.1.0"]
-raw = """
- 15 files changed, 544 insertions(+)
-"""
-count = 544
-
-[diffs.pkcs11."0.4.2"]
-raw = """
- 15 files changed, 6743 insertions(+)
-"""
-count = 6743
+insertions = 538
+deletions = 0
+files_changed = 13
 
 [diffs.pkg-config."0.3.25"]
-raw = """
- 16 files changed, 1754 insertions(+)
-"""
-count = 1754
-
-[diffs.plane-split."0.17.1"]
-raw = """
- 17 files changed, 2300 insertions(+)
-"""
-count = 2300
-
-[diffs.plist."0.5.5"]
-raw = """
- 34 files changed, 6231 insertions(+)
-"""
-count = 6231
-
-[diffs.precomputed-hash."0.1.1"]
-raw = """
- 6 files changed, 77 insertions(+)
-"""
-count = 77
-
-[diffs.proc-macro2."1.0.36"]
-raw = """
- 22 files changed, 5685 insertions(+)
-"""
-count = 5685
+insertions = 1747
+deletions = 0
+files_changed = 14
 
 [diffs.proc-macro2."1.0.37"]
-raw = """
- 22 files changed, 5702 insertions(+)
-"""
-count = 5702
-
-[diffs.profiling."1.0.5"]
-raw = """
- 52 files changed, 4679 insertions(+)
-"""
-count = 4679
-
-[diffs.prost."0.8.0"]
-raw = """
- 19 files changed, 3723 insertions(+)
-"""
-count = 3723
-
-[diffs.prost-derive."0.8.0"]
-raw = """
- 12 files changed, 2492 insertions(+)
-"""
-count = 2492
-
-[diffs.qlog."0.4.0"]
-raw = """
- 7 files changed, 4321 insertions(+)
-"""
-count = 4321
-
-[diffs.quote."1.0.14"]
-raw = """
- 35 files changed, 3698 insertions(+)
-"""
-count = 3698
+insertions = 5695
+deletions = 0
+files_changed = 20
 
 [diffs.quote."1.0.18"]
-raw = """
- 35 files changed, 3845 insertions(+)
-"""
-count = 3845
-
-[diffs.rand."0.7.3"]
-raw = """
- 56 files changed, 11946 insertions(+)
-"""
-count = 11946
-
-[diffs.range-alloc."0.1.2"]
-raw = """
- 5 files changed, 358 insertions(+)
-"""
-count = 358
-
-[diffs.raw-window-handle."0.4.2"]
-raw = """
- 21 files changed, 843 insertions(+)
-"""
-count = 843
-
-[diffs.rayon."1.5.1"]
-raw = """
- 118 files changed, 26830 insertions(+)
-"""
-count = 26830
+insertions = 3838
+deletions = 0
+files_changed = 33
 
 [diffs.redox_syscall."0.2.13"]
-raw = """
- 32 files changed, 3897 insertions(+)
-"""
-count = 3897
-
-[diffs.regex."1.5.5"]
-raw = """
- 85 files changed, 26202 insertions(+)
-"""
-count = 26202
+insertions = 3890
+deletions = 0
+files_changed = 30
 
 [diffs.remove_dir_all."0.5.3"]
-raw = """
- 9 files changed, 598 insertions(+)
-"""
-count = 598
-
-[diffs.renderdoc-sys."0.7.1"]
-raw = """
- 7 files changed, 791 insertions(+)
-"""
-count = 791
-
-[diffs.rental."0.5.6"]
-raw = """
- 26 files changed, 1963 insertions(+)
-"""
-count = 1963
-
-[diffs.replace_with."0.1.7"]
-raw = """
- 12 files changed, 1093 insertions(+)
-"""
-count = 1093
+insertions = 592
+deletions = 0
+files_changed = 7
 
 [diffs.reqwest."0.11.10"]
-raw = """
- 63 files changed, 21663 insertions(+)
-"""
-count = 21663
-
-[diffs.rkv."0.17.0"]
-raw = """
- 68 files changed, 11545 insertions(+)
-"""
-count = 11545
-
-[diffs.ron."0.7.0"]
-raw = """
- 58 files changed, 7507 insertions(+)
-"""
-count = 7507
-
-[diffs.rusqlite."0.24.2"]
-raw = """
- 63 files changed, 16529 insertions(+)
-"""
-count = 16529
-
-[diffs.rust-ini."0.10.3"]
-raw = """
- 9 files changed, 1412 insertions(+)
-"""
-count = 1412
-
-[diffs.rust_cascade."1.2.0"]
-raw = """
- 18 files changed, 1050 insertions(+)
-"""
-count = 1050
-
-[diffs.rustc-demangle."0.1.21"]
-raw = """
- 14 files changed, 2829 insertions(+)
-"""
-count = 2829
-
-[diffs.rustc-hash."1.1.0"]
-raw = """
- 10 files changed, 497 insertions(+)
-"""
-count = 497
-
-[diffs.rustc_version."0.2.3"]
-raw = """
- 10 files changed, 795 insertions(+)
-"""
-count = 795
+insertions = 19797
+deletions = 0
+files_changed = 60
 
 [diffs.ryu."1.0.9"]
-raw = """
- 37 files changed, 4531 insertions(+)
-"""
-count = 4531
+insertions = 4362
+deletions = 0
+files_changed = 34
 
 [diffs.schannel."0.1.19"]
-raw = """
- 34 files changed, 4607 insertions(+)
-"""
-count = 4607
+insertions = 4601
+deletions = 0
+files_changed = 32
 
 [diffs.security-framework."2.6.1"]
-raw = """
- 45 files changed, 9776 insertions(+)
-"""
-count = 9776
+insertions = 9316
+deletions = 0
+files_changed = 42
 
 [diffs.security-framework-sys."2.6.1"]
-raw = """
- 29 files changed, 2023 insertions(+)
-"""
-count = 2023
-
-[diffs.semver."0.9.0"]
-raw = """
- 14 files changed, 2401 insertions(+)
-"""
-count = 2401
-
-[diffs.serde."1.0.133"]
-raw = """
- 28 files changed, 16043 insertions(+)
-"""
-count = 16043
+insertions = 2016
+deletions = 0
+files_changed = 27
 
 [diffs.serde."1.0.136"]
-raw = """
- 29 files changed, 16148 insertions(+)
-"""
-count = 16148
-
-[diffs.serde."1.0.0 -> 1.0.136"]
-raw = """
- 29 files changed, 6610 insertions(+), 2168 deletions(-)
-"""
-count = 8778
-
-[diffs.serde_bytes."0.11.5"]
-raw = """
- 17 files changed, 1483 insertions(+)
-"""
-count = 1483
-
-[diffs.serde_derive."1.0.133"]
-raw = """
- 26 files changed, 9082 insertions(+)
-"""
-count = 9082
-
-[diffs.serde_json."1.0.72"]
-raw = """
- 47 files changed, 18059 insertions(+)
-"""
-count = 18059
+insertions = 16141
+deletions = 0
+files_changed = 27
 
 [diffs.serde_json."1.0.79"]
-raw = """
- 88 files changed, 22855 insertions(+)
-"""
-count = 22855
-
-[diffs.serde_repr."0.1.7"]
-raw = """
- 24 files changed, 828 insertions(+)
-"""
-count = 828
+insertions = 22848
+deletions = 0
+files_changed = 86
 
 [diffs.serde_urlencoded."0.7.1"]
-raw = """
- 19 files changed, 2127 insertions(+)
-"""
-count = 2127
-
-[diffs.serde_yaml."0.8.23"]
-raw = """
- 27 files changed, 7510 insertions(+)
-"""
-count = 7510
-
-[diffs.serial_test."0.5.1"]
-raw = """
- 8 files changed, 219 insertions(+)
-"""
-count = 219
-
-[diffs.sfv."0.9.1"]
-raw = """
- 17 files changed, 3477 insertions(+)
-"""
-count = 3477
-
-[diffs.sha2."0.8.2"]
-raw = """
- 28 files changed, 1947 insertions(+)
-"""
-count = 1947
-
-[diffs.slab."0.4.5"]
-raw = """
- 11 files changed, 2584 insertions(+)
-"""
-count = 2584
+insertions = 2120
+deletions = 0
+files_changed = 17
 
 [diffs.slab."0.4.6"]
-raw = """
- 11 files changed, 2622 insertions(+)
-"""
-count = 2622
-
-[diffs.smallbitvec."2.5.1"]
-raw = """
- 12 files changed, 1994 insertions(+)
-"""
-count = 1994
-
-[diffs.smallvec."1.8.0"]
-raw = """
- 16 files changed, 3885 insertions(+)
-"""
-count = 3885
-
-[diffs.socket2."0.3.19"]
-raw = """
- 19 files changed, 4797 insertions(+)
-"""
-count = 4797
+insertions = 2615
+deletions = 0
+files_changed = 9
 
 [diffs.socket2."0.4.4"]
-raw = """
- 13 files changed, 6018 insertions(+)
-"""
-count = 6018
-
-[diffs.spirv."0.2.0+1.5.4"]
-raw = """
- 8 files changed, 4476 insertions(+)
-"""
-count = 4476
-
-[diffs.stable_deref_trait."1.2.0"]
-raw = """
- 9 files changed, 490 insertions(+)
-"""
-count = 490
-
-[diffs.static_assertions."1.1.0"]
-raw = """
- 18 files changed, 1792 insertions(+)
-"""
-count = 1792
-
-[diffs.strsim."0.10.0"]
-raw = """
- 15 files changed, 1574 insertions(+)
-"""
-count = 1574
-
-[diffs.svg_fmt."0.4.1"]
-raw = """
- 8 files changed, 742 insertions(+)
-"""
-count = 742
-
-[diffs.syn."1.0.85"]
-raw = """
- 98 files changed, 56943 insertions(+)
-"""
-count = 56943
-
-[diffs.syn."1.0.91"]
-raw = """
- 98 files changed, 57175 insertions(+)
-"""
-count = 57175
+insertions = 6011
+deletions = 0
+files_changed = 11
 
 [diffs.syn."1.0.0 -> 1.0.91"]
-raw = """
- 93 files changed, 21776 insertions(+), 6701 deletions(-)
-"""
-count = 28477
-
-[diffs.synstructure."0.12.6"]
-raw = """
- 8 files changed, 2991 insertions(+)
-"""
-count = 2991
-
-[diffs.tempfile."3.1.0"]
-raw = """
- 23 files changed, 3841 insertions(+)
-"""
-count = 3841
+insertions = 21772
+deletions = 6698
+files_changed = 92
 
 [diffs.tempfile."3.3.0"]
-raw = """
- 24 files changed, 4066 insertions(+)
-"""
-count = 4066
+insertions = 4059
+deletions = 0
+files_changed = 22
 
 [diffs.termcolor."1.1.3"]
-raw = """
- 12 files changed, 2585 insertions(+)
-"""
-count = 2585
+insertions = 2578
+deletions = 0
+files_changed = 10
 
 [diffs.textwrap."0.15.0"]
-raw = """
- 18 files changed, 6165 insertions(+)
-"""
-count = 6165
-
-[diffs.thin-vec."0.2.5"]
-raw = """
- 8 files changed, 2895 insertions(+)
-"""
-count = 2895
-
-[diffs.thiserror."1.0.30"]
-raw = """
- 66 files changed, 2448 insertions(+)
-"""
-count = 2448
-
-[diffs.threadbound."0.1.2"]
-raw = """
- 10 files changed, 535 insertions(+)
-"""
-count = 535
-
-[diffs.time."0.1.43"]
-raw = """
- 13 files changed, 3836 insertions(+)
-"""
-count = 3836
+insertions = 5196
+deletions = 0
+files_changed = 15
 
 [diffs.tinyvec."1.5.1"]
-raw = """
- 27 files changed, 16758 insertions(+)
-"""
-count = 16758
+insertions = 16751
+deletions = 0
+files_changed = 25
 
 [diffs.tinyvec_macros."0.1.0"]
-raw = """
- 7 files changed, 87 insertions(+)
-"""
-count = 87
-
-[diffs.tokio."0.2.25"]
-raw = """
- 396 files changed, 67418 insertions(+)
-"""
-count = 67418
+insertions = 81
+deletions = 0
+files_changed = 5
 
 [diffs.tokio."1.17.0"]
-raw = """
- 405 files changed, 91278 insertions(+)
-"""
-count = 91278
+insertions = 91271
+deletions = 0
+files_changed = 403
 
 [diffs.tokio-native-tls."0.3.0"]
-raw = """
- 19 files changed, 1804 insertions(+)
-"""
-count = 1804
+insertions = 1089
+deletions = 0
+files_changed = 16
 
 [diffs.tokio-util."0.7.1"]
-raw = """
- 67 files changed, 13877 insertions(+)
-"""
-count = 13877
-
-[diffs.toml."0.4.10"]
-raw = """
- 21 files changed, 7314 insertions(+)
-"""
-count = 7314
+insertions = 13870
+deletions = 0
+files_changed = 65
 
 [diffs.tower-service."0.3.1"]
-raw = """
- 8 files changed, 507 insertions(+)
-"""
-count = 507
+insertions = 501
+deletions = 0
+files_changed = 6
 
 [diffs.tracing."0.1.33"]
-raw = """
- 34 files changed, 10957 insertions(+)
-"""
-count = 10957
+insertions = 10950
+deletions = 0
+files_changed = 32
 
 [diffs.tracing-attributes."0.1.20"]
-raw = """
- 20 files changed, 3964 insertions(+)
-"""
-count = 3964
+insertions = 3957
+deletions = 0
+files_changed = 18
 
 [diffs.tracing-core."0.1.25"]
-raw = """
- 28 files changed, 6163 insertions(+)
-"""
-count = 6163
-
-[diffs.tracy-rs."0.1.2"]
-raw = """
- 10 files changed, 682 insertions(+)
-"""
-count = 682
+insertions = 6156
+deletions = 0
+files_changed = 26
 
 [diffs.try-lock."0.2.3"]
-raw = """
- 8 files changed, 386 insertions(+)
-"""
-count = 386
-
-[diffs.uluru."1.1.1"]
-raw = """
- 10 files changed, 1016 insertions(+)
-"""
-count = 1016
-
-[diffs.unic-langid."0.9.0"]
-raw = """
- 7 files changed, 363 insertions(+)
-"""
-count = 363
+insertions = 380
+deletions = 0
+files_changed = 6
 
 [diffs.unicode-bidi."0.2.0"]
-raw = """
- 14 files changed, 595897 insertions(+)
-"""
-count = 595897
+insertions = 595896
+deletions = 0
+files_changed = 13
 
 [diffs.unicode-bidi."0.3.7"]
-raw = """
- 23 files changed, 3398 insertions(+)
-"""
-count = 3398
+insertions = 3217
+deletions = 0
+files_changed = 20
 
 [diffs.unicode-normalization."0.1.19"]
-raw = """
- 26 files changed, 28628 insertions(+)
-"""
-count = 28628
-
-[diffs.unicode-segmentation."1.8.0"]
-raw = """
- 23 files changed, 8336 insertions(+)
-"""
-count = 8336
+insertions = 28622
+deletions = 0
+files_changed = 24
 
 [diffs.unicode-xid."0.2.2"]
-raw = """
- 14 files changed, 2050 insertions(+)
-"""
-count = 2050
-
-[diffs.unix_path."1.0.1"]
-raw = """
- 10 files changed, 3413 insertions(+)
-"""
-count = 3413
-
-[diffs.url."2.1.0"]
-raw = """
- 25 files changed, 14675 insertions(+)
-"""
-count = 14675
+insertions = 2044
+deletions = 0
+files_changed = 12
 
 [diffs.url."2.2.2"]
-raw = """
- 17 files changed, 16350 insertions(+)
-"""
-count = 16350
-
-[diffs.uuid."0.8.1"]
-raw = """
- 39 files changed, 5404 insertions(+)
-"""
-count = 5404
+insertions = 16344
+deletions = 0
+files_changed = 15
 
 [diffs.vcpkg."0.2.15"]
-raw = """
- 834 files changed, 42648 insertions(+)
-"""
-count = 42648
-
-[diffs.void."1.0.2"]
-raw = """
- 6 files changed, 221 insertions(+)
-"""
-count = 221
-
-[diffs.walkdir."2.3.2"]
-raw = """
- 20 files changed, 3509 insertions(+)
-"""
-count = 3509
+insertions = 42642
+deletions = 0
+files_changed = 832
 
 [diffs.want."0.3.0"]
-raw = """
- 9 files changed, 703 insertions(+)
-"""
-count = 703
-
-[diffs.warp."0.2.3"]
-raw = """
- 94 files changed, 15525 insertions(+)
-"""
-count = 15525
+insertions = 697
+deletions = 0
+files_changed = 7
 
 [diffs.wasi."0.11.0+wasi-snapshot-preview1"]
-raw = """
- 17 files changed, 3309 insertions(+)
-"""
-count = 3309
+insertions = 3302
+deletions = 0
+files_changed = 15
 
 [diffs.wasm-bindgen."0.2.80"]
-raw = """
- 243 files changed, 20978 insertions(+)
-"""
-count = 20978
+insertions = 20977
+deletions = 0
+files_changed = 242
 
 [diffs.wasm-bindgen-backend."0.2.80"]
-raw = """
- 11 files changed, 3019 insertions(+)
-"""
-count = 3019
+insertions = 3018
+deletions = 0
+files_changed = 10
 
 [diffs.wasm-bindgen-futures."0.4.30"]
-raw = """
- 13 files changed, 1304 insertions(+)
-"""
-count = 1304
+insertions = 1303
+deletions = 0
+files_changed = 12
 
 [diffs.wasm-bindgen-macro."0.2.80"]
-raw = """
- 46 files changed, 1275 insertions(+)
-"""
-count = 1275
+insertions = 1274
+deletions = 0
+files_changed = 45
 
 [diffs.wasm-bindgen-macro-support."0.2.80"]
-raw = """
- 7 files changed, 1966 insertions(+)
-"""
-count = 1966
+insertions = 1965
+deletions = 0
+files_changed = 6
 
 [diffs.wasm-bindgen-shared."0.2.80"]
-raw = """
- 8 files changed, 516 insertions(+)
-"""
-count = 516
-
-[diffs.wasm-smith."0.8.0"]
-raw = """
- 13 files changed, 8951 insertions(+)
-"""
-count = 8951
-
-[diffs.wasmparser."0.78.2"]
-raw = """
- 42 files changed, 13591 insertions(+)
-"""
-count = 13591
-
-[diffs.wat."1.0.41"]
-raw = """
- 7 files changed, 674 insertions(+)
-"""
-count = 674
+insertions = 515
+deletions = 0
+files_changed = 7
 
 [diffs.web-sys."0.3.57"]
-raw = """
- 2203 files changed, 197014 insertions(+)
-"""
-count = 197014
-
-[diffs.webrtc-sdp."0.3.9"]
-raw = """
- 69 files changed, 10569 insertions(+)
-"""
-count = 10569
+insertions = 197013
+deletions = 0
+files_changed = 2202
 
 [diffs.winapi."0.3.9"]
-raw = """
- 412 files changed, 181329 insertions(+)
-"""
-count = 181329
+insertions = 181323
+deletions = 0
+files_changed = 410
 
 [diffs.winapi-i686-pc-windows-gnu."0.4.0"]
-raw = """
- 1392 files changed, 1133 insertions(+)
-"""
-count = 1133
+insertions = 1132
+deletions = 0
+files_changed = 1391
 
 [diffs.winapi-util."0.1.5"]
-raw = """
- 15 files changed, 1101 insertions(+)
-"""
-count = 1101
+insertions = 1095
+deletions = 0
+files_changed = 13
 
 [diffs.winapi-x86_64-pc-windows-gnu."0.4.0"]
-raw = """
- 1421 files changed, 1168 insertions(+)
-"""
-count = 1168
-
-[diffs.winreg."0.5.1"]
-raw = """
- 22 files changed, 2894 insertions(+)
-"""
-count = 2894
+insertions = 1167
+deletions = 0
+files_changed = 1420
 
 [diffs.winreg."0.10.1"]
-raw = """
- 29 files changed, 4276 insertions(+)
-"""
-count = 4276
-
-[diffs.wio."0.2.2"]
-raw = """
- 18 files changed, 938 insertions(+)
-"""
-count = 938
-
-[diffs.xmldecl."0.2.0"]
-raw = """
- 11 files changed, 711 insertions(+)
-"""
-count = 711
-
-[diffs.zip."0.4.2"]
-raw = """
- 27 files changed, 2704 insertions(+)
-"""
-count = 2704
+insertions = 3920
+deletions = 0
+files_changed = 26

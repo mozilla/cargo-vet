@@ -25,8 +25,9 @@ expression: json
           "from": "11.0.0",
           "to": "10.0.0",
           "diffstat": {
-            "raw": "-21",
-            "count": 21
+            "insertions": 0,
+            "deletions": 21,
+            "files_changed": 1
           }
         }
       }
@@ -43,8 +44,9 @@ expression: json
             "from": "11.0.0",
             "to": "10.0.0",
             "diffstat": {
-              "raw": "-21",
-              "count": 21
+              "insertions": 0,
+              "deletions": 21,
+              "files_changed": 1
             }
           }
         }

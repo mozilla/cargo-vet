@@ -15,7 +15,7 @@
 // the env as `CARGO_BIN_EXE_<name>`.
 
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Output, Stdio},
 };
 
@@ -341,4 +341,67 @@ fn test_project_bad_certify_json() {
 
     insta::assert_snapshot!("test-project-bad-certify-json", format_outputs(&output));
     assert!(!output.status.success(), "{}", output.status);
+}
+
+#[test]
+fn test_project_diff_output() {
+    // Test that the diff output from `cargo vet diff` is correctly filtered to
+    // remove files like .cargo_vcs_info.json.
+
+    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-project");
+    let bin = env!("CARGO_BIN_EXE_cargo-vet");
+    let mut child = Command::new(bin)
+        .current_dir(&project)
+        .arg("vet")
+        .arg("diff")
+        .arg("--mode")
+        .arg("local")
+        .arg("syn")
+        .arg("1.0.90")
+        .arg("1.0.91")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    std::io::Write::write_all(child.stdin.as_mut().unwrap(), b"\n").unwrap();
+
+    let output = child.wait_with_output().unwrap();
+
+    // Filter out lines which may contain paths so that the output is portable,
+    // while preserving some of the general format.
+    let stdout = std::str::from_utf8(&output.stdout)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.starts_with("diff --git"))
+        .map(|line| {
+            if let Some(path) = line.strip_prefix("--- ") {
+                return format!(
+                    "--- a/{}",
+                    Path::new(path).file_name().unwrap().to_str().unwrap()
+                );
+            }
+            if let Some(path) = line.strip_prefix("+++ ") {
+                return format!(
+                    "+++ b/{}",
+                    Path::new(path).file_name().unwrap().to_str().unwrap()
+                );
+            }
+            line.to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let stderr = std::str::from_utf8(&output.stderr)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.starts_with("Blocking: waiting for file lock"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let formatted = format!("stdout:\n{stdout}\nstderr:\n{stderr}");
+
+    insta::assert_snapshot!("test-project-diff-output", formatted);
+    assert!(output.status.success(), "{}", output.status);
 }
