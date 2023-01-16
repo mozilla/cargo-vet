@@ -1,15 +1,16 @@
-//! Helper utilities for opening files in the editor.
+//! Helper utilities for invoking git configured tools.
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::str;
 
 use tempfile::NamedTempFile;
 use tracing::warn;
 
 use crate::errors::EditError;
+use crate::out::Out;
 
 #[cfg(windows)]
 fn git_sh_path() -> Option<PathBuf> {
@@ -35,6 +36,27 @@ fn git_sh_path() -> Option<PathBuf> {
 #[cfg(not(windows))]
 fn git_sh_path() -> Option<PathBuf> {
     Some("/bin/sh".into())
+}
+
+fn git_config(config: &str) -> Option<String> {
+    let output = Command::new("git")
+        .arg("config")
+        .arg(config)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(str::from_utf8(&output.stdout).ok()?.trim().to_owned())
+}
+
+fn git_config_bool(config: &str) -> Option<bool> {
+    let value = git_config(config)?;
+    match &value[..] {
+        "true" | "yes" | "on" => Some(true),
+        "" | "false" | "no" | "off" => Some(false),
+        _ => Some(value.parse::<i64>().ok()? != 0),
+    }
 }
 
 /// Read the git configuration to determine the value for GIT_EDITOR.
@@ -235,5 +257,104 @@ impl<'a> Editor<'a> {
         }
 
         Ok(lines.join("\n"))
+    }
+}
+
+/// Read the git configuration to determine the value for GIT_EDITOR.
+fn git_pager() -> Option<String> {
+    let output = Command::new("git")
+        .arg("var")
+        .arg("GIT_PAGER")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let pager = str::from_utf8(&output.stdout).ok()?.trim().to_owned();
+    if pager == "cat" {
+        return None;
+    }
+    Some(pager)
+}
+
+/// Get a Command which can be used to invoke the user's EDITOR to edit a
+/// document when passed an argument. This will try to use the user's configured
+/// GIT_EDITOR when possible.
+fn pager_command(out: &dyn Out) -> Option<Command> {
+    if !out.is_term() {
+        return None;
+    }
+
+    // Try to use the user's configured pager if we're able to locate their git
+    // install. If this fails, we'll not use a pager. Don't bother warning in
+    // that case.
+    let git_sh = git_sh_path()?;
+    let git_pager = git_pager()?;
+
+    let mut cmd = Command::new(git_sh);
+    cmd.arg("-c")
+        .arg(format!("{} \"$@\"", git_pager))
+        .arg(git_pager);
+    // These environment variables are hard-coded into `git` at build
+    // time, and are required to support colors in `less`.
+    cmd.env("LESS", "FRX").env("LV", "-c");
+    Some(cmd)
+}
+
+pub struct Pager<'a> {
+    out: &'a dyn Out,
+    child: Option<Child>,
+    use_color: bool,
+}
+
+impl<'a> Pager<'a> {
+    /// Create a new pager for the given output stream, or a dummy pager if no pager is available.
+    pub fn new(out: &'a dyn Out) -> Result<Self, io::Error> {
+        let child = if let Some(mut cmd) = pager_command(out) {
+            Some(cmd.stdin(Stdio::piped()).spawn()?)
+        } else {
+            None
+        };
+        let use_color = child.is_some()
+            && out.is_term()
+            && console::colors_enabled()
+            && git_config_bool("pager.color")
+                .or_else(|| git_config_bool("color.pager"))
+                .unwrap_or(true);
+        Ok(Pager {
+            out,
+            child,
+            use_color,
+        })
+    }
+
+    /// Should attempts to write to this pager include ANSI color codes?
+    pub fn use_color(&self) -> bool {
+        self.use_color
+    }
+
+    /// Wait for the pager to stop running, so it's OK to start writing to
+    /// output again.
+    pub fn wait(self) -> Result<(), io::Error> {
+        if let Some(mut child) = self.child {
+            child.wait()?;
+        }
+        Ok(())
+    }
+}
+
+impl<'a> io::Write for Pager<'a> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match &mut self.child {
+            Some(child) => child.stdin.as_mut().unwrap().write(buf),
+            None => self.out.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match &mut self.child {
+            Some(child) => child.stdin.as_mut().unwrap().flush(),
+            None => Ok(()),
+        }
     }
 }

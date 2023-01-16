@@ -11,11 +11,11 @@ use clap::Parser;
 use serde_json::{json, Value};
 
 use crate::{
-    editor::Editor,
     format::{
         AuditKind, CriteriaName, CriteriaStr, DependencyCriteria, FastMap, MetaConfig, PackageName,
         PackageStr, PolicyEntry, SortedSet, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
+    git_tool::Editor,
     init_files,
     out::Out,
     resolver::{ResolveDepth, ResolveReport},
