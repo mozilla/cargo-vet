@@ -3,7 +3,7 @@ source: tests/test-cli.rs
 expression: format_outputs(&output)
 ---
 stdout:
-cargo-vet 0.3.0
+cargo-vet 0.3.1
 Supply-chain security for Rust
 
 USAGE:
