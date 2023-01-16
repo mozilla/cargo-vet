@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{fs::File, io, panic, path::PathBuf};
 
-use cargo_metadata::{Metadata, Package, Version};
+use cargo_metadata::{Metadata, Package};
 use clap::{CommandFactory, Parser};
 use console::Term;
 use errors::{
@@ -32,12 +32,13 @@ use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
 use crate::errors::{
-    CommandError, DownloadError, FetchAndDiffError, RegenerateExemptionsError, SourceFile,
+    CommandError, DownloadError, FetchAndDiffError, FetchError, RegenerateExemptionsError,
+    SourceFile,
 };
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria,
     ExemptedDependency, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr,
-    SortedMap, StoreInfo,
+    SortedMap, StoreInfo, VetVersion,
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
@@ -88,6 +89,7 @@ impl Deref for Config {
 
 pub trait PackageExt {
     fn is_third_party(&self, policy: &SortedMap<PackageName, PolicyEntry>) -> bool;
+    fn vet_version(&self) -> VetVersion;
 }
 
 impl PackageExt for Package {
@@ -103,6 +105,16 @@ impl PackageExt for Package {
             .unwrap_or(false);
 
         forced_third_party || is_crates_io
+    }
+    fn vet_version(&self) -> VetVersion {
+        VetVersion {
+            semver: self.version.clone(),
+            git_rev: self.source.as_ref().and_then(|s| {
+                let git_source = s.repr.strip_prefix("git+")?;
+                let source_url = Url::parse(git_source).ok()?;
+                Some(source_url.fragment()?.to_owned())
+            }),
+        }
     }
 }
 
@@ -549,7 +561,7 @@ fn cmd_inspect(
             version: version.clone(),
         });
 
-        if sub_args.mode == FetchMode::Sourcegraph {
+        if sub_args.mode == FetchMode::Sourcegraph && version.git_rev.is_none() {
             let url = format!("https://sourcegraph.com/crates/{package}@v{version}");
             tokio::runtime::Handle::current()
                 .block_on(prompt_criteria_eulas(
@@ -574,7 +586,24 @@ fn cmd_inspect(
 
         tokio::runtime::Handle::current().block_on(async {
             let (pkg, eulas) = tokio::join!(
-                cache.fetch_package(network.as_ref(), package, version),
+                async {
+                    // If we're fetching a git revision for inspection, don't
+                    // use fetch_package, as we want to point the user at the
+                    // actual cargo checkout, rather than our repack, which may
+                    // be incomplete, and will be clobbered by GC.
+                    if let Some(git_rev) = &version.git_rev {
+                        storage::locate_local_checkout(&cfg.metadata, package, version).ok_or_else(
+                            || FetchError::UnknownGitRevision {
+                                package: package.to_owned(),
+                                git_rev: git_rev.to_owned(),
+                            },
+                        )
+                    } else {
+                        cache
+                            .fetch_package(&cfg.metadata, network.as_ref(), package, version)
+                            .await
+                    }
+                },
                 prompt_criteria_eulas(
                     out,
                     cfg,
@@ -985,8 +1014,8 @@ fn guess_audit_criteria(
     cfg: &Config,
     store: &Store,
     package: PackageStr<'_>,
-    from: Option<&Version>,
-    to: &Version,
+    from: Option<&VetVersion>,
+    to: &VetVersion,
 ) -> Vec<String> {
     // Attempt to resolve a normal `cargo vet`, and try to find criteria which
     // would heal some errors in that result if it fails.
@@ -1027,8 +1056,8 @@ async fn prompt_criteria_eulas(
     network: Option<&Network>,
     store: &Store,
     package: PackageStr<'_>,
-    from: Option<&Version>,
-    to: &Version,
+    from: Option<&VetVersion>,
+    to: &VetVersion,
     url: Option<&str>,
 ) -> Result<(), io::Error> {
     let description = if let Some(from) = from {
@@ -1420,7 +1449,10 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
             version2: version2.clone(),
         });
 
-        if sub_args.mode == FetchMode::Sourcegraph {
+        if sub_args.mode == FetchMode::Sourcegraph
+            && version1.git_rev.is_none()
+            && version2.git_rev.is_none()
+        {
             let url = format!(
                 "https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}"
             );
@@ -1453,10 +1485,16 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
             let (to_compare, eulas) = tokio::join!(
                 async {
                     let (pkg1, pkg2) = tokio::try_join!(
-                        cache.fetch_package(network.as_ref(), package, version1),
-                        cache.fetch_package(network.as_ref(), package, version2)
+                        cache.fetch_package(&cfg.metadata, network.as_ref(), package, version1),
+                        cache.fetch_package(&cfg.metadata, network.as_ref(), package, version2)
                     )?;
-                    let (_, to_compare) = cache.diffstat_package(&pkg1, &pkg2).await?;
+                    let (_, to_compare) = cache
+                        .diffstat_package(
+                            &pkg1,
+                            &pkg2,
+                            version1.git_rev.is_some() || version2.git_rev.is_some(),
+                        )
+                        .await?;
                     Ok::<_, FetchAndDiffError>(to_compare)
                 },
                 prompt_criteria_eulas(

@@ -1,6 +1,9 @@
 
 # cargo-vet config file
 
+[policy.proc-macro2]
+audit-as-crates-io = true
+
 [policy.test-project]
 audit-as-crates-io = false
 
@@ -210,6 +213,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.proc-macro2]]
 version = "1.0.37"
+criteria = "safe-to-deploy"
+
+[[exemptions.proc-macro2]]
+version = "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9"
 criteria = "safe-to-deploy"
 
 [[exemptions.quote]]

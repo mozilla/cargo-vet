@@ -6,14 +6,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use cargo_metadata::{Metadata, Version};
+use cargo_metadata::{semver, Metadata};
 use clap::Parser;
 use serde_json::{json, Value};
 
 use crate::{
     format::{
         AuditKind, CriteriaName, CriteriaStr, DependencyCriteria, FastMap, MetaConfig, PackageName,
-        PackageStr, PolicyEntry, SortedSet, VersionReq, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        PackageStr, PolicyEntry, SortedSet, VersionReq, VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     git_tool::Editor,
     init_files,
@@ -89,12 +89,12 @@ lazy_static::lazy_static! {
 struct MockMetadata {
     packages: Vec<MockPackage>,
     pkgids: Vec<String>,
-    idx_by_name_and_ver: BTreeMap<PackageStr<'static>, BTreeMap<Version, usize>>,
+    idx_by_name_and_ver: BTreeMap<PackageStr<'static>, BTreeMap<VetVersion, usize>>,
 }
 
 struct MockPackage {
     name: &'static str,
-    version: Version,
+    version: VetVersion,
     deps: Vec<MockDependency>,
     dev_deps: Vec<MockDependency>,
     build_deps: Vec<MockDependency>,
@@ -105,7 +105,7 @@ struct MockPackage {
 
 struct MockDependency {
     name: &'static str,
-    version: Version,
+    version: VetVersion,
 }
 
 pub struct MockIndex {
@@ -114,7 +114,7 @@ pub struct MockIndex {
 }
 
 struct MockRegistryVersion {
-    version: Version,
+    version: VetVersion,
     /// Dependency info dummied out in case we ever want that
     deps: Vec<()>,
 }
@@ -258,13 +258,16 @@ impl Default for MockPackage {
     }
 }
 
-fn ver(major: u64) -> Version {
-    Version {
-        major,
-        minor: 0,
-        patch: 0,
-        pre: Default::default(),
-        build: Default::default(),
+fn ver(major: u64) -> VetVersion {
+    VetVersion {
+        semver: semver::Version {
+            major,
+            minor: 0,
+            patch: 0,
+            pre: Default::default(),
+            build: Default::default(),
+        },
+        git_rev: None,
     }
 }
 
@@ -280,7 +283,7 @@ fn dep_ver(name: &'static str, version: u64) -> MockDependency {
 }
 
 #[allow(dead_code)]
-fn default_exemptions(version: Version, config: &ConfigFile) -> ExemptedDependency {
+fn default_exemptions(version: VetVersion, config: &ConfigFile) -> ExemptedDependency {
     ExemptedDependency {
         version,
         criteria: vec![config.default_criteria.clone().into()],
@@ -289,7 +292,7 @@ fn default_exemptions(version: Version, config: &ConfigFile) -> ExemptedDependen
         suggest: true,
     }
 }
-fn exemptions(version: Version, criteria: CriteriaStr) -> ExemptedDependency {
+fn exemptions(version: VetVersion, criteria: CriteriaStr) -> ExemptedDependency {
     ExemptedDependency {
         version,
         criteria: vec![criteria.to_string().into()],
@@ -300,7 +303,7 @@ fn exemptions(version: Version, criteria: CriteriaStr) -> ExemptedDependency {
 }
 
 fn exemptions_dep(
-    version: Version,
+    version: VetVersion,
     criteria: CriteriaStr,
     dependency_criteria: impl IntoIterator<
         Item = (
@@ -326,7 +329,7 @@ fn exemptions_dep(
     }
 }
 
-fn delta_audit(from: Version, to: Version, criteria: CriteriaStr) -> AuditEntry {
+fn delta_audit(from: VetVersion, to: VetVersion, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
         who: vec![],
         notes: None,
@@ -343,8 +346,8 @@ fn delta_audit(from: Version, to: Version, criteria: CriteriaStr) -> AuditEntry 
 
 #[allow(dead_code)]
 fn delta_audit_dep(
-    from: Version,
-    to: Version,
+    from: VetVersion,
+    to: VetVersion,
     criteria: CriteriaStr,
     dependency_criteria: impl IntoIterator<
         Item = (
@@ -375,7 +378,7 @@ fn delta_audit_dep(
     }
 }
 
-fn full_audit(version: Version, criteria: CriteriaStr) -> AuditEntry {
+fn full_audit(version: VetVersion, criteria: CriteriaStr) -> AuditEntry {
     AuditEntry {
         who: vec![],
         notes: None,
@@ -390,7 +393,7 @@ fn full_audit(version: Version, criteria: CriteriaStr) -> AuditEntry {
 }
 
 fn full_audit_m(
-    version: Version,
+    version: VetVersion,
     criteria: impl IntoIterator<Item = impl Into<CriteriaName>>,
 ) -> AuditEntry {
     AuditEntry {
@@ -407,7 +410,7 @@ fn full_audit_m(
 }
 
 fn full_audit_dep(
-    version: Version,
+    version: VetVersion,
     criteria: CriteriaStr,
     dependency_criteria: impl IntoIterator<
         Item = (
@@ -802,7 +805,7 @@ impl MockMetadata {
 
     fn new(packages: Vec<MockPackage>) -> Self {
         let mut pkgids = vec![];
-        let mut idx_by_name_and_ver = BTreeMap::<PackageStr, BTreeMap<Version, usize>>::new();
+        let mut idx_by_name_and_ver = BTreeMap::<PackageStr, BTreeMap<VetVersion, usize>>::new();
 
         for (idx, package) in packages.iter().enumerate() {
             let pkgid = if package.is_first_party {
@@ -840,11 +843,11 @@ impl MockMetadata {
         self.pkgid_by(package.name, &package.version)
     }
 
-    fn pkgid_by(&self, name: PackageStr, version: &Version) -> &str {
+    fn pkgid_by(&self, name: PackageStr, version: &VetVersion) -> &str {
         &self.pkgids[self.idx_by_name_and_ver[name][version]]
     }
 
-    fn package_by(&self, name: PackageStr, version: &Version) -> &MockPackage {
+    fn package_by(&self, name: PackageStr, version: &VetVersion) -> &MockPackage {
         &self.packages[self.idx_by_name_and_ver[name][version]]
     }
 
@@ -917,7 +920,7 @@ impl MockMetadata {
             }).collect::<Vec<_>>(),
             "resolve": {
                 "nodes": self.packages.iter().map(|package| {
-                    let mut all_deps = BTreeMap::<(PackageStr, &Version), Vec<Option<&str>>>::new();
+                    let mut all_deps = BTreeMap::<(PackageStr, &VetVersion), Vec<Option<&str>>>::new();
                     for dep in &package.deps {
                         all_deps.entry((dep.name, &dep.version)).or_default().push(None);
                     }
@@ -1025,7 +1028,7 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
             audited
                 .entry(package.name.clone())
                 .or_default()
-                .push(full_audit(package.version.clone(), DEFAULT_CRIT));
+                .push(full_audit(package.vet_version(), DEFAULT_CRIT));
         }
     }
     audits.audits = audited;
@@ -1054,7 +1057,7 @@ fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
             audited
                 .entry(package.name.clone())
                 .or_default()
-                .push(full_audit(package.version.clone(), SAFE_TO_DEPLOY));
+                .push(full_audit(package.vet_version(), SAFE_TO_DEPLOY));
         }
     }
     audits.audits = audited;

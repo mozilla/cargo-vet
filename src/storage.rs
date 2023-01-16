@@ -8,7 +8,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use cargo_metadata::Version;
+use cargo_metadata::semver;
 use flate2::read::GzDecoder;
 use futures_util::future::try_join_all;
 use miette::SourceOffset;
@@ -24,20 +24,21 @@ use crate::{
         CriteriaChangeErrors, DiffError, DownloadError, FetchAndDiffError, FetchAuditError,
         FetchError, FlockError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError,
         SourceFile, StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError,
-        StoreTomlError, StoreValidateError, StoreValidateErrors, TomlParseError, UnpackError,
+        StoreTomlError, StoreValidateError, StoreValidateErrors, TomlParseError,
+        UnpackCheckoutError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
         self, AuditEntry, AuditKind, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
         CriteriaEntry, CriteriaName, Delta, DiffCache, DiffStat, FastMap, FetchCommand,
         ForeignAuditsFile, ImportName, ImportsFile, MetaConfig, PackageName, PackageStr, SortedMap,
-        SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
     resolver::{self, Conclusion},
     serialization::{parse_from_value, spanned::Spanned, to_formatted_toml},
-    Config, PartialConfig,
+    Config, PackageExt, PartialConfig, CARGO_ENV,
 };
 
 /// The type to use for accessing information from crates.io.
@@ -70,6 +71,7 @@ const CACHE_ALLOWED_FILES: &[&str] = &[
 // Various cargo values
 const CARGO_REGISTRY_SRC: &str = "src";
 const CARGO_REGISTRY_CACHE: &str = "cache";
+const CARGO_TOML_FILE: &str = "Cargo.toml";
 const CARGO_OK_FILE: &str = ".cargo-ok";
 const CARGO_OK_BODY: &str = "ok";
 
@@ -1078,7 +1080,7 @@ struct CacheState {
     /// Command history to provide some persistent magic smarts
     command_history: CommandHistory,
     /// Paths for unpacked packages from this version.
-    fetched_packages: FastMap<(String, Version), Arc<tokio::sync::OnceCell<PathBuf>>>,
+    fetched_packages: FastMap<(String, VetVersion), Arc<tokio::sync::OnceCell<PathBuf>>>,
     /// Computed diffstats from this version.
     diffed: FastMap<(String, Delta), Arc<tokio::sync::OnceCell<DiffStat>>>,
 }
@@ -1262,12 +1264,13 @@ impl Cache {
         reg.index.crate_(name)
     }
 
-    #[tracing::instrument(skip(self, network), err)]
+    #[tracing::instrument(skip(self, metadata, network), err)]
     pub async fn fetch_package(
         &self,
+        metadata: &cargo_metadata::Metadata,
         network: Option<&Network>,
         package: PackageStr<'_>,
-        version: &Version,
+        version: &VetVersion,
     ) -> Result<PathBuf, FetchError> {
         // Lock the mutex to extract a reference to the OnceCell which we'll use
         // to asynchronously synchronize on and fetch the package only once in a
@@ -1285,6 +1288,41 @@ impl Cache {
         let path_res: Result<_, FetchError> = once_cell
             .get_or_try_init(|| async {
                 let root = self.root.as_ref().unwrap();
+
+                // crates.io won't have a copy of any crates with git revision
+                // versions, so they need to be found in local clones within the
+                // cargo metadata, otherwise we cannot find them.
+                if let Some(git_rev) = &version.git_rev {
+                    let repacked_src = root.join(CACHE_REGISTRY_SRC).join(format!(
+                        "{}-{}.git.{}",
+                        package,
+                        version.semver,
+                        version.git_rev.as_ref().unwrap()
+                    ));
+                    if fetch_is_ok(&repacked_src).await {
+                        return Ok(repacked_src);
+                    }
+
+                    // We don't have a cached re-pack - repack again ourselves.
+                    let checkout_path = locate_local_checkout(metadata, package, version)
+                        .ok_or_else(|| FetchError::UnknownGitRevision {
+                            package: package.to_owned(),
+                            git_rev: git_rev.to_owned(),
+                        })?;
+
+                    // We re-package any git checkouts into the cache in order
+                    // to maintain a consistent directory structure with crates
+                    // fetched from crates.io in diffs.
+                    unpack_checkout(&checkout_path, &repacked_src)
+                        .await
+                        .map_err(|error| FetchError::UnpackCheckout {
+                            src: checkout_path,
+                            error,
+                        })?;
+                    return Ok(repacked_src);
+                }
+
+                let version = &version.semver;
 
                 let dir_name = format!("{}-{}", package, version);
 
@@ -1395,6 +1433,7 @@ impl Cache {
         &self,
         version1: &Path,
         version2: &Path,
+        has_git_rev: bool,
     ) -> Result<(DiffStat, Vec<(PathBuf, PathBuf)>), DiffError> {
         let _permit = self
             .diff_semaphore
@@ -1442,15 +1481,24 @@ impl Cache {
         while let (Some(changes_s), Some(from_s), Some(to_s)) =
             (chunks.next(), chunks.next(), chunks.next())
         {
-            // Check if the 'to' path is one of the files which is ignored. We
-            // can only filter on 'to' paths, so don't bother checking 'from'.
-            if to_s != "/dev/null" {
-                let to_path = Path::new(to_s)
+            // Check if the path is one of the files which is ignored.
+            let rel_path = if to_s != "/dev/null" {
+                Path::new(to_s)
                     .strip_prefix(version2)
-                    .map_err(DiffError::UnexpectedPath)?;
-                if DIFF_SKIP_PATHS.iter().any(|p| Path::new(p) == to_path) {
-                    continue;
-                }
+                    .map_err(DiffError::UnexpectedPath)?
+            } else {
+                assert_ne!(
+                    from_s, "/dev/null",
+                    "unexpected diff from /dev/null to /dev/null"
+                );
+                Path::new(from_s)
+                    .strip_prefix(version1)
+                    .map_err(DiffError::UnexpectedPath)?
+            };
+            if DIFF_SKIP_PATHS.iter().any(|p| Path::new(p) == rel_path)
+                || (has_git_rev && Path::new(CARGO_TOML_FILE) == rel_path)
+            {
+                continue;
             }
 
             to_compare.push((from_s.into(), to_s.into()));
@@ -1473,9 +1521,10 @@ impl Cache {
         Ok((diffstat, to_compare))
     }
 
-    #[tracing::instrument(skip(self, network), err)]
+    #[tracing::instrument(skip(self, metadata, network), err)]
     pub async fn fetch_and_diffstat_package(
         &self,
+        metadata: &cargo_metadata::Metadata,
         network: Option<&Network>,
         package: PackageStr<'_>,
         delta: &Delta,
@@ -1506,10 +1555,10 @@ impl Cache {
                 warn!("Missing root, assuming we're in tests and mocking");
 
                 let from_len = match &delta.from {
-                    Some(from) => from.major * from.major,
+                    Some(from) => from.semver.major * from.semver.major,
                     None => 0,
                 };
-                let to_len: u64 = delta.to.major * delta.to.major;
+                let to_len: u64 = delta.to.semver.major * delta.to.semver.major;
                 let diff = to_len as i64 - from_len as i64;
                 let count = diff.unsigned_abs();
                 return Ok(DiffStat {
@@ -1529,13 +1578,19 @@ impl Cache {
         let diffstat = once_cell
             .get_or_try_init(|| async {
                 let from = match &delta.from {
-                    Some(from) => self.fetch_package(network, package, from).await?,
+                    Some(from) => self.fetch_package(metadata, network, package, from).await?,
                     None => self.root.as_ref().unwrap().join(CACHE_EMPTY_PACKAGE),
                 };
-                let to = self.fetch_package(network, package, &delta.to).await?;
+                let to = self
+                    .fetch_package(metadata, network, package, &delta.to)
+                    .await?;
 
                 // Have fetches, do a real diffstat
-                let (diffstat, _) = self.diffstat_package(&from, &to).await?;
+                // NOTE: We'll never pick a 'from' version with a git_rev, so we
+                // don't need to check for that here.
+                let (diffstat, _) = self
+                    .diffstat_package(&from, &to, delta.to.git_rev.is_some())
+                    .await?;
 
                 // Record the cache result in the diffcache
                 {
@@ -1681,13 +1736,33 @@ impl Cache {
 /// Queries a package in the crates.io registry for a specific published version
 pub fn exact_version<'a>(
     this: &'a crates_index::Crate,
-    target_version: &Version,
+    target_version: &semver::Version,
 ) -> Option<&'a crates_index::Version> {
     for index_version in this.versions() {
-        if let Ok(index_ver) = index_version.version().parse::<cargo_metadata::Version>() {
+        if let Ok(index_ver) = index_version.version().parse::<semver::Version>() {
             if &index_ver == target_version {
                 return Some(index_version);
             }
+        }
+    }
+    None
+}
+
+/// Locate the checkout path for the given package and version if it is part of
+/// the local build graph. Returns `None` if a local checkout cannot be found.
+pub fn locate_local_checkout(
+    metadata: &cargo_metadata::Metadata,
+    package: PackageStr<'_>,
+    version: &VetVersion,
+) -> Option<PathBuf> {
+    for pkg in &metadata.packages {
+        if pkg.name == package && &pkg.vet_version() == version {
+            assert_eq!(
+                pkg.manifest_path.file_name(),
+                Some(CARGO_TOML_FILE),
+                "unexpected manifest file name"
+            );
+            return Some(pkg.manifest_path.parent().map(PathBuf::from).unwrap());
         }
     }
     None
@@ -1701,7 +1776,6 @@ fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), UnpackError> 
         fs::remove_dir_all(unpack_dir)?;
     }
     fs::create_dir(unpack_dir)?;
-    let lockfile = unpack_dir.join(CARGO_OK_FILE);
     let gz = GzDecoder::new(tarball);
     let mut tar = Archive::new(gz);
     let prefix = unpack_dir.file_name().unwrap();
@@ -1734,23 +1808,113 @@ fn unpack_package(tarball: &File, unpack_dir: &Path) -> Result<(), UnpackError> 
             })?;
     }
 
+    create_unpack_lock(unpack_dir).map_err(|error| UnpackError::LockCreate {
+        target: unpack_dir.to_owned(),
+        error,
+    })?;
+
+    Ok(())
+}
+
+fn create_unpack_lock(unpack_dir: &Path) -> Result<(), io::Error> {
+    let lockfile = unpack_dir.join(CARGO_OK_FILE);
+
     // The lock file is created after unpacking so we overwrite a lock file
     // which may have been extracted from the package.
     let mut ok = OpenOptions::new()
         .create(true)
         .read(true)
         .write(true)
-        .open(&lockfile)
-        .map_err(|error| UnpackError::LockCreate {
-            target: lockfile.clone(),
+        .open(lockfile)?;
+
+    // Write to the lock file to indicate that unpacking was successful.
+    write!(ok, "ok")?;
+    ok.sync_all()?;
+
+    Ok(())
+}
+
+/// Unpack a non-crates.io package checkout in a format similar to what would be
+/// unpacked from a .crate file published on crates.io.
+///
+/// This is used in order to normalize the file and directory structure for git
+/// revisions to make them easier to work with when diffing.
+async fn unpack_checkout(
+    checkout_path: &Path,
+    unpack_path: &Path,
+) -> Result<(), UnpackCheckoutError> {
+    // Invoke `cargo package --list` to determine the list of files which
+    // should be copied to the repackaged directory.
+    let cargo_path = std::env::var_os(CARGO_ENV).expect("Cargo failed to set $CARGO, how?");
+    let out = tokio::process::Command::new(cargo_path)
+        .arg("package")
+        .arg("--list")
+        .arg("--allow-dirty")
+        .arg("--manifest-path")
+        .arg(checkout_path.join(CARGO_TOML_FILE))
+        .output()
+        .await
+        .map_err(CommandError::CommandFailed)?;
+
+    if !out.status.success() {
+        return Err(CommandError::BadStatus(out.status.code().unwrap_or(-1)).into());
+    }
+
+    let stdout = String::from_utf8(out.stdout).map_err(CommandError::BadOutput)?;
+
+    tokio::fs::create_dir_all(unpack_path)
+        .await
+        .map_err(|error| UnpackCheckoutError::CreateDirError {
+            path: unpack_path.to_owned(),
             error,
         })?;
 
-    // Write to the lock file to indicate that unpacking was successful.
-    write!(ok, "ok").map_err(|error| UnpackError::LockCreate {
-        target: lockfile.clone(),
-        error,
-    })?;
+    // Asynchronously copy all required files to the target directory.
+    try_join_all(stdout.lines().map(|target| async move {
+        // We'll be ignoring diffs for each of the skipped paths, so we can
+        // ignore these if cargo reports them.
+        if DIFF_SKIP_PATHS.iter().any(|&p| p == target) {
+            return Ok(());
+        }
+
+        let to = unpack_path.join(target);
+        let from = match target {
+            // Copy the original Cargo.toml to Cargo.toml.orig for better
+            // comparisons.
+            "Cargo.toml.orig" => checkout_path.join(CARGO_TOML_FILE),
+            _ => checkout_path.join(target),
+        };
+
+        // Create the directory this file will be placed in.
+        let parent = to.parent().unwrap();
+        tokio::fs::create_dir_all(&parent).await.map_err(|error| {
+            UnpackCheckoutError::CreateDirError {
+                path: parent.to_owned(),
+                error,
+            }
+        })?;
+
+        match tokio::fs::copy(from, to).await {
+            Ok(_) => Ok(()),
+            Err(error) => match error.kind() {
+                // Cargo may tell us about files which don't exist (e.g. because
+                // they are generated). It's OK to ignore those files when
+                // copying.
+                io::ErrorKind::NotFound => Ok(()),
+                _ => Err(UnpackCheckoutError::CopyError {
+                    target: target.into(),
+                    error,
+                }),
+            },
+        }
+    }))
+    .await?;
+
+    let unpack_path_ = unpack_path.to_owned();
+    tokio::task::spawn_blocking(move || create_unpack_lock(&unpack_path_))
+        .await
+        .expect("failed to join")
+        .map_err(UnpackCheckoutError::LockCreate)?;
 
     Ok(())
 }

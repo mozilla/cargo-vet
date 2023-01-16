@@ -5,11 +5,12 @@ expression: format_outputs(&output)
 stdout:
 graph LR
     subgraph roots
-        node74{test-project:0.1.0}
+        node75{test-project:0.1.0}
     end
     subgraph workspace-members
     end
     subgraph first-party
+        node56[proc-macro2:1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9]
     end
     subgraph third-party
         node0(atty:0.2.14)
@@ -68,65 +69,65 @@ graph LR
         node53(pin-project-lite:0.2.8)
         node54(pin-utils:0.1.0)
         node55(pkg-config:0.3.25)
-        node56(proc-macro2:1.0.37)
-        node57(quote:1.0.18)
-        node58(redox_syscall:0.2.13)
-        node59(remove_dir_all:0.5.3)
-        node60(reqwest:0.11.10)
-        node61(ryu:1.0.9)
-        node62(schannel:0.1.19)
-        node63(security-framework:2.6.1)
-        node64(security-framework-sys:2.6.1)
-        node65(serde:1.0.136)
-        node66(serde_json:1.0.79)
-        node67(serde_urlencoded:0.7.1)
-        node68(slab:0.4.6)
-        node69(socket2:0.4.4)
-        node70(strsim:0.10.0)
-        node71(syn:1.0.91)
-        node72(tempfile:3.3.0)
-        node73(termcolor:1.1.3)
-        node75(textwrap:0.15.0)
-        node76(tinyvec:1.5.1)
-        node77(tinyvec_macros:0.1.0)
-        node78(tokio:1.17.0)
-        node79(tokio-native-tls:0.3.0)
-        node80(tokio-util:0.7.1)
-        node81(tower-service:0.3.1)
-        node82(tracing:0.1.33)
-        node83(tracing-attributes:0.1.20)
-        node84(tracing-core:0.1.25)
-        node85(try-lock:0.2.3)
-        node86(unicode-bidi:0.3.7)
-        node87(unicode-normalization:0.1.19)
-        node88(unicode-xid:0.2.2)
-        node89(url:2.2.2)
-        node90(vcpkg:0.2.15)
-        node91(want:0.3.0)
-        node92(wasi:0.11.0+wasi-snapshot-preview1)
-        node93(wasm-bindgen:0.2.80)
-        node94(wasm-bindgen-backend:0.2.80)
-        node95(wasm-bindgen-futures:0.4.30)
-        node96(wasm-bindgen-macro:0.2.80)
-        node97(wasm-bindgen-macro-support:0.2.80)
-        node98(wasm-bindgen-shared:0.2.80)
-        node99(web-sys:0.3.57)
-        node100(winapi:0.3.9)
-        node101(winapi-i686-pc-windows-gnu:0.4.0)
-        node102(winapi-util:0.1.5)
-        node103(winapi-x86_64-pc-windows-gnu:0.4.0)
-        node104(winreg:0.10.1)
+        node57(proc-macro2:1.0.37)
+        node58(quote:1.0.18)
+        node59(redox_syscall:0.2.13)
+        node60(remove_dir_all:0.5.3)
+        node61(reqwest:0.11.10)
+        node62(ryu:1.0.9)
+        node63(schannel:0.1.19)
+        node64(security-framework:2.6.1)
+        node65(security-framework-sys:2.6.1)
+        node66(serde:1.0.136)
+        node67(serde_json:1.0.79)
+        node68(serde_urlencoded:0.7.1)
+        node69(slab:0.4.6)
+        node70(socket2:0.4.4)
+        node71(strsim:0.10.0)
+        node72(syn:1.0.91)
+        node73(tempfile:3.3.0)
+        node74(termcolor:1.1.3)
+        node76(textwrap:0.15.0)
+        node77(tinyvec:1.5.1)
+        node78(tinyvec_macros:0.1.0)
+        node79(tokio:1.17.0)
+        node80(tokio-native-tls:0.3.0)
+        node81(tokio-util:0.7.1)
+        node82(tower-service:0.3.1)
+        node83(tracing:0.1.33)
+        node84(tracing-attributes:0.1.20)
+        node85(tracing-core:0.1.25)
+        node86(try-lock:0.2.3)
+        node87(unicode-bidi:0.3.7)
+        node88(unicode-normalization:0.1.19)
+        node89(unicode-xid:0.2.2)
+        node90(url:2.2.2)
+        node91(vcpkg:0.2.15)
+        node92(want:0.3.0)
+        node93(wasi:0.11.0+wasi-snapshot-preview1)
+        node94(wasm-bindgen:0.2.80)
+        node95(wasm-bindgen-backend:0.2.80)
+        node96(wasm-bindgen-futures:0.4.30)
+        node97(wasm-bindgen-macro:0.2.80)
+        node98(wasm-bindgen-macro-support:0.2.80)
+        node99(wasm-bindgen-shared:0.2.80)
+        node100(web-sys:0.3.57)
+        node101(winapi:0.3.9)
+        node102(winapi-i686-pc-windows-gnu:0.4.0)
+        node103(winapi-util:0.1.5)
+        node104(winapi-x86_64-pc-windows-gnu:0.4.0)
+        node105(winreg:0.10.1)
     end
     node0 --> node24
     node0 --> node38
-    node0 --> node100
+    node0 --> node101
     node8 --> node0
     node8 --> node3
     node8 --> node32
     node8 --> node51
-    node8 --> node70
-    node8 --> node73
-    node8 --> node75
+    node8 --> node71
+    node8 --> node74
+    node8 --> node76
     node9 --> node10
     node9 --> node38
     node11 --> node7
@@ -146,10 +147,10 @@ graph LR
     node22 --> node21
     node22 --> node25
     node22 --> node32
-    node22 --> node68
-    node22 --> node78
-    node22 --> node80
-    node22 --> node82
+    node22 --> node69
+    node22 --> node79
+    node22 --> node81
+    node22 --> node83
     node24 --> node38
     node25 --> node5
     node25 --> node13
@@ -168,42 +169,42 @@ graph LR
     node29 --> node28
     node29 --> node35
     node29 --> node53
-    node29 --> node69
-    node29 --> node78
-    node29 --> node81
+    node29 --> node70
+    node29 --> node79
     node29 --> node82
-    node29 --> node91
+    node29 --> node83
+    node29 --> node92
     node30 --> node5
     node30 --> node29
     node30 --> node45
-    node30 --> node78
     node30 --> node79
+    node30 --> node80
     node31 --> node40
-    node31 --> node86
     node31 --> node87
+    node31 --> node88
     node32 --> node1
     node32 --> node23
     node33 --> node7
-    node36 --> node93
+    node36 --> node94
     node39 --> node7
     node43 --> node38
     node43 --> node39
     node43 --> node44
     node43 --> node46
-    node43 --> node92
-    node43 --> node100
-    node44 --> node100
+    node43 --> node93
+    node43 --> node101
+    node44 --> node101
     node45 --> node37
     node45 --> node38
     node45 --> node39
     node45 --> node48
     node45 --> node49
     node45 --> node50
-    node45 --> node62
     node45 --> node63
     node45 --> node64
-    node45 --> node72
-    node46 --> node100
+    node45 --> node65
+    node45 --> node73
+    node46 --> node101
     node48 --> node3
     node48 --> node7
     node48 --> node14
@@ -214,129 +215,131 @@ graph LR
     node50 --> node6
     node50 --> node38
     node50 --> node55
-    node50 --> node90
+    node50 --> node91
     node51 --> node41
-    node56 --> node88
-    node57 --> node56
-    node58 --> node3
-    node59 --> node100
-    node60 --> node2
-    node60 --> node5
-    node60 --> node11
-    node60 --> node18
-    node60 --> node21
-    node60 --> node22
-    node60 --> node25
-    node60 --> node26
-    node60 --> node29
-    node60 --> node30
-    node60 --> node34
-    node60 --> node36
-    node60 --> node37
-    node60 --> node39
-    node60 --> node42
-    node60 --> node45
-    node60 --> node52
-    node60 --> node53
-    node60 --> node65
-    node60 --> node66
-    node60 --> node67
-    node60 --> node78
-    node60 --> node79
-    node60 --> node89
-    node60 --> node93
-    node60 --> node95
-    node60 --> node99
-    node60 --> node104
-    node62 --> node37
-    node62 --> node100
-    node63 --> node3
-    node63 --> node9
-    node63 --> node10
-    node63 --> node38
-    node63 --> node64
+    node56 --> node89
+    node57 --> node89
+    node58 --> node57
+    node59 --> node3
+    node60 --> node101
+    node61 --> node2
+    node61 --> node5
+    node61 --> node11
+    node61 --> node18
+    node61 --> node21
+    node61 --> node22
+    node61 --> node25
+    node61 --> node26
+    node61 --> node29
+    node61 --> node30
+    node61 --> node34
+    node61 --> node36
+    node61 --> node37
+    node61 --> node39
+    node61 --> node42
+    node61 --> node45
+    node61 --> node52
+    node61 --> node53
+    node61 --> node66
+    node61 --> node67
+    node61 --> node68
+    node61 --> node79
+    node61 --> node80
+    node61 --> node90
+    node61 --> node94
+    node61 --> node96
+    node61 --> node100
+    node61 --> node105
+    node63 --> node37
+    node63 --> node101
+    node64 --> node3
+    node64 --> node9
     node64 --> node10
     node64 --> node38
-    node66 --> node35
-    node66 --> node61
-    node66 --> node65
-    node67 --> node16
+    node64 --> node65
+    node65 --> node10
+    node65 --> node38
     node67 --> node35
-    node67 --> node61
-    node67 --> node65
-    node69 --> node38
-    node69 --> node100
-    node71 --> node56
-    node71 --> node57
-    node71 --> node88
-    node72 --> node7
-    node72 --> node12
-    node72 --> node38
+    node67 --> node62
+    node67 --> node66
+    node68 --> node16
+    node68 --> node35
+    node68 --> node62
+    node68 --> node66
+    node70 --> node38
+    node70 --> node101
+    node72 --> node57
     node72 --> node58
-    node72 --> node59
-    node72 --> node100
-    node73 --> node102
-    node74 --> node8
-    node74 --> node60
-    node74 --> node66
-    node74 --> node78
-    node76 --> node77
-    node78 --> node5
-    node78 --> node38
-    node78 --> node41
-    node78 --> node43
-    node78 --> node53
-    node78 --> node69
-    node78 --> node100
-    node79 --> node45
-    node79 --> node78
-    node80 --> node5
-    node80 --> node18
-    node80 --> node19
-    node80 --> node53
-    node80 --> node78
-    node80 --> node82
-    node82 --> node7
-    node82 --> node53
-    node82 --> node83
-    node82 --> node84
-    node83 --> node56
-    node83 --> node57
-    node83 --> node71
-    node84 --> node37
-    node87 --> node76
-    node89 --> node16
-    node89 --> node31
-    node89 --> node40
-    node89 --> node52
-    node91 --> node39
-    node91 --> node85
-    node93 --> node7
-    node93 --> node96
-    node94 --> node4
-    node94 --> node37
-    node94 --> node39
-    node94 --> node56
-    node94 --> node57
-    node94 --> node71
-    node94 --> node98
-    node95 --> node7
-    node95 --> node36
-    node95 --> node93
+    node72 --> node89
+    node73 --> node7
+    node73 --> node12
+    node73 --> node38
+    node73 --> node59
+    node73 --> node60
+    node73 --> node101
+    node74 --> node103
+    node75 --> node8
+    node75 --> node56
+    node75 --> node61
+    node75 --> node67
+    node75 --> node79
+    node77 --> node78
+    node79 --> node5
+    node79 --> node38
+    node79 --> node41
+    node79 --> node43
+    node79 --> node53
+    node79 --> node70
+    node79 --> node101
+    node80 --> node45
+    node80 --> node79
+    node81 --> node5
+    node81 --> node18
+    node81 --> node19
+    node81 --> node53
+    node81 --> node79
+    node81 --> node83
+    node83 --> node7
+    node83 --> node53
+    node83 --> node84
+    node83 --> node85
+    node84 --> node57
+    node84 --> node58
+    node84 --> node72
+    node85 --> node37
+    node88 --> node77
+    node90 --> node16
+    node90 --> node31
+    node90 --> node40
+    node90 --> node52
+    node92 --> node39
+    node92 --> node86
+    node94 --> node7
+    node94 --> node97
+    node95 --> node4
+    node95 --> node37
+    node95 --> node39
+    node95 --> node57
+    node95 --> node58
+    node95 --> node72
     node95 --> node99
-    node96 --> node57
-    node96 --> node97
-    node97 --> node56
-    node97 --> node57
-    node97 --> node71
-    node97 --> node94
+    node96 --> node7
+    node96 --> node36
+    node96 --> node94
+    node96 --> node100
+    node97 --> node58
     node97 --> node98
-    node99 --> node36
-    node99 --> node93
-    node100 --> node101
-    node100 --> node103
-    node102 --> node100
-    node104 --> node100
+    node98 --> node57
+    node98 --> node58
+    node98 --> node72
+    node98 --> node95
+    node98 --> node99
+    node100 --> node36
+    node100 --> node94
+    node101 --> node102
+    node101 --> node104
+    node103 --> node101
+    node105 --> node101
 
 stderr:
 

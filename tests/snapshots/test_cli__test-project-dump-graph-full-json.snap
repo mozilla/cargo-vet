@@ -11,19 +11,19 @@ stdout:
     "normal_deps": [
       24,
       38,
-      100
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       24,
       38,
-      100
+      101
     ],
     "all_deps": [
       24,
       38,
-      100
+      101
     ],
     "reverse_deps": [
       8
@@ -61,7 +61,7 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -80,8 +80,8 @@ stdout:
     "reverse_deps": [
       8,
       48,
-      58,
-      63
+      59,
+      64
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -98,7 +98,7 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      94
+      95
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -120,9 +120,9 @@ stdout:
       26,
       29,
       30,
-      60,
-      78,
-      80
+      61,
+      79,
+      81
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -160,10 +160,10 @@ stdout:
       33,
       39,
       48,
-      72,
-      82,
-      93,
-      95
+      73,
+      83,
+      94,
+      96
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -179,9 +179,9 @@ stdout:
       3,
       32,
       51,
-      70,
-      73,
-      75
+      71,
+      74,
+      76
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -190,21 +190,21 @@ stdout:
       3,
       32,
       51,
-      70,
-      73,
-      75
+      71,
+      74,
+      76
     ],
     "all_deps": [
       0,
       3,
       32,
       51,
-      70,
-      73,
-      75
+      71,
+      74,
+      76
     ],
     "reverse_deps": [
-      74
+      75
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -230,7 +230,7 @@ stdout:
       38
     ],
     "reverse_deps": [
-      63
+      64
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -248,8 +248,8 @@ stdout:
     "all_deps": [],
     "reverse_deps": [
       9,
-      63,
-      64
+      64,
+      65
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -272,7 +272,7 @@ stdout:
       7
     ],
     "reverse_deps": [
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -295,7 +295,7 @@ stdout:
       33
     ],
     "reverse_deps": [
-      72
+      73
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -379,8 +379,8 @@ stdout:
       52
     ],
     "reverse_deps": [
-      67,
-      89
+      68,
+      90
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -424,8 +424,8 @@ stdout:
       21,
       22,
       29,
-      60,
-      80
+      61,
+      81
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -443,7 +443,7 @@ stdout:
     "all_deps": [],
     "reverse_deps": [
       22,
-      80
+      81
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -494,7 +494,7 @@ stdout:
     "reverse_deps": [
       22,
       29,
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -513,10 +513,10 @@ stdout:
       21,
       25,
       32,
-      68,
-      78,
-      80,
-      82
+      69,
+      79,
+      81,
+      83
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -528,10 +528,10 @@ stdout:
       21,
       25,
       32,
-      68,
-      78,
-      80,
-      82
+      69,
+      79,
+      81,
+      83
     ],
     "all_deps": [
       5,
@@ -541,14 +541,14 @@ stdout:
       21,
       25,
       32,
-      68,
-      78,
-      80,
-      82
+      69,
+      79,
+      81,
+      83
     ],
     "reverse_deps": [
       29,
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -620,7 +620,7 @@ stdout:
       22,
       26,
       29,
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -650,7 +650,7 @@ stdout:
     ],
     "reverse_deps": [
       29,
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -707,11 +707,11 @@ stdout:
       28,
       35,
       53,
-      69,
-      78,
-      81,
+      70,
+      79,
       82,
-      91
+      83,
+      92
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -727,11 +727,11 @@ stdout:
       28,
       35,
       53,
-      69,
-      78,
-      81,
+      70,
+      79,
       82,
-      91
+      83,
+      92
     ],
     "all_deps": [
       5,
@@ -745,15 +745,15 @@ stdout:
       28,
       35,
       53,
-      69,
-      78,
-      81,
+      70,
+      79,
       82,
-      91
+      83,
+      92
     ],
     "reverse_deps": [
       30,
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -768,8 +768,8 @@ stdout:
       5,
       29,
       45,
-      78,
-      79
+      79,
+      80
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -777,18 +777,18 @@ stdout:
       5,
       29,
       45,
-      78,
-      79
+      79,
+      80
     ],
     "all_deps": [
       5,
       29,
       45,
-      78,
-      79
+      79,
+      80
     ],
     "reverse_deps": [
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -801,23 +801,23 @@ stdout:
     "version": "0.2.3",
     "normal_deps": [
       40,
-      86,
-      87
+      87,
+      88
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       40,
-      86,
-      87
+      87,
+      88
     ],
     "all_deps": [
       40,
-      86,
-      87
+      87,
+      88
     ],
     "reverse_deps": [
-      89
+      90
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -885,7 +885,7 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -904,8 +904,8 @@ stdout:
     "reverse_deps": [
       25,
       29,
-      66,
-      67
+      67,
+      68
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -917,20 +917,20 @@ stdout:
     "name": "js-sys",
     "version": "0.3.57",
     "normal_deps": [
-      93
+      94
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      93
+      94
     ],
     "all_deps": [
-      93
+      94
     ],
     "reverse_deps": [
-      60,
-      95,
-      99
+      61,
+      96,
+      100
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -948,10 +948,10 @@ stdout:
     "all_deps": [],
     "reverse_deps": [
       45,
-      60,
-      62,
-      84,
-      94
+      61,
+      63,
+      85,
+      95
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -975,11 +975,11 @@ stdout:
       45,
       48,
       50,
-      63,
       64,
-      69,
-      72,
-      78
+      65,
+      70,
+      73,
+      79
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1004,9 +1004,9 @@ stdout:
     "reverse_deps": [
       43,
       45,
-      60,
-      91,
-      94
+      61,
+      92,
+      95
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1025,7 +1025,7 @@ stdout:
     "reverse_deps": [
       16,
       31,
-      89
+      90
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1043,7 +1043,7 @@ stdout:
     "all_deps": [],
     "reverse_deps": [
       51,
-      78
+      79
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1060,7 +1060,7 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1076,8 +1076,8 @@ stdout:
       39,
       44,
       46,
-      92,
-      100
+      93,
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -1086,19 +1086,19 @@ stdout:
       39,
       44,
       46,
-      92,
-      100
+      93,
+      101
     ],
     "all_deps": [
       38,
       39,
       44,
       46,
-      92,
-      100
+      93,
+      101
     ],
     "reverse_deps": [
-      78
+      79
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1110,15 +1110,15 @@ stdout:
     "name": "miow",
     "version": "0.3.7",
     "normal_deps": [
-      100
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      100
+      101
     ],
     "all_deps": [
-      100
+      101
     ],
     "reverse_deps": [
       43
@@ -1139,10 +1139,10 @@ stdout:
       48,
       49,
       50,
-      62,
       63,
       64,
-      72
+      65,
+      73
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -1153,10 +1153,10 @@ stdout:
       48,
       49,
       50,
-      62,
       63,
       64,
-      72
+      65,
+      73
     ],
     "all_deps": [
       37,
@@ -1165,15 +1165,15 @@ stdout:
       48,
       49,
       50,
-      62,
       63,
       64,
-      72
+      65,
+      73
     ],
     "reverse_deps": [
       30,
-      60,
-      79
+      61,
+      80
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1185,15 +1185,15 @@ stdout:
     "name": "ntapi",
     "version": "0.3.7",
     "normal_deps": [
-      100
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      100
+      101
     ],
     "all_deps": [
-      100
+      101
     ],
     "reverse_deps": [
       43
@@ -1286,7 +1286,7 @@ stdout:
       1,
       6,
       55,
-      90
+      91
     ],
     "dev_deps": [],
     "normal_and_build_deps": [
@@ -1294,14 +1294,14 @@ stdout:
       6,
       38,
       55,
-      90
+      91
     ],
     "all_deps": [
       1,
       6,
       38,
       55,
-      90
+      91
     ],
     "reverse_deps": [
       45,
@@ -1346,8 +1346,8 @@ stdout:
     "all_deps": [],
     "reverse_deps": [
       16,
-      60,
-      89
+      61,
+      90
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1367,10 +1367,10 @@ stdout:
       21,
       26,
       29,
-      60,
-      78,
-      80,
-      82
+      61,
+      79,
+      81,
+      83
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1412,26 +1412,49 @@ stdout:
     "is_dev_only": false
   },
   {
-    "package_id": "proc-macro2 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
+    "package_id": "proc-macro2 1.0.37 (git+https://github.com/dtolnay/proc-macro2?rev=4445659b0f753a928059244c875a58bb12f791e9#4445659b0f753a928059244c875a58bb12f791e9)",
     "name": "proc-macro2",
-    "version": "1.0.37",
+    "version": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
     "normal_deps": [
-      88
+      89
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      88
+      89
     ],
     "all_deps": [
-      88
+      89
     ],
     "reverse_deps": [
-      57,
-      71,
-      83,
-      94,
-      97
+      75
+    ],
+    "is_workspace_member": false,
+    "is_third_party": false,
+    "is_root": false,
+    "is_dev_only": false
+  },
+  {
+    "package_id": "proc-macro2 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
+    "name": "proc-macro2",
+    "version": "1.0.37",
+    "normal_deps": [
+      89
+    ],
+    "build_deps": [],
+    "dev_deps": [],
+    "normal_and_build_deps": [
+      89
+    ],
+    "all_deps": [
+      89
+    ],
+    "reverse_deps": [
+      58,
+      72,
+      84,
+      95,
+      98
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1443,22 +1466,22 @@ stdout:
     "name": "quote",
     "version": "1.0.18",
     "normal_deps": [
-      56
+      57
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      56
+      57
     ],
     "all_deps": [
-      56
+      57
     ],
     "reverse_deps": [
-      71,
-      83,
-      94,
-      96,
-      97
+      72,
+      84,
+      95,
+      97,
+      98
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1481,7 +1504,7 @@ stdout:
       3
     ],
     "reverse_deps": [
-      72
+      73
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1493,18 +1516,18 @@ stdout:
     "name": "remove_dir_all",
     "version": "0.5.3",
     "normal_deps": [
-      100
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      100
+      101
     ],
     "all_deps": [
-      100
+      101
     ],
     "reverse_deps": [
-      72
+      73
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1534,16 +1557,16 @@ stdout:
       45,
       52,
       53,
-      65,
       66,
       67,
-      78,
+      68,
       79,
-      89,
-      93,
-      95,
-      99,
-      104
+      80,
+      90,
+      94,
+      96,
+      100,
+      105
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -1566,16 +1589,16 @@ stdout:
       45,
       52,
       53,
-      65,
       66,
       67,
-      78,
+      68,
       79,
-      89,
-      93,
-      95,
-      99,
-      104
+      80,
+      90,
+      94,
+      96,
+      100,
+      105
     ],
     "all_deps": [
       2,
@@ -1596,19 +1619,19 @@ stdout:
       45,
       52,
       53,
-      65,
       66,
       67,
-      78,
+      68,
       79,
-      89,
-      93,
-      95,
-      99,
-      104
+      80,
+      90,
+      94,
+      96,
+      100,
+      105
     ],
     "reverse_deps": [
-      74
+      75
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1625,8 +1648,8 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      66,
-      67
+      67,
+      68
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1639,17 +1662,17 @@ stdout:
     "version": "0.1.19",
     "normal_deps": [
       37,
-      100
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       37,
-      100
+      101
     ],
     "all_deps": [
       37,
-      100
+      101
     ],
     "reverse_deps": [
       45
@@ -1668,7 +1691,7 @@ stdout:
       9,
       10,
       38,
-      64
+      65
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -1677,14 +1700,14 @@ stdout:
       9,
       10,
       38,
-      64
+      65
     ],
     "all_deps": [
       3,
       9,
       10,
       38,
-      64
+      65
     ],
     "reverse_deps": [
       45
@@ -1714,7 +1737,7 @@ stdout:
     ],
     "reverse_deps": [
       45,
-      63
+      64
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1731,9 +1754,9 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      60,
-      66,
-      67
+      61,
+      67,
+      68
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1746,24 +1769,24 @@ stdout:
     "version": "1.0.79",
     "normal_deps": [
       35,
-      61,
-      65
+      62,
+      66
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       35,
-      61,
-      65
+      62,
+      66
     ],
     "all_deps": [
       35,
-      61,
-      65
+      62,
+      66
     ],
     "reverse_deps": [
-      60,
-      74
+      61,
+      75
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1777,25 +1800,25 @@ stdout:
     "normal_deps": [
       16,
       35,
-      61,
-      65
+      62,
+      66
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       16,
       35,
-      61,
-      65
+      62,
+      66
     ],
     "all_deps": [
       16,
       35,
-      61,
-      65
+      62,
+      66
     ],
     "reverse_deps": [
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1825,21 +1848,21 @@ stdout:
     "version": "0.4.4",
     "normal_deps": [
       38,
-      100
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       38,
-      100
+      101
     ],
     "all_deps": [
       38,
-      100
+      101
     ],
     "reverse_deps": [
       29,
-      78
+      79
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1868,26 +1891,26 @@ stdout:
     "name": "syn",
     "version": "1.0.91",
     "normal_deps": [
-      56,
       57,
-      88
+      58,
+      89
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      56,
       57,
-      88
+      58,
+      89
     ],
     "all_deps": [
-      56,
       57,
-      88
+      58,
+      89
     ],
     "reverse_deps": [
-      83,
-      94,
-      97
+      84,
+      95,
+      98
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -1902,9 +1925,9 @@ stdout:
       7,
       12,
       38,
-      58,
       59,
-      100
+      60,
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -1912,17 +1935,17 @@ stdout:
       7,
       12,
       38,
-      58,
       59,
-      100
+      60,
+      101
     ],
     "all_deps": [
       7,
       12,
       38,
-      58,
       59,
-      100
+      60,
+      101
     ],
     "reverse_deps": [
       45
@@ -1937,15 +1960,15 @@ stdout:
     "name": "termcolor",
     "version": "1.1.3",
     "normal_deps": [
-      102
+      103
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      102
+      103
     ],
     "all_deps": [
-      102
+      103
     ],
     "reverse_deps": [
       8
@@ -1960,23 +1983,26 @@ stdout:
     "version": "0.1.0",
     "normal_deps": [
       8,
-      60,
-      66,
-      78
+      56,
+      61,
+      67,
+      79
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       8,
-      60,
-      66,
-      78
+      56,
+      61,
+      67,
+      79
     ],
     "all_deps": [
       8,
-      60,
-      66,
-      78
+      56,
+      61,
+      67,
+      79
     ],
     "reverse_deps": [],
     "is_workspace_member": true,
@@ -2006,18 +2032,18 @@ stdout:
     "name": "tinyvec",
     "version": "1.5.1",
     "normal_deps": [
-      77
+      78
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      77
+      78
     ],
     "all_deps": [
-      77
+      78
     ],
     "reverse_deps": [
-      87
+      88
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2034,7 +2060,7 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      76
+      77
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2051,8 +2077,8 @@ stdout:
       41,
       43,
       53,
-      69,
-      100
+      70,
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -2062,8 +2088,8 @@ stdout:
       41,
       43,
       53,
-      69,
-      100
+      70,
+      101
     ],
     "all_deps": [
       5,
@@ -2071,17 +2097,17 @@ stdout:
       41,
       43,
       53,
-      69,
-      100
+      70,
+      101
     ],
     "reverse_deps": [
       22,
       29,
       30,
-      60,
-      74,
-      79,
-      80
+      61,
+      75,
+      80,
+      81
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2094,21 +2120,21 @@ stdout:
     "version": "0.3.0",
     "normal_deps": [
       45,
-      78
+      79
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       45,
-      78
+      79
     ],
     "all_deps": [
       45,
-      78
+      79
     ],
     "reverse_deps": [
       30,
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2124,8 +2150,8 @@ stdout:
       18,
       19,
       53,
-      78,
-      82
+      79,
+      83
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -2134,16 +2160,16 @@ stdout:
       18,
       19,
       53,
-      78,
-      82
+      79,
+      83
     ],
     "all_deps": [
       5,
       18,
       19,
       53,
-      78,
-      82
+      79,
+      83
     ],
     "reverse_deps": [
       22
@@ -2177,27 +2203,27 @@ stdout:
     "normal_deps": [
       7,
       53,
-      83,
-      84
+      84,
+      85
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       7,
       53,
-      83,
-      84
+      84,
+      85
     ],
     "all_deps": [
       7,
       53,
-      83,
-      84
+      84,
+      85
     ],
     "reverse_deps": [
       22,
       29,
-      80
+      81
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2209,24 +2235,24 @@ stdout:
     "name": "tracing-attributes",
     "version": "0.1.20",
     "normal_deps": [
-      56,
       57,
-      71
+      58,
+      72
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      56,
       57,
-      71
+      58,
+      72
     ],
     "all_deps": [
-      56,
       57,
-      71
+      58,
+      72
     ],
     "reverse_deps": [
-      82
+      83
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2249,7 +2275,7 @@ stdout:
       37
     ],
     "reverse_deps": [
-      82
+      83
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2266,7 +2292,7 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      91
+      92
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2295,15 +2321,15 @@ stdout:
     "name": "unicode-normalization",
     "version": "0.1.19",
     "normal_deps": [
-      76
+      77
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      76
+      77
     ],
     "all_deps": [
-      76
+      77
     ],
     "reverse_deps": [
       31
@@ -2324,7 +2350,8 @@ stdout:
     "all_deps": [],
     "reverse_deps": [
       56,
-      71
+      57,
+      72
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2356,7 +2383,7 @@ stdout:
       52
     ],
     "reverse_deps": [
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2386,17 +2413,17 @@ stdout:
     "version": "0.3.0",
     "normal_deps": [
       39,
-      85
+      86
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       39,
-      85
+      86
     ],
     "all_deps": [
       39,
-      85
+      86
     ],
     "reverse_deps": [
       29
@@ -2429,23 +2456,23 @@ stdout:
     "version": "0.2.80",
     "normal_deps": [
       7,
-      96
+      97
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       7,
-      96
+      97
     ],
     "all_deps": [
       7,
-      96
+      97
     ],
     "reverse_deps": [
       36,
-      60,
-      95,
-      99
+      61,
+      96,
+      100
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2460,10 +2487,10 @@ stdout:
       4,
       37,
       39,
-      56,
       57,
-      71,
-      98
+      58,
+      72,
+      99
     ],
     "build_deps": [],
     "dev_deps": [],
@@ -2471,22 +2498,22 @@ stdout:
       4,
       37,
       39,
-      56,
       57,
-      71,
-      98
+      58,
+      72,
+      99
     ],
     "all_deps": [
       4,
       37,
       39,
-      56,
       57,
-      71,
-      98
+      58,
+      72,
+      99
     ],
     "reverse_deps": [
-      97
+      98
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2500,25 +2527,25 @@ stdout:
     "normal_deps": [
       7,
       36,
-      93,
-      99
+      94,
+      100
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       7,
       36,
-      93,
-      99
+      94,
+      100
     ],
     "all_deps": [
       7,
       36,
-      93,
-      99
+      94,
+      100
     ],
     "reverse_deps": [
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2530,21 +2557,21 @@ stdout:
     "name": "wasm-bindgen-macro",
     "version": "0.2.80",
     "normal_deps": [
-      57,
-      97
+      58,
+      98
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      57,
-      97
+      58,
+      98
     ],
     "all_deps": [
-      57,
-      97
+      58,
+      98
     ],
     "reverse_deps": [
-      93
+      94
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2556,30 +2583,30 @@ stdout:
     "name": "wasm-bindgen-macro-support",
     "version": "0.2.80",
     "normal_deps": [
-      56,
       57,
-      71,
-      94,
-      98
+      58,
+      72,
+      95,
+      99
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      56,
       57,
-      71,
-      94,
-      98
+      58,
+      72,
+      95,
+      99
     ],
     "all_deps": [
-      56,
       57,
-      71,
-      94,
-      98
+      58,
+      72,
+      95,
+      99
     ],
     "reverse_deps": [
-      96
+      97
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2596,8 +2623,8 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      94,
-      97
+      95,
+      98
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2610,21 +2637,21 @@ stdout:
     "version": "0.3.57",
     "normal_deps": [
       36,
-      93
+      94
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
       36,
-      93
+      94
     ],
     "all_deps": [
       36,
-      93
+      94
     ],
     "reverse_deps": [
-      60,
-      95
+      61,
+      96
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2636,31 +2663,31 @@ stdout:
     "name": "winapi",
     "version": "0.3.9",
     "normal_deps": [
-      101,
-      103
+      102,
+      104
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      101,
-      103
+      102,
+      104
     ],
     "all_deps": [
-      101,
-      103
+      102,
+      104
     ],
     "reverse_deps": [
       0,
       43,
       44,
       46,
-      59,
-      62,
-      69,
-      72,
-      78,
-      102,
-      104
+      60,
+      63,
+      70,
+      73,
+      79,
+      103,
+      105
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2677,7 +2704,7 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      100
+      101
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2689,18 +2716,18 @@ stdout:
     "name": "winapi-util",
     "version": "0.1.5",
     "normal_deps": [
-      100
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      100
+      101
     ],
     "all_deps": [
-      100
+      101
     ],
     "reverse_deps": [
-      73
+      74
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2717,7 +2744,7 @@ stdout:
     "normal_and_build_deps": [],
     "all_deps": [],
     "reverse_deps": [
-      100
+      101
     ],
     "is_workspace_member": false,
     "is_third_party": true,
@@ -2729,18 +2756,18 @@ stdout:
     "name": "winreg",
     "version": "0.10.1",
     "normal_deps": [
-      100
+      101
     ],
     "build_deps": [],
     "dev_deps": [],
     "normal_and_build_deps": [
-      100
+      101
     ],
     "all_deps": [
-      100
+      101
     ],
     "reverse_deps": [
-      60
+      61
     ],
     "is_workspace_member": false,
     "is_third_party": true,

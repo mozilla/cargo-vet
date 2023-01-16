@@ -1,5 +1,6 @@
 //! Details of the file formats used by cargo vet
 
+use crate::errors::VersionParseError;
 use crate::resolver::{DiffRecommendation, ViolationConflict};
 use crate::serialization::spanned::Spanned;
 use crate::{flock::Filesystem, serialization};
@@ -8,9 +9,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use cargo_metadata::Version;
-use serde::de::Visitor;
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use cargo_metadata::semver;
+use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 // Collections based on how we're using, so it's easier to swap them out.
 pub type FastMap<K, V> = HashMap<K, V>;
@@ -27,20 +27,20 @@ pub type ImportName = String;
 
 // newtype VersionReq so that we can implement PartialOrd on it.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct VersionReq(pub cargo_metadata::VersionReq);
+pub struct VersionReq(pub semver::VersionReq);
 impl fmt::Display for VersionReq {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 impl FromStr for VersionReq {
-    type Err = <cargo_metadata::VersionReq as FromStr>::Err;
+    type Err = <semver::VersionReq as FromStr>::Err;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        cargo_metadata::VersionReq::from_str(s).map(VersionReq)
+        semver::VersionReq::from_str(s).map(VersionReq)
     }
 }
 impl core::ops::Deref for VersionReq {
-    type Target = cargo_metadata::VersionReq;
+    type Target = semver::VersionReq;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -52,7 +52,81 @@ impl cmp::PartialOrd for VersionReq {
 }
 impl VersionReq {
     pub fn parse(text: &str) -> Result<Self, <Self as FromStr>::Err> {
-        cargo_metadata::VersionReq::parse(text).map(VersionReq)
+        cargo_metadata::semver::VersionReq::parse(text).map(VersionReq)
+    }
+    pub fn matches(&self, version: &VetVersion) -> bool {
+        self.0.matches(&version.semver)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VetVersion {
+    pub semver: semver::Version,
+    pub git_rev: Option<String>,
+}
+impl VetVersion {
+    pub fn parse(s: &str) -> Result<Self, VersionParseError> {
+        if let Some((ver, rev)) = s.split_once('@') {
+            if let Some(hash) = rev.trim_start().strip_prefix("git:") {
+                Ok(VetVersion {
+                    semver: ver.trim_end().parse()?,
+                    git_rev: Some(hash.to_owned()),
+                })
+            } else {
+                Err(VersionParseError::UnknownRevision)
+            }
+        } else {
+            Ok(VetVersion {
+                semver: s.parse()?,
+                git_rev: None,
+            })
+        }
+    }
+}
+impl fmt::Display for VetVersion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.git_rev {
+            Some(hash) => write!(f, "{}@git:{}", self.semver, hash),
+            None => self.semver.fmt(f),
+        }
+    }
+}
+impl FromStr for VetVersion {
+    type Err = VersionParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s)
+    }
+}
+impl Serialize for VetVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.to_string().serialize(serializer)
+    }
+}
+impl<'de> Deserialize<'de> for VetVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct VersionVisitor;
+
+        impl<'de> Visitor<'de> for VersionVisitor {
+            type Value = VetVersion;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("semver version")
+            }
+            fn visit_str<E>(self, string: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                VetVersion::parse(string).map_err(de::Error::custom)
+            }
+        }
+
+        deserializer.deserialize_str(VersionVisitor)
     }
 }
 
@@ -206,12 +280,12 @@ impl cmp::Ord for AuditEntry {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum AuditKind {
     Full {
-        version: Version,
+        version: VetVersion,
         dependency_criteria: DependencyCriteria,
     },
     Delta {
-        from: Version,
-        to: Version,
+        from: VetVersion,
+        to: VetVersion,
         dependency_criteria: DependencyCriteria,
     },
     Violation {
@@ -232,8 +306,8 @@ pub type DependencyCriteria = SortedMap<PackageName, Vec<Spanned<CriteriaName>>>
 /// A "VERSION" or "VERSION -> VERSION"
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Delta {
-    pub from: Option<Version>,
-    pub to: Version,
+    pub from: Option<VetVersion>,
+    pub to: VetVersion,
 }
 
 impl<'de> Deserialize<'de> for Delta {
@@ -256,13 +330,13 @@ impl<'de> Deserialize<'de> for Delta {
             {
                 if let Some((from, to)) = string.split_once("->") {
                     Ok(Delta {
-                        from: Some(Version::parse(from.trim()).map_err(de::Error::custom)?),
-                        to: Version::parse(to.trim()).map_err(de::Error::custom)?,
+                        from: Some(VetVersion::parse(from.trim()).map_err(de::Error::custom)?),
+                        to: VetVersion::parse(to.trim()).map_err(de::Error::custom)?,
                     })
                 } else {
                     Ok(Delta {
                         from: None,
-                        to: Version::parse(string.trim()).map_err(de::Error::custom)?,
+                        to: VetVersion::parse(string.trim()).map_err(de::Error::custom)?,
                     })
                 }
             }
@@ -436,7 +510,7 @@ pub struct CriteriaMapping {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ExemptedDependency {
     /// The version of the crate that we are currently "fine" with leaving unaudited.
-    pub version: Version,
+    pub version: VetVersion,
     /// Criteria that we're willing to handwave for this version (assuming our dependencies
     /// satisfy this criteria). This isn't defaulted, 'vet init' and similar commands will
     /// pick a "good" initial value.
@@ -556,12 +630,12 @@ impl fmt::Display for DiffStat {
 pub enum FetchCommand {
     Inspect {
         package: PackageName,
-        version: Version,
+        version: VetVersion,
     },
     Diff {
         package: PackageName,
-        version1: Version,
-        version2: Version,
+        version1: VetVersion,
+        version2: VetVersion,
     },
 }
 
@@ -665,7 +739,7 @@ pub struct JsonVetFailure {
     /// The name of the package
     pub name: PackageName,
     /// The version of the package
-    pub version: Version,
+    pub version: VetVersion,
     /// The missing criteria
     pub missing_criteria: Vec<CriteriaName>,
 }
@@ -694,5 +768,5 @@ pub struct JsonPackage {
     /// Name of the package
     pub name: PackageName,
     /// Version of the package
-    pub version: Version,
+    pub version: VetVersion,
 }

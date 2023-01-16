@@ -365,6 +365,13 @@ stdout:
     },
     {
       "name": "proc-macro2",
+      "version": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+      "missing_criteria": [
+        "safe-to-deploy"
+      ]
+    },
+    {
+      "name": "proc-macro2",
       "version": "1.0.37",
       "missing_criteria": [
         "safe-to-deploy"
@@ -756,6 +763,22 @@ stdout:
             "insertions": 5196,
             "deletions": 0,
             "files_changed": 15
+          }
+        }
+      },
+      {
+        "name": "proc-macro2",
+        "notable_parents": "test-project",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+          "diffstat": {
+            "insertions": 5691,
+            "deletions": 0,
+            "files_changed": 19
           }
         }
       },
@@ -1433,7 +1456,7 @@ stdout:
       },
       {
         "name": "unicode-xid",
-        "notable_parents": "syn, proc-macro2",
+        "notable_parents": "syn, proc-macro2, proc-macro2",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2315,6 +2338,22 @@ stdout:
           }
         },
         {
+          "name": "proc-macro2",
+          "notable_parents": "test-project",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+            "diffstat": {
+              "insertions": 5691,
+              "deletions": 0,
+              "files_changed": 19
+            }
+          }
+        },
+        {
           "name": "indexmap",
           "notable_parents": "h2, clap",
           "suggested_criteria": [
@@ -2988,7 +3027,7 @@ stdout:
         },
         {
           "name": "unicode-xid",
-          "notable_parents": "syn, proc-macro2",
+          "notable_parents": "syn, proc-macro2, proc-macro2",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3838,7 +3877,7 @@ stdout:
         }
       ]
     },
-    "total_lines": 1734141
+    "total_lines": 1739832
   }
 }
 stderr:

@@ -481,10 +481,6 @@ criteria = "safe-to-deploy"
 version = "1.1.4"
 criteria = "safe-to-deploy"
 
-[[exemptions.tinyvec]]
-version = "1.6.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.tokio]]
 version = "1.20.1"
 criteria = "safe-to-deploy"
@@ -537,20 +533,12 @@ criteria = "safe-to-deploy"
 version = "0.2.3"
 criteria = "safe-to-deploy"
 
-[[exemptions.unicode-bidi]]
-version = "0.3.8"
-criteria = "safe-to-deploy"
-
 [[exemptions.unicode-ident]]
 version = "1.0.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.unicode-linebreak]]
 version = "0.1.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.unicode-normalization]]
-version = "0.1.19"
 criteria = "safe-to-deploy"
 
 [[exemptions.unicode-width]]
@@ -668,4 +656,3 @@ criteria = "safe-to-deploy"
 [[exemptions.yaml-rust]]
 version = "0.4.5"
 criteria = "safe-to-run"
-

@@ -185,9 +185,8 @@ pub mod audit {
     use super::*;
 
     use crate::format::{
-        AuditEntry, AuditKind, CriteriaName, Delta, DependencyCriteria, VersionReq,
+        AuditEntry, AuditKind, CriteriaName, Delta, DependencyCriteria, VersionReq, VetVersion,
     };
-    use cargo_metadata::Version;
 
     #[derive(Serialize, Deserialize)]
     pub struct AuditEntryAll {
@@ -198,7 +197,7 @@ pub mod audit {
         #[serde(default)]
         #[serde(with = "string_or_vec")]
         criteria: Vec<Spanned<CriteriaName>>,
-        version: Option<Version>,
+        version: Option<VetVersion>,
         delta: Option<Delta>,
         violation: Option<VersionReq>,
         #[serde(rename = "dependency-criteria")]
