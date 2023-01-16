@@ -24,16 +24,48 @@ use std::{
 // in `target`.
 // const TEST_TMP: &str = "../target/testdata/";
 
-fn format_outputs(output: &Output) -> String {
-    let stdout = std::str::from_utf8(&output.stdout).unwrap();
-    // NOTE: We filter out the "Blocking: waiting for file lock" lines, as they
-    // are printed out non-deterministically when there is file contention.
-    let stderr = std::str::from_utf8(&output.stderr)
+// NOTE: We filter out the "Blocking: waiting for file lock" lines, as they are
+// printed out non-deterministically when there is file contention.
+fn filter_blocking_lines(stderr: &[u8]) -> String {
+    std::str::from_utf8(stderr)
         .unwrap()
         .lines()
         .filter(|line| !line.starts_with("Blocking: waiting for file lock"))
         .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_outputs(output: &Output) -> String {
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let stderr = filter_blocking_lines(&output.stderr);
+    format!("stdout:\n{stdout}\nstderr:\n{stderr}")
+}
+
+fn format_diff_outputs(output: &Output) -> String {
+    // Filter out lines which may contain paths so that the output is portable,
+    // while preserving some of the general format.
+    let stdout = std::str::from_utf8(&output.stdout)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.starts_with("diff --git"))
+        .map(|line| {
+            if let Some(path) = line.strip_prefix("--- ") {
+                return format!(
+                    "--- a/{}",
+                    Path::new(path).file_name().unwrap().to_str().unwrap()
+                );
+            }
+            if let Some(path) = line.strip_prefix("+++ ") {
+                return format!(
+                    "+++ b/{}",
+                    Path::new(path).file_name().unwrap().to_str().unwrap()
+                );
+            }
+            line.to_owned()
+        })
+        .collect::<Vec<_>>()
         .join("\n");
+    let stderr = filter_blocking_lines(&output.stderr);
     format!("stdout:\n{stdout}\nstderr:\n{stderr}")
 }
 
@@ -371,37 +403,37 @@ fn test_project_diff_output() {
 
     let output = child.wait_with_output().unwrap();
 
-    // Filter out lines which may contain paths so that the output is portable,
-    // while preserving some of the general format.
-    let stdout = std::str::from_utf8(&output.stdout)
-        .unwrap()
-        .lines()
-        .filter(|line| !line.starts_with("diff --git"))
-        .map(|line| {
-            if let Some(path) = line.strip_prefix("--- ") {
-                return format!(
-                    "--- a/{}",
-                    Path::new(path).file_name().unwrap().to_str().unwrap()
-                );
-            }
-            if let Some(path) = line.strip_prefix("+++ ") {
-                return format!(
-                    "+++ b/{}",
-                    Path::new(path).file_name().unwrap().to_str().unwrap()
-                );
-            }
-            line.to_owned()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    let stderr = std::str::from_utf8(&output.stderr)
-        .unwrap()
-        .lines()
-        .filter(|line| !line.starts_with("Blocking: waiting for file lock"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let formatted = format!("stdout:\n{stdout}\nstderr:\n{stderr}");
+    insta::assert_snapshot!("test-project-diff-output", format_diff_outputs(&output));
+    assert!(output.status.success(), "{}", output.status);
+}
 
-    insta::assert_snapshot!("test-project-diff-output", formatted);
+#[test]
+fn test_project_diff_output_git() {
+    // Test that the diff output handles git revisions.
+
+    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-project");
+    let bin = env!("CARGO_BIN_EXE_cargo-vet");
+    let mut child = Command::new(bin)
+        .current_dir(&project)
+        .arg("vet")
+        .arg("diff")
+        .arg("--mode")
+        .arg("local")
+        .arg("proc-macro2")
+        .arg("1.0.37")
+        .arg("1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    std::io::Write::write_all(child.stdin.as_mut().unwrap(), b"\n").unwrap();
+
+    let output = child.wait_with_output().unwrap();
+
+    insta::assert_snapshot!("test-project-diff-output-git", format_diff_outputs(&output));
     assert!(output.status.success(), "{}", output.status);
 }

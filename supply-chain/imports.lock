@@ -47,14 +47,45 @@ criteria = "safe-to-deploy"
 version = "0.1.21"
 notes = "I am the author of this crate."
 
+[[audits.bytecodealliance.audits.tinyvec]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.6.0"
+notes = """
+This crate, while it implements collections, does so without `std::*` APIs and
+without `unsafe`. Skimming the crate everything looks reasonable and what one
+would expect from idiomatic safe collections in Rust.
+"""
+
+[[audits.bytecodealliance.audits.unicode-bidi]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.3.8"
+notes = """
+This crate has no unsafe code and does not use `std::*`. Skimming the crate it
+does not attempt to out of the bounds of what it's already supposed to be doing.
+"""
+
+[[audits.bytecodealliance.audits.unicode-normalization]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.19"
+notes = """
+This crate contains one usage of `unsafe` which I have manually checked to see
+it as correct. This crate's size comes in large part due to the generated
+unicode tables that it contains. This crate is additionally widely used
+throughout the ecosystem and skimming the crate shows no usage of `std::*` APIs
+and nothing suspicious.
+"""
+
 [[audits.embark.audits.tinyvec_macros]]
-who = "Johan Andersson <johan@embark-studios.com>"
+who = "Johan Andersson <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"
 version = "0.1.0"
 notes = "Inspected it and is a tiny crate with single safe macro"
 
 [[audits.embark.audits.webpki-roots]]
-who = "Johan Andersson <johan@embark-studios.com>"
+who = "Johan Andersson <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"
 version = "0.22.4"
 notes = "Inspected it to confirm that it only contains data definitions and no runtime code"
@@ -411,3 +442,7 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.1.20 -> 0.1.21"
 
+[[audits.firefox.audits.unicode-normalization]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.1.21 -> 0.1.22"

@@ -1,10 +1,9 @@
 use std::{path::PathBuf, str::FromStr};
 
-use cargo_metadata::Version;
 use clap::{Parser, Subcommand, ValueEnum};
 use tracing::level_filters::LevelFilter;
 
-use crate::format::{CriteriaName, PackageName, VersionReq};
+use crate::format::{CriteriaName, PackageName, VersionReq, VetVersion};
 
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
@@ -419,7 +418,7 @@ pub struct InspectArgs {
     pub package: PackageName,
     /// The version to inspect
     #[clap(action)]
-    pub version: Version,
+    pub version: VetVersion,
     /// How to inspect the source
     #[clap(long, action, default_value = "sourcegraph")]
     pub mode: FetchMode,
@@ -433,10 +432,10 @@ pub struct DiffArgs {
     pub package: PackageName,
     /// The base version to diff
     #[clap(action)]
-    pub version1: Version,
+    pub version1: VetVersion,
     /// The target version to diff
     #[clap(action)]
-    pub version2: Version,
+    pub version2: VetVersion,
     /// How to inspect the source
     #[clap(long, action, default_value = "sourcegraph")]
     pub mode: FetchMode,
@@ -450,10 +449,10 @@ pub struct CertifyArgs {
     pub package: Option<PackageName>,
     /// The version to certify as audited
     #[clap(action)]
-    pub version1: Option<Version>,
+    pub version1: Option<VetVersion>,
     /// If present, instead certify a diff from version1->version2
     #[clap(action)]
-    pub version2: Option<Version>,
+    pub version2: Option<VetVersion>,
     /// The criteria to certify for this audit
     ///
     /// If not provided, we will prompt you for this information.
@@ -525,7 +524,7 @@ pub struct AddExemptionArgs {
     pub package: PackageName,
     /// The version to mark as exempted
     #[clap(action)]
-    pub version: Version,
+    pub version: VetVersion,
     /// The criteria to assume (trust)
     ///
     /// If not provided, we will prompt you for this information.
@@ -701,7 +700,7 @@ pub enum GraphFilterQuery {
 #[derive(Clone, Debug)]
 pub enum GraphFilterProperty {
     Name(PackageName),
-    Version(Version),
+    Version(VetVersion),
     IsRoot(bool),
     IsWorkspaceMember(bool),
     IsThirdParty(bool),
@@ -817,9 +816,9 @@ impl FromStr for GraphFilter {
         fn val_package_name(input: &str) -> ParseResult<&str, &str> {
             is_not(") ")(input)
         }
-        fn val_version(input: &str) -> ParseResult<&str, Version> {
+        fn val_version(input: &str) -> ParseResult<&str, VetVersion> {
             let (rest, val) = is_not(") ")(input)?;
-            let val = Version::from_str(val).map_err(|_e| {
+            let val = VetVersion::from_str(val).map_err(|_e| {
                 nom::Err::Failure(VerboseError {
                     errors: vec![(val, VerboseErrorKind::Context("version parse error"))],
                 })

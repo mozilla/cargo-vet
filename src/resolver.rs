@@ -61,7 +61,7 @@
 //! * take the blame and do a huge pile of diffstats on the reachable versions
 //!   (from search_for_path) to figure out which audits to recommend for which criteria
 
-use cargo_metadata::{DependencyKind, Metadata, Node, PackageId, Version};
+use cargo_metadata::{DependencyKind, Metadata, Node, PackageId};
 use core::fmt;
 use futures_util::future::join_all;
 use miette::IntoDiagnostic;
@@ -78,7 +78,7 @@ use crate::format::{
     ExemptedDependency, ImportName, JsonPackage, JsonReport, JsonReportConclusion,
     JsonReportFailForVet, JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest,
     JsonSuggestItem, JsonVetFailure, PackageName, PackageStr, PolicyEntry, RemoteImport,
-    SAFE_TO_DEPLOY, SAFE_TO_RUN,
+    VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
@@ -100,7 +100,7 @@ pub struct ResolveReport<'a> {
 
     /// Low-level results for each package's individual criteria resolving analysis,
     /// indexed by [`PackageIdx`][].
-    pub results: Vec<ResolveResult<'a>>,
+    pub results: Vec<ResolveResult>,
 
     /// The final conclusion of our analysis.
     pub conclusion: Conclusion,
@@ -170,8 +170,8 @@ pub struct SuggestItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffRecommendation {
-    pub from: Option<Version>,
-    pub to: Version,
+    pub from: Option<VetVersion>,
+    pub to: VetVersion,
     pub diffstat: DiffStat,
 }
 
@@ -257,7 +257,7 @@ pub struct PackageNode<'a> {
     /// The name of the package
     pub name: PackageStr<'a>,
     /// The version of this package
-    pub version: &'a Version,
+    pub version: VetVersion,
     /// All normal deps (shipped in the project or a proc-macro it uses)
     pub normal_deps: Vec<PackageIdx>,
     /// All build deps (used for build.rs)
@@ -295,11 +295,11 @@ pub struct DepGraph<'a> {
 
 /// Results and notes from running vet on a particular package.
 #[derive(Debug, Clone)]
-pub struct ResolveResult<'a> {
+pub struct ResolveResult {
     /// The set of criteria we validated for this package.
     pub validated_criteria: CriteriaSet,
     /// Individual search results for each criteria.
-    pub search_results: Vec<SearchResult<'a>>,
+    pub search_results: Vec<SearchResult>,
     /// Whether there was an exemption for this exact version.
     pub directly_exempted: bool,
 }
@@ -315,7 +315,7 @@ pub struct AuditFailure {
 
 /// The possible results of search for an audit chain for a Criteria
 #[derive(Debug, Clone)]
-pub enum SearchResult<'a> {
+pub enum SearchResult {
     /// We found a path, criteria validated.
     Connected {
         /// Caveats which were required to build the audit chain for this
@@ -335,12 +335,12 @@ pub enum SearchResult<'a> {
     /// We failed to find any path, criteria not valid.
     Disconnected {
         /// Nodes we could reach from "root"
-        reachable_from_root: SortedSet<Option<&'a Version>>,
+        reachable_from_root: SortedSet<Option<VetVersion>>,
         /// Nodes we could reach from the "target"
         ///
         /// We will only ever fill in the other one, but on failure we run the algorithm
         /// in reverse and will merge that result into this value.
-        reachable_from_target: SortedSet<Option<&'a Version>>,
+        reachable_from_target: SortedSet<Option<VetVersion>>,
     },
 }
 
@@ -392,7 +392,7 @@ impl Caveats {
 /// we can't find the desired path in the forward graph, and is used to compute the
 /// reachability set of the target version for that criteria. That reachability is
 /// used for `suggest`.
-pub type AuditGraph<'a> = SortedMap<Option<&'a Version>, Vec<DeltaEdge<'a>>>;
+pub type AuditGraph<'a> = SortedMap<Option<&'a VetVersion>, Vec<DeltaEdge<'a>>>;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum DeltaEdgeOrigin {
@@ -415,7 +415,7 @@ enum DeltaEdgeOrigin {
 #[derive(Debug, Clone)]
 pub struct DeltaEdge<'a> {
     /// The version this edge goes to.
-    version: Option<&'a Version>,
+    version: Option<&'a VetVersion>,
     /// The criteria that this edge is valid for.
     criteria: CriteriaSet,
     /// Requirements that dependencies must satisfy for the edge to be valid.
@@ -839,7 +839,7 @@ impl CriteriaFailureSet {
     }
 }
 
-impl ResolveResult<'_> {
+impl ResolveResult {
     fn with_no_criteria(empty: CriteriaSet) -> Self {
         Self {
             validated_criteria: empty,
@@ -885,7 +885,7 @@ impl<'a> DepGraph<'a> {
             nodes.push(PackageNode {
                 package_id: &resolve_node.id,
                 name: &package.name,
-                version: &package.version,
+                version: package.vet_version(),
                 is_third_party: package.is_third_party(policy),
                 // These will get (re)computed later
                 normal_deps: vec![],
@@ -1086,7 +1086,7 @@ impl<'a> DepGraph<'a> {
         fn matches_property(package: &PackageNode, property: &GraphFilterProperty) -> bool {
             match property {
                 Name(val) => package.name == val,
-                Version(val) => package.version == val,
+                Version(val) => &package.version == val,
                 IsRoot(val) => &package.is_root == val,
                 IsWorkspaceMember(val) => &package.is_workspace_member == val,
                 IsThirdParty(val) => &package.is_third_party == val,
@@ -1152,7 +1152,7 @@ impl<'a> DepGraph<'a> {
             nodes.push(PackageNode {
                 package_id: package.package_id,
                 name: package.name,
-                version: package.version,
+                version: package.version.clone(),
                 normal_deps: vec![],
                 build_deps: vec![],
                 dev_deps: vec![],
@@ -1345,12 +1345,12 @@ pub fn resolve<'a>(
     }
 }
 
-fn resolve_core<'a>(
-    graph: &DepGraph<'a>,
-    store: &'a Store,
+fn resolve_core(
+    graph: &DepGraph<'_>,
+    store: &Store,
     criteria_mapper: &CriteriaMapper,
     resolve_depth: ResolveDepth,
-) -> (Vec<ResolveResult<'a>>, Conclusion) {
+) -> (Vec<ResolveResult>, Conclusion) {
     let _resolve_span = trace_span!("validate").entered();
 
     // This uses the same indexing pattern as graph.resolve_index_by_pkgid
@@ -1548,11 +1548,11 @@ fn resolve_core<'a>(
     )
 }
 
-fn resolve_third_party<'a>(
-    store: &'a Store,
-    graph: &DepGraph<'a>,
+fn resolve_third_party(
+    store: &Store,
+    graph: &DepGraph<'_>,
     criteria_mapper: &CriteriaMapper,
-    results: &mut [ResolveResult<'a>],
+    results: &mut [ResolveResult],
     violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
     _root_failures: &mut RootFailures,
     pkgidx: PackageIdx,
@@ -1777,7 +1777,7 @@ fn resolve_third_party<'a>(
     // Unaudited entries are equivalent to full-audits
     if let Some(alloweds) = exemptions {
         for allowed in alloweds {
-            if &allowed.version == package.version {
+            if allowed.version == package.version {
                 directly_exempted = true;
             }
             let from_ver = None;
@@ -1813,7 +1813,7 @@ fn resolve_third_party<'a>(
         let result = search_for_path(
             criteria,
             None,
-            Some(package.version),
+            Some(&package.version),
             &forward_audits,
             graph,
             criteria_mapper,
@@ -1840,7 +1840,7 @@ fn resolve_third_party<'a>(
                 // can reach from the other side, so we have our candidates for suggestions.
                 let rev_result = search_for_path(
                     criteria,
-                    Some(package.version),
+                    Some(&package.version),
                     None,
                     &backward_audits,
                     graph,
@@ -1887,7 +1887,7 @@ fn resolve_third_party<'a>(
 fn get_dependency_criteria_caveats(
     dep_graph: &DepGraph,
     criteria_mapper: &CriteriaMapper,
-    results: &[ResolveResult<'_>],
+    results: &[ResolveResult],
     dependencies: &[PackageIdx],
     base_criteria: &CriteriaSet,
     dependency_criteria: &FastMap<PackageStr<'_>, CriteriaSet>,
@@ -1939,17 +1939,17 @@ fn get_dependency_criteria_caveats(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn search_for_path<'a>(
+fn search_for_path(
     cur_criteria: &CriteriaSet,
-    from_version: Option<&'a Version>,
-    to_version: Option<&'a Version>,
-    audit_graph: &AuditGraph<'a>,
-    dep_graph: &DepGraph<'a>,
+    from_version: Option<&VetVersion>,
+    to_version: Option<&VetVersion>,
+    audit_graph: &AuditGraph<'_>,
+    dep_graph: &DepGraph<'_>,
     criteria_mapper: &CriteriaMapper,
     results: &[ResolveResult],
     pkgidx: PackageIdx,
     dependencies: &[PackageIdx],
-) -> SearchResult<'a> {
+) -> SearchResult {
     // Search for any path through the graph with edges that satisfy
     // cur_criteria.  Finding any path validates that we satisfy that criteria.
     //
@@ -1968,7 +1968,7 @@ fn search_for_path<'a>(
     // caveat) to fresh imports and even failed edges (the most-important
     // caveat).
     struct Node<'a> {
-        version: Option<&'a Version>,
+        version: Option<&'a VetVersion>,
         caveats: Caveats,
         failed_deps: SortedMap<PackageIdx, CriteriaSet>,
     }
@@ -2080,17 +2080,17 @@ fn search_for_path<'a>(
     // Complete failure, we need more audits for this package, so all that
     // matters is what nodes were reachable.
     SearchResult::Disconnected {
-        reachable_from_root: visited,
+        reachable_from_root: visited.into_iter().map(|v| v.cloned()).collect(),
         // This will get filled in by a second pass.
         reachable_from_target: Default::default(),
     }
 }
 
-fn resolve_first_party<'a>(
-    store: &'a Store,
-    graph: &DepGraph<'a>,
+fn resolve_first_party(
+    store: &Store,
+    graph: &DepGraph<'_>,
     criteria_mapper: &CriteriaMapper,
-    results: &mut [ResolveResult<'a>],
+    results: &mut [ResolveResult],
     _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
     _root_failures: &mut RootFailures,
     pkgidx: PackageIdx,
@@ -2158,9 +2158,9 @@ fn resolve_first_party<'a>(
     };
 }
 
-fn get_policy_caveats<'a>(
+fn get_policy_caveats(
     criteria_mapper: &CriteriaMapper,
-    search_results: &[SearchResult<'a>],
+    search_results: &[SearchResult],
     own_policy: &CriteriaSet,
     pkgidx: PackageIdx,
     root_caveats: &mut Caveats,
@@ -2193,11 +2193,11 @@ fn get_policy_caveats<'a>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn resolve_self_policy<'a>(
-    store: &'a Store,
-    graph: &DepGraph<'a>,
+fn resolve_self_policy(
+    store: &Store,
+    graph: &DepGraph<'_>,
     criteria_mapper: &CriteriaMapper,
-    results: &mut [ResolveResult<'a>],
+    results: &mut [ResolveResult],
     _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
     root_failures: &mut RootFailures,
     root_caveats: &mut Caveats,
@@ -2248,11 +2248,11 @@ fn resolve_self_policy<'a>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn resolve_dev<'a>(
-    store: &'a Store,
-    graph: &DepGraph<'a>,
+fn resolve_dev(
+    store: &Store,
+    graph: &DepGraph<'_>,
     criteria_mapper: &CriteriaMapper,
-    results: &mut [ResolveResult<'a>],
+    results: &mut [ResolveResult],
     _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
     root_failures: &mut RootFailures,
     root_caveats: &mut Caveats,
@@ -2345,10 +2345,10 @@ fn resolve_dev<'a>(
 }
 
 /// Traverse the build graph from the root failures to the leaf failures.
-fn visit_failures<'a, T>(
-    graph: &DepGraph<'a>,
+fn visit_failures<T>(
+    graph: &DepGraph<'_>,
     criteria_mapper: &CriteriaMapper,
-    results: &[ResolveResult<'a>],
+    results: &[ResolveResult],
     root_failures: &RootFailures,
     resolve_depth: ResolveDepth,
     mut callback: impl FnMut(PackageIdx, usize, Option<&CriteriaFailureSet>) -> Result<(), T>,
@@ -2590,8 +2590,8 @@ impl<'a> ResolveReport<'a> {
                     };
 
                     // Collect up the details of how we failed
-                    let mut from_root = None::<SortedSet<Option<&Version>>>;
-                    let mut from_target = None::<SortedSet<Option<&Version>>>;
+                    let mut from_root = None::<SortedSet<&Option<VetVersion>>>;
+                    let mut from_target = None::<SortedSet<&Option<VetVersion>>>;
                     for criteria_idx in audit_failure.criteria_failures.all().indices() {
                         let search_result = &result.search_results[criteria_idx];
                         if let SearchResult::Disconnected {
@@ -2607,11 +2607,33 @@ impl<'a> ResolveReport<'a> {
                                 // restricting ourselves to the reachable nodes that are common to all
                                 // failures, so that we can suggest just one change that will fix
                                 // everything.
-                                *from_root = &*from_root & reachable_from_root;
-                                *from_target = &*from_target & reachable_from_target;
+                                from_root.retain(|ver| reachable_from_root.contains(ver));
+                                from_target.retain(|ver| reachable_from_target.contains(ver));
                             } else {
-                                from_root = Some(reachable_from_root.clone());
-                                from_target = Some(reachable_from_target.clone());
+                                // We only have sources available for the
+                                // package itself, and any non-git versions.
+                                let version_has_sources = |ver: &&Option<VetVersion>| -> bool {
+                                    ver.as_ref() == Some(&package.version)
+                                        || !matches!(
+                                            ver,
+                                            Some(VetVersion {
+                                                git_rev: Some(_),
+                                                ..
+                                            })
+                                        )
+                                };
+                                from_root = Some(
+                                    reachable_from_root
+                                        .iter()
+                                        .filter(version_has_sources)
+                                        .collect(),
+                                );
+                                from_target = Some(
+                                    reachable_from_target
+                                        .iter()
+                                        .filter(version_has_sources)
+                                        .collect(),
+                                );
                             }
                         } else {
                             unreachable!("messed up suggest...");
@@ -2645,8 +2667,8 @@ impl<'a> ResolveReport<'a> {
 
                             for closest in closest_below.into_iter().chain(closest_above) {
                                 candidates.insert(Delta {
-                                    from: closest.cloned(),
-                                    to: dest.unwrap().clone(),
+                                    from: closest.clone(),
+                                    to: dest.clone().unwrap(),
                                 });
                             }
                         }
@@ -2655,14 +2677,14 @@ impl<'a> ResolveReport<'a> {
                         for &dest in from_target.as_ref().unwrap() {
                             candidates.insert(Delta {
                                 from: None,
-                                to: dest.unwrap().clone(),
+                                to: dest.clone().unwrap(),
                             });
                         }
                     }
 
                     let diffstats = join_all(candidates.iter().map(|delta| async {
                         match cache
-                            .fetch_and_diffstat_package(network, package.name, delta)
+                            .fetch_and_diffstat_package(&cfg.metadata, network, package.name, delta)
                             .await
                         {
                             Ok(diffstat) => Some(DiffRecommendation {
@@ -2703,7 +2725,7 @@ impl<'a> ResolveReport<'a> {
             .map(|s| s.suggested_diff.diffstat.count())
             .sum();
 
-        suggestions.sort_by_key(|item| self.graph.nodes[item.package].version);
+        suggestions.sort_by_key(|item| &self.graph.nodes[item.package].version);
         suggestions.sort_by_key(|item| self.graph.nodes[item.package].name);
         suggestions.sort_by_key(|item| item.suggested_diff.diffstat.count());
         suggestions.sort_by_key(|item| item.suggested_criteria.is_fully_unconfident());
@@ -2738,8 +2760,8 @@ impl<'a> ResolveReport<'a> {
     pub fn compute_suggested_criteria(
         &self,
         package_name: PackageStr<'_>,
-        from: Option<&Version>,
-        to: &Version,
+        from: Option<&VetVersion>,
+        to: &VetVersion,
     ) -> Vec<CriteriaName> {
         let fail = if let Conclusion::FailForVet(fail) = &self.conclusion {
             fail
@@ -2748,6 +2770,11 @@ impl<'a> ResolveReport<'a> {
         };
 
         let mut criteria = self.criteria_mapper.no_criteria();
+
+        // Make owned versions of the `Version` types, such that we can look
+        // them up in search results more easily.
+        let from = from.cloned();
+        let to = Some(to.clone());
 
         // Enumerate over the recorded failures, adding any criteria for this
         // delta which would connect that package version into the audit graph.
@@ -2765,9 +2792,7 @@ impl<'a> ResolveReport<'a> {
                     reachable_from_target,
                 } = search_result
                 {
-                    if reachable_from_target.contains(&Some(to))
-                        && from.map_or(true, |v| reachable_from_root.contains(&Some(v)))
-                    {
+                    if reachable_from_target.contains(&to) && reachable_from_root.contains(&from) {
                         criteria.set_criteria(criteria_idx);
                     }
                 }
@@ -2920,7 +2945,7 @@ impl Success {
     pub fn print_human(
         &self,
         out: &Arc<dyn Out>,
-        _report: &ResolveReport,
+        _report: &ResolveReport<'_>,
         _cfg: &Config,
     ) -> Result<(), std::io::Error> {
         let fully_audited_count = self.vetted_fully.len();
@@ -2973,7 +2998,7 @@ impl Suggest {
     pub fn print_human(
         &self,
         out: &Arc<dyn Out>,
-        report: &ResolveReport,
+        report: &ResolveReport<'_>,
     ) -> Result<(), std::io::Error> {
         for (criteria, suggestions) in &self.suggestions_by_criteria {
             writeln!(out, "recommended audits for {}:", criteria);
@@ -3045,7 +3070,7 @@ impl FailForVet {
     fn print_human(
         &self,
         out: &Arc<dyn Out>,
-        report: &ResolveReport,
+        report: &ResolveReport<'_>,
         _cfg: &Config,
         suggest: Option<&Suggest>,
     ) -> Result<(), std::io::Error> {
@@ -3057,7 +3082,7 @@ impl FailForVet {
             .iter()
             .map(|(&failed_idx, failure)| (&report.graph.nodes[failed_idx], failure))
             .collect::<Vec<_>>();
-        failures.sort_by_key(|(failed, _)| failed.version);
+        failures.sort_by_key(|(failed, _)| &failed.version);
         failures.sort_by_key(|(failed, _)| failed.name);
         failures.sort_by_key(|(_, failure)| failure.criteria_failures.is_fully_unconfident());
         for (failed_package, failed_audit) in failures {
@@ -3105,7 +3130,7 @@ impl FailForViolationConflict {
     fn print_human(
         &self,
         out: &Arc<dyn Out>,
-        report: &ResolveReport,
+        report: &ResolveReport<'_>,
         _cfg: &Config,
     ) -> Result<(), std::io::Error> {
         writeln!(out, "Violations Found!");
@@ -3238,12 +3263,12 @@ pub fn regenerate_exemptions(
     // Build a list of all relevant versions of each crate used in this crate
     // graph by-name. We sort this in ascending order, meaning that we try to
     // add exemptions for earlier (in-use) versions first when needed.
-    let mut pkg_versions_by_name: SortedMap<PackageStr<'_>, Vec<&Version>> = SortedMap::new();
+    let mut pkg_versions_by_name: SortedMap<PackageStr<'_>, Vec<&VetVersion>> = SortedMap::new();
     for package in &graph.nodes {
         pkg_versions_by_name
             .entry(package.name)
             .or_default()
-            .push(package.version);
+            .push(&package.version);
     }
     for versions in pkg_versions_by_name.values_mut() {
         versions.sort();
@@ -3254,7 +3279,7 @@ pub fn regenerate_exemptions(
     /// well as for each used version, such that some combination of these
     /// exemptions can satisfy any criteria.
     struct PotentialExemption<'a> {
-        version: &'a Version,
+        version: &'a VetVersion,
         max_criteria: CriteriaSet,
         useful_criteria: CriteriaSet,
         suggest: bool,
@@ -3423,7 +3448,7 @@ pub fn regenerate_exemptions(
                     for potential in &mut potential_exemptions[..] {
                         if potential.is_special()
                             && potential.max_criteria.has_criteria(implied_idx)
-                            && reachable_from_target.contains(&Some(potential.version))
+                            && reachable_from_target.contains(&Some(potential.version.clone()))
                         {
                             // We found a "special" exemption which matches!
                             // Record the criteria we're using and that we found
@@ -3459,7 +3484,7 @@ pub fn regenerate_exemptions(
                 // satisfies what we're looking for.
                 for potential in &mut potential_exemptions[..] {
                     if potential.max_criteria.has_criteria(criteria_idx)
-                        && reachable_from_target.contains(&Some(potential.version))
+                        && reachable_from_target.contains(&Some(potential.version.clone()))
                     {
                         update_useful_criteria(
                             potential,

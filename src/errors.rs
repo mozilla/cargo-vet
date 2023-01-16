@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use cargo_metadata::Version;
+use cargo_metadata::semver;
 use miette::{Diagnostic, MietteSpanContents, SourceCode, SourceOffset, SourceSpan};
 use thiserror::Error;
 
@@ -71,6 +71,19 @@ impl Debug for SourceFile {
             .field("source", &self.source())
             .finish()
     }
+}
+
+//////////////////////////////////////////////////////////
+// VersionParseError
+//////////////////////////////////////////////////////////
+
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum VersionParseError {
+    #[error(transparent)]
+    Semver(#[from] semver::Error),
+    #[error("unrecognized revision type, expected 'git:' prefix")]
+    UnknownRevision,
 }
 
 ///////////////////////////////////////////////////////////
@@ -151,14 +164,14 @@ impl Display for UnusedAuditAsErrors {
 #[error("{package}:{version}")]
 pub struct NeedsAuditAsError {
     pub package: PackageName,
-    pub version: Version,
+    pub version: semver::Version,
 }
 
 #[derive(Debug, Error)]
 #[error("{package}:{version}")]
 pub struct ShouldntBeAuditAsError {
     pub package: PackageName,
-    pub version: Version,
+    pub version: semver::Version,
 }
 
 #[derive(Debug, Error)]
@@ -498,7 +511,7 @@ pub enum FetchError {
     #[error("Running as --frozen but needed to fetch {package}:{version}")]
     Frozen {
         package: PackageName,
-        version: Version,
+        version: semver::Version,
     },
     #[error("Failed to unpack .crate at {}", src.display())]
     Unpack {
@@ -511,6 +524,18 @@ pub enum FetchError {
         target: std::path::PathBuf,
         #[source]
         error: std::io::Error,
+    },
+    #[error("Failed to unpack checkout at {}", src.display())]
+    UnpackCheckout {
+        src: PathBuf,
+        #[source]
+        error: UnpackCheckoutError,
+    },
+    #[error("Cannot get source for unknown git commit {git_rev} of {package}")]
+    #[help("Only revisions actively used in the dependency graph can be located")]
+    UnknownGitRevision {
+        package: PackageName,
+        git_rev: String,
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -543,6 +568,31 @@ pub enum UnpackError {
     },
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum UnpackCheckoutError {
+    #[error("Failed to run 'cargo package --list'")]
+    CommandError(
+        #[from]
+        #[source]
+        CommandError,
+    ),
+    #[error("Failed to create directory {path}")]
+    CreateDirError {
+        path: std::path::PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+    #[error("Failed to copy file contents for {target}")]
+    CopyError {
+        target: std::path::PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+    #[error("Failed to finalize checkout unpack")]
+    LockCreate(#[source] std::io::Error),
 }
 
 //////////////////////////////////////////////////////////

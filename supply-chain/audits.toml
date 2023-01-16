@@ -7,6 +7,11 @@ criteria = "safe-to-deploy"
 delta = "0.3.66 -> 0.3.65"
 notes = "Only changes were to the miri backend, which will be checked"
 
+[[audits.cargo_metadata]]
+who = "Nika Layzell <nika@thelayzells.com>"
+criteria = "safe-to-deploy"
+delta = "0.14.2 -> 0.15.2"
+
 [[audits.doc-comment]]
 who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"
@@ -55,4 +60,3 @@ notes = """
 Algorithm crate implemented entirely in safe rust. Does no platform-specific
 logic, only implementing diffing and string manipulation algorithms.
 """
-

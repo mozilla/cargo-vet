@@ -35,6 +35,13 @@ stdout:
       ]
     },
     {
+      "name": "proc-macro2",
+      "version": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+      "missing_criteria": [
+        "safe-to-deploy"
+      ]
+    },
+    {
       "name": "reqwest",
       "version": "0.11.10",
       "missing_criteria": [
@@ -140,6 +147,22 @@ stdout:
             "insertions": 5196,
             "deletions": 0,
             "files_changed": 15
+          }
+        }
+      },
+      {
+        "name": "proc-macro2",
+        "notable_parents": "test-project",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+          "diffstat": {
+            "insertions": 5691,
+            "deletions": 0,
+            "files_changed": 19
           }
         }
       },
@@ -291,6 +314,22 @@ stdout:
           }
         },
         {
+          "name": "proc-macro2",
+          "notable_parents": "test-project",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+            "diffstat": {
+              "insertions": 5691,
+              "deletions": 0,
+              "files_changed": 19
+            }
+          }
+        },
+        {
           "name": "indexmap",
           "notable_parents": "h2, clap",
           "suggested_criteria": [
@@ -406,7 +445,7 @@ stdout:
         }
       ]
     },
-    "total_lines": 430361
+    "total_lines": 436052
   }
 }
 stderr:

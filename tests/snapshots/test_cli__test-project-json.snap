@@ -87,6 +87,14 @@ stdout:
       "version": "0.15.0"
     },
     {
+      "name": "unicode-xid",
+      "version": "0.2.2"
+    },
+    {
+      "name": "proc-macro2",
+      "version": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9"
+    },
+    {
       "name": "bytes",
       "version": "1.1.0"
     },
@@ -165,10 +173,6 @@ stdout:
     {
       "name": "tokio",
       "version": "1.17.0"
-    },
-    {
-      "name": "unicode-xid",
-      "version": "0.2.2"
     },
     {
       "name": "proc-macro2",

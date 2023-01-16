@@ -1,0 +1,159 @@
+---
+source: tests/test-cli.rs
+expression: format_diff_outputs(&output)
+---
+stdout:
+You are about to diff versions 1.0.37 and 1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9 of 'proc-macro2'
+Other software projects may rely on this audit. Ask for help if you're not sure.
+
+(press ENTER to inspect locally)
+index 1f5da1a..d70c3be 100644
+--- a/ci.yml
++++ b/ci.yml
+@@ -17,7 +17,7 @@ jobs:
+       matrix:
+         rust: [1.31.0, stable, beta]
+     steps:
+-      - uses: actions/checkout@v2
++      - uses: actions/checkout@v3
+       - uses: dtolnay/rust-toolchain@master
+         with:
+           toolchain: ${{matrix.rust}}
+@@ -37,7 +37,7 @@ jobs:
+     name: Rust nightly
+     runs-on: ubuntu-latest
+     steps:
+-      - uses: actions/checkout@v2
++      - uses: actions/checkout@v3
+       - uses: dtolnay/rust-toolchain@nightly
+       - run: cargo test
+       - run: cargo test --no-default-features
+@@ -62,7 +62,7 @@ jobs:
+     name: WebAssembly
+     runs-on: ubuntu-latest
+     steps:
+-      - uses: actions/checkout@v2
++      - uses: actions/checkout@v3
+       - uses: dtolnay/rust-toolchain@nightly
+         with:
+           target: wasm32-unknown-unknown
+@@ -73,16 +73,26 @@ jobs:
+     runs-on: ubuntu-latest
+     if: github.event_name != 'pull_request'
+     steps:
+-      - uses: actions/checkout@v2
++      - uses: actions/checkout@v3
+       - uses: dtolnay/rust-toolchain@clippy
+       - run: cargo clippy --tests -- -Dclippy::all -Dclippy::pedantic
+       - run: cargo clippy --tests --all-features -- -Dclippy::all -Dclippy::pedantic
+ 
++  miri:
++    name: Miri
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v3
++      - uses: dtolnay/rust-toolchain@miri
++      - run: cargo miri test
++        env:
++          MIRIFLAGS: -Zmiri-tag-raw-pointers
++
+   outdated:
+     name: Outdated
+     runs-on: ubuntu-latest
+     if: github.event_name != 'pull_request'
+     steps:
+-      - uses: actions/checkout@v2
++      - uses: actions/checkout@v3
+       - uses: dtolnay/install@cargo-outdated
+       - run: cargo outdated --exit-code 1
+index be53877..21ede03 100644
+--- a/fallback.rs
++++ b/fallback.rs
+@@ -4,7 +4,7 @@ use crate::{Delimiter, Spacing, TokenTree};
+ use std::cell::RefCell;
+ #[cfg(span_locations)]
+ use std::cmp;
+-use std::fmt::{self, Debug, Display};
++use std::fmt::{self, Debug, Display, Write};
+ use std::iter::FromIterator;
+ use std::mem;
+ use std::ops::RangeBounds;
+@@ -876,7 +876,9 @@ impl Literal {
+                 b'"' => escaped.push_str("\\\""),
+                 b'\\' => escaped.push_str("\\\\"),
+                 b'\x20'..=b'\x7E' => escaped.push(*b as char),
+-                _ => escaped.push_str(&format!("\\x{:02X}", b)),
++                _ => {
++                    let _ = write!(escaped, "\\x{:02X}", b);
++                }
+             }
+         }
+         escaped.push('"');
+index ab82390..a3e0d32 100644
+--- a/test.rs
++++ b/test.rs
+@@ -106,6 +106,15 @@ fn literal_raw_string() {
+     "r\"\r\n\"".parse::<TokenStream>().unwrap();
+ }
+ 
++#[test]
++fn literal_byte_string() {
++    assert_eq!(Literal::byte_string(b"").to_string(), "b\"\"");
++    assert_eq!(
++        Literal::byte_string(b"\0\t\n\r\"\\2\x10").to_string(),
++        "b\"\\0\\t\\n\\r\\\"\\\\2\\x10\"",
++    );
++}
++
+ #[test]
+ fn literal_character() {
+     assert_eq!(Literal::character('x').to_string(), "'x'");
+@@ -113,9 +122,44 @@ fn literal_character() {
+     assert_eq!(Literal::character('"').to_string(), "'\"'");
+ }
+ 
++#[test]
++fn literal_integer() {
++    assert_eq!(Literal::u8_suffixed(10).to_string(), "10u8");
++    assert_eq!(Literal::u16_suffixed(10).to_string(), "10u16");
++    assert_eq!(Literal::u32_suffixed(10).to_string(), "10u32");
++    assert_eq!(Literal::u64_suffixed(10).to_string(), "10u64");
++    assert_eq!(Literal::u128_suffixed(10).to_string(), "10u128");
++    assert_eq!(Literal::usize_suffixed(10).to_string(), "10usize");
++
++    assert_eq!(Literal::i8_suffixed(10).to_string(), "10i8");
++    assert_eq!(Literal::i16_suffixed(10).to_string(), "10i16");
++    assert_eq!(Literal::i32_suffixed(10).to_string(), "10i32");
++    assert_eq!(Literal::i64_suffixed(10).to_string(), "10i64");
++    assert_eq!(Literal::i128_suffixed(10).to_string(), "10i128");
++    assert_eq!(Literal::isize_suffixed(10).to_string(), "10isize");
++
++    assert_eq!(Literal::u8_unsuffixed(10).to_string(), "10");
++    assert_eq!(Literal::u16_unsuffixed(10).to_string(), "10");
++    assert_eq!(Literal::u32_unsuffixed(10).to_string(), "10");
++    assert_eq!(Literal::u64_unsuffixed(10).to_string(), "10");
++    assert_eq!(Literal::u128_unsuffixed(10).to_string(), "10");
++    assert_eq!(Literal::usize_unsuffixed(10).to_string(), "10");
++
++    assert_eq!(Literal::i8_unsuffixed(10).to_string(), "10");
++    assert_eq!(Literal::i16_unsuffixed(10).to_string(), "10");
++    assert_eq!(Literal::i32_unsuffixed(10).to_string(), "10");
++    assert_eq!(Literal::i64_unsuffixed(10).to_string(), "10");
++    assert_eq!(Literal::i128_unsuffixed(10).to_string(), "10");
++    assert_eq!(Literal::isize_unsuffixed(10).to_string(), "10");
++}
++
+ #[test]
+ fn literal_float() {
++    assert_eq!(Literal::f32_suffixed(10.0).to_string(), "10f32");
++    assert_eq!(Literal::f64_suffixed(10.0).to_string(), "10f64");
++
+     assert_eq!(Literal::f32_unsuffixed(10.0).to_string(), "10.0");
++    assert_eq!(Literal::f64_unsuffixed(10.0).to_string(), "10.0");
+ }
+ 
+ #[test]
+
+Use |cargo vet certify| to record your audit.
+stderr:
+ WARN unable to determine likely criteria, this may not be a relevant audit for this project.

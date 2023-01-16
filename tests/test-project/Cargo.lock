@@ -501,12 +501,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "proc-macro2"
+version = "1.0.37"
+source = "git+https://github.com/dtolnay/proc-macro2?rev=4445659b0f753a928059244c875a58bb12f791e9#4445659b0f753a928059244c875a58bb12f791e9"
+dependencies = [
+ "unicode-xid",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1feb54ed693b93a84e14094943b84b7c4eae204c512b7ccb95ab0c66d278ad1"
 dependencies = [
- "proc-macro2",
+ "proc-macro2 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -659,7 +667,7 @@ version = "1.0.91"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b683b2b825c8eef438b77c36a06dc262294da3d5a5813fac20da149241dcd44d"
 dependencies = [
- "proc-macro2",
+ "proc-macro2 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote",
  "unicode-xid",
 ]
@@ -692,6 +700,7 @@ name = "test-project"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "proc-macro2 1.0.37 (git+https://github.com/dtolnay/proc-macro2?rev=4445659b0f753a928059244c875a58bb12f791e9)",
  "reqwest",
  "serde_json",
  "tokio",
@@ -781,7 +790,7 @@ version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e65ce065b4b5c53e73bb28912318cb8c9e9ad3921f1d669eb0e68b4c8143a2b"
 dependencies = [
- "proc-macro2",
+ "proc-macro2 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote",
  "syn",
 ]
@@ -875,7 +884,7 @@ dependencies = [
  "bumpalo",
  "lazy_static",
  "log",
- "proc-macro2",
+ "proc-macro2 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote",
  "syn",
  "wasm-bindgen-shared",
@@ -909,7 +918,7 @@ version = "0.2.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99ec0dc7a4756fffc231aab1b9f2f578d23cd391390ab27f952ae0c9b3ece20b"
 dependencies = [
- "proc-macro2",
+ "proc-macro2 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote",
  "syn",
  "wasm-bindgen-backend",

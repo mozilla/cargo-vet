@@ -260,6 +260,11 @@ insertions = 5695
 deletions = 0
 files_changed = 20
 
+[diffs.proc-macro2."1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9"]
+insertions = 5691
+deletions = 0
+files_changed = 19
+
 [diffs.quote."1.0.18"]
 insertions = 3838
 deletions = 0
