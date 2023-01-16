@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::ops::Deref;
 use std::panic::panic_any;
+use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{fs::File, io, panic, path::PathBuf};
@@ -26,7 +27,6 @@ use out::{progress_bar, IncProgressOnDrop};
 use reqwest::Url;
 use serde::de::Deserialize;
 use serialization::spanned::Spanned;
-use tempfile::NamedTempFile;
 use thiserror::Error;
 use tracing::{error, info, trace, warn};
 
@@ -39,15 +39,16 @@ use crate::format::{
     ExemptedDependency, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr,
     SortedMap, StoreInfo,
 };
+use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
 use crate::resolver::{CriteriaMapper, CriteriaNamespace, DepGraph, ResolveDepth};
 use crate::storage::{Cache, Store};
 
 mod cli;
-mod editor;
 pub mod errors;
 mod flock;
 pub mod format;
+mod git_tool;
 pub mod network;
 mod out;
 pub mod resolver;
@@ -1407,7 +1408,7 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
     let version2 = &sub_args.version2;
     let package = &*sub_args.package;
 
-    let (fetched1, fetched2, filter_config) = {
+    let to_compare = {
         let network = Network::acquire(cfg);
         let store = Store::acquire(cfg, network.as_ref(), false)?;
         let cache = Cache::acquire(cfg)?;
@@ -1449,14 +1450,14 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
             // NOTE: don't `try_join` everything as we don't want to abort the
             // prompt to the user if the download fails while it is being shown, as
             // that could be disorienting.
-            let (pkgs, eulas) = tokio::join!(
+            let (to_compare, eulas) = tokio::join!(
                 async {
                     let (pkg1, pkg2) = tokio::try_join!(
                         cache.fetch_package(network.as_ref(), package, version1),
                         cache.fetch_package(network.as_ref(), package, version2)
                     )?;
-                    let (_, filter_config) = cache.diffstat_package(&pkg1, &pkg2).await?;
-                    Ok::<_, FetchAndDiffError>((pkg1, pkg2, filter_config))
+                    let (_, to_compare) = cache.diffstat_package(&pkg1, &pkg2).await?;
+                    Ok::<_, FetchAndDiffError>(to_compare)
                 },
                 prompt_criteria_eulas(
                     out,
@@ -1470,34 +1471,39 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
                 )
             );
             eulas.into_diagnostic()?;
-            pkgs.into_diagnostic()
+            to_compare.into_diagnostic()
         })?
     };
 
     writeln!(out);
 
-    // Create a temporary orderfile with the computed values in order to skip
-    // diffs which we want to ignore using --skip-to.
-    let mut orderfile = NamedTempFile::new().into_diagnostic()?;
-    filter_config
-        .write_order_file(&mut orderfile)
-        .into_diagnostic()?;
+    // Start a pager to show the output from our diff invocations. This will
+    // fall back to just printing to `stdout` if no pager is available or we're
+    // not piped to a terminal.
+    let mut pager = Pager::new(&**out).into_diagnostic()?;
 
-    std::process::Command::new("git")
-        .arg("-c")
-        .arg("core.safecrlf=false")
-        .arg("diff")
-        .arg("--no-index")
-        .arg("--ignore-cr-at-eol")
-        .arg("-O")
-        .arg(orderfile.path())
-        .arg("--skip-to")
-        .arg(filter_config.skip_to())
-        .arg(&fetched1)
-        .arg(&fetched2)
-        .status()
-        .map_err(CommandError::CommandFailed)
-        .into_diagnostic()?;
+    for (from, to) in to_compare {
+        let output = std::process::Command::new("git")
+            .arg("-c")
+            .arg("core.safecrlf=false")
+            .arg("diff")
+            .arg(if pager.use_color() {
+                "--color=always"
+            } else {
+                "--color=never"
+            })
+            .arg("--no-index")
+            .arg("--ignore-cr-at-eol")
+            .arg(&from)
+            .arg(&to)
+            .stdout(Stdio::piped())
+            .output()
+            .map_err(CommandError::CommandFailed)
+            .into_diagnostic()?;
+        io::Write::write_all(&mut pager, &output.stdout).into_diagnostic()?;
+    }
+
+    pager.wait().into_diagnostic()?;
 
     writeln!(out, "\nUse |cargo vet certify| to record your audit.");
 

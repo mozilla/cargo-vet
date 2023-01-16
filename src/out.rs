@@ -4,7 +4,7 @@
 //! In general, this type should be preferred over directly writing to stdout or
 //! stderr.
 
-use crate::editor::Editor;
+use crate::git_tool::Editor;
 use console::{Style, Term};
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use lazy_static::lazy_static;

@@ -1046,39 +1046,6 @@ fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> 
     Some(audit)
 }
 
-/// Helper type used to track information required to filter `git diff` output
-/// to match the filtering we do with diffstat.
-///
-/// This is done by using the `-O` (orderfile) and `--skip-to` arguments to `git
-/// diff` to place the paths we want to ignore first in the diff output, then
-/// specify `--skip-to` to skip past them.
-pub struct DiffFilterConfig {
-    paths: Vec<String>,
-    skip_to: Option<String>,
-}
-
-impl DiffFilterConfig {
-    /// Write out the contents of the orderfile which must be passed to the `-O`
-    /// flag for `git diff` to perform filtering.
-    pub fn write_order_file(&self, order_file: &mut impl io::Write) -> io::Result<()> {
-        for file in self.paths.iter().chain(&self.skip_to) {
-            order_file.write_all(file.as_bytes())?;
-        }
-        Ok(())
-    }
-
-    /// Get the path which should be passed to the `--skip-to` flag for `git
-    /// diff` to perform filtering.
-    pub fn skip_to(&self) -> &str {
-        // If we have no `skip_to`, it means that files were only removed, so
-        // skip to the first removed file.
-        match &self.skip_to {
-            Some(skip_to) => skip_to,
-            None => "/dev/null",
-        }
-    }
-}
-
 /// A Registry in CARGO_HOME (usually the crates.io one)
 pub struct CargoRegistry {
     /// The queryable index
@@ -1428,7 +1395,7 @@ impl Cache {
         &self,
         version1: &Path,
         version2: &Path,
-    ) -> Result<(DiffStat, DiffFilterConfig), DiffError> {
+    ) -> Result<(DiffStat, Vec<(PathBuf, PathBuf)>), DiffError> {
         let _permit = self
             .diff_semaphore
             .acquire()
@@ -1463,10 +1430,7 @@ impl Cache {
             insertions: 0,
             deletions: 0,
         };
-        let mut filter_config = DiffFilterConfig {
-            paths: Vec::new(),
-            skip_to: None,
-        };
+        let mut to_compare = Vec::new();
 
         // Thanks to the `-z` flag the output takes the rough format of:
         // "{INSERTED}\t{DELETED}\t\0{FROM_PATH}\0{TO_PATH}\0" for each file
@@ -1475,7 +1439,7 @@ impl Cache {
         // inserted & deleted counts.
         let output = String::from_utf8(out.stdout).map_err(CommandError::BadOutput)?;
         let mut chunks = output.split('\0');
-        while let (Some(changes_s), Some(_from_s), Some(to_s)) =
+        while let (Some(changes_s), Some(from_s), Some(to_s)) =
             (chunks.next(), chunks.next(), chunks.next())
         {
             // Check if the 'to' path is one of the files which is ignored. We
@@ -1485,13 +1449,11 @@ impl Cache {
                     .strip_prefix(version2)
                     .map_err(DiffError::UnexpectedPath)?;
                 if DIFF_SKIP_PATHS.iter().any(|p| Path::new(p) == to_path) {
-                    filter_config.paths.push(to_s.to_owned());
                     continue;
                 }
-                if filter_config.skip_to.is_none() {
-                    filter_config.skip_to = Some(to_s.to_owned());
-                }
             }
+
+            to_compare.push((from_s.into(), to_s.into()));
 
             diffstat.files_changed += 1;
 
@@ -1508,7 +1470,7 @@ impl Cache {
                 None => Err(DiffError::InvalidOutput)?,
             };
         }
-        Ok((diffstat, filter_config))
+        Ok((diffstat, to_compare))
     }
 
     #[tracing::instrument(skip(self, network), err)]
