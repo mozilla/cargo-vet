@@ -1596,6 +1596,22 @@ fn resolve_third_party(
 
     let all_audits = own_audits.chain(foreign_audits);
 
+    // Get custom policies for our dependencies
+    let policy_dep_criteria = store
+        .config
+        .policy
+        .get(package.name)
+        .map(|policy| {
+            policy
+                .dependency_criteria
+                .iter()
+                .map(|(dep_name, criteria)| {
+                    (&**dep_name, criteria_mapper.criteria_from_list(criteria))
+                })
+                .collect::<FastMap<_, _>>()
+        })
+        .unwrap_or_default();
+
     // See AuditGraph's docs for details on the lowering we do here
     let mut forward_audits = AuditGraph::new();
     let mut backward_audits = AuditGraph::new();
@@ -1620,17 +1636,17 @@ fn resolve_third_party(
             }
         };
 
-        let criteria = criteria_mapper.criteria_from_namespaced_entry(namespace, entry);
         // Convert all the custom criteria to CriteriaSets
-        let dependency_criteria: FastMap<_, _> = dependency_criteria
-            .iter()
-            .map(|(pkg_name, criteria)| {
-                (
-                    &**pkg_name,
-                    criteria_mapper.criteria_from_namespaced_list(namespace, criteria),
-                )
-            })
-            .collect();
+        let criteria = criteria_mapper.criteria_from_namespaced_entry(namespace, entry);
+
+        // Build the dependency_criteria for this edge, by combining the
+        // explicitly specified criteria with ones from the policy.
+        let mut dep_criteria = policy_dep_criteria.clone();
+        for (pkg_name, criteria) in dependency_criteria {
+            dep_criteria.entry(&**pkg_name).or_insert_with(|| {
+                criteria_mapper.criteria_from_namespaced_list(namespace, criteria)
+            });
+        }
 
         let origin = if entry.is_fresh_import {
             DeltaEdgeOrigin::FreshImportedAudit
@@ -1641,7 +1657,7 @@ fn resolve_third_party(
         forward_audits.entry(from_ver).or_default().push(DeltaEdge {
             version: Some(to_ver),
             criteria: criteria.clone(),
-            dependency_criteria: dependency_criteria.clone(),
+            dependency_criteria: dep_criteria.clone(),
             origin,
         });
         backward_audits
@@ -1650,7 +1666,7 @@ fn resolve_third_party(
             .push(DeltaEdge {
                 version: from_ver,
                 criteria,
-                dependency_criteria,
+                dependency_criteria: dep_criteria,
                 origin,
             });
     }
@@ -1783,25 +1799,27 @@ fn resolve_third_party(
             let from_ver = None;
             let to_ver = Some(&allowed.version);
             let criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
-            let dependency_criteria: FastMap<_, _> = allowed
-                .dependency_criteria
-                .iter()
-                .map(|(pkg_name, criteria)| {
-                    (&**pkg_name, criteria_mapper.criteria_from_list(criteria))
-                })
-                .collect();
+
+            // Build the dependency_criteria for this edge, by combining the
+            // explicitly specified criteria with ones from the policy.
+            let mut dep_criteria = policy_dep_criteria.clone();
+            for (pkg_name, criteria) in &allowed.dependency_criteria {
+                dep_criteria
+                    .entry(&**pkg_name)
+                    .or_insert_with(|| criteria_mapper.criteria_from_list(criteria));
+            }
 
             // For simplicity, turn 'exemptions' entries into deltas from None.
             forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: to_ver,
                 criteria: criteria.clone(),
-                dependency_criteria: dependency_criteria.clone(),
+                dependency_criteria: dep_criteria.clone(),
                 origin: DeltaEdgeOrigin::Exemption,
             });
             backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                 version: from_ver,
                 criteria,
-                dependency_criteria,
+                dependency_criteria: dep_criteria,
                 origin: DeltaEdgeOrigin::Exemption,
             });
         }

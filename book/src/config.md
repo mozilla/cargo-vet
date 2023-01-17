@@ -116,10 +116,10 @@ of a given crate.
 
 ### the `policy` Table
 
-This table maps first-party crates to the audit requirements that `cargo vet`
-should enforce on their dependencies. When unspecified, non-top-level
-first-party crates inherit most policy attributes from their parents, whereas
-top-level first-party crates get the defaults described below.
+This table maps crates to extra audit requirements that `cargo vet` should
+enforce on their dependencies. When unspecified, non-top-level first-party
+crates inherit most policy attributes from their parents, whereas top-level
+first-party crates get the defaults described below.
 
 In this context, "top-level" generally refers to crates with no
 reverse-dependencies — except when evaluating dev-dependencies, in which case
@@ -129,6 +129,9 @@ every workspace member is considered a root.
 
 A string or array of strings specifying the criteria that should be enforced for
 this crate and its dependency tree.
+
+If specified, no other audits or dependency edges can enforce additional or
+fewer criteria.
 
 For top-level crates, defaults to `safe-to-deploy`.
 
@@ -140,9 +143,15 @@ For top-level crates, defaults to `safe-to-run`.
 
 #### `dependency-criteria`
 
-Allows overriding the above values on a per-dependency basis. Similar in format
-to the [equivalent field](audit-entries.md#dependency-criteria) in audit
-entries.
+Allows overriding dependency criteria requirements on a per-dependency basis.
+
+Similar in format to the [equivalent field](audit-entries.md#dependency-criteria)
+in audit entries.
+
+This policy override takes priority over all other places where
+`dependency-criteria` is specified, and can be specified for any crate,
+including third-party crates, in order to modify how audits on that crate treat
+dependencies.
 
 Defaults to the empty set and is not inherited.
 
