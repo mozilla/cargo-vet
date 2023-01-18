@@ -116,10 +116,10 @@ of a given crate.
 
 ### the `policy` Table
 
-This table maps first-party crates to the audit requirements that `cargo vet`
-should enforce on their dependencies. When unspecified, non-top-level
-first-party crates inherit most policy attributes from their parents, whereas
-top-level first-party crates get the defaults described below.
+This table allows projects to configure the audit requirements that `cargo vet`
+should enforce on various dependencies. When unspecified, non-top-level crates
+inherit most policy attributes from their parents, whereas top-level crates get
+the defaults described below.
 
 In this context, "top-level" generally refers to crates with no
 reverse-dependencies — except when evaluating dev-dependencies, in which case
@@ -128,7 +128,10 @@ every workspace member is considered a root.
 #### `criteria`
 
 A string or array of strings specifying the criteria that should be enforced for
-this crate and its dependency tree.
+this crate and its dependency subtree.
+
+This may only be specified for first-party crates. Requirements for third-party
+crates should be applied via inheritance or `dependency-criteria`.
 
 For top-level crates, defaults to `safe-to-deploy`.
 
@@ -140,9 +143,21 @@ For top-level crates, defaults to `safe-to-run`.
 
 #### `dependency-criteria`
 
-Allows overriding the above values on a per-dependency basis. Similar in format
-to the [equivalent field](audit-entries.md#dependency-criteria) in audit
-entries.
+Allows overriding the above values on a per-dependency basis.
+
+```
+[policy.foo]
+dependency-criteria = { bar = [] }
+notes = "bar is only used to implement a foo feature we never plan to enable."
+```
+
+Unlike `criteria` and `dev-criteria`, `dependency-criteria` may apply directly
+to third-party crates (both `foo` and `bar` may be third-party in the above
+example).  Specifying `criteria` is disallowed for third-party crates because a
+given third-party crate can often be used in multiple unrelated places in a
+project's dependency graph. So in the above example, we want to exempt `bar`
+from auditing insofar as it's used by `foo`, but not necessarily if it crops up
+somewhere else.
 
 Defaults to the empty set and is not inherited.
 
@@ -169,21 +184,6 @@ Specifies the exact version which should be exempted.
 #### `criteria`
 
 Specifies the criteria covered by the exemption.
-
-#### `dependency-criteria`
-
-Allows overriding the criteria requirements for dependencies on a per-dependency basis.
-Similar in format to the [equivalent field](audit-entries.md#dependency-criteria) in audit entries.
-
-This serves the same purposes as the field on audit entries, allowing the
-exemption to relax or strengthen the requirements which it places on
-dependencies when it is used.
-
-This can be used when a crate still needs to be exempted (e.g. because it hasn't
-been audited enough to publish an audit), but it has been determined that a
-particular subtree should be held to different audit requirements. This may both
-be useful for dependencies which only need to be `safe-to-run`, or for adding
-extra requirements for specific dependencies of an exempted crate.
 
 #### `notes`
 
