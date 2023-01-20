@@ -18,7 +18,7 @@ use crate::{
     git_tool::Editor,
     init_files,
     out::Out,
-    resolver::{ResolveDepth, ResolveReport},
+    resolver::ResolveReport,
     AuditEntry, AuditsFile, Config, ConfigFile, CriteriaEntry, ExemptedDependency, ImportsFile,
     PackageExt, PartialConfig, SortedMap, Store,
 };

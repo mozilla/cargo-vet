@@ -233,55 +233,6 @@ fn test_project_suggest_json() {
 }
 
 #[test]
-fn test_project_suggest_shallow() {
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let output = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("suggest")
-        .arg("--diff-cache")
-        .arg("../diff-cache.toml")
-        .arg("--manifest-path")
-        .arg("Cargo.toml")
-        .arg("--shallow")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .unwrap();
-
-    insta::assert_snapshot!("test-project-suggest-shallow", format_outputs(&output));
-    assert!(output.status.success(), "{}", output.status);
-}
-
-#[test]
-fn test_project_suggest_shallow_json() {
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let output = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("suggest")
-        .arg("--diff-cache")
-        .arg("../diff-cache.toml")
-        .arg("--manifest-path")
-        .arg("Cargo.toml")
-        .arg("--output-format=json")
-        .arg("--shallow")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .unwrap();
-
-    insta::assert_snapshot!("test-project-suggest-shallow-json", format_outputs(&output));
-    assert!(output.status.success(), "{}", output.status);
-}
-
-#[test]
 fn test_project_dump_graph_full_json() {
     let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
