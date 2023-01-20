@@ -1,15 +1,16 @@
 //! The Resolver is the heart of cargo-vet, and does all the work to validate the audits
-//! for your current packages and to suggest fixes. This is done in 3 phases:
+//! for your current packages and to suggest fixes. This is done in 4 phases:
 //!
-//! 1. Validating the audits against your policies
-//! 2. Blaming packages for failed policies
+//! 1. Resolving required criteria based on your policies
+//! 2. Searching for audits which satisfy the required criteria
 //! 3. Suggesting audits that would make your project pass validation
 //!
 //! # High-level Usage
 //!
-//! * [`resolve`] is the main entry point, Validating and Blaming and producing a [`ResolveReport`]
+//! * [`resolve`] is the main entry point, Validating and Searching and producing a [`ResolveReport`]
 //! * [`ResolveReport::compute_suggest`] does Suggesting and produces a [`Suggest`]
 //! * various methods on [`ResolveReport`] and [`Suggest`] handle printing
+//! * [`regenerate_exemptions`] handles automatically minimizing and generating exemptions
 //!
 //! # Low-level Design
 //!
@@ -21,86 +22,62 @@
 //!       and includes a special topological sorting of the packages that prioritizes the normal
 //!       build over the dev build (it's complicated...)
 //!
-//! * resolve_third_party: for each third-party package, resolve what criteria it's audited for
+//! * resolve_requirements: for each package, resolve what criteria it needs to be audited for
+//!     * start with root targets and propagate requirements out towards leaf crates
+//!     * policies can override requirements on the target crate and its dependencies
+//!
+//! * resolve_audits: for each package, resolve what criteria it's audited for
 //!     * compute the [`AuditGraph`] and check for violations
-//!     * for each criteria, search_for_path (check if it has a connected path in the audit graph)
-//!         * if it does, then we have validated that it has that criteria
-//!         * if it doesn't, but only because dependency_criteria, blame those dependencies
-//!         * otherwise, blame ourselves and note the reachable nodes from root and target
-//!
-//! * resolve_first_party: inherit third-party criteria from normal/build deps, check policies
-//!     * first-parties "inherit" the intersection of all their dependencies' validated criteria
-//!         * as with third-parties, this is done per-criteria so we can granularly blame deps
-//!     * if there is a policy.dependency_criteria, then that dep isn't inherited normally
-//!       and is instead effectively no_criteria or all_criteria based on whether it passes or not
-//!
-//! * resolve_self_policy: if there is a policy.criteria (or it's a root), then we check
-//!   the resolved criteria against that policy
-//!     * on success, we set ourselves to all_criteria
-//!     * on failure, we set ourselves to no_criteria
-//!     * **This is the check that matters!** Anything that fails this check is registered
-//!       as a "root (policy) failure" and will be fed into the blame phase.
-//!
-//! * resolve_dev: same as above, but check dev-deps and dev-policies
-//!     * this must be done as a second pass because dev-deps can introduce cycles. by doing
-//!       all other analysis first, we can guarantee all dev-deps are fully resolved, as you
-//!       cannot actually depend on the "dev" build of a package.
-//!
-//!
-//!
-//! ## Blame
-//!
-//! * take the "root failures" and descend back down the DepGraph as a tree, following
-//!   every package's "blames" until we hit packages that blame themselves. Packages that
-//!   blame themselves are "leaf failures" and are will be the basis for `suggest`
-//!
+//!     * for each criteria, search the for a connected path in the audit graph
+//!     * check if the criteria are satisfied
+//!         * if they are, record caveats which were required for the criteria
+//!         * if they aren't record the criteria which failed, and how to fix them
 //!
 //!
 //! ## Suggest
 //!
-//! * take the blame and do a huge pile of diffstats on the reachable versions
-//!   (from search_for_path) to figure out which audits to recommend for which criteria
+//! * enumerate the failures and perform a number of diffstats based on the
+//!   existing set of criteria, to suggest the best audit and criteria which could
+//!   be used to allow the crate to vet successfully.
 
 use cargo_metadata::{DependencyKind, Metadata, Node, PackageId};
-use core::fmt;
 use futures_util::future::join_all;
 use miette::IntoDiagnostic;
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
-use std::mem;
 use std::sync::Arc;
+use std::{fmt, mem};
 use tracing::{error, trace, trace_span};
 
+use crate::cli::{DumpGraphArgs, GraphFilter, GraphFilterProperty, GraphFilterQuery};
 use crate::errors::{RegenerateExemptionsError, SuggestError};
 use crate::format::{
-    self, AuditKind, AuditsFile, CriteriaName, CriteriaStr, Delta, DiffStat, ExemptedDependency,
-    ImportName, JsonPackage, JsonReport, JsonReportConclusion, JsonReportFailForVet,
-    JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest, JsonSuggestItem,
-    JsonVetFailure, PackageName, PackageStr, PolicyEntry, RemoteImport, VetVersion, SAFE_TO_DEPLOY,
-    SAFE_TO_RUN,
+    self, AuditEntry, AuditKind, AuditsFile, CriteriaEntry, CriteriaName, CriteriaStr, Delta,
+    DiffStat, ExemptedDependency, FastMap, FastSet, ImportName, JsonPackage, JsonReport,
+    JsonReportConclusion, JsonReportFailForVet, JsonReportFailForViolationConflict,
+    JsonReportSuccess, JsonSuggest, JsonSuggestItem, JsonVetFailure, PackageName, PackageStr,
+    PolicyEntry, RemoteImport, VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
 };
-use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
+use crate::format::{SortedMap, SortedSet};
 use crate::network::Network;
 use crate::out::{progress_bar, IncProgressOnDrop, Out};
-use crate::{
-    AuditEntry, Cache, Config, CriteriaEntry, DumpGraphArgs, GraphFilter, GraphFilterProperty,
-    GraphFilterQuery, PackageExt, Store,
-};
+use crate::storage::Cache;
+use crate::{Config, PackageExt, Store};
 
-/// A report of the results of running `resolve`.
-#[derive(Debug, Clone)]
 pub struct ResolveReport<'a> {
     /// The Cargo dependency graph as parsed and understood by cargo-vet.
     ///
     /// All [`PackageIdx`][] values are indices into this graph's nodes.
     pub graph: DepGraph<'a>,
+
     /// Mappings between criteria names and CriteriaSets/Indices.
     pub criteria_mapper: CriteriaMapper,
 
-    /// Low-level results for each package's individual criteria resolving analysis,
-    /// indexed by [`PackageIdx`][].
-    pub results: Vec<ResolveResult>,
+    /// Low-level results for each package's individual criteria resolving
+    /// analysis, indexed by [`PackageIdx`][]. Will be `None` for first-party
+    /// crates or crates with violation conflicts.
+    pub results: Vec<Option<ResolveResult<'a>>>,
 
     /// The final conclusion of our analysis.
     pub conclusion: Conclusion,
@@ -127,13 +104,13 @@ pub struct Success {
 
 #[derive(Debug, Clone)]
 pub struct FailForViolationConflict {
-    pub violations: SortedMap<PackageIdx, Vec<ViolationConflict>>,
+    pub violations: Vec<(PackageIdx, Vec<ViolationConflict>)>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FailForVet {
     /// These packages are to blame and need to be fixed
-    pub failures: SortedMap<PackageIdx, AuditFailure>,
+    pub failures: Vec<(PackageIdx, AuditFailure)>,
     pub suggest: Option<Suggest>,
 }
 
@@ -163,7 +140,7 @@ pub struct Suggest {
 #[derive(Debug, Clone)]
 pub struct SuggestItem {
     pub package: PackageIdx,
-    pub suggested_criteria: CriteriaFailureSet,
+    pub suggested_criteria: CriteriaSet,
     pub suggested_diff: DiffRecommendation,
     pub notable_parents: String,
 }
@@ -295,77 +272,39 @@ pub struct DepGraph<'a> {
 
 /// Results and notes from running vet on a particular package.
 #[derive(Debug, Clone)]
-pub struct ResolveResult {
-    /// The set of criteria we validated for this package.
-    pub validated_criteria: CriteriaSet,
-    /// Individual search results for each criteria.
-    pub search_results: Vec<SearchResult>,
-    /// Whether there was an exemption for this exact version.
-    pub directly_exempted: bool,
+pub struct ResolveResult<'a> {
+    /// Graph used to compute audits for this package.
+    pub audit_graph: AuditGraph<'a>,
+    /// Cache of search results for each criteria.
+    pub search_results: Vec<Result<Caveats, SearchFailure>>,
 }
-
-pub type PolicyFailures = SortedMap<PackageIdx, CriteriaSet>;
-/// (FailedPackage, Failures, is_dev)
-pub type RootFailures = Vec<(PackageIdx, PolicyFailures, bool)>;
 
 #[derive(Debug, Clone)]
 pub struct AuditFailure {
-    pub criteria_failures: CriteriaFailureSet,
+    pub criteria_failures: CriteriaSet,
 }
 
-/// The possible results of search for an audit chain for a Criteria
+/// Value indicating a failure to find a path in the audit graph between two nodes.
 #[derive(Debug, Clone)]
-pub enum SearchResult {
-    /// We found a path, criteria validated.
-    Connected {
-        /// Caveats which were required to build the audit chain for this
-        /// Criteria.
-        caveats: Caveats,
-    },
-    /// We failed to find a *proper* path, criteria not valid, but adding in failing
-    /// edges caused by our dependencies not meeting criteria created a connection!
-    /// If you fix these dependencies then we should validate this criteria!
-    PossiblyConnected {
-        /// The dependencies that failed on some edges (blame them).
-        /// This is currently overbroad in corner cases where there are two possible
-        /// paths blocked by two different dependencies and so only fixing one would
-        /// actually be sufficient, but, whatever.
-        failed_deps: SortedMap<PackageIdx, CriteriaSet>,
-    },
-    /// We failed to find any path, criteria not valid.
-    Disconnected {
-        /// Nodes we could reach from "root"
-        reachable_from_root: SortedSet<Option<VetVersion>>,
-        /// Nodes we could reach from the "target"
-        ///
-        /// We will only ever fill in the other one, but on failure we run the algorithm
-        /// in reverse and will merge that result into this value.
-        reachable_from_target: SortedSet<Option<VetVersion>>,
-    },
+pub struct SearchFailure {
+    /// Nodes we could reach from "root"
+    pub reachable_from_root: SortedSet<Option<VetVersion>>,
+    /// Nodes we could reach from the "target"
+    pub reachable_from_target: SortedSet<Option<VetVersion>>,
 }
 
-// NOTE: There's probably a more efficient representation for these in the
-// general case.
 /// Caveats which apply to the results of an audit.
 #[derive(Debug, Clone, Default)]
 pub struct Caveats {
-    /// The set of packages which required exemptions in order to successfully
-    /// audit.
-    pub needed_exemptions: SortedSet<PackageIdx>,
-
-    /// The set of packages which required fresh imports in order to
-    /// successfully audit.
-    pub needed_fresh_imports: SortedSet<PackageIdx>,
+    /// The audit was certified directly because of an exemption.
+    pub directly_exempted: bool,
+    /// The audit required at least one exemption.
+    pub needed_exemptions: bool,
+    /// The audit required at least one fresh import.
+    pub needed_fresh_imports: bool,
 }
 
-impl Caveats {
-    /// Union the given caveat set with this set of caveats, mutating `self`.
-    fn add(&mut self, other: &Caveats) {
-        self.needed_exemptions.extend(&other.needed_exemptions);
-        self.needed_fresh_imports
-            .extend(&other.needed_fresh_imports);
-    }
-}
+type DirectedAuditGraph<'a> = SortedMap<Option<&'a VetVersion>, Vec<DeltaEdge<'a>>>;
 
 /// A graph of the audits for a package.
 ///
@@ -392,7 +331,11 @@ impl Caveats {
 /// we can't find the desired path in the forward graph, and is used to compute the
 /// reachability set of the target version for that criteria. That reachability is
 /// used for `suggest`.
-pub type AuditGraph<'a> = SortedMap<Option<&'a VetVersion>, Vec<DeltaEdge<'a>>>;
+#[derive(Debug, Clone)]
+pub struct AuditGraph<'a> {
+    forward_audits: DirectedAuditGraph<'a>,
+    backward_audits: DirectedAuditGraph<'a>,
+}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum DeltaEdgeOrigin {
@@ -413,7 +356,7 @@ enum DeltaEdgeOrigin {
 /// depending on if we're searching from "roots" (forward) or the target (backward).
 /// The source isn't included because that's implicit in the Node.
 #[derive(Debug, Clone)]
-pub struct DeltaEdge<'a> {
+struct DeltaEdge<'a> {
     /// The version this edge goes to.
     version: Option<&'a VetVersion>,
     /// The criteria that this edge is valid for.
@@ -618,17 +561,6 @@ impl CriteriaMapper {
     ) {
         set.unioned_with(&self.implied_criteria[self.index[namespace][criteria]])
     }
-    pub fn clear_criteria(&self, set: &mut CriteriaFailureSet, criteria: CriteriaStr) {
-        self.clear_namespaced_criteria(set, &CriteriaNamespace::Local, criteria)
-    }
-    pub fn clear_namespaced_criteria(
-        &self,
-        set: &mut CriteriaFailureSet,
-        namespace: &CriteriaNamespace,
-        criteria: CriteriaStr,
-    ) {
-        set.clear_criteria(&self.implied_criteria[self.index[namespace][criteria]])
-    }
     /// An iterator over every criteria in order, with 'implies' fully applied.
     ///
     /// This includes any foreign criteria that has been eliminated as redundant.
@@ -655,9 +587,6 @@ impl CriteriaMapper {
     }
     pub fn all_criteria(&self) -> CriteriaSet {
         CriteriaSet::_all(self.len())
-    }
-    pub fn no_criteria_failures(&self) -> CriteriaFailureSet {
-        CriteriaFailureSet::none(self.len())
     }
 
     /// Like [`CriteriaSet::indices`] but uses knowledge of things like
@@ -688,30 +617,6 @@ impl CriteriaMapper {
         criteria: &'a CriteriaSet,
     ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
         self.minimal_indices(criteria)
-            .map(|idx| &*self.list[idx].namespaced_name)
-    }
-
-    pub fn all_criteria_names<'a>(
-        &'a self,
-        criteria: &'a CriteriaFailureSet,
-    ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
-        self.criteria_names(criteria.all())
-    }
-
-    pub fn confident_criteria_names<'a>(
-        &'a self,
-        criteria: &'a CriteriaFailureSet,
-    ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
-        self.criteria_names(criteria.confident())
-    }
-
-    pub fn unconfident_criteria_names<'a>(
-        &'a self,
-        criteria: &'a CriteriaFailureSet,
-    ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
-        // Filter criteria present in `confident()`
-        self.minimal_indices(criteria.all())
-            .filter(|idx| !criteria.confident().has_criteria(*idx))
             .map(|idx| &*self.list[idx].namespaced_name)
     }
 }
@@ -770,79 +675,11 @@ impl CriteriaSet {
             }
         })
     }
-    /// Clear all the bits in the set
-    fn clear(&mut self) {
-        self.0 = 0;
-    }
 }
 
 impl fmt::Debug for CriteriaSet {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{:08b}", self.0)
-    }
-}
-
-impl CriteriaFailureSet {
-    pub fn none(count: usize) -> Self {
-        CriteriaFailureSet {
-            confident: CriteriaSet::none(count),
-            all: CriteriaSet::none(count),
-        }
-    }
-    pub fn from(criteria: &CriteriaSet, confident: bool) -> Self {
-        CriteriaFailureSet {
-            confident: if confident {
-                criteria.clone()
-            } else {
-                // Kinda jank but lets us copy the capacity without knowing it
-                let mut set = criteria.clone();
-                set.clear();
-                set
-            },
-            all: criteria.clone(),
-        }
-    }
-    pub fn set_criteria(&mut self, idx: usize, confident: bool) {
-        self.all.set_criteria(idx);
-        if confident {
-            self.confident.set_criteria(idx);
-        }
-    }
-    pub fn clear_criteria(&mut self, other: &CriteriaSet) {
-        self.confident.clear_criteria(other);
-        self.all.clear_criteria(other);
-    }
-    pub fn unioned_with(&mut self, other: &CriteriaFailureSet) {
-        self.all.unioned_with(&other.all);
-        self.confident.unioned_with(&other.confident);
-    }
-    pub fn contains(&self, other: &CriteriaFailureSet) -> bool {
-        self.all.contains(&other.all) && self.confident.contains(&other.confident)
-    }
-    pub fn is_empty(&self) -> bool {
-        self.all.is_empty()
-    }
-    pub fn is_fully_confident(&self) -> bool {
-        self.confident.contains(&self.all)
-    }
-    pub fn is_fully_unconfident(&self) -> bool {
-        self.confident.is_empty()
-    }
-    pub fn all(&self) -> &CriteriaSet {
-        &self.all
-    }
-    pub fn confident(&self) -> &CriteriaSet {
-        &self.confident
-    }
-}
-
-impl ResolveResult {
-    fn with_no_criteria(empty: CriteriaSet) -> Self {
-        Self {
-            validated_criteria: empty,
-            search_results: vec![],
-            directly_exempted: false,
-        }
     }
 }
 
@@ -1325,7 +1162,9 @@ pub fn resolve<'a>(
     );
     trace!("built CriteriaMapper!");
 
-    let (results, conclusion) = resolve_core(&graph, store, &criteria_mapper);
+    let requirements = resolve_requirements(&graph, &store.config.policy, &criteria_mapper);
+
+    let (results, conclusion) = resolve_audits(&graph, store, &criteria_mapper, &requirements);
 
     ResolveReport {
         graph,
@@ -1335,602 +1174,410 @@ pub fn resolve<'a>(
     }
 }
 
-fn resolve_core(
+fn resolve_requirements(
     graph: &DepGraph<'_>,
-    store: &Store,
+    policy: &SortedMap<PackageName, PolicyEntry>,
     criteria_mapper: &CriteriaMapper,
-) -> (Vec<ResolveResult>, Conclusion) {
-    let _resolve_span = trace_span!("validate").entered();
+) -> Vec<CriteriaSet> {
+    let _resolve_requirements = trace_span!("resolve_requirements").entered();
 
-    // This uses the same indexing pattern as graph.resolve_index_by_pkgid
-    let mut results =
-        vec![ResolveResult::with_no_criteria(criteria_mapper.no_criteria()); graph.nodes.len()];
+    let mut requirements = vec![criteria_mapper.no_criteria(); graph.nodes.len()];
 
-    let mut root_failures = RootFailures::new();
-    let mut violations = SortedMap::new();
-    let mut root_caveats = Caveats::default();
-
-    // Actually vet the build graph
-    for &pkgidx in &graph.topo_index {
-        let package = &graph.nodes[pkgidx];
-
-        trace!("resolving {}:{}", package.name, package.version,);
-
-        if package.is_third_party {
-            resolve_third_party(
-                store,
-                graph,
-                criteria_mapper,
-                &mut results,
-                &mut violations,
-                &mut root_failures,
-                pkgidx,
-            );
-        } else {
-            resolve_first_party(
-                store,
-                graph,
-                criteria_mapper,
-                &mut results,
-                &mut violations,
-                &mut root_failures,
-                pkgidx,
-            );
-        }
-
-        // Check that any policy on our resolved value is satisfied
-        resolve_self_policy(
-            store,
-            graph,
-            criteria_mapper,
-            &mut results,
-            &mut violations,
-            &mut root_failures,
-            &mut root_caveats,
-            pkgidx,
-        );
-    }
-
-    // Now that we've processed the "normal" graph we need to check the dev (test/bench) builds.
-    // This needs to be done as a separate pass because tests can introduce apparent cycles in
-    // the Cargo graph, because our X's tests can depend on Y which in turn depend on X again.
-    //
-    // This is fine for Cargo because the tests are a completely different build from X itself
-    // so the cycle completely disappears once the graph is "desugarred" into actual build units,
-    // but it's an annoying problem for us because it essentially means we cannot fully analyze
-    // X in one shot. However we have a few useful insights we can leverage:
-    //
-    // * Nothing can "depend" on X's tests, and therefore ignoring the tests on our first pass
-    //   shouldn't logically affect any other node's results. i.e. UsesX being safe-to-run
-    //   does not depend on X's tests being safe-to-run. If we were to desugar X into two nodes
-    //   as Cargo does, the "dev" node would always be a root, so we should treat it as such
-    //   during this second pass.
-    //
-    // * We don't actually *care* if a node *has* tests/benches. All we care about is if
-    //   the node has dev-dependencies, because that's the only thing that could change the
-    //   results of the previous pass. (TODO: is this actually true? Root nodes get special
-    //   default policies, so maybe all nodes that are testable should get rescanned? But
-    //   also tests are expected to have weaker requirements... hmm...)
-    //
-    // * We will only ever test/bench a workspace member, and workspace members are always
-    //   first-party packages. This means we can avoid thinking about all the complicated
-    //   graph search stuff and just need to do simple one-shot analysis of our deps and
-    //   check against root policies.
-    for &pkgidx in &graph.topo_index {
-        let package = &graph.nodes[pkgidx];
-        trace!("resolving dev {}:{}", package.name, package.version,);
-        if package.is_workspace_member {
-            resolve_dev(
-                store,
-                graph,
-                criteria_mapper,
-                &mut results,
-                &mut violations,
-                &mut root_failures,
-                &mut root_caveats,
-                pkgidx,
-            );
-        } else {
-            assert!(
-                package.dev_deps.is_empty(),
-                "{}:{} isn't a workspace member but has dev-deps!",
-                package.name,
-                package.version
-            );
-        }
-    }
-
-    // If there were violations, report that
-    if !violations.is_empty() {
-        return (
-            results,
-            Conclusion::FailForViolationConflict(FailForViolationConflict { violations }),
-        );
-    }
-    _resolve_span.exit();
-    let _blame_span = trace_span!("blame").entered();
-
-    // There weren't any violations, so now compute the final failures by pushing blame
-    // down from the roots to the leaves that caused those failures.
-    let mut failures = SortedMap::<PackageIdx, AuditFailure>::new();
-    visit_failures(
-        graph,
-        criteria_mapper,
-        &results,
-        &root_failures,
-        |failure, depth, own_failure| {
-            if let Some(criteria_failures) = own_failure {
-                trace!(
-                    " {:width$}blaming: {}:{} for {:?} + {:?}",
-                    "",
-                    graph.nodes[failure].name,
-                    graph.nodes[failure].version,
-                    criteria_mapper
-                        .confident_criteria_names(criteria_failures)
-                        .collect::<Vec<_>>(),
-                    criteria_mapper
-                        .unconfident_criteria_names(criteria_failures)
-                        .collect::<Vec<_>>(),
-                    width = depth
-                );
-                failures
-                    .entry(failure)
-                    .or_insert_with(|| AuditFailure {
-                        criteria_failures: criteria_mapper.no_criteria_failures(),
-                    })
-                    .criteria_failures
-                    .unioned_with(criteria_failures);
-            }
-            Ok::<(), ()>(())
-        },
-    )
-    .unwrap();
-
-    // There should always be leaf failures if there were root failures!
-    assert_eq!(
-        root_failures.is_empty(),
-        failures.is_empty(),
-        "failure blaming system bugged out"
-    );
-
-    // If there are any failures, report that
-    if !failures.is_empty() {
-        return (
-            results,
-            Conclusion::FailForVet(FailForVet {
-                failures,
-                suggest: None,
-            }),
-        );
-    }
-
-    // Ok, we've actually completely succeeded! Gather up stats on that success.
-    let mut vetted_with_exemptions = vec![];
-    let mut vetted_partially = vec![];
-    let mut vetted_fully = vec![];
-    for &pkgidx in &graph.topo_index {
-        let package = &graph.nodes[pkgidx];
-        if !package.is_third_party {
-            // We only want to report on third-parties.
+    // For any packages which have dev-dependencies, apply policy-specified
+    // dependency-criteria or dev-criteria to those dependencies.
+    for package in &graph.nodes {
+        if package.dev_deps.is_empty() {
             continue;
         }
-        let result = &results[pkgidx];
 
-        if !root_caveats.needed_exemptions.contains(&pkgidx) {
-            vetted_fully.push(pkgidx);
-        } else if result.directly_exempted {
-            vetted_with_exemptions.push(pkgidx);
+        let policy = policy.get(package.name);
+        let dev_criteria = if let Some(c) = policy.and_then(|p| p.dev_criteria.as_ref()) {
+            criteria_mapper.criteria_from_list(c)
         } else {
-            vetted_partially.push(pkgidx);
+            criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_DEV_CRITERIA])
+        };
+
+        for &depidx in &package.dev_deps {
+            let dep_package = &graph.nodes[depidx];
+            let dependency_criteria = policy
+                .and_then(|policy| policy.dependency_criteria.get(dep_package.name))
+                .map(|criteria| criteria_mapper.criteria_from_list(criteria));
+            requirements[depidx]
+                .unioned_with(dependency_criteria.as_ref().unwrap_or(&dev_criteria));
         }
     }
 
-    (
-        results,
+    // Walk the topo graph in reverse, so that we visit each package before any
+    // dependencies.
+    for &pkgidx in graph.topo_index.iter().rev() {
+        let package = &graph.nodes[pkgidx];
+        let policy = policy.get(package.name);
+
+        if let Some(c) = policy.and_then(|p| p.criteria.as_ref()) {
+            // If we specify a policy on ourselves, override any requirements we've
+            // had placed on us by reverse-dependencies.
+            requirements[pkgidx] = criteria_mapper.criteria_from_list(c);
+        } else if package.is_root {
+            // If this is a root crate, it will require at least
+            // `DEFAULT_POLICY_CRITERIA` by default, unless overridden.
+            requirements[pkgidx].unioned_with(
+                &criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA]),
+            );
+        }
+        let normal_criteria = requirements[pkgidx].clone();
+
+        // For each dependency,
+        for &depidx in &package.normal_and_build_deps {
+            let dep_package = &graph.nodes[depidx];
+            let dependency_criteria = policy
+                .and_then(|policy| policy.dependency_criteria.get(dep_package.name))
+                .map(|criteria| criteria_mapper.criteria_from_list(criteria));
+            requirements[depidx]
+                .unioned_with(dependency_criteria.as_ref().unwrap_or(&normal_criteria));
+        }
+    }
+
+    requirements
+}
+
+fn resolve_audits<'a>(
+    graph: &DepGraph<'_>,
+    store: &'a Store,
+    criteria_mapper: &CriteriaMapper,
+    requirements: &[CriteriaSet],
+) -> (Vec<Option<ResolveResult<'a>>>, Conclusion) {
+    let _resolve_audits = trace_span!("resolve_audits").entered();
+    let mut violations = Vec::new();
+    let mut failures = Vec::new();
+    let mut vetted_with_exemptions = Vec::new();
+    let mut vetted_partially = Vec::new();
+    let mut vetted_fully = Vec::new();
+    let mut needed_fresh_imports = SortedSet::new();
+    let results: Vec<_> = requirements
+        .iter()
+        .enumerate()
+        .map(|(pkgidx, required_criteria)| {
+            let package = &graph.nodes[pkgidx];
+            if !package.is_third_party {
+                return None; // first-party crates don't need audits
+            }
+
+            let audit_graph = AuditGraph::build(store, criteria_mapper, package.name)
+                .map_err(|v| violations.push((pkgidx, v)))
+                .ok()?;
+
+            // NOTE: We currently always compute all search results even if we
+            // only need those in `req_criteria` because some later passes using
+            // the resolver results might need that information. We might want
+            // to look into simplifying this in the future.
+            let search_results: Vec<_> = (0..criteria_mapper.len())
+                .map(|criteria_idx| audit_graph.search(criteria_idx, &package.version))
+                .collect();
+
+            let mut caveats = Caveats::default();
+            let mut criteria_failures = criteria_mapper.no_criteria();
+            for criteria_idx in required_criteria.indices() {
+                match &search_results[criteria_idx] {
+                    Ok(criteria_caveats) => {
+                        caveats.directly_exempted |= criteria_caveats.directly_exempted;
+                        caveats.needed_exemptions |= criteria_caveats.needed_exemptions;
+                        caveats.needed_fresh_imports |= criteria_caveats.needed_fresh_imports;
+                    }
+                    Err(_) => criteria_failures.set_criteria(criteria_idx),
+                }
+            }
+
+            if !criteria_failures.is_empty() {
+                failures.push((pkgidx, AuditFailure { criteria_failures }));
+            }
+
+            // XXX: Callers using these fields in success should perhaps be
+            // changed to instead walk the results?
+            if !caveats.needed_exemptions {
+                vetted_fully.push(pkgidx);
+            } else if caveats.directly_exempted {
+                vetted_with_exemptions.push(pkgidx);
+            } else {
+                vetted_partially.push(pkgidx);
+            }
+            if caveats.needed_fresh_imports {
+                needed_fresh_imports.insert(pkgidx);
+            }
+
+            Some(ResolveResult {
+                audit_graph,
+                search_results,
+            })
+        })
+        .collect();
+
+    let conclusion = if !violations.is_empty() {
+        Conclusion::FailForViolationConflict(FailForViolationConflict { violations })
+    } else if !failures.is_empty() {
+        Conclusion::FailForVet(FailForVet {
+            failures,
+            suggest: None,
+        })
+    } else {
         Conclusion::Success(Success {
             vetted_with_exemptions,
             vetted_partially,
             vetted_fully,
-            needed_fresh_imports: root_caveats.needed_fresh_imports,
-        }),
-    )
+            needed_fresh_imports,
+        })
+    };
+
+    (results, conclusion)
 }
 
-fn resolve_third_party(
-    store: &Store,
-    graph: &DepGraph<'_>,
-    criteria_mapper: &CriteriaMapper,
-    results: &mut [ResolveResult],
-    violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
-    _root_failures: &mut RootFailures,
-    pkgidx: PackageIdx,
-) {
-    let package = &graph.nodes[pkgidx];
-    let exemptions = store.config.exemptions.get(package.name);
+impl<'a> AuditGraph<'a> {
+    /// Given the store, and a package name, builds up an audit graph. This can
+    /// then be searched in order to find a specific path which satisfies a
+    /// given criteria.
+    pub fn build(
+        store: &'a Store,
+        criteria_mapper: &CriteriaMapper,
+        package: PackageStr<'_>,
+    ) -> Result<Self, Vec<ViolationConflict>> {
+        // Pre-build the namespaces for each audit so that we can take a reference
+        // to each one as-needed rather than cloning the name each time.
+        let foreign_namespaces: Vec<CriteriaNamespace> = store
+            .imported_audits()
+            .keys()
+            .map(|import_name| CriteriaNamespace::Foreign(import_name.clone()))
+            .collect();
 
-    // Get custom policies for our dependencies
-    let dep_criteria = store
-        .config
-        .policy
-        .get(package.name)
-        .map(|policy| {
-            policy
-                .dependency_criteria
-                .iter()
-                .map(|(dep_name, criteria)| {
-                    (&**dep_name, criteria_mapper.criteria_from_list(criteria))
-                })
-                .collect::<FastMap<_, _>>()
-        })
-        .unwrap_or_default();
+        // Each of our own audits should be put into the "local" criteria namespace.
+        let own_audits = store
+            .audits
+            .audits
+            .get(package)
+            .map(|v| &v[..])
+            .unwrap_or(&[])
+            .iter()
+            .map(|audit| (&CriteriaNamespace::Local, audit));
 
-    // Pre-build the namespaces for each audit so that we can take a reference
-    // to each one as-needed rather than cloning the name each time.
-    let foreign_namespaces: Vec<CriteriaNamespace> = store
-        .imported_audits()
-        .keys()
-        .map(|import_name| CriteriaNamespace::Foreign(import_name.clone()))
-        .collect();
+        // Each foreign audit should be put into a "foreign" criteria namespace.
+        let foreign_audits =
+            store
+                .imported_audits()
+                .values()
+                .enumerate()
+                .flat_map(|(idx, audits)| {
+                    let namespace = &foreign_namespaces[idx];
+                    audits
+                        .audits
+                        .get(package)
+                        .map(|v| &v[..])
+                        .unwrap_or(&[])
+                        .iter()
+                        .map(move |audit| (namespace, audit))
+                });
 
-    // Each of our own audits should be put into the "local" criteria namespace.
-    let own_audits = store
-        .audits
-        .audits
-        .get(package.name)
-        .map(|v| &v[..])
-        .unwrap_or(&[])
-        .iter()
-        .map(|audit| (&CriteriaNamespace::Local, audit));
+        let all_audits = own_audits.chain(foreign_audits);
+        let exemptions = store.config.exemptions.get(package);
 
-    // Each foreign audit should be put into a "foreign" criteria namespace.
-    let foreign_audits = store
-        .imported_audits()
-        .values()
-        .enumerate()
-        .flat_map(|(idx, audits)| {
-            let namespace = &foreign_namespaces[idx];
-            audits
-                .audits
-                .get(package.name)
-                .map(|v| &v[..])
-                .unwrap_or(&[])
-                .iter()
-                .map(move |audit| (namespace, audit))
-        });
+        let mut forward_audits = DirectedAuditGraph::new();
+        let mut backward_audits = DirectedAuditGraph::new();
+        let mut violation_nodes = Vec::new();
 
-    let all_audits = own_audits.chain(foreign_audits);
+        // Collect up all the deltas, and their criteria
+        for (namespace, entry) in all_audits.clone() {
+            // For uniformity, model a Full Audit as `None -> x.y.z`
+            let (from_ver, to_ver) = match &entry.kind {
+                AuditKind::Full { version } => (None, version),
+                AuditKind::Delta { from, to } => (Some(from), to),
+                AuditKind::Violation { .. } => {
+                    violation_nodes.push((namespace.clone(), entry));
+                    continue;
+                }
+            };
 
-    // See AuditGraph's docs for details on the lowering we do here
-    let mut forward_audits = AuditGraph::new();
-    let mut backward_audits = AuditGraph::new();
-    let mut violation_nodes = Vec::new();
+            let criteria = criteria_mapper.criteria_from_namespaced_entry(namespace, entry);
 
-    // Collect up all the deltas, and their criteria
-    for (namespace, entry) in all_audits.clone() {
-        // For uniformity, model a Full Audit as `None -> x.y.z`
-        let (from_ver, to_ver) = match &entry.kind {
-            AuditKind::Full { version } => (None, version),
-            AuditKind::Delta { from, to } => (Some(from), to),
-            AuditKind::Violation { .. } => {
-                violation_nodes.push((namespace.clone(), entry));
-                continue;
-            }
-        };
+            let origin = if entry.is_fresh_import {
+                DeltaEdgeOrigin::FreshImportedAudit
+            } else {
+                DeltaEdgeOrigin::StoredAudit
+            };
 
-        let criteria = criteria_mapper.criteria_from_namespaced_entry(namespace, entry);
-
-        let origin = if entry.is_fresh_import {
-            DeltaEdgeOrigin::FreshImportedAudit
-        } else {
-            DeltaEdgeOrigin::StoredAudit
-        };
-
-        forward_audits.entry(from_ver).or_default().push(DeltaEdge {
-            version: Some(to_ver),
-            criteria: criteria.clone(),
-            origin,
-        });
-        backward_audits
-            .entry(Some(to_ver))
-            .or_default()
-            .push(DeltaEdge {
-                version: from_ver,
-                criteria,
+            forward_audits.entry(from_ver).or_default().push(DeltaEdge {
+                version: Some(to_ver),
+                criteria: criteria.clone(),
                 origin,
             });
-    }
+            backward_audits
+                .entry(Some(to_ver))
+                .or_default()
+                .push(DeltaEdge {
+                    version: from_ver,
+                    criteria,
+                    origin,
+                });
+        }
 
-    // Reject forbidden packages (violations)
-    for (violation_source, violation_entry) in &violation_nodes {
-        // Ok this is kind of weird. We want to reject any audits which contain any of these criteria.
-        // Normally we would slap all the criteria in this entry into a set and do some kind of set
-        // comparison, but that's not quite right. Here are the cases we want to work:
-        //
-        // * violation: safe-to-deploy, audit: safe-to-deploy -- ERROR!
-        // * violation: safe-to-deploy, audit: safe-to-run    -- OK!
-        // * violation: safe-to-run,    audit: safe-to-deploy -- ERROR!
-        // * violation: [a, b],         audit: [a, c]         -- ERROR!
-        //
-        // The first 3 cases are correctly handled by audit.contains(violation)
-        // but the last one isn't. I think the correct solution to this is to
-        // *for each individual entry in the violation* do audit.contains(violation).
-        // If any of those queries trips, then it's an ERROR.
-        //
-        // Note that this would also more correctly handle [safe-to-deploy, safe-to-run]
-        // as a violation entry because it would effectively become safe-to-run instead
-        // of safe-to-deploy, which is the correct and desirable behaviour!
-        //
-        // So here we make a criteria set for each entry in the violation.
-        let violation_criterias = violation_entry
-            .criteria
-            .iter()
-            .map(|c| criteria_mapper.criteria_from_namespaced_list(violation_source, [&c]))
-            .collect::<Vec<_>>();
-        let violation_range = if let AuditKind::Violation { violation } = &violation_entry.kind {
-            violation
-        } else {
-            unreachable!("violation_entry wasn't a Violation?");
-        };
-
-        // Note if this entry conflicts with any exemptions
+        // Exempted entries are equivalent to full-audits
         if let Some(alloweds) = exemptions {
             for allowed in alloweds {
-                let audit_criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
+                let from_ver = None;
+                let to_ver = Some(&allowed.version);
+                let criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
+
+                // For simplicity, turn 'exemptions' entries into deltas from None.
+                forward_audits.entry(from_ver).or_default().push(DeltaEdge {
+                    version: to_ver,
+                    criteria: criteria.clone(),
+                    origin: DeltaEdgeOrigin::Exemption,
+                });
+                backward_audits.entry(to_ver).or_default().push(DeltaEdge {
+                    version: from_ver,
+                    criteria,
+                    origin: DeltaEdgeOrigin::Exemption,
+                });
+            }
+        }
+
+        // Reject forbidden packages (violations)
+        let mut violations = Vec::new();
+        for (violation_source, violation_entry) in &violation_nodes {
+            // Ok this is kind of weird. We want to reject any audits which contain any of these criteria.
+            // Normally we would slap all the criteria in this entry into a set and do some kind of set
+            // comparison, but that's not quite right. Here are the cases we want to work:
+            //
+            // * violation: safe-to-deploy, audit: safe-to-deploy -- ERROR!
+            // * violation: safe-to-deploy, audit: safe-to-run    -- OK!
+            // * violation: safe-to-run,    audit: safe-to-deploy -- ERROR!
+            // * violation: [a, b],         audit: [a, c]         -- ERROR!
+            //
+            // The first 3 cases are correctly handled by audit.contains(violation)
+            // but the last one isn't. I think the correct solution to this is to
+            // *for each individual entry in the violation* do audit.contains(violation).
+            // If any of those queries trips, then it's an ERROR.
+            //
+            // Note that this would also more correctly handle [safe-to-deploy, safe-to-run]
+            // as a violation entry because it would effectively become safe-to-run instead
+            // of safe-to-deploy, which is the correct and desirable behaviour!
+            //
+            // So here we make a criteria set for each entry in the violation.
+            let violation_criterias = violation_entry
+                .criteria
+                .iter()
+                .map(|c| criteria_mapper.criteria_from_namespaced_list(violation_source, [&c]))
+                .collect::<Vec<_>>();
+            let violation_range = if let AuditKind::Violation { violation } = &violation_entry.kind
+            {
+                violation
+            } else {
+                unreachable!("violation_entry wasn't a Violation?");
+            };
+
+            // Note if this entry conflicts with any exemptions
+            if let Some(alloweds) = exemptions {
+                for allowed in alloweds {
+                    let audit_criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
+                    let has_violation = violation_criterias
+                        .iter()
+                        .any(|v| audit_criteria.contains(v));
+                    if !has_violation {
+                        continue;
+                    }
+                    if violation_range.matches(&allowed.version) {
+                        violations.push(ViolationConflict::UnauditedConflict {
+                            violation_source: violation_source.clone(),
+                            violation: (*violation_entry).clone(),
+                            exemptions: allowed.clone(),
+                        });
+                    }
+                }
+            }
+
+            // Note if this entry conflicts with any audits
+            for (namespace, audit) in all_audits.clone() {
+                let audit_criteria =
+                    criteria_mapper.criteria_from_namespaced_entry(namespace, audit);
                 let has_violation = violation_criterias
                     .iter()
                     .any(|v| audit_criteria.contains(v));
                 if !has_violation {
                     continue;
                 }
-                if violation_range.matches(&allowed.version) {
-                    violations.entry(pkgidx).or_default().push(
-                        ViolationConflict::UnauditedConflict {
-                            violation_source: violation_source.clone(),
-                            violation: (*violation_entry).clone(),
-                            exemptions: allowed.clone(),
-                        },
-                    );
-                }
-            }
-        }
-
-        // Note if this entry conflicts with any audits
-        for (namespace, audit) in all_audits.clone() {
-            let audit_criteria = criteria_mapper.criteria_from_namespaced_entry(namespace, audit);
-            let has_violation = violation_criterias
-                .iter()
-                .any(|v| audit_criteria.contains(v));
-            if !has_violation {
-                continue;
-            }
-            match &audit.kind {
-                AuditKind::Full { version, .. } => {
-                    if violation_range.matches(version) {
-                        violations.entry(pkgidx).or_default().push(
-                            ViolationConflict::AuditConflict {
+                match &audit.kind {
+                    AuditKind::Full { version, .. } => {
+                        if violation_range.matches(version) {
+                            violations.push(ViolationConflict::AuditConflict {
                                 violation_source: violation_source.clone(),
                                 violation: (*violation_entry).clone(),
                                 audit_source: namespace.clone(),
                                 audit: audit.clone(),
-                            },
-                        );
+                            });
+                        }
                     }
-                }
-                AuditKind::Delta { from, to, .. } => {
-                    if violation_range.matches(from) || violation_range.matches(to) {
-                        violations.entry(pkgidx).or_default().push(
-                            ViolationConflict::AuditConflict {
+                    AuditKind::Delta { from, to, .. } => {
+                        if violation_range.matches(from) || violation_range.matches(to) {
+                            violations.push(ViolationConflict::AuditConflict {
                                 violation_source: violation_source.clone(),
                                 violation: (*violation_entry).clone(),
                                 audit_source: namespace.clone(),
                                 audit: audit.clone(),
-                            },
-                        );
+                            });
+                        }
+                    }
+                    AuditKind::Violation { .. } => {
+                        // don't care
                     }
                 }
-                AuditKind::Violation { .. } => {
-                    // don't care
+            }
+        }
+
+        // If we enountered any violations, report them.
+        if !violations.is_empty() {
+            return Err(violations);
+        }
+
+        Ok(AuditGraph {
+            forward_audits,
+            backward_audits,
+        })
+    }
+
+    /// Search for a path in this AuditGraph which indicates that the given
+    /// version of the crate satisfies the given criteria. Returns the `Caveats`
+    /// which were required for that proof if successful, and information about
+    /// the versions which could be reached from both the target and root if
+    /// unsuccessful.
+    pub fn search(
+        &self,
+        criteria_idx: usize,
+        version: &VetVersion,
+    ) -> Result<Caveats, SearchFailure> {
+        search_for_path(&self.forward_audits, criteria_idx, None, Some(version)).map_err(
+            |reachable_from_root| {
+                // The search failed, perform the search backwards in order to
+                // also get the set of nodes reachable from the target. We can
+                // `unwrap_err()` here, as we'll definitely fail.
+                let reachable_from_target =
+                    search_for_path(&self.backward_audits, criteria_idx, Some(version), None)
+                        .unwrap_err();
+                SearchFailure {
+                    reachable_from_root,
+                    reachable_from_target,
                 }
-            }
-        }
-
-        // FIXME: this kind of violation is annoying to catch, but you kind of don't have to.
-        //
-        // It's impossible to validate a package with some criteria without an audit/exemptions
-        // entry with that criteria (or a criteria that implies it) touching that version.
-        // Therefore we can catch any "true" violations by just looking at the AuditGraph's
-        // edges as we do above. However if you current version is a violation and but doesn't
-        // have an audit, we may suggest an audit that *is* a violation. This is bad.
-        //
-        // This commented out code stands as a memorial to that problem for later.
-
-        /*
-        // Note if this entry conflicts with the current package's version
-        if violation_range.matches(package.version) {
-            violations
-                .entry(pkgidx)
-                .or_default()
-                .push(ViolationConflict::CurVersionConflict {
-                    source: violation_source.clone(),
-                    violation: (*violation_entry).clone(),
-                });
-        }
-        */
-    }
-
-    let mut directly_exempted = false;
-    // Unaudited entries are equivalent to full-audits
-    if let Some(alloweds) = exemptions {
-        for allowed in alloweds {
-            if allowed.version == package.version {
-                directly_exempted = true;
-            }
-            let from_ver = None;
-            let to_ver = Some(&allowed.version);
-            let criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
-
-            // For simplicity, turn 'exemptions' entries into deltas from None.
-            forward_audits.entry(from_ver).or_default().push(DeltaEdge {
-                version: to_ver,
-                criteria: criteria.clone(),
-                origin: DeltaEdgeOrigin::Exemption,
-            });
-            backward_audits.entry(to_ver).or_default().push(DeltaEdge {
-                version: from_ver,
-                criteria,
-                origin: DeltaEdgeOrigin::Exemption,
-            });
-        }
-    }
-
-    let mut validated_criteria = criteria_mapper.no_criteria();
-    let mut search_results = vec![];
-    for criteria in criteria_mapper.all_criteria_iter() {
-        let result = search_for_path(
-            criteria,
-            None,
-            Some(&package.version),
-            &forward_audits,
-            graph,
-            criteria_mapper,
-            results,
-            pkgidx,
-            &package.normal_and_build_deps,
-            &dep_criteria,
-        );
-        match result {
-            SearchResult::Connected { caveats } => {
-                // We found a patch to satisfy this criteria.
-                validated_criteria.unioned_with(criteria);
-                search_results.push(SearchResult::Connected { caveats });
-            }
-            SearchResult::PossiblyConnected { failed_deps } => {
-                // We failed but found a possible solution if our dependencies were better.
-                // Just forward this along so that we can blame them if it comes up!
-                search_results.push(SearchResult::PossiblyConnected { failed_deps });
-            }
-            SearchResult::Disconnected {
-                reachable_from_root,
-                ..
-            } => {
-                // We failed to find a path, boo! Run the algorithm backwards to see what we
-                // can reach from the other side, so we have our candidates for suggestions.
-                let rev_result = search_for_path(
-                    criteria,
-                    Some(&package.version),
-                    None,
-                    &backward_audits,
-                    graph,
-                    criteria_mapper,
-                    results,
-                    pkgidx,
-                    &package.normal_and_build_deps,
-                    &dep_criteria,
-                );
-                if let SearchResult::Disconnected {
-                    reachable_from_root: reachable_from_target,
-                    ..
-                } = rev_result
-                {
-                    search_results.push(SearchResult::Disconnected {
-                        reachable_from_root,
-                        reachable_from_target,
-                    })
-                } else {
-                    unreachable!("We managed to find a path but only from one direction?!");
-                }
-            }
-        }
-    }
-
-    trace!(
-        "  third-party validation: {:?}",
-        criteria_mapper
-            .criteria_names(&validated_criteria)
-            .collect::<Vec<_>>()
-    );
-
-    // We've completed our graph analysis for this package, now record the results
-    results[pkgidx] = ResolveResult {
-        validated_criteria,
-        search_results,
-        directly_exempted,
-    };
-}
-
-/// Updates `caveats`, and `failed_deps` to include any caveats or failed
-/// dependencies involved in requiring `dependencies` to satisfy the given
-/// criteria.
-#[allow(clippy::too_many_arguments)]
-fn get_dependency_criteria_caveats(
-    dep_graph: &DepGraph,
-    criteria_mapper: &CriteriaMapper,
-    results: &[ResolveResult],
-    dependencies: &[PackageIdx],
-    base_criteria: &CriteriaSet,
-    dependency_criteria: &FastMap<PackageStr<'_>, CriteriaSet>,
-    caveats: &mut Caveats,
-    failed_deps: &mut SortedMap<PackageIdx, CriteriaSet>,
-) {
-    for &depidx in dependencies {
-        let dep_package = &dep_graph.nodes[depidx];
-        let dep_results = &results[depidx];
-
-        // If no custom criteria is specified, then require our dependency to match
-        // the base criteria that we're trying to validate. This makes audits effectively
-        // break down their criteria into individually verifiable components instead of
-        // purely "all or nothing".
-        //
-        // e.g. a safe-to-deploy audit with some deps that are only safe-to-run
-        // still audits for safe-to-run, but not safe-to-deploy. Similarly so for
-        // `[safe-to-run, some-other-criteria]` validating each criteria individually.
-        let dep_req = dependency_criteria
-            .get(dep_package.name)
-            .unwrap_or(base_criteria);
-
-        if !dep_results.validated_criteria.contains(dep_req) {
-            // This dependency's criteria is not satisfied, so add it to the
-            // failed deps map.
-            failed_deps
-                .entry(depidx)
-                .or_insert_with(|| criteria_mapper.no_criteria())
-                .unioned_with(dep_req);
-            continue;
-        }
-
-        // Only iterate the minimal set of indices to reduce the number of
-        // search results we check for caveats, as implied results will have a
-        // subset of the caveats of the stronger criteria.
-        for required_criteria_idx in criteria_mapper.minimal_indices(dep_req) {
-            // Check if the original search results succeeded here, and if it
-            // did record the relevant caveats. It's OK if we don't see
-            // `Connected` here, as that just means a policy overwrote our
-            // failure.
-            if let SearchResult::Connected {
-                caveats: dep_caveats,
-            } = &dep_results.search_results[required_criteria_idx]
-            {
-                caveats.add(dep_caveats);
-            }
-        }
+            },
+        )
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Core algorithm used to search for a path between two versions within a
+/// DirectedAuditGraph. A path with the fewest "caveats" will be used in order
+/// to minimize dependence on exemptions and freshly imported audits.
 fn search_for_path(
-    cur_criteria: &CriteriaSet,
+    audit_graph: &DirectedAuditGraph<'_>,
+    criteria_idx: usize,
     from_version: Option<&VetVersion>,
     to_version: Option<&VetVersion>,
-    audit_graph: &AuditGraph<'_>,
-    dep_graph: &DepGraph<'_>,
-    criteria_mapper: &CriteriaMapper,
-    results: &[ResolveResult],
-    pkgidx: PackageIdx,
-    dependencies: &[PackageIdx],
-    dependency_criteria: &FastMap<PackageStr<'_>, CriteriaSet>,
-) -> SearchResult {
-    // Search for any path through the graph with edges that satisfy
-    // cur_criteria.  Finding any path validates that we satisfy that criteria.
+) -> Result<Caveats, SortedSet<Option<VetVersion>>> {
+    // Search for any path through the graph with edges that satisfy criteria.
+    // Finding any path validates that we satisfy that criteria.
     //
     // All full-audits and exemptions have been "desugarred" to a delta from
     // None, meaning our graph now has exactly one source and one sink,
@@ -1943,24 +1590,22 @@ fn search_for_path(
     // find a patch without using a node with caveats, it's unambiguous proof we
     // don't need edges with caveats.
     //
-    // These caveats extend all the way from exemptions (the least-important
-    // caveat) to fresh imports and even failed edges (the most-important
-    // caveat).
+    // These caveats extend from exemptions (the least-important caveat) to
+    // fresh imports (the most-important caveat).
     struct Node<'a> {
         version: Option<&'a VetVersion>,
         caveats: Caveats,
-        failed_deps: SortedMap<PackageIdx, CriteriaSet>,
     }
 
     impl<'a> Node<'a> {
-        fn key(&self) -> Reverse<(usize, usize, usize)> {
-            // Nodes are compared by the number of failed dependencies, fresh
-            // imports, and exemptions, in that order. Fewer caveats makes the
-            // node sort higher, as it will be stored in a max heap.
+        fn key(&self) -> Reverse<(bool, bool, bool)> {
+            // Nodes are compared whether they require fresh imports or
+            // exemptions, in that order. Fewer caveats makes the node sort
+            // higher, as it will be stored in a max heap.
             Reverse((
-                self.failed_deps.len(),
-                self.caveats.needed_fresh_imports.len(),
-                self.caveats.needed_exemptions.len(),
+                self.caveats.needed_fresh_imports,
+                self.caveats.needed_exemptions,
+                self.caveats.directly_exempted,
             ))
         }
     }
@@ -1985,16 +1630,10 @@ fn search_for_path(
     queue.push(Node {
         version: from_version,
         caveats: Caveats::default(),
-        failed_deps: SortedMap::new(),
     });
 
     let mut visited = SortedSet::new();
-    while let Some(Node {
-        version,
-        caveats,
-        failed_deps,
-    }) = queue.pop()
-    {
+    while let Some(Node { version, caveats }) = queue.pop() {
         // If We've been to a version before, We're not going to get a better
         // result revisiting it, as we visit the "best" edges first.
         if !visited.insert(version) {
@@ -2004,18 +1643,14 @@ fn search_for_path(
         // We found a path! Return a search result reflecting what we
         // discovered.
         if version == to_version {
-            return if failed_deps.is_empty() {
-                SearchResult::Connected { caveats }
-            } else {
-                SearchResult::PossiblyConnected { failed_deps }
-            };
+            return Ok(caveats);
         }
 
         // Apply deltas to move along to the next layer of the search, adding it
         // to our queue.
         let edges = audit_graph.get(&version).map(|v| &v[..]).unwrap_or(&[]);
         for edge in edges {
-            if !edge.criteria.contains(cur_criteria) {
+            if !edge.criteria.has_criteria(criteria_idx) {
                 // This edge never would have been useful to us.
                 continue;
             }
@@ -2025,478 +1660,29 @@ fn search_for_path(
             }
 
             let mut edge_caveats = caveats.clone();
-            let mut edge_failed_deps = failed_deps.clone();
+            edge_caveats.directly_exempted = false;
 
             match edge.origin {
                 DeltaEdgeOrigin::Exemption => {
-                    edge_caveats.needed_exemptions.insert(pkgidx);
+                    edge_caveats.needed_exemptions = true;
+                    edge_caveats.directly_exempted = true;
                 }
                 DeltaEdgeOrigin::FreshImportedAudit => {
-                    edge_caveats.needed_fresh_imports.insert(pkgidx);
+                    edge_caveats.needed_fresh_imports = true;
                 }
                 DeltaEdgeOrigin::StoredAudit => {}
             }
 
-            get_dependency_criteria_caveats(
-                dep_graph,
-                criteria_mapper,
-                results,
-                dependencies,
-                cur_criteria,
-                dependency_criteria,
-                &mut edge_caveats,
-                &mut edge_failed_deps,
-            );
-
             queue.push(Node {
                 version: edge.version,
                 caveats: edge_caveats,
-                failed_deps: edge_failed_deps,
             });
         }
     }
 
     // Complete failure, we need more audits for this package, so all that
     // matters is what nodes were reachable.
-    SearchResult::Disconnected {
-        reachable_from_root: visited.into_iter().map(|v| v.cloned()).collect(),
-        // This will get filled in by a second pass.
-        reachable_from_target: Default::default(),
-    }
-}
-
-fn resolve_first_party(
-    store: &Store,
-    graph: &DepGraph<'_>,
-    criteria_mapper: &CriteriaMapper,
-    results: &mut [ResolveResult],
-    _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
-    _root_failures: &mut RootFailures,
-    pkgidx: PackageIdx,
-) {
-    // Check the build-deps and normal-deps of this package. dev-deps are checking in `resolve_dep`
-    // In this pass we properly use package.is_root, but in the next pass all nodes are "roots"
-    let package = &graph.nodes[pkgidx];
-
-    // Get custom policies for our dependencies
-    let dep_criteria = store
-        .config
-        .policy
-        .get(package.name)
-        .map(|policy| {
-            policy
-                .dependency_criteria
-                .iter()
-                .map(|(dep_name, criteria)| {
-                    (&**dep_name, criteria_mapper.criteria_from_list(criteria))
-                })
-                .collect::<FastMap<_, _>>()
-        })
-        .unwrap_or_default();
-
-    // Compute whether we have each criteria based on our dependencies
-    let mut validated_criteria = criteria_mapper.no_criteria();
-    let mut search_results = Vec::with_capacity(criteria_mapper.len());
-    for criteria in criteria_mapper.all_criteria_iter() {
-        // Find any build/normal dependencies that don't satisfy this criteria
-        let mut caveats = Caveats::default();
-        let mut failed_deps = SortedMap::new();
-
-        get_dependency_criteria_caveats(
-            graph,
-            criteria_mapper,
-            results,
-            &package.normal_and_build_deps,
-            criteria,
-            &dep_criteria,
-            &mut caveats,
-            &mut failed_deps,
-        );
-
-        if failed_deps.is_empty() {
-            // All our deps passed the test, so we have this criteria
-            search_results.push(SearchResult::Connected { caveats });
-            validated_criteria.unioned_with(criteria);
-        } else {
-            // Some of our deps failed to satisfy this criteria, record this
-            search_results.push(SearchResult::PossiblyConnected { failed_deps })
-        }
-    }
-    trace!(
-        "  first-party validation: {:?}",
-        criteria_mapper
-            .criteria_names(&validated_criteria)
-            .collect::<Vec<_>>()
-    );
-
-    // Save the results
-    results[pkgidx] = ResolveResult {
-        validated_criteria,
-        search_results,
-        directly_exempted: false,
-    };
-}
-
-fn get_policy_caveats(
-    criteria_mapper: &CriteriaMapper,
-    search_results: &[SearchResult],
-    own_policy: &CriteriaSet,
-    pkgidx: PackageIdx,
-    root_caveats: &mut Caveats,
-    policy_failures: &mut PolicyFailures,
-) {
-    for criteria_idx in own_policy.indices() {
-        match &search_results[criteria_idx] {
-            SearchResult::PossiblyConnected { failed_deps } => {
-                // Our children failed us
-                for (&dep, failed_criteria) in failed_deps {
-                    policy_failures
-                        .entry(dep)
-                        .or_insert_with(|| criteria_mapper.no_criteria())
-                        .unioned_with(failed_criteria);
-                }
-            }
-            SearchResult::Disconnected { .. } => {
-                // We failed ourselves
-                policy_failures
-                    .entry(pkgidx)
-                    .or_insert_with(|| criteria_mapper.no_criteria())
-                    .set_criteria(criteria_idx)
-            }
-            SearchResult::Connected { caveats } => {
-                // A-OK
-                root_caveats.add(caveats);
-            }
-        }
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn resolve_self_policy(
-    store: &Store,
-    graph: &DepGraph<'_>,
-    criteria_mapper: &CriteriaMapper,
-    results: &mut [ResolveResult],
-    _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
-    root_failures: &mut RootFailures,
-    root_caveats: &mut Caveats,
-    pkgidx: PackageIdx,
-) {
-    let package = &graph.nodes[pkgidx];
-
-    // Now check that we pass our own policy
-    let entry = store.config.policy.get(package.name);
-    let own_policy = if let Some(c) = entry.and_then(|p| p.criteria.as_ref()) {
-        trace!("  explicit policy: {:?}", c);
-        criteria_mapper.criteria_from_list(c)
-    } else if package.is_root {
-        trace!("  root policy: {:?}", [format::DEFAULT_POLICY_CRITERIA]);
-        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_CRITERIA])
-    } else {
-        trace!("  has no policy, done");
-        // We have no policy, we're done
-        return;
-    };
-
-    let mut policy_failures = PolicyFailures::new();
-
-    get_policy_caveats(
-        criteria_mapper,
-        &results[pkgidx].search_results,
-        &own_policy,
-        pkgidx,
-        root_caveats,
-        &mut policy_failures,
-    );
-
-    // NOTE: We don't update search results here, just `validated_criteria`.
-    // This is the only way that these two should get out of sync, but we want
-    // to keep around the old search results as it will be useful for blame.
-    if policy_failures.is_empty() {
-        // We had a policy and it passed, so now we're validated for all criteria
-        // because our parents can never require anything else of us. No need
-        // to update search_results, they'll be masked out by validated_criteria(?)
-        trace!("  passed policy, all_criteria");
-        results[pkgidx].validated_criteria = criteria_mapper.all_criteria();
-    } else {
-        // We had a policy and it failed, so now we're invalid for all criteria(?)
-        trace!("  failed policy, no_criteria");
-        results[pkgidx].validated_criteria = criteria_mapper.no_criteria();
-        root_failures.push((pkgidx, policy_failures, false));
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn resolve_dev(
-    store: &Store,
-    graph: &DepGraph<'_>,
-    criteria_mapper: &CriteriaMapper,
-    results: &mut [ResolveResult],
-    _violations: &mut SortedMap<PackageIdx, Vec<ViolationConflict>>,
-    root_failures: &mut RootFailures,
-    root_caveats: &mut Caveats,
-    pkgidx: PackageIdx,
-) {
-    // Check the dev-deps of this package. It is assumed to be a root in this context,
-    // so the default root dev policy will always be applicable.
-    let package = &graph.nodes[pkgidx];
-
-    // Get custom policies for our dependencies
-    let dep_criteria = store
-        .config
-        .policy
-        .get(package.name)
-        .map(|policy| {
-            policy
-                .dependency_criteria
-                .iter()
-                .map(|(dep_name, criteria)| {
-                    (&**dep_name, criteria_mapper.criteria_from_list(criteria))
-                })
-                .collect::<FastMap<_, _>>()
-        })
-        .unwrap_or_default();
-
-    // Compute whether we have each criteria based on our dependencies
-    let mut validated_criteria = criteria_mapper.no_criteria();
-    let mut search_results = vec![];
-    for criteria in criteria_mapper.all_criteria_iter() {
-        // Find any build/normal dependencies that don't satisfy this criteria
-        let mut caveats = Caveats::default();
-        let mut failed_deps = SortedMap::new();
-
-        get_dependency_criteria_caveats(
-            graph,
-            criteria_mapper,
-            results,
-            &package.dev_deps,
-            criteria,
-            &dep_criteria,
-            &mut caveats,
-            &mut failed_deps,
-        );
-
-        if failed_deps.is_empty() {
-            // All our deps passed the test, so we have this criteria
-            search_results.push(SearchResult::Connected { caveats });
-            validated_criteria.unioned_with(criteria);
-        } else {
-            // Some of our deps failed to satisfy this criteria, record this
-            search_results.push(SearchResult::PossiblyConnected { failed_deps })
-        }
-    }
-    trace!(
-        "  dev validation: {:?}",
-        criteria_mapper
-            .criteria_names(&validated_criteria)
-            .collect::<Vec<_>>()
-    );
-    // NOTE: DON'T save the results, because we're analyzing this as a dev-node
-    // and anything that depends on us only cares about the "normal" results.
-
-    // Now check that we pass our own policy
-    let entry = store.config.policy.get(package.name);
-    let own_policy = if let Some(c) = entry.and_then(|p| p.dev_criteria.as_ref()) {
-        trace!("  explicit policy: {:?}", c);
-        criteria_mapper.criteria_from_list(c)
-    } else {
-        trace!("  root policy: {:?}", [format::DEFAULT_POLICY_DEV_CRITERIA]);
-        criteria_mapper.criteria_from_list([format::DEFAULT_POLICY_DEV_CRITERIA])
-    };
-
-    let mut policy_failures = PolicyFailures::new();
-
-    get_policy_caveats(
-        criteria_mapper,
-        &search_results,
-        &own_policy,
-        pkgidx,
-        root_caveats,
-        &mut policy_failures,
-    );
-
-    if policy_failures.is_empty() {
-        trace!("  passed dev policy");
-    } else {
-        trace!("  failed dev policy");
-        root_failures.push((pkgidx, policy_failures, true));
-    }
-}
-
-/// Traverse the build graph from the root failures to the leaf failures.
-fn visit_failures<T>(
-    graph: &DepGraph<'_>,
-    criteria_mapper: &CriteriaMapper,
-    results: &[ResolveResult],
-    root_failures: &RootFailures,
-    mut callback: impl FnMut(PackageIdx, usize, Option<&CriteriaFailureSet>) -> Result<(), T>,
-) -> Result<(), T> {
-    trace!(" traversing blame tree");
-
-    // The crate graph can be messy in several ways:
-    //
-    // 1. The depth of the graph can be very large, so recursion could blow the stack.
-    //
-    // 2. The "tree" view of the graph can have an exponential number of nodes because
-    //    of duplicated subgraphs from shared dependencies. Unfortunately, that is
-    //    the representation we "have" to traverse to properly blame packages for
-    //    specific policty failures.
-    //
-    // 3. Different "targets" for one package are actually logically separate crates,
-    //    and naively unifying them can result in cycles. In particular, the "dev"
-    //    version of a crate (tests and benches) can have dev-dependencies which depend
-    //    on the "real" version of that crate, so if you combine "dev" and "normal"
-    //    then you can have cycles. Horrifyingly, people do rely on this.
-    //
-    // Problem 1 is easy to fix: just use an explicit stack instead of recursion.
-    //
-    // Problem 2 can be solved by noting that, as long as we don't actually care about
-    // *printing* the entire blame-tree and just want to figure out what the leaves
-    // are and what criteria they need, we can use the usual "keep a set of visited
-    // nodes and don't revisit nodes in that set" pattern *except* modified to include
-    // the set of criteria it has been visited with. We then only revisit a node if
-    // our current path has criteria that aren't yet in the visitor set.
-    //
-    // Problem 3 is trickier. Really we should "desugar" a node into its different
-    // targets, but there are effectively infinite targets due to all the possible
-    // cfg combinations and feature flags, so we'd *really* like to be able to abstractly
-    // handle those. I *think* we only *really* need to split up "dev" from "everything else"
-    // but I want to think about this more. For now we just rely on the solution to problem 2
-    // to avoid infinite loops and just don't worry about the semantics.
-    let mut search_stack = Vec::new();
-
-    let mut immune_to_parent_demands = FastSet::new();
-    for (failed_idx, policy_failures, is_dev) in root_failures {
-        let failed_package = &graph.nodes[*failed_idx];
-        trace!(
-            " policy failure for {}:{}",
-            failed_package.name,
-            failed_package.version
-        );
-        for (&failed_dep_idx, failed_criteria) in policy_failures {
-            let failed_dep = &graph.nodes[failed_dep_idx];
-            trace!(
-                "   {}:{} needed {:?}",
-                failed_dep.name,
-                failed_dep.version,
-                criteria_mapper
-                    .criteria_names(failed_criteria)
-                    .collect::<Vec<_>>()
-            );
-            search_stack.push((
-                failed_dep_idx,
-                0,
-                Some(CriteriaFailureSet::from(failed_criteria, true)),
-            ));
-        }
-        if !is_dev {
-            // If we have a root failure and it's not from the virtual dev-node, then
-            // we have a self-policy that "shadows" anything a parent could require.
-            // We will properly blame our children based on the existence of this entry,
-            // so we should refuse any attempts from a parent to blame us for anything.
-            immune_to_parent_demands.insert(failed_idx);
-        }
-    }
-    let mut visited = FastMap::<PackageIdx, CriteriaFailureSet>::new();
-    let no_criteria = criteria_mapper.no_criteria_failures();
-
-    while let Some((failure_idx, depth, cur_criteria)) = search_stack.pop() {
-        match visited.entry(failure_idx) {
-            std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(cur_criteria.clone().unwrap_or_else(|| no_criteria.clone()));
-            }
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
-                let cur = cur_criteria.as_ref().unwrap_or(&no_criteria);
-                if entry.get().contains(cur) {
-                    continue;
-                } else {
-                    entry.get_mut().unioned_with(cur);
-                }
-            }
-        }
-
-        let result = &results[failure_idx];
-        let package = &graph.nodes[failure_idx];
-        trace!(
-            " {:width$}visiting {}:{} for {:?} + {:?}",
-            "",
-            package.name,
-            package.version,
-            cur_criteria.as_ref().map(|c| criteria_mapper
-                .confident_criteria_names(c)
-                .collect::<Vec<_>>()),
-            cur_criteria.as_ref().map(|c| criteria_mapper
-                .unconfident_criteria_names(c)
-                .collect::<Vec<_>>()),
-            width = depth
-        );
-
-        if let Some(failed_criteria) = cur_criteria {
-            let mut own_fault = no_criteria.clone();
-            let mut dep_faults = FastMap::<PackageIdx, CriteriaFailureSet>::new();
-
-            // Collect up details of how we failed the criteria
-            for criteria_idx in failed_criteria.all().indices() {
-                let confident = failed_criteria.confident().has_criteria(criteria_idx);
-                match &result.search_results[criteria_idx] {
-                    SearchResult::Connected { .. } => {
-                        // Do nothing, this package is good
-                    }
-                    SearchResult::PossiblyConnected { failed_deps } => {
-                        // We're not to blame, it's our children who failed!
-                        for (&failed_dep, failed_criteria) in failed_deps {
-                            dep_faults
-                                .entry(failed_dep)
-                                .or_insert_with(|| no_criteria.clone())
-                                .unioned_with(&CriteriaFailureSet::from(
-                                    failed_criteria,
-                                    confident,
-                                ));
-                        }
-                    }
-                    SearchResult::Disconnected { .. } => {
-                        // Oh dang ok we *are* to blame, our bad
-                        own_fault.set_criteria(criteria_idx, confident);
-
-                        // Try to Guess Deeper by blaming our children for all |self| failures
-                        // by assuming we would need them to conform to our own criteria too.
-                        //
-                        // Dev-deps should never be chased here because any issues with those show
-                        // up as root_failures and have already been pushed into the search-stack.
-                        // All recursive blaming is about deps for a "normal" build, which requires
-                        // only these two kinds of deps.
-                        for &dep_idx in &package.normal_and_build_deps {
-                            let dep_result = &results[dep_idx];
-                            if !dep_result.validated_criteria.has_criteria(criteria_idx) {
-                                dep_faults
-                                    .entry(dep_idx)
-                                    .or_insert_with(|| no_criteria.clone())
-                                    .set_criteria(criteria_idx, false);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Visit ourselves based on whether we're to blame at all
-            if own_fault.is_empty() {
-                callback(failure_idx, depth, None)?;
-            } else {
-                callback(failure_idx, depth, Some(&own_fault))?;
-            }
-
-            // Now visit our children
-            for (failed_dep, failed_criteria) in dep_faults {
-                if immune_to_parent_demands.contains(&failed_dep) {
-                    continue;
-                }
-                search_stack.push((failed_dep, depth + 1, Some(failed_criteria.clone())));
-            }
-        } else {
-            unreachable!("I don't think this should happen..?");
-        }
-    }
-    Ok(())
+    Err(visited.into_iter().map(|v| v.cloned()).collect())
 }
 
 impl<'a> ResolveReport<'a> {
@@ -2535,7 +1721,9 @@ impl<'a> ResolveReport<'a> {
 
                     let failure_idx = *failure_idx;
                     let package = &self.graph.nodes[failure_idx];
-                    let result = &self.results[failure_idx];
+                    let result = self.results[failure_idx]
+                        .as_ref()
+                        .expect("failed package without ResolveResults?");
 
                     // Precompute some "notable" parents
                     let notable_parents = {
@@ -2568,12 +1756,12 @@ impl<'a> ResolveReport<'a> {
                     // Collect up the details of how we failed
                     let mut from_root = None::<SortedSet<&Option<VetVersion>>>;
                     let mut from_target = None::<SortedSet<&Option<VetVersion>>>;
-                    for criteria_idx in audit_failure.criteria_failures.all().indices() {
+                    for criteria_idx in audit_failure.criteria_failures.indices() {
                         let search_result = &result.search_results[criteria_idx];
-                        if let SearchResult::Disconnected {
+                        if let Err(SearchFailure {
                             reachable_from_root,
                             reachable_from_target,
-                        } = search_result
+                        }) = search_result
                         {
                             if let (Some(from_root), Some(from_target)) =
                                 (from_root.as_mut(), from_target.as_mut())
@@ -2704,13 +1892,12 @@ impl<'a> ResolveReport<'a> {
         suggestions.sort_by_key(|item| &self.graph.nodes[item.package].version);
         suggestions.sort_by_key(|item| self.graph.nodes[item.package].name);
         suggestions.sort_by_key(|item| item.suggested_diff.diffstat.count());
-        suggestions.sort_by_key(|item| item.suggested_criteria.is_fully_unconfident());
 
         let mut suggestions_by_criteria = SortedMap::<CriteriaName, Vec<SuggestItem>>::new();
         for s in suggestions.clone().into_iter() {
             let criteria_names = self
                 .criteria_mapper
-                .all_criteria_names(&s.suggested_criteria)
+                .criteria_names(&s.suggested_criteria)
                 .collect::<Vec<_>>()
                 .join(", ");
 
@@ -2754,19 +1941,21 @@ impl<'a> ResolveReport<'a> {
 
         // Enumerate over the recorded failures, adding any criteria for this
         // delta which would connect that package version into the audit graph.
-        for (&failure_idx, audit_failure) in &fail.failures {
-            let package = &self.graph.nodes[failure_idx];
+        for (failure_idx, audit_failure) in &fail.failures {
+            let package = &self.graph.nodes[*failure_idx];
             if package.name != package_name {
                 continue;
             }
 
-            let result = &self.results[failure_idx];
-            for criteria_idx in audit_failure.criteria_failures.all().indices() {
+            let result = &self.results[*failure_idx]
+                .as_ref()
+                .expect("failure without ResolveResults?");
+            for criteria_idx in audit_failure.criteria_failures.indices() {
                 let search_result = &result.search_results[criteria_idx];
-                if let SearchResult::Disconnected {
+                if let Err(SearchFailure {
                     reachable_from_root,
                     reachable_from_target,
-                } = search_result
+                }) = search_result
                 {
                     if reachable_from_target.contains(&to) && reachable_from_root.contains(&from) {
                         criteria.set_criteria(criteria_idx);
@@ -2865,7 +2054,7 @@ impl<'a> ResolveReport<'a> {
                             notable_parents: item.notable_parents.to_owned(),
                             suggested_criteria: self
                                 .criteria_mapper
-                                .all_criteria_names(&item.suggested_criteria)
+                                .criteria_names(&item.suggested_criteria)
                                 .map(|s| s.to_owned())
                                 .collect(),
                             suggested_diff: item.suggested_diff.clone(),
@@ -2875,14 +2064,14 @@ impl<'a> ResolveReport<'a> {
                         failures: fail
                             .failures
                             .iter()
-                            .map(|(&pkgidx, audit_fail)| {
-                                let package = &self.graph.nodes[pkgidx];
+                            .map(|(pkgidx, audit_fail)| {
+                                let package = &self.graph.nodes[*pkgidx];
                                 JsonVetFailure {
                                     name: package.name.to_owned(),
                                     version: package.version.clone(),
                                     missing_criteria: self
                                         .criteria_mapper
-                                        .all_criteria_names(&audit_fail.criteria_failures)
+                                        .criteria_names(&audit_fail.criteria_failures)
                                         .map(|s| s.to_owned())
                                         .collect(),
                                 }
@@ -2998,12 +2187,7 @@ impl Suggest {
                         Some(_) => format!("({})", item.suggested_diff.diffstat),
                         None => format!("({} lines)", item.suggested_diff.diffstat.count()),
                     };
-                    let style = if item.suggested_criteria.is_fully_unconfident() {
-                        out.style().dim()
-                    } else {
-                        out.style()
-                    };
-                    (cmd, parents, diffstat, style)
+                    (cmd, parents, diffstat)
                 })
                 .collect::<Vec<_>>();
 
@@ -3014,21 +2198,16 @@ impl Suggest {
                 max1 = max1.max(console::measure_text_width(s1));
             }
 
-            for (s0, s1, s2, style) in strings {
+            for (s0, s1, s2) in strings {
                 write!(
                     out,
                     "{}",
-                    style
-                        .clone()
+                    out.style()
                         .cyan()
                         .bold()
                         .apply_to(format_args!("    {s0:width$}", width = max0))
                 );
-                writeln!(
-                    out,
-                    "{}",
-                    style.apply_to(format_args!("  {s1:width$}  {s2}", width = max1))
-                );
+                writeln!(out, "  {s1:width$}  {s2}", width = max1);
             }
 
             writeln!(out);
@@ -3056,40 +2235,18 @@ impl FailForVet {
         let mut failures = self
             .failures
             .iter()
-            .map(|(&failed_idx, failure)| (&report.graph.nodes[failed_idx], failure))
+            .map(|(failed_idx, failure)| (&report.graph.nodes[*failed_idx], failure))
             .collect::<Vec<_>>();
         failures.sort_by_key(|(failed, _)| &failed.version);
         failures.sort_by_key(|(failed, _)| failed.name);
-        failures.sort_by_key(|(_, failure)| failure.criteria_failures.is_fully_unconfident());
         for (failed_package, failed_audit) in failures {
-            let confident_criteria = report
+            let criteria = report
                 .criteria_mapper
-                .confident_criteria_names(&failed_audit.criteria_failures)
-                .collect::<Vec<_>>();
-            let unconfident_criteria = report
-                .criteria_mapper
-                .unconfident_criteria_names(&failed_audit.criteria_failures)
+                .criteria_names(&failed_audit.criteria_failures)
                 .collect::<Vec<_>>();
 
             let label = format!("  {}:{}", failed_package.name, failed_package.version);
-            if !confident_criteria.is_empty() {
-                writeln!(out, "{} missing {:?}", label, confident_criteria);
-            }
-            if !unconfident_criteria.is_empty() {
-                writeln!(
-                    out,
-                    "{}",
-                    out.style().dim().apply_to(format_args!(
-                        "{} likely missing {:?}",
-                        if confident_criteria.is_empty() {
-                            label
-                        } else {
-                            format!("{:width$}", "", width = console::measure_text_width(&label))
-                        },
-                        unconfident_criteria
-                    ))
-                );
-            }
+            writeln!(out, "{} missing {:?}", label, criteria);
         }
 
         // Suggest output generally requires hitting the network.
@@ -3111,8 +2268,8 @@ impl FailForViolationConflict {
     ) -> Result<(), std::io::Error> {
         writeln!(out, "Violations Found!");
 
-        for (&pkgidx, violations) in &self.violations {
-            let package = &report.graph.nodes[pkgidx];
+        for (pkgidx, violations) in &self.violations {
+            let package = &report.graph.nodes[*pkgidx];
             writeln!(out, "  {}:{}", package.name, package.version);
             for violation in violations {
                 match violation {
@@ -3206,8 +2363,8 @@ pub fn regenerate_exemptions(
     force_update_imports: bool,
 ) -> Result<(), RegenerateExemptionsError> {
     // While minimizing exemptions, a number of different calls to the resolver
-    // will be made using the same DepGraph and CriteriaMapper, which will be
-    // generated up-front.
+    // will be made using the same DepGraph, CriteriaMapper and requirements,
+    // which will be generated up-front.
     let graph = DepGraph::new(
         &cfg.metadata,
         cfg.cli.filter_graph.as_ref(),
@@ -3218,13 +2375,14 @@ pub fn regenerate_exemptions(
         store.imported_audits(),
         &store.config.imports,
     );
+    let requirements = resolve_requirements(&graph, &store.config.policy, &criteria_mapper);
 
     // If we're not allowing new exemptions, we must already be passing `vet`.
     // If we aren't, we can't do anything, so just update imports and return
     // immediately. We'll also do this if automatic exemption minimization is
     // disabled through the CLI.
     if !allow_new_exemptions {
-        let (_, conclusion) = resolve_core(&graph, store, &criteria_mapper);
+        let (_, conclusion) = resolve_audits(&graph, store, &criteria_mapper, &requirements);
         if !matches!(conclusion, Conclusion::Success(_)) || cfg.cli.no_minimize_exemptions {
             store.imports =
                 store.get_updated_imports_file(&graph, &conclusion, force_update_imports);
@@ -3275,7 +2433,7 @@ pub fn regenerate_exemptions(
 
     loop {
         // Try to vet.
-        let (results, conclusion) = resolve_core(&graph, store, &criteria_mapper);
+        let (results, conclusion) = resolve_audits(&graph, store, &criteria_mapper, &requirements);
 
         // We only need to do more work here if we have any failures which we
         // can work with.
@@ -3309,9 +2467,11 @@ pub fn regenerate_exemptions(
                 potential.useful_criteria.unioned_with(new_criteria);
             };
 
-        for (&failure_idx, failure) in &fail.failures {
-            let package = &graph.nodes[failure_idx];
-            let result = &results[failure_idx];
+        for (failure_idx, failure) in &fail.failures {
+            let package = &graph.nodes[*failure_idx];
+            let result = results[*failure_idx]
+                .as_ref()
+                .expect("failed package without ResolveResult?");
 
             trace!("minimizing exemptions for {}", package.name);
 
@@ -3390,7 +2550,7 @@ pub fn regenerate_exemptions(
             // requirements for. We'll loop around again to add more audits
             // until we successfully vet.
             'min_criteria: for criteria_idx in
-                criteria_mapper.minimal_indices(failure.criteria_failures.confident())
+                criteria_mapper.minimal_indices(&failure.criteria_failures)
             {
                 let implied = &criteria_mapper.implied_criteria[criteria_idx];
 
@@ -3407,10 +2567,10 @@ pub fn regenerate_exemptions(
                     // Check if this implied criteria actually failed, if it
                     // didn't, we don't need to add any new exemptions for it.
                     let reachable_from_target = match &result.search_results[implied_idx] {
-                        SearchResult::Disconnected {
+                        Err(SearchFailure {
                             reachable_from_target,
                             ..
-                        } => reachable_from_target,
+                        }) => reachable_from_target,
                         _ => continue,
                     };
                     let mut found = false;
@@ -3441,10 +2601,10 @@ pub fn regenerate_exemptions(
                 }
 
                 let reachable_from_target = match &result.search_results[criteria_idx] {
-                    SearchResult::Disconnected {
+                    Err(SearchFailure {
                         reachable_from_target,
                         ..
-                    } => reachable_from_target,
+                    }) => reachable_from_target,
                     _ => unreachable!("minimal criteria didn't actually fail?"),
                 };
 

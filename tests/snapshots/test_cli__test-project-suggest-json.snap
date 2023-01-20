@@ -703,182 +703,6 @@ stdout:
   "suggest": {
     "suggestions": [
       {
-        "name": "hermit-abi",
-        "notable_parents": "atty",
-        "suggested_criteria": [
-          "safe-to-run"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "0.1.19",
-          "diffstat": {
-            "insertions": 932,
-            "deletions": 0,
-            "files_changed": 9
-          }
-        }
-      },
-      {
-        "name": "termcolor",
-        "notable_parents": "clap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "1.1.3",
-          "diffstat": {
-            "insertions": 2578,
-            "deletions": 0,
-            "files_changed": 10
-          }
-        }
-      },
-      {
-        "name": "os_str_bytes",
-        "notable_parents": "clap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "6.0.0",
-          "diffstat": {
-            "insertions": 2911,
-            "deletions": 0,
-            "files_changed": 21
-          }
-        }
-      },
-      {
-        "name": "textwrap",
-        "notable_parents": "clap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "0.15.0",
-          "diffstat": {
-            "insertions": 5196,
-            "deletions": 0,
-            "files_changed": 15
-          }
-        }
-      },
-      {
-        "name": "proc-macro2",
-        "notable_parents": "test-project",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
-          "diffstat": {
-            "insertions": 5691,
-            "deletions": 0,
-            "files_changed": 19
-          }
-        }
-      },
-      {
-        "name": "indexmap",
-        "notable_parents": "h2, clap",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "1.8.1",
-          "diffstat": {
-            "insertions": 9445,
-            "deletions": 0,
-            "files_changed": 31
-          }
-        }
-      },
-      {
-        "name": "reqwest",
-        "notable_parents": "test-project",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "0.11.10",
-          "diffstat": {
-            "insertions": 19797,
-            "deletions": 0,
-            "files_changed": 60
-          }
-        }
-      },
-      {
-        "name": "serde_json",
-        "notable_parents": "reqwest, test-project",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "1.0.79",
-          "diffstat": {
-            "insertions": 22848,
-            "deletions": 0,
-            "files_changed": 86
-          }
-        }
-      },
-      {
-        "name": "tokio",
-        "notable_parents": "h2, hyper, reqwest, and 4 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "1.17.0",
-          "diffstat": {
-            "insertions": 91271,
-            "deletions": 0,
-            "files_changed": 403
-          }
-        }
-      },
-      {
-        "name": "libc",
-        "notable_parents": "mio, atty, tokio, openssl, and 8 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "0.2.123",
-          "diffstat": {
-            "insertions": 94060,
-            "deletions": 0,
-            "files_changed": 215
-          }
-        }
-      },
-      {
-        "name": "winapi",
-        "notable_parents": "mio, atty, miow, ntapi, and 7 others",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "0.3.9",
-          "diffstat": {
-            "insertions": 181323,
-            "deletions": 0,
-            "files_changed": 410
-          }
-        }
-      },
-      {
         "name": "tinyvec_macros",
         "notable_parents": "tinyvec",
         "suggested_criteria": [
@@ -1199,6 +1023,22 @@ stdout:
         }
       },
       {
+        "name": "hermit-abi",
+        "notable_parents": "atty",
+        "suggested_criteria": [
+          "safe-to-run"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.1.19",
+          "diffstat": {
+            "insertions": 932,
+            "deletions": 0,
+            "files_changed": 9
+          }
+        }
+      },
+      {
         "name": "httpdate",
         "notable_parents": "hyper",
         "suggested_criteria": [
@@ -1487,6 +1327,22 @@ stdout:
         }
       },
       {
+        "name": "termcolor",
+        "notable_parents": "clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.1.3",
+          "diffstat": {
+            "insertions": 2578,
+            "deletions": 0,
+            "files_changed": 10
+          }
+        }
+      },
+      {
         "name": "slab",
         "notable_parents": "h2",
         "suggested_criteria": [
@@ -1499,6 +1355,22 @@ stdout:
             "insertions": 2615,
             "deletions": 0,
             "files_changed": 9
+          }
+        }
+      },
+      {
+        "name": "os_str_bytes",
+        "notable_parents": "clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "6.0.0",
+          "diffstat": {
+            "insertions": 2911,
+            "deletions": 0,
+            "files_changed": 21
           }
         }
       },
@@ -1759,6 +1631,22 @@ stdout:
         }
       },
       {
+        "name": "textwrap",
+        "notable_parents": "clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.15.0",
+          "diffstat": {
+            "insertions": 5196,
+            "deletions": 0,
+            "files_changed": 15
+          }
+        }
+      },
+      {
         "name": "log",
         "notable_parents": "mio, want, reqwest, and 2 others",
         "suggested_criteria": [
@@ -1769,6 +1657,22 @@ stdout:
           "to": "0.4.16",
           "diffstat": {
             "insertions": 5625,
+            "deletions": 0,
+            "files_changed": 19
+          }
+        }
+      },
+      {
+        "name": "proc-macro2",
+        "notable_parents": "test-project",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+          "diffstat": {
+            "insertions": 5691,
             "deletions": 0,
             "files_changed": 19
           }
@@ -1915,6 +1819,22 @@ stdout:
             "insertions": 9316,
             "deletions": 0,
             "files_changed": 42
+          }
+        }
+      },
+      {
+        "name": "indexmap",
+        "notable_parents": "h2, clap",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.8.1",
+          "diffstat": {
+            "insertions": 9445,
+            "deletions": 0,
+            "files_changed": 31
           }
         }
       },
@@ -2095,6 +2015,22 @@ stdout:
         }
       },
       {
+        "name": "reqwest",
+        "notable_parents": "test-project",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.11.10",
+          "diffstat": {
+            "insertions": 19797,
+            "deletions": 0,
+            "files_changed": 60
+          }
+        }
+      },
+      {
         "name": "wasm-bindgen",
         "notable_parents": "js-sys, reqwest, web-sys, wasm-bindgen-futures",
         "suggested_criteria": [
@@ -2123,6 +2059,22 @@ stdout:
             "insertions": 21227,
             "deletions": 0,
             "files_changed": 42
+          }
+        }
+      },
+      {
+        "name": "serde_json",
+        "notable_parents": "reqwest, test-project",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.0.79",
+          "diffstat": {
+            "insertions": 22848,
+            "deletions": 0,
+            "files_changed": 86
           }
         }
       },
@@ -2255,6 +2207,54 @@ stdout:
         }
       },
       {
+        "name": "tokio",
+        "notable_parents": "h2, hyper, reqwest, and 4 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "1.17.0",
+          "diffstat": {
+            "insertions": 91271,
+            "deletions": 0,
+            "files_changed": 403
+          }
+        }
+      },
+      {
+        "name": "libc",
+        "notable_parents": "mio, atty, tokio, openssl, and 8 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.2.123",
+          "diffstat": {
+            "insertions": 94060,
+            "deletions": 0,
+            "files_changed": 215
+          }
+        }
+      },
+      {
+        "name": "winapi",
+        "notable_parents": "mio, atty, miow, ntapi, and 7 others",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "0.3.9",
+          "diffstat": {
+            "insertions": 181323,
+            "deletions": 0,
+            "files_changed": 410
+          }
+        }
+      },
+      {
         "name": "web-sys",
         "notable_parents": "reqwest, wasm-bindgen-futures",
         "suggested_criteria": [
@@ -2289,166 +2289,6 @@ stdout:
     ],
     "suggest_by_criteria": {
       "safe-to-deploy": [
-        {
-          "name": "termcolor",
-          "notable_parents": "clap",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "1.1.3",
-            "diffstat": {
-              "insertions": 2578,
-              "deletions": 0,
-              "files_changed": 10
-            }
-          }
-        },
-        {
-          "name": "os_str_bytes",
-          "notable_parents": "clap",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "6.0.0",
-            "diffstat": {
-              "insertions": 2911,
-              "deletions": 0,
-              "files_changed": 21
-            }
-          }
-        },
-        {
-          "name": "textwrap",
-          "notable_parents": "clap",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "0.15.0",
-            "diffstat": {
-              "insertions": 5196,
-              "deletions": 0,
-              "files_changed": 15
-            }
-          }
-        },
-        {
-          "name": "proc-macro2",
-          "notable_parents": "test-project",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
-            "diffstat": {
-              "insertions": 5691,
-              "deletions": 0,
-              "files_changed": 19
-            }
-          }
-        },
-        {
-          "name": "indexmap",
-          "notable_parents": "h2, clap",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "1.8.1",
-            "diffstat": {
-              "insertions": 9445,
-              "deletions": 0,
-              "files_changed": 31
-            }
-          }
-        },
-        {
-          "name": "reqwest",
-          "notable_parents": "test-project",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "0.11.10",
-            "diffstat": {
-              "insertions": 19797,
-              "deletions": 0,
-              "files_changed": 60
-            }
-          }
-        },
-        {
-          "name": "serde_json",
-          "notable_parents": "reqwest, test-project",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "1.0.79",
-            "diffstat": {
-              "insertions": 22848,
-              "deletions": 0,
-              "files_changed": 86
-            }
-          }
-        },
-        {
-          "name": "tokio",
-          "notable_parents": "h2, hyper, reqwest, and 4 others",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "1.17.0",
-            "diffstat": {
-              "insertions": 91271,
-              "deletions": 0,
-              "files_changed": 403
-            }
-          }
-        },
-        {
-          "name": "libc",
-          "notable_parents": "mio, atty, tokio, openssl, and 8 others",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "0.2.123",
-            "diffstat": {
-              "insertions": 94060,
-              "deletions": 0,
-              "files_changed": 215
-            }
-          }
-        },
-        {
-          "name": "winapi",
-          "notable_parents": "mio, atty, miow, ntapi, and 7 others",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "0.3.9",
-            "diffstat": {
-              "insertions": 181323,
-              "deletions": 0,
-              "files_changed": 410
-            }
-          }
-        },
         {
           "name": "tinyvec_macros",
           "notable_parents": "tinyvec",
@@ -3058,6 +2898,22 @@ stdout:
           }
         },
         {
+          "name": "termcolor",
+          "notable_parents": "clap",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "1.1.3",
+            "diffstat": {
+              "insertions": 2578,
+              "deletions": 0,
+              "files_changed": 10
+            }
+          }
+        },
+        {
           "name": "slab",
           "notable_parents": "h2",
           "suggested_criteria": [
@@ -3070,6 +2926,22 @@ stdout:
               "insertions": 2615,
               "deletions": 0,
               "files_changed": 9
+            }
+          }
+        },
+        {
+          "name": "os_str_bytes",
+          "notable_parents": "clap",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "6.0.0",
+            "diffstat": {
+              "insertions": 2911,
+              "deletions": 0,
+              "files_changed": 21
             }
           }
         },
@@ -3330,6 +3202,22 @@ stdout:
           }
         },
         {
+          "name": "textwrap",
+          "notable_parents": "clap",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "0.15.0",
+            "diffstat": {
+              "insertions": 5196,
+              "deletions": 0,
+              "files_changed": 15
+            }
+          }
+        },
+        {
           "name": "log",
           "notable_parents": "mio, want, reqwest, and 2 others",
           "suggested_criteria": [
@@ -3340,6 +3228,22 @@ stdout:
             "to": "0.4.16",
             "diffstat": {
               "insertions": 5625,
+              "deletions": 0,
+              "files_changed": 19
+            }
+          }
+        },
+        {
+          "name": "proc-macro2",
+          "notable_parents": "test-project",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+            "diffstat": {
+              "insertions": 5691,
               "deletions": 0,
               "files_changed": 19
             }
@@ -3486,6 +3390,22 @@ stdout:
               "insertions": 9316,
               "deletions": 0,
               "files_changed": 42
+            }
+          }
+        },
+        {
+          "name": "indexmap",
+          "notable_parents": "h2, clap",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "1.8.1",
+            "diffstat": {
+              "insertions": 9445,
+              "deletions": 0,
+              "files_changed": 31
             }
           }
         },
@@ -3666,6 +3586,22 @@ stdout:
           }
         },
         {
+          "name": "reqwest",
+          "notable_parents": "test-project",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "0.11.10",
+            "diffstat": {
+              "insertions": 19797,
+              "deletions": 0,
+              "files_changed": 60
+            }
+          }
+        },
+        {
           "name": "wasm-bindgen",
           "notable_parents": "js-sys, reqwest, web-sys, wasm-bindgen-futures",
           "suggested_criteria": [
@@ -3694,6 +3630,22 @@ stdout:
               "insertions": 21227,
               "deletions": 0,
               "files_changed": 42
+            }
+          }
+        },
+        {
+          "name": "serde_json",
+          "notable_parents": "reqwest, test-project",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "1.0.79",
+            "diffstat": {
+              "insertions": 22848,
+              "deletions": 0,
+              "files_changed": 86
             }
           }
         },
@@ -3822,6 +3774,54 @@ stdout:
               "insertions": 42642,
               "deletions": 0,
               "files_changed": 832
+            }
+          }
+        },
+        {
+          "name": "tokio",
+          "notable_parents": "h2, hyper, reqwest, and 4 others",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "1.17.0",
+            "diffstat": {
+              "insertions": 91271,
+              "deletions": 0,
+              "files_changed": 403
+            }
+          }
+        },
+        {
+          "name": "libc",
+          "notable_parents": "mio, atty, tokio, openssl, and 8 others",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "0.2.123",
+            "diffstat": {
+              "insertions": 94060,
+              "deletions": 0,
+              "files_changed": 215
+            }
+          }
+        },
+        {
+          "name": "winapi",
+          "notable_parents": "mio, atty, miow, ntapi, and 7 others",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": null,
+            "to": "0.3.9",
+            "diffstat": {
+              "insertions": 181323,
+              "deletions": 0,
+              "files_changed": 410
             }
           }
         },

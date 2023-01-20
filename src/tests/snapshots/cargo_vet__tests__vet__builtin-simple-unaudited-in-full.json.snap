@@ -6,15 +6,15 @@ expression: json
   "conclusion": "success",
   "vetted_fully": [
     {
-      "name": "transitive-third-party1",
-      "version": "10.0.0"
-    },
-    {
       "name": "third-party1",
       "version": "10.0.0"
     },
     {
       "name": "third-party2",
+      "version": "10.0.0"
+    },
+    {
+      "name": "transitive-third-party1",
       "version": "10.0.0"
     }
   ],

@@ -8,11 +8,11 @@ expression: json
   "vetted_partially": [],
   "vetted_with_exemptions": [
     {
-      "name": "third-normal",
+      "name": "third-dev",
       "version": "10.0.0"
     },
     {
-      "name": "third-dev",
+      "name": "third-normal",
       "version": "10.0.0"
     }
   ]

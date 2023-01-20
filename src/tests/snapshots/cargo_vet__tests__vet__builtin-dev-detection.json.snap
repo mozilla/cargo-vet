@@ -10,7 +10,7 @@ expression: json
       "version": "10.0.0"
     },
     {
-      "name": "normal",
+      "name": "dev-cycle-direct",
       "version": "10.0.0"
     },
     {
@@ -18,15 +18,15 @@ expression: json
       "version": "10.0.0"
     },
     {
-      "name": "dev-cycle-direct",
-      "version": "10.0.0"
-    },
-    {
-      "name": "simple-dev-indirect",
+      "name": "normal",
       "version": "10.0.0"
     },
     {
       "name": "simple-dev",
+      "version": "10.0.0"
+    },
+    {
+      "name": "simple-dev-indirect",
       "version": "10.0.0"
     }
   ],

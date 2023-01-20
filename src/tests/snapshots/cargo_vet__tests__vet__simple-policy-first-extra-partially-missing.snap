@@ -6,7 +6,7 @@ Vetting Failed!
 
 2 unvetted dependencies:
   third-party1:10.0.0 missing ["fuzzed"]
-  transitive-third-party1:10.0.0 likely missing ["fuzzed"]
+  transitive-third-party1:10.0.0 missing ["fuzzed"]
 
 recommended audits for fuzzed:
     cargo vet inspect third-party1 10.0.0             (used by first-party)   (100 lines)

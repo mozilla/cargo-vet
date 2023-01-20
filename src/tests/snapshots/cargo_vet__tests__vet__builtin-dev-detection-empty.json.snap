@@ -83,6 +83,22 @@ expression: json
         }
       },
       {
+        "name": "dev-cycle-indirect",
+        "notable_parents": "dev-cycle-direct",
+        "suggested_criteria": [
+          "safe-to-run"
+        ],
+        "suggested_diff": {
+          "from": null,
+          "to": "10.0.0",
+          "diffstat": {
+            "insertions": 100,
+            "deletions": 0,
+            "files_changed": 1
+          }
+        }
+      },
+      {
         "name": "normal",
         "notable_parents": "root",
         "suggested_criteria": [
@@ -101,22 +117,6 @@ expression: json
       {
         "name": "simple-dev",
         "notable_parents": "root",
-        "suggested_criteria": [
-          "safe-to-run"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "10.0.0",
-          "diffstat": {
-            "insertions": 100,
-            "deletions": 0,
-            "files_changed": 1
-          }
-        }
-      },
-      {
-        "name": "dev-cycle-indirect",
-        "notable_parents": "dev-cycle-direct",
         "suggested_criteria": [
           "safe-to-run"
         ],
@@ -200,8 +200,8 @@ expression: json
           }
         },
         {
-          "name": "simple-dev",
-          "notable_parents": "root",
+          "name": "dev-cycle-indirect",
+          "notable_parents": "dev-cycle-direct",
           "suggested_criteria": [
             "safe-to-run"
           ],
@@ -216,8 +216,8 @@ expression: json
           }
         },
         {
-          "name": "dev-cycle-indirect",
-          "notable_parents": "dev-cycle-direct",
+          "name": "simple-dev",
+          "notable_parents": "root",
           "suggested_criteria": [
             "safe-to-run"
           ],
