@@ -36,9 +36,8 @@ use crate::errors::{
     SourceFile,
 };
 use crate::format::{
-    AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, DependencyCriteria,
-    ExemptedDependency, FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr,
-    SortedMap, StoreInfo, VetVersion,
+    AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, ExemptedDependency, FetchCommand,
+    ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo, VetVersion,
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
@@ -522,7 +521,6 @@ pub fn init_files(
             let item = ExemptedDependency {
                 version: package.version.clone(),
                 criteria,
-                dependency_criteria: DependencyCriteria::new(),
                 notes: None,
                 suggest: true,
             };
@@ -696,20 +694,6 @@ fn do_cmd_certify(
         return Err(CertifyError::NotAPackage(package));
     }
 
-    let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
-        // TODO: look at the current audits to infer this? prompt?
-        DependencyCriteria::new()
-    } else {
-        let mut dep_criteria = DependencyCriteria::new();
-        for arg in &sub_args.dependency_criteria {
-            dep_criteria
-                .entry(arg.dependency.clone())
-                .or_insert_with(Vec::new)
-                .push(arg.criteria.clone().into());
-        }
-        dep_criteria
-    };
-
     let kind = if let Some(v1) = &sub_args.version1 {
         // If explicit versions were provided, use those
         if let Some(v2) = &sub_args.version2 {
@@ -717,28 +701,22 @@ fn do_cmd_certify(
             AuditKind::Delta {
                 from: v1.clone(),
                 to: v2.clone(),
-                dependency_criteria,
             }
         } else {
             // This is a full audit
             AuditKind::Full {
                 version: v1.clone(),
-                dependency_criteria,
             }
         }
     } else if let Some(fetch) = last_fetch.filter(|f| f.package() == package) {
         // Otherwise, is we just fetched this package, use the version(s) we fetched
         match fetch {
-            FetchCommand::Inspect { version, .. } => AuditKind::Full {
-                version,
-                dependency_criteria,
-            },
+            FetchCommand::Inspect { version, .. } => AuditKind::Full { version },
             FetchCommand::Diff {
                 version1, version2, ..
             } => AuditKind::Delta {
                 from: version1,
                 to: version2,
-                dependency_criteria,
             },
         }
     } else {
@@ -1224,20 +1202,6 @@ fn cmd_add_exemption(
     // Add an exemption entry
     let mut store = Store::acquire_offline(cfg)?;
 
-    let dependency_criteria = if sub_args.dependency_criteria.is_empty() {
-        // TODO: look at the current audits to infer this? prompt?
-        DependencyCriteria::new()
-    } else {
-        let mut dep_criteria = DependencyCriteria::new();
-        for arg in &sub_args.dependency_criteria {
-            dep_criteria
-                .entry(arg.dependency.clone())
-                .or_insert_with(Vec::new)
-                .push(arg.criteria.clone().into());
-        }
-        dep_criteria
-    };
-
     let notes = sub_args.notes.clone();
 
     let criteria = if sub_args.criteria.is_empty() {
@@ -1272,7 +1236,6 @@ fn cmd_add_exemption(
         criteria,
         notes,
         version: sub_args.version.clone(),
-        dependency_criteria,
         suggest,
     };
 

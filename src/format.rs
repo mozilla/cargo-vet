@@ -279,29 +279,10 @@ impl cmp::Ord for AuditEntry {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum AuditKind {
-    Full {
-        version: VetVersion,
-        dependency_criteria: DependencyCriteria,
-    },
-    Delta {
-        from: VetVersion,
-        to: VetVersion,
-        dependency_criteria: DependencyCriteria,
-    },
-    Violation {
-        violation: VersionReq,
-    },
+    Full { version: VetVersion },
+    Delta { from: VetVersion, to: VetVersion },
+    Violation { violation: VersionReq },
 }
-
-/// A list of criteria that transitive dependencies must satisfy for this
-/// audit to continue to be considered valid.
-///
-/// Example:
-///
-/// ```toml
-/// dependency_criteria = { hmac: ['secure', 'crypto_reviewed'] }
-/// ```
-pub type DependencyCriteria = SortedMap<PackageName, Vec<Spanned<CriteriaName>>>;
 
 /// A "VERSION" or "VERSION -> VERSION"
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -476,6 +457,16 @@ pub struct PolicyEntry {
     pub notes: Option<String>,
 }
 
+/// A list of criteria that transitive dependencies must satisfy for this
+/// policy to be satisfied.
+///
+/// Example:
+///
+/// ```toml
+/// dependency_criteria = { hmac = ['secure', 'crypto_reviewed'] }
+/// ```
+pub type DependencyCriteria = SortedMap<PackageName, Vec<Spanned<CriteriaName>>>;
+
 pub static DEFAULT_POLICY_CRITERIA: CriteriaStr = SAFE_TO_DEPLOY;
 pub static DEFAULT_POLICY_DEV_CRITERIA: CriteriaStr = SAFE_TO_RUN;
 
@@ -521,14 +512,6 @@ pub struct ExemptedDependency {
     #[serde(default = "get_default_exemptions_suggest")]
     #[serde(skip_serializing_if = "is_default_exemptions_suggest")]
     pub suggest: bool,
-    /// Custom criteria for an exempted crate's dependencies.
-    ///
-    /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
-    #[serde(rename = "dependency-criteria")]
-    #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
-    #[serde(with = "serialization::dependency_criteria")]
-    #[serde(default)]
-    pub dependency_criteria: DependencyCriteria,
     /// Freeform notes, put whatever you want here. Just more stable/reliable than comments.
     pub notes: Option<String>,
 }

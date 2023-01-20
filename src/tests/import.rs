@@ -922,24 +922,6 @@ fn foreign_audit_file_to_local() {
                     },
                     toml::toml! {
                         criteria = "safe-to-deploy"
-                        version = "10.0.0"
-                        dependency-criteria = { foo = "unknown-criteria" }
-                        notes = "will be removed"
-                    },
-                    toml::toml! {
-                        criteria = "safe-to-deploy"
-                        version = "10.0.0"
-                        dependency-criteria = { foo = ["example", "unknown-criteria"] }
-                        notes = "will be removed"
-                    },
-                    toml::toml! {
-                        criteria = "safe-to-deploy"
-                        version = "10.0.0"
-                        dependency-criteria = { foo = "example" }
-                        notes = "should parse correctly"
-                    },
-                    toml::toml! {
-                        criteria = "safe-to-deploy"
                         violation = "invalid"
                         notes = "will be removed"
                     },
@@ -990,7 +972,7 @@ fn foreign_audit_file_to_local() {
     assert_eq!(result.ignored_criteria, &["will-not-parse"]);
     assert_eq!(
         result.ignored_audits,
-        &["crate-a", "crate-a", "crate-a", "crate-a", "crate-a", "crate-a", "crate-b"]
+        &["crate-a", "crate-a", "crate-a", "crate-a", "crate-b"]
     );
 
     insta::assert_snapshot!(

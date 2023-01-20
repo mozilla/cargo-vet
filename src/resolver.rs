@@ -74,11 +74,11 @@ use tracing::{error, trace, trace_span};
 
 use crate::errors::{RegenerateExemptionsError, SuggestError};
 use crate::format::{
-    self, AuditKind, AuditsFile, CriteriaName, CriteriaStr, Delta, DependencyCriteria, DiffStat,
-    ExemptedDependency, ImportName, JsonPackage, JsonReport, JsonReportConclusion,
-    JsonReportFailForVet, JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest,
-    JsonSuggestItem, JsonVetFailure, PackageName, PackageStr, PolicyEntry, RemoteImport,
-    VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+    self, AuditKind, AuditsFile, CriteriaName, CriteriaStr, Delta, DiffStat, ExemptedDependency,
+    ImportName, JsonPackage, JsonReport, JsonReportConclusion, JsonReportFailForVet,
+    JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest, JsonSuggestItem,
+    JsonVetFailure, PackageName, PackageStr, PolicyEntry, RemoteImport, VetVersion, SAFE_TO_DEPLOY,
+    SAFE_TO_RUN,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
@@ -418,9 +418,6 @@ pub struct DeltaEdge<'a> {
     version: Option<&'a VetVersion>,
     /// The criteria that this edge is valid for.
     criteria: CriteriaSet,
-    /// Requirements that dependencies must satisfy for the edge to be valid.
-    /// If a dependency isn't mentioned, then it defaults to `criteria`.
-    dependency_criteria: FastMap<PackageStr<'a>, CriteriaSet>,
     /// The origin of this edge. See `DeltaEdgeOrigin`'s documentation for more
     /// details.
     origin: DeltaEdgeOrigin,
@@ -1560,6 +1557,22 @@ fn resolve_third_party(
     let package = &graph.nodes[pkgidx];
     let exemptions = store.config.exemptions.get(package.name);
 
+    // Get custom policies for our dependencies
+    let dep_criteria = store
+        .config
+        .policy
+        .get(package.name)
+        .map(|policy| {
+            policy
+                .dependency_criteria
+                .iter()
+                .map(|(dep_name, criteria)| {
+                    (&**dep_name, criteria_mapper.criteria_from_list(criteria))
+                })
+                .collect::<FastMap<_, _>>()
+        })
+        .unwrap_or_default();
+
     // Pre-build the namespaces for each audit so that we can take a reference
     // to each one as-needed rather than cloning the name each time.
     let foreign_namespaces: Vec<CriteriaNamespace> = store
@@ -1601,19 +1614,12 @@ fn resolve_third_party(
     let mut backward_audits = AuditGraph::new();
     let mut violation_nodes = Vec::new();
 
-    // Collect up all the deltas, their criteria, and dependency_criteria
+    // Collect up all the deltas, and their criteria
     for (namespace, entry) in all_audits.clone() {
         // For uniformity, model a Full Audit as `None -> x.y.z`
-        let (from_ver, to_ver, dependency_criteria) = match &entry.kind {
-            AuditKind::Full {
-                version,
-                dependency_criteria,
-            } => (None, version, dependency_criteria),
-            AuditKind::Delta {
-                from,
-                to,
-                dependency_criteria,
-            } => (Some(from), to, dependency_criteria),
+        let (from_ver, to_ver) = match &entry.kind {
+            AuditKind::Full { version } => (None, version),
+            AuditKind::Delta { from, to } => (Some(from), to),
             AuditKind::Violation { .. } => {
                 violation_nodes.push((namespace.clone(), entry));
                 continue;
@@ -1621,16 +1627,6 @@ fn resolve_third_party(
         };
 
         let criteria = criteria_mapper.criteria_from_namespaced_entry(namespace, entry);
-        // Convert all the custom criteria to CriteriaSets
-        let dependency_criteria: FastMap<_, _> = dependency_criteria
-            .iter()
-            .map(|(pkg_name, criteria)| {
-                (
-                    &**pkg_name,
-                    criteria_mapper.criteria_from_namespaced_list(namespace, criteria),
-                )
-            })
-            .collect();
 
         let origin = if entry.is_fresh_import {
             DeltaEdgeOrigin::FreshImportedAudit
@@ -1641,7 +1637,6 @@ fn resolve_third_party(
         forward_audits.entry(from_ver).or_default().push(DeltaEdge {
             version: Some(to_ver),
             criteria: criteria.clone(),
-            dependency_criteria: dependency_criteria.clone(),
             origin,
         });
         backward_audits
@@ -1650,7 +1645,6 @@ fn resolve_third_party(
             .push(DeltaEdge {
                 version: from_ver,
                 criteria,
-                dependency_criteria,
                 origin,
             });
     }
@@ -1783,25 +1777,16 @@ fn resolve_third_party(
             let from_ver = None;
             let to_ver = Some(&allowed.version);
             let criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
-            let dependency_criteria: FastMap<_, _> = allowed
-                .dependency_criteria
-                .iter()
-                .map(|(pkg_name, criteria)| {
-                    (&**pkg_name, criteria_mapper.criteria_from_list(criteria))
-                })
-                .collect();
 
             // For simplicity, turn 'exemptions' entries into deltas from None.
             forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: to_ver,
                 criteria: criteria.clone(),
-                dependency_criteria: dependency_criteria.clone(),
                 origin: DeltaEdgeOrigin::Exemption,
             });
             backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                 version: from_ver,
                 criteria,
-                dependency_criteria,
                 origin: DeltaEdgeOrigin::Exemption,
             });
         }
@@ -1820,6 +1805,7 @@ fn resolve_third_party(
             results,
             pkgidx,
             &package.normal_and_build_deps,
+            &dep_criteria,
         );
         match result {
             SearchResult::Connected { caveats } => {
@@ -1848,6 +1834,7 @@ fn resolve_third_party(
                     results,
                     pkgidx,
                     &package.normal_and_build_deps,
+                    &dep_criteria,
                 );
                 if let SearchResult::Disconnected {
                     reachable_from_root: reachable_from_target,
@@ -1949,6 +1936,7 @@ fn search_for_path(
     results: &[ResolveResult],
     pkgidx: PackageIdx,
     dependencies: &[PackageIdx],
+    dependency_criteria: &FastMap<PackageStr<'_>, CriteriaSet>,
 ) -> SearchResult {
     // Search for any path through the graph with edges that satisfy
     // cur_criteria.  Finding any path validates that we satisfy that criteria.
@@ -2064,7 +2052,7 @@ fn search_for_path(
                 results,
                 dependencies,
                 cur_criteria,
-                &edge.dependency_criteria,
+                dependency_criteria,
                 &mut edge_caveats,
                 &mut edge_failed_deps,
             );
@@ -3283,7 +3271,6 @@ pub fn regenerate_exemptions(
         max_criteria: CriteriaSet,
         useful_criteria: CriteriaSet,
         suggest: bool,
-        dependency_criteria: &'a DependencyCriteria,
         notes: &'a Option<String>,
     }
 
@@ -3292,11 +3279,10 @@ pub fn regenerate_exemptions(
         /// or has `dependency_criteria`). We avoid removing special exemptions
         /// if they could be applicable.
         fn is_special(&self) -> bool {
-            !self.suggest || !self.dependency_criteria.is_empty()
+            !self.suggest
         }
     }
 
-    let no_dependency_criteria = DependencyCriteria::new();
     let mut potential_exemptions = SortedMap::<PackageStr<'_>, Vec<PotentialExemption<'_>>>::new();
 
     loop {
@@ -3361,15 +3347,13 @@ pub fn regenerate_exemptions(
                                 max_criteria: criteria_mapper.all_criteria(),
                                 useful_criteria: criteria_mapper.no_criteria(),
                                 suggest: exemption.suggest,
-                                dependency_criteria: &exemption.dependency_criteria,
                                 notes: &exemption.notes,
                             };
                             // We don't allow special exemptions (criteria with
-                            // `suggest = false` or `dependency_criteria`) to
-                            // expand the allowed criteria, so record the
-                            // existing criteria as our maximum.
-                            // We also don't allow expanding criteria if we
-                            // aren't allowing new exemptions.
+                            // `suggest = false`) to expand the allowed
+                            // criteria, so record the existing criteria as our
+                            // maximum.  We also don't allow expanding criteria
+                            // if we aren't allowing new exemptions.
                             if potential.is_special() || !allow_new_exemptions {
                                 potential.max_criteria = criteria_mapper
                                     .criteria_from_namespaced_list(
@@ -3383,19 +3367,17 @@ pub fn regenerate_exemptions(
                     // The existing exemptions are the only potential exemptions
                     // unless we're allowing adding new exemptions.
                     if allow_new_exemptions {
-                        // Next, for criteria with `suggest = false` (but without
-                        // `dependency_criteria`), we'll consider adding a
-                        // suggestable expanded exemption at the same version
-                        // without criteria limitations, to try to pin exemptions at
-                        // specific past versions.
+                        // Next, for criteria with `suggest = false`, we'll
+                        // consider adding a suggestable expanded exemption at
+                        // the same version without criteria limitations, to try
+                        // to pin exemptions at specific past versions.
                         for exemption in existing_exemptions {
-                            if !exemption.suggest && exemption.dependency_criteria.is_empty() {
+                            if !exemption.suggest {
                                 potentials.push(PotentialExemption {
                                     version: &exemption.version,
                                     max_criteria: criteria_mapper.all_criteria(),
                                     useful_criteria: criteria_mapper.no_criteria(),
                                     suggest: true,
-                                    dependency_criteria: &no_dependency_criteria,
                                     notes: &exemption.notes,
                                 })
                             }
@@ -3412,7 +3394,6 @@ pub fn regenerate_exemptions(
                                     max_criteria: criteria_mapper.all_criteria(),
                                     useful_criteria: criteria_mapper.no_criteria(),
                                     suggest: true,
-                                    dependency_criteria: &no_dependency_criteria,
                                     notes: &None,
                                 }),
                         );
@@ -3427,7 +3408,7 @@ pub fn regenerate_exemptions(
 
                 // In the first pass, try to satisfy as many implied criteria as
                 // possible using "special" potential exemptions (i.e. those
-                // with `suggest = false` or `dependency_criteria`).
+                // with `suggest = false`).
                 //
                 // We always want to prioritize marking all "special" exemptions
                 // which may be applicable as "used", as they may have different
@@ -3529,7 +3510,6 @@ pub fn regenerate_exemptions(
                                 .map(|criteria| criteria.to_owned().into())
                                 .collect(),
                             suggest: potential.suggest,
-                            dependency_criteria: potential.dependency_criteria.clone(),
                             notes: potential.notes.clone(),
                         })
                         .collect();

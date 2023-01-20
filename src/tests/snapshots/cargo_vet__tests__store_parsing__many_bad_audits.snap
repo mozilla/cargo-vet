@@ -24,84 +24,39 @@ Error:
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 Error: 
-  × 'bad1' is not a valid criteria name
-    ╭─[audits.toml:10:1]
- 10 │ version = "1.0.0"
- 11 │ dependency-criteria = { serde_derive = ["bad1", "good", "bad2"], toml = "bad-dep" }
-    ·                                         ──────
- 12 │ 
-    ╰────
-  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'bad2' is not a valid criteria name
-    ╭─[audits.toml:10:1]
- 10 │ version = "1.0.0"
- 11 │ dependency-criteria = { serde_derive = ["bad1", "good", "bad2"], toml = "bad-dep" }
-    ·                                                         ──────
- 12 │ 
-    ╰────
-  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'bad-dep' is not a valid criteria name
-    ╭─[audits.toml:10:1]
- 10 │ version = "1.0.0"
- 11 │ dependency-criteria = { serde_derive = ["bad1", "good", "bad2"], toml = "bad-dep" }
-    ·                                                                         ─────────
- 12 │ 
-    ╰────
-  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
   × 'safe-to-jog' is not a valid criteria name
-    ╭─[audits.toml:13:1]
- 13 │ [[audits.serde]]
- 14 │ criteria = "safe-to-jog"
+    ╭─[audits.toml:12:1]
+ 12 │ [[audits.serde]]
+ 13 │ criteria = "safe-to-jog"
     ·            ─────────────
- 15 │ version = "2.0.0"
-    ╰────
-  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'unsafe-to-destroy' is not a valid criteria name
-    ╭─[audits.toml:15:1]
- 15 │ version = "2.0.0"
- 16 │ dependency-criteria = { toml = "unsafe-to-destroy" }
-    ·                                ───────────────────
- 17 │ 
-    ╰────
-  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'dang' is not a valid criteria name
-    ╭─[audits.toml:18:1]
- 18 │ [[audits.serde]]
- 19 │ criteria = ["safe-to-run", "dang"]
-    ·                            ──────
- 20 │ delta = "1.0.0 -> 1.1.0"
+ 14 │ version = "2.0.0"
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 Error: 
   × 'oops' is not a valid criteria name
-    ╭─[audits.toml:22:1]
- 22 │ [[audits.serde]]
- 23 │ criteria = "oops"
+    ╭─[audits.toml:16:1]
+ 16 │ [[audits.serde]]
+ 17 │ criteria = "oops"
     ·            ──────
- 24 │ delta = "1.0.0 -> 1.1.0"
+ 18 │ delta = "1.0.0 -> 1.1.0"
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 Error: 
-  × 'nah' is not a valid criteria name
-    ╭─[audits.toml:24:1]
- 24 │ delta = "1.0.0 -> 1.1.0"
- 25 │ dependency-criteria = { nope = "nah" }
-    ·                                ─────
- 26 │ 
+  × 'dang' is not a valid criteria name
+    ╭─[audits.toml:20:1]
+ 20 │ [[audits.serde]]
+ 21 │ criteria = ["safe-to-run", "dang"]
+    ·                            ──────
+ 22 │ delta = "1.0.0 -> 1.1.0"
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 Error: 
   × 'no-good-bad-bad' is not a valid criteria name
-    ╭─[audits.toml:27:1]
- 27 │ [[audits.serde]]
- 28 │ criteria = "no-good-bad-bad"
+    ╭─[audits.toml:24:1]
+ 24 │ [[audits.serde]]
+ 25 │ criteria = "no-good-bad-bad"
     ·            ─────────────────
- 29 │ violation = "^5.0.0"
+ 26 │ violation = "^5.0.0"
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 

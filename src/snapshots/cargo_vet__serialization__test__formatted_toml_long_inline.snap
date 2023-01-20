@@ -3,12 +3,11 @@ source: src/serialization.rs
 expression: formatted
 ---
 
-[[audits.test]]
+[policy.long-criteria]
 criteria = "long-criteria"
-version = "1.0.0"
 notes = "notes go here!"
 
-[audits.test.dependency-criteria]
+[policy.long-criteria.dependency-criteria]
 example-crate-1 = ["criteria-one-very-long", "criteria-two-very-long"]
 example-crate-2 = ["criteria-one-✨✨✨✨✨✨✨✨✨✨", "criteria-two-✨✨✨✨✨✨✨✨✨✨"]
 example-crate-3 = [
@@ -17,9 +16,8 @@ example-crate-3 = [
     "criteria-three-extremely-long-this-array-should-wrap",
 ]
 
-[[audits.test]]
+[policy.short-criteria]
 criteria = "short-criteria"
-version = "1.0.0"
 dependency-criteria = { example-crate-1 = "criteria-one" }
 notes = "notes go here!"
 

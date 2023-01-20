@@ -58,21 +58,18 @@ implies = ["safe-to-deploy", "bad-imply"]
 [[audits.serde]]
 criteria = "bad"
 version = "1.0.0"
-dependency-criteria = { serde_derive = ["bad1", "good", "bad2"], toml = "bad-dep" }
 
 [[audits.serde]]
 criteria = "safe-to-jog"
 version = "2.0.0"
-dependency-criteria = { toml = "unsafe-to-destroy" }
-
-[[audits.serde]]
-criteria = ["safe-to-run", "dang"]
-delta = "1.0.0 -> 1.1.0"
 
 [[audits.serde]]
 criteria = "oops"
 delta = "1.0.0 -> 1.1.0"
-dependency-criteria = { nope = "nah" }
+
+[[audits.serde]]
+criteria = ["safe-to-run", "dang"]
+delta = "1.0.0 -> 1.1.0"
 
 [[audits.serde]]
 criteria = "no-good-bad-bad"
@@ -104,7 +101,6 @@ dependency-criteria = { clap = ["safe-to-run", "unsafe-for-all", "good"], serde_
 [[exemptions.clap]]
 version = "1.0.0"
 criteria = "oops"
-dependency-criteria = { clap_derive = "nah", oops = ["no", "safe-to-run"] }
 
 [[exemptions.clap_derive]]
 version = "1.0.0"

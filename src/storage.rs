@@ -453,14 +453,6 @@ impl Store {
                     &mut invalid_criteria_errors,
                     &entry.criteria,
                 );
-                for (_dep_package, dep_criteria) in &entry.dependency_criteria {
-                    check_criteria(
-                        &self.config_src,
-                        &valid_criteria,
-                        &mut invalid_criteria_errors,
-                        dep_criteria,
-                    );
-                }
             }
         }
         for (_package, policy) in &self.config.policy {
@@ -503,35 +495,6 @@ impl Store {
                     &mut invalid_criteria_errors,
                     &entry.criteria,
                 );
-                match &entry.kind {
-                    crate::format::AuditKind::Full {
-                        dependency_criteria,
-                        ..
-                    } => {
-                        for (_dep_package, dep_criteria) in dependency_criteria {
-                            check_criteria(
-                                &self.audits_src,
-                                &valid_criteria,
-                                &mut invalid_criteria_errors,
-                                dep_criteria,
-                            );
-                        }
-                    }
-                    crate::format::AuditKind::Delta {
-                        dependency_criteria,
-                        ..
-                    } => {
-                        for (_dep_package, dep_criteria) in dependency_criteria {
-                            check_criteria(
-                                &self.audits_src,
-                                &valid_criteria,
-                                &mut invalid_criteria_errors,
-                                dep_criteria,
-                            );
-                        }
-                    }
-                    crate::format::AuditKind::Violation { .. } => {}
-                }
             }
         }
 
@@ -1023,26 +986,6 @@ fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> 
     if audit.criteria.is_empty() {
         info!("imported audit parsing failed due to no known criteria");
         return None;
-    }
-
-    // If any dependency criteria name an unknown criteria, ignore the audit.
-    match &audit.kind {
-        AuditKind::Delta {
-            dependency_criteria,
-            ..
-        }
-        | AuditKind::Full {
-            dependency_criteria,
-            ..
-        } => {
-            for criteria_name in dependency_criteria.values().flatten() {
-                if !is_known_criteria(valid_criteria, criteria_name) {
-                    info!("imported audit parsing failed due to unknown dependency criteria: {criteria_name}");
-                    return None;
-                }
-            }
-        }
-        _ => {}
     }
 
     Some(audit)

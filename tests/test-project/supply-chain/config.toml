@@ -1,6 +1,9 @@
 
 # cargo-vet config file
 
+[policy.clap]
+dependency-criteria = { atty = "safe-to-run", bitflags = ["audited", "fuzzed"] }
+
 [policy.proc-macro2]
 audit-as-crates-io = true
 

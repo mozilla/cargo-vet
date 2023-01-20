@@ -184,9 +184,7 @@ pub mod dependency_criteria {
 pub mod audit {
     use super::*;
 
-    use crate::format::{
-        AuditEntry, AuditKind, CriteriaName, Delta, DependencyCriteria, VersionReq, VetVersion,
-    };
+    use crate::format::{AuditEntry, AuditKind, CriteriaName, Delta, VersionReq, VetVersion};
 
     #[derive(Serialize, Deserialize)]
     pub struct AuditEntryAll {
@@ -200,11 +198,6 @@ pub mod audit {
         version: Option<VetVersion>,
         delta: Option<Delta>,
         violation: Option<VersionReq>,
-        #[serde(rename = "dependency-criteria")]
-        #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
-        #[serde(with = "dependency_criteria")]
-        #[serde(default)]
-        dependency_criteria: DependencyCriteria,
         notes: Option<String>,
         #[serde(rename = "aggregated-from")]
         #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -217,28 +210,15 @@ pub mod audit {
         type Error = String;
         fn try_from(val: AuditEntryAll) -> Result<AuditEntry, Self::Error> {
             let kind = match (val.version, val.delta, val.violation) {
-                (Some(version), None, None) => Ok(AuditKind::Full {
-                    version,
-                    dependency_criteria: val.dependency_criteria,
-                }),
+                (Some(version), None, None) => Ok(AuditKind::Full { version }),
                 (None, Some(delta), None) => {
                     if let Some(from) = delta.from {
-                        Ok(AuditKind::Delta {
-                            from,
-                            to: delta.to,
-                            dependency_criteria: val.dependency_criteria,
-                        })
+                        Ok(AuditKind::Delta { from, to: delta.to })
                     } else {
                         Err("'delta' must be a delta of the form 'VERSION -> VERSION'".to_string())
                     }
                 }
-                (None, None, Some(violation)) => {
-                    if val.dependency_criteria.is_empty() {
-                        Ok(AuditKind::Violation { violation })
-                    } else {
-                        Err("'violation' can't have dependency_criteria".to_string())
-                    }
-                }
+                (None, None, Some(violation)) => Ok(AuditKind::Violation { violation }),
                 _ => Err(
                     "audit entires must have exactly one of 'version', 'delta', and 'violation'"
                         .to_string(),
@@ -259,27 +239,17 @@ pub mod audit {
 
     impl From<AuditEntry> for AuditEntryAll {
         fn from(val: AuditEntry) -> AuditEntryAll {
-            let (version, delta, violation, dependency_criteria) = match val.kind {
-                AuditKind::Full {
-                    version,
-                    dependency_criteria,
-                } => (Some(version), None, None, dependency_criteria),
-                AuditKind::Delta {
-                    from,
-                    to,
-                    dependency_criteria,
-                } => (
+            let (version, delta, violation) = match val.kind {
+                AuditKind::Full { version } => (Some(version), None, None),
+                AuditKind::Delta { from, to } => (
                     None,
                     Some(Delta {
                         from: Some(from),
                         to,
                     }),
                     None,
-                    dependency_criteria,
                 ),
-                AuditKind::Violation { violation } => {
-                    (None, None, Some(violation), DependencyCriteria::new())
-                }
+                AuditKind::Violation { violation } => (None, None, Some(violation)),
             };
             AuditEntryAll {
                 who: val.who,
@@ -288,7 +258,6 @@ pub mod audit {
                 version,
                 delta,
                 violation,
-                dependency_criteria,
                 aggregated_from: val.aggregated_from,
             }
         }
@@ -655,38 +624,33 @@ mod test {
             vec!["criteria-one".to_owned().into()],
         );
 
-        let mut audits = SortedMap::new();
-        audits.insert(
-            "test".to_owned(),
-            vec![
-                AuditEntry {
-                    who: vec![],
-                    criteria: vec!["long-criteria".to_owned().into()],
-                    kind: AuditKind::Full {
-                        version: "1.0.0".parse().unwrap(),
-                        dependency_criteria: dc_long,
-                    },
-                    notes: Some("notes go here!".to_owned()),
-                    aggregated_from: vec![],
-                    is_fresh_import: false, // ignored
-                },
-                AuditEntry {
-                    who: vec![],
-                    criteria: vec!["short-criteria".to_owned().into()],
-                    kind: AuditKind::Full {
-                        version: "1.0.0".parse().unwrap(),
-                        dependency_criteria: dc_short,
-                    },
-                    notes: Some("notes go here!".to_owned()),
-                    aggregated_from: vec![],
-                    is_fresh_import: true, // ignored
-                },
-            ],
+        let mut policy = SortedMap::new();
+        policy.insert(
+            "long-criteria".to_owned(),
+            PolicyEntry {
+                audit_as_crates_io: None,
+                criteria: Some(vec!["long-criteria".to_owned().into()]),
+                dev_criteria: None,
+                dependency_criteria: dc_long,
+                notes: Some("notes go here!".to_owned()),
+            },
+        );
+        policy.insert(
+            "short-criteria".to_owned(),
+            PolicyEntry {
+                audit_as_crates_io: None,
+                criteria: Some(vec!["short-criteria".to_owned().into()]),
+                dev_criteria: None,
+                dependency_criteria: dc_short,
+                notes: Some("notes go here!".to_owned()),
+            },
         );
 
-        let formatted = super::to_formatted_toml(AuditsFile {
-            criteria: SortedMap::new(),
-            audits,
+        let formatted = super::to_formatted_toml(ConfigFile {
+            default_criteria: get_default_criteria(),
+            imports: SortedMap::new(),
+            policy,
+            exemptions: SortedMap::new(),
         })
         .unwrap()
         .to_string();
