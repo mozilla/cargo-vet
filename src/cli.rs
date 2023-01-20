@@ -396,16 +396,7 @@ pub enum RegenerateSubcommands {
 }
 
 #[derive(clap::Args)]
-pub struct CheckArgs {
-    /// Avoid suggesting audits for dependencies of unaudited dependencies.
-    ///
-    /// By default, if a dependency doesn't have sufficient audits for *itself*
-    /// then we try to speculate that its dependencies require the criteria.
-    /// This flag disables that behaviour, causing only suggestions which we're
-    /// certain of the requirements for to be emitted.
-    #[clap(long, action)]
-    pub shallow: bool,
-}
+pub struct CheckArgs {}
 
 #[derive(clap::Args)]
 pub struct InitArgs {}
@@ -542,16 +533,7 @@ pub struct AddExemptionArgs {
 }
 
 #[derive(clap::Args)]
-pub struct SuggestArgs {
-    /// Avoid suggesting audits for dependencies of unaudited dependencies.
-    ///
-    /// By default, if a dependency doesn't have sufficient audits for *itself*
-    /// then we try to speculate that its dependencies require the criteria.
-    /// This flag disables that behaviour, causing only suggestions which we're
-    /// certain of the requirements for to be emitted.
-    #[clap(long, action)]
-    pub shallow: bool,
-}
+pub struct SuggestArgs {}
 
 #[derive(clap::Args)]
 pub struct FmtArgs {}

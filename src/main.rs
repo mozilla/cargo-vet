@@ -41,7 +41,7 @@ use crate::format::{
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
-use crate::resolver::{CriteriaMapper, CriteriaNamespace, DepGraph, ResolveDepth};
+use crate::resolver::{CriteriaMapper, CriteriaNamespace, DepGraph};
 use crate::storage::{Cache, Store};
 
 mod cli;
@@ -997,13 +997,8 @@ fn guess_audit_criteria(
 ) -> Vec<String> {
     // Attempt to resolve a normal `cargo vet`, and try to find criteria which
     // would heal some errors in that result if it fails.
-    let criteria = resolver::resolve(
-        &cfg.metadata,
-        cfg.cli.filter_graph.as_ref(),
-        store,
-        ResolveDepth::Deep,
-    )
-    .compute_suggested_criteria(package, from, to);
+    let criteria = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), store)
+        .compute_suggested_criteria(package, from, to);
     if !criteria.is_empty() {
         return criteria;
     }
@@ -1017,7 +1012,6 @@ fn guess_audit_criteria(
         &cfg.metadata,
         cfg.cli.filter_graph.as_ref(),
         &store.clone_for_suggest(),
-        ResolveDepth::Deep,
     )
     .compute_suggested_criteria(package, from, to)
 }
@@ -1254,7 +1248,7 @@ fn cmd_add_exemption(
 fn cmd_suggest(
     out: &Arc<dyn Out>,
     cfg: &Config,
-    sub_args: &SuggestArgs,
+    _sub_args: &SuggestArgs,
 ) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
@@ -1262,16 +1256,7 @@ fn cmd_suggest(
     let suggest_store = Store::acquire(cfg, network.as_ref(), false)?.clone_for_suggest();
 
     // DO THE THING!!!!
-    let report = resolver::resolve(
-        &cfg.metadata,
-        cfg.cli.filter_graph.as_ref(),
-        &suggest_store,
-        if sub_args.shallow {
-            ResolveDepth::Shallow
-        } else {
-            ResolveDepth::Deep
-        },
-    );
+    let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &suggest_store);
     let suggest = report.compute_suggest(cfg, network.as_ref(), true)?;
     match cfg.cli.output_format {
         OutputFormat::Human => report
@@ -1511,7 +1496,11 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
     Ok(())
 }
 
-fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(), miette::Report> {
+fn cmd_check(
+    out: &Arc<dyn Out>,
+    cfg: &Config,
+    _sub_args: &CheckArgs,
+) -> Result<(), miette::Report> {
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("vetting...");
 
@@ -1525,16 +1514,7 @@ fn cmd_check(out: &Arc<dyn Out>, cfg: &Config, sub_args: &CheckArgs) -> Result<(
     }
 
     // DO THE THING!!!!
-    let report = resolver::resolve(
-        &cfg.metadata,
-        cfg.cli.filter_graph.as_ref(),
-        &store,
-        if sub_args.shallow {
-            ResolveDepth::Shallow
-        } else {
-            ResolveDepth::Deep
-        },
-    );
+    let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store);
 
     // Bare `cargo vet` shouldn't suggest in CI
     let suggest = if !cfg.cli.locked {

@@ -5,7 +5,7 @@ use super::*;
 fn get_imports_file_changes(metadata: &Metadata, store: &Store, force_updates: bool) -> String {
     // Run the resolver before calling `get_imports_file` to compute the new
     // imports file.
-    let report = crate::resolver::resolve(metadata, None, store, ResolveDepth::Shallow);
+    let report = crate::resolver::resolve(metadata, None, store);
     let new_imports =
         store.get_updated_imports_file(&report.graph, &report.conclusion, force_updates);
 

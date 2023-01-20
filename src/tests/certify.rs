@@ -38,7 +38,7 @@ fn mock_simple_suggested_criteria() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Deep);
+    let report = crate::resolver::resolve(&metadata, None, &store);
 
     let mut output = String::new();
     for (from, to, descr) in [

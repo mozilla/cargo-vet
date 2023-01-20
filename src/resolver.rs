@@ -1307,17 +1307,10 @@ impl<'a> DepGraph<'a> {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum ResolveDepth {
-    Deep,
-    Shallow,
-}
-
 pub fn resolve<'a>(
     metadata: &'a Metadata,
     filter_graph: Option<&Vec<GraphFilter>>,
     store: &'a Store,
-    resolve_depth: ResolveDepth,
 ) -> ResolveReport<'a> {
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
@@ -1332,7 +1325,7 @@ pub fn resolve<'a>(
     );
     trace!("built CriteriaMapper!");
 
-    let (results, conclusion) = resolve_core(&graph, store, &criteria_mapper, resolve_depth);
+    let (results, conclusion) = resolve_core(&graph, store, &criteria_mapper);
 
     ResolveReport {
         graph,
@@ -1346,7 +1339,6 @@ fn resolve_core(
     graph: &DepGraph<'_>,
     store: &Store,
     criteria_mapper: &CriteriaMapper,
-    resolve_depth: ResolveDepth,
 ) -> (Vec<ResolveResult>, Conclusion) {
     let _resolve_span = trace_span!("validate").entered();
 
@@ -1466,7 +1458,6 @@ fn resolve_core(
         criteria_mapper,
         &results,
         &root_failures,
-        resolve_depth,
         |failure, depth, own_failure| {
             if let Some(criteria_failures) = own_failure {
                 trace!(
@@ -2338,7 +2329,6 @@ fn visit_failures<T>(
     criteria_mapper: &CriteriaMapper,
     results: &[ResolveResult],
     root_failures: &RootFailures,
-    resolve_depth: ResolveDepth,
     mut callback: impl FnMut(PackageIdx, usize, Option<&CriteriaFailureSet>) -> Result<(), T>,
 ) -> Result<(), T> {
     trace!(" traversing blame tree");
@@ -2468,22 +2458,20 @@ fn visit_failures<T>(
                         // Oh dang ok we *are* to blame, our bad
                         own_fault.set_criteria(criteria_idx, confident);
 
-                        if resolve_depth != ResolveDepth::Shallow {
-                            // Try to Guess Deeper by blaming our children for all |self| failures
-                            // by assuming we would need them to conform to our own criteria too.
-                            //
-                            // Dev-deps should never be chased here because any issues with those show
-                            // up as root_failures and have already been pushed into the search-stack.
-                            // All recursive blaming is about deps for a "normal" build, which requires
-                            // only these two kinds of deps.
-                            for &dep_idx in &package.normal_and_build_deps {
-                                let dep_result = &results[dep_idx];
-                                if !dep_result.validated_criteria.has_criteria(criteria_idx) {
-                                    dep_faults
-                                        .entry(dep_idx)
-                                        .or_insert_with(|| no_criteria.clone())
-                                        .set_criteria(criteria_idx, false);
-                                }
+                        // Try to Guess Deeper by blaming our children for all |self| failures
+                        // by assuming we would need them to conform to our own criteria too.
+                        //
+                        // Dev-deps should never be chased here because any issues with those show
+                        // up as root_failures and have already been pushed into the search-stack.
+                        // All recursive blaming is about deps for a "normal" build, which requires
+                        // only these two kinds of deps.
+                        for &dep_idx in &package.normal_and_build_deps {
+                            let dep_result = &results[dep_idx];
+                            if !dep_result.validated_criteria.has_criteria(criteria_idx) {
+                                dep_faults
+                                    .entry(dep_idx)
+                                    .or_insert_with(|| no_criteria.clone())
+                                    .set_criteria(criteria_idx, false);
                             }
                         }
                     }
@@ -3236,7 +3224,7 @@ pub fn regenerate_exemptions(
     // immediately. We'll also do this if automatic exemption minimization is
     // disabled through the CLI.
     if !allow_new_exemptions {
-        let (_, conclusion) = resolve_core(&graph, store, &criteria_mapper, ResolveDepth::Shallow);
+        let (_, conclusion) = resolve_core(&graph, store, &criteria_mapper);
         if !matches!(conclusion, Conclusion::Success(_)) || cfg.cli.no_minimize_exemptions {
             store.imports =
                 store.get_updated_imports_file(&graph, &conclusion, force_update_imports);
@@ -3286,11 +3274,8 @@ pub fn regenerate_exemptions(
     let mut potential_exemptions = SortedMap::<PackageStr<'_>, Vec<PotentialExemption<'_>>>::new();
 
     loop {
-        // Try to vet. We only probe shallowly as we only want to add exemptions
-        // which we're certain of the requirements for. We'll loop around again
-        // to add more audits until we successfully vet.
-        let (results, conclusion) =
-            resolve_core(&graph, store, &criteria_mapper, ResolveDepth::Shallow);
+        // Try to vet.
+        let (results, conclusion) = resolve_core(&graph, store, &criteria_mapper);
 
         // We only need to do more work here if we have any failures which we
         // can work with.
@@ -3401,6 +3386,9 @@ pub fn regenerate_exemptions(
                     potentials
                 });
 
+            // We only want to add exemptions which we're certain of the
+            // requirements for. We'll loop around again to add more audits
+            // until we successfully vet.
             'min_criteria: for criteria_idx in
                 criteria_mapper.minimal_indices(failure.criteria_failures.confident())
             {
