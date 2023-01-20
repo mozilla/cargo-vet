@@ -11,25 +11,7 @@ Error:
  18 │ version = "1.0.0"
  19 │ criteria = "oops"
     ·            ──────
- 20 │ dependency-criteria = { clap_derive = "nah", oops = ["no", "safe-to-run"] }
-    ╰────
-  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'nah' is not a valid criteria name
-    ╭─[config.toml:19:1]
- 19 │ criteria = "oops"
- 20 │ dependency-criteria = { clap_derive = "nah", oops = ["no", "safe-to-run"] }
-    ·                                       ─────
- 21 │ 
-    ╰────
-  help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'no' is not a valid criteria name
-    ╭─[config.toml:19:1]
- 19 │ criteria = "oops"
- 20 │ dependency-criteria = { clap_derive = "nah", oops = ["no", "safe-to-run"] }
-    ·                                                      ────
- 21 │ 
+ 20 │ 
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 Error: 

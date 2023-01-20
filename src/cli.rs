@@ -458,11 +458,6 @@ pub struct CertifyArgs {
     /// If not provided, we will prompt you for this information.
     #[clap(long, action)]
     pub criteria: Vec<CriteriaName>,
-    /// The dependency-criteria to require for this audit to be valid
-    ///
-    /// If not provided, we will still implicitly require dependencies to satisfy `criteria`.
-    #[clap(long, action)]
-    pub dependency_criteria: Vec<DependencyCriteriaArg>,
     /// Who to name as the auditor
     ///
     /// If not provided, we will collect this information from the local git.
@@ -530,11 +525,6 @@ pub struct AddExemptionArgs {
     /// If not provided, we will prompt you for this information.
     #[clap(long, action)]
     pub criteria: Vec<CriteriaName>,
-    /// The dependency-criteria to require for this exemption to be valid
-    ///
-    /// If not provided, we will still implicitly require dependencies to satisfy `criteria`.
-    #[clap(long, action)]
-    pub dependency_criteria: Vec<DependencyCriteriaArg>,
     /// A free-form string to include with the new forbid entry
     ///
     /// If not provided, there will be no notes.

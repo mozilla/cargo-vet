@@ -363,11 +363,6 @@ The criteria to certify for this audit
 
 If not provided, we will prompt you for this information.
 
-#### `--dependency-criteria <DEPENDENCY_CRITERIA>`
-The dependency-criteria to require for this audit to be valid
-
-If not provided, we will still implicitly require dependencies to satisfy `criteria`.
-
 #### `--who <WHO>`
 Who to name as the auditor
 
@@ -526,11 +521,6 @@ The version to mark as exempted
 The criteria to assume (trust)
 
 If not provided, we will prompt you for this information.
-
-#### `--dependency-criteria <DEPENDENCY_CRITERIA>`
-The dependency-criteria to require for this exemption to be valid
-
-If not provided, we will still implicitly require dependencies to satisfy `criteria`.
 
 #### `--notes <NOTES>`
 A free-form string to include with the new forbid entry

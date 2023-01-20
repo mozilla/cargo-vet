@@ -185,7 +185,7 @@ fn mock_simple_weaker_transitive_req() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = files_full_audited(&metadata);
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     let trans_audits = &mut audits.audits.get_mut("transitive-third-party1").unwrap();
     trans_audits.clear();
@@ -193,11 +193,12 @@ fn mock_simple_weaker_transitive_req() {
 
     let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
-    direct_audits.push(full_audit_dep(
-        ver(DEFAULT_VER),
-        "reviewed",
-        [("transitive-third-party1", ["weak-reviewed"])],
-    ));
+    direct_audits.push(full_audit(ver(DEFAULT_VER), "reviewed"));
+
+    config.policy.insert(
+        "third-party1".to_string(),
+        dep_policy([("transitive-third-party1", ["weak-reviewed"])]),
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -214,7 +215,7 @@ fn mock_simple_weaker_transitive_req_using_implies() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = files_full_audited(&metadata);
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     let trans_audits = &mut audits.audits.get_mut("transitive-third-party1").unwrap();
     trans_audits.clear();
@@ -222,11 +223,12 @@ fn mock_simple_weaker_transitive_req_using_implies() {
 
     let direct_audits = &mut audits.audits.get_mut("third-party1").unwrap();
     direct_audits.clear();
-    direct_audits.push(full_audit_dep(
-        ver(DEFAULT_VER),
-        "reviewed",
-        [("transitive-third-party1", ["weak-reviewed"])],
-    ));
+    direct_audits.push(full_audit(ver(DEFAULT_VER), "reviewed"));
+
+    config.policy.insert(
+        "third-party1".to_string(),
+        dep_policy([("transitive-third-party1", ["weak-reviewed"])]),
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -911,7 +913,7 @@ fn mock_complex_core10_partially_too_weak() {
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = files_full_audited(&metadata);
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     audits.audits.insert(
         "third-core".to_string(),
@@ -921,17 +923,22 @@ fn mock_complex_core10_partially_too_weak() {
         ],
     );
 
-    let audit_with_weaker_req = full_audit_dep(
-        ver(DEFAULT_VER),
-        "reviewed",
-        [("third-core", ["weak-reviewed"])],
-    );
+    let audit_with_weaker_req = full_audit(ver(DEFAULT_VER), "reviewed");
     audits
         .audits
         .insert("thirdA".to_string(), vec![audit_with_weaker_req.clone()]);
     audits
         .audits
         .insert("thirdAB".to_string(), vec![audit_with_weaker_req]);
+
+    config.policy.insert(
+        "thirdA".to_string(),
+        dep_policy([("third-core", ["weak-reviewed"])]),
+    );
+    config.policy.insert(
+        "thirdAB".to_string(),
+        dep_policy([("third-core", ["weak-reviewed"])]),
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -945,7 +952,7 @@ fn mock_complex_core10_partially_too_weak_via_weak_delta() {
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::complex();
     let metadata = mock.metadata();
-    let (config, mut audits, imports) = files_full_audited(&metadata);
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
 
     audits.audits.insert(
         "third-core".to_string(),
@@ -955,17 +962,22 @@ fn mock_complex_core10_partially_too_weak_via_weak_delta() {
         ],
     );
 
-    let audit_with_weaker_req = full_audit_dep(
-        ver(DEFAULT_VER),
-        "reviewed",
-        [("third-core", ["weak-reviewed"])],
-    );
+    let audit_with_weaker_req = full_audit(ver(DEFAULT_VER), "reviewed");
     audits
         .audits
         .insert("thirdA".to_string(), vec![audit_with_weaker_req.clone()]);
     audits
         .audits
         .insert("thirdAB".to_string(), vec![audit_with_weaker_req]);
+
+    config.policy.insert(
+        "thirdA".to_string(),
+        dep_policy([("third-core", ["weak-reviewed"])]),
+    );
+    config.policy.insert(
+        "thirdAB".to_string(),
+        dep_policy([("third-core", ["weak-reviewed"])]),
+    );
 
     let store = Store::mock(config, audits, imports);
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
@@ -994,11 +1006,7 @@ fn mock_complex_core10_partially_too_weak_via_strong_delta() {
         ],
     );
 
-    let audit_with_weaker_req = full_audit_dep(
-        ver(DEFAULT_VER),
-        "reviewed",
-        [("third-core", ["weak-reviewed"])],
-    );
+    let audit_with_weaker_req = full_audit(ver(DEFAULT_VER), "reviewed");
     audits
         .audits
         .insert("thirdA".to_string(), vec![audit_with_weaker_req.clone()]);
@@ -1008,6 +1016,14 @@ fn mock_complex_core10_partially_too_weak_via_strong_delta() {
 
     config.policy.insert(
         "firstA".to_string(),
+        dep_policy([("third-core", ["weak-reviewed"])]),
+    );
+    config.policy.insert(
+        "thirdA".to_string(),
+        dep_policy([("third-core", ["weak-reviewed"])]),
+    );
+    config.policy.insert(
+        "thirdAB".to_string(),
         dep_policy([("third-core", ["weak-reviewed"])]),
     );
 
@@ -1781,7 +1797,6 @@ fn builtin_simple_exemptions_in_direct_full() {
 #[test]
 fn builtin_simple_exemptions_nested_weaker_req() {
     // (Pass) A dep that has weaker requirements on its dep
-    // including dependency_criteria on an exemptions entry
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1792,18 +1807,8 @@ fn builtin_simple_exemptions_nested_weaker_req() {
     audits.audits.insert(
         "third-party1".to_string(),
         vec![
-            delta_audit_dep(
-                ver(3),
-                ver(6),
-                SAFE_TO_DEPLOY,
-                [("transitive-third-party1", [SAFE_TO_RUN])],
-            ),
-            delta_audit_dep(
-                ver(6),
-                ver(DEFAULT_VER),
-                SAFE_TO_DEPLOY,
-                [("transitive-third-party1", [SAFE_TO_RUN])],
-            ),
+            delta_audit(ver(3), ver(6), SAFE_TO_DEPLOY),
+            delta_audit(ver(6), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
         ],
     );
     audits.audits.insert(
@@ -1814,64 +1819,9 @@ fn builtin_simple_exemptions_nested_weaker_req() {
         ],
     );
 
-    config.exemptions.insert(
+    config.policy.insert(
         "third-party1".to_string(),
-        vec![exemptions_dep(
-            ver(3),
-            SAFE_TO_DEPLOY,
-            [("transitive-third-party1", [SAFE_TO_RUN])],
-        )],
-    );
-
-    config.exemptions.insert(
-        "transitive-third-party1".to_string(),
-        vec![exemptions(ver(4), SAFE_TO_RUN)],
-    );
-
-    let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
-
-    assert_report_snapshot!(
-        "builtin-simple-unaudited-nested-weaker-req",
-        &metadata,
-        report
-    );
-}
-
-#[test]
-fn builtin_simple_exemptions_nested_weaker_req_needs_dep_criteria() {
-    // (Fail) A dep that has weaker requirements on its dep
-    // but the exemptions entry is missing that so the whole thing fails
-
-    let _enter = TEST_RUNTIME.enter();
-    let mock = MockMetadata::simple();
-
-    let metadata = mock.metadata();
-    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
-
-    audits.audits.insert(
-        "third-party1".to_string(),
-        vec![
-            delta_audit_dep(
-                ver(3),
-                ver(6),
-                SAFE_TO_DEPLOY,
-                [("transitive-third-party1", [SAFE_TO_RUN])],
-            ),
-            delta_audit_dep(
-                ver(6),
-                ver(DEFAULT_VER),
-                SAFE_TO_DEPLOY,
-                [("transitive-third-party1", [SAFE_TO_RUN])],
-            ),
-        ],
-    );
-    audits.audits.insert(
-        "transitive-third-party1".to_string(),
-        vec![
-            delta_audit(ver(4), ver(8), SAFE_TO_RUN),
-            delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_RUN),
-        ],
+        dep_policy([("transitive-third-party1", [SAFE_TO_RUN])]),
     );
 
     config.exemptions.insert(
@@ -1888,7 +1838,7 @@ fn builtin_simple_exemptions_nested_weaker_req_needs_dep_criteria() {
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     assert_report_snapshot!(
-        "builtin-simple-unaudited-nested-weaker-req-needs-dep-criteria",
+        "builtin-simple-unaudited-nested-weaker-req",
         &metadata,
         report
     );
@@ -1908,22 +1858,16 @@ fn builtin_simple_exemptions_nested_stronger_req() {
         "first-party".to_string(),
         dep_policy([("third-party1", [SAFE_TO_RUN])]),
     );
+    config.policy.insert(
+        "third-party1".to_string(),
+        dep_policy([("transitive-third-party1", [SAFE_TO_DEPLOY])]),
+    );
 
     audits.audits.insert(
         "third-party1".to_string(),
         vec![
-            delta_audit_dep(
-                ver(3),
-                ver(6),
-                SAFE_TO_RUN,
-                [("transitive-third-party1", [SAFE_TO_DEPLOY])],
-            ),
-            delta_audit_dep(
-                ver(6),
-                ver(DEFAULT_VER),
-                SAFE_TO_RUN,
-                [("transitive-third-party1", [SAFE_TO_DEPLOY])],
-            ),
+            delta_audit(ver(3), ver(6), SAFE_TO_RUN),
+            delta_audit(ver(6), ver(DEFAULT_VER), SAFE_TO_RUN),
         ],
     );
     audits.audits.insert(
@@ -2687,104 +2631,4 @@ fn builtin_simple_mega_foreign_tag_team() {
     let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
 
     assert_report_snapshot!("builtin_simple_mega_foreign_tag_team", &metadata, report);
-}
-
-#[test]
-fn builtin_simple_foreign_dep_criteria_fail() {
-    // (Fail) Vetting hinges on some foreign audit with non-local depenency_criteria
-    // In this case we're "forced" to suggest a foreign audit
-
-    let _enter = TEST_RUNTIME.enter();
-    let mock = MockMetadata::simple();
-
-    let metadata = mock.metadata();
-    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
-    audits.audits.remove("third-party1");
-    imports.audits.insert(
-        FOREIGN.to_owned(),
-        AuditsFile {
-            criteria: [(DEFAULT_CRIT.to_owned(), criteria("nice"))]
-                .into_iter()
-                .collect(),
-            audits: [(
-                "third-party1".to_owned(),
-                vec![full_audit_dep(
-                    ver(DEFAULT_VER),
-                    SAFE_TO_DEPLOY,
-                    [("transitive-third-party1", [DEFAULT_CRIT])],
-                )],
-            )]
-            .into_iter()
-            .collect(),
-        },
-    );
-    config.imports.insert(
-        FOREIGN.to_owned(),
-        crate::format::RemoteImport {
-            url: FOREIGN_URL.to_owned(),
-            ..Default::default()
-        },
-    );
-
-    let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
-
-    assert_report_snapshot!(
-        "builtin_simple_foreign_dep_criteria_fail",
-        &metadata,
-        report
-    );
-}
-
-#[test]
-fn builtin_simple_foreign_dep_criteria_pass() {
-    // (Fail) Vetting hinges on some foreign audit with non-local depenency_criteria
-    // In this case we're "forced" to suggest a foreign audit
-
-    let _enter = TEST_RUNTIME.enter();
-    let mock = MockMetadata::simple();
-
-    let metadata = mock.metadata();
-    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
-    audits.audits.remove("third-party1");
-    imports.audits.insert(
-        FOREIGN.to_owned(),
-        AuditsFile {
-            criteria: [(DEFAULT_CRIT.to_owned(), criteria("nice"))]
-                .into_iter()
-                .collect(),
-            audits: [
-                (
-                    "third-party1".to_owned(),
-                    vec![full_audit_dep(
-                        ver(DEFAULT_VER),
-                        SAFE_TO_DEPLOY,
-                        [("transitive-third-party1", [DEFAULT_CRIT])],
-                    )],
-                ),
-                (
-                    "transitive-third-party1".to_owned(),
-                    vec![full_audit(ver(DEFAULT_VER), DEFAULT_CRIT)],
-                ),
-            ]
-            .into_iter()
-            .collect(),
-        },
-    );
-    config.imports.insert(
-        FOREIGN.to_owned(),
-        crate::format::RemoteImport {
-            url: FOREIGN_URL.to_owned(),
-            ..Default::default()
-        },
-    );
-
-    let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store, ResolveDepth::Shallow);
-
-    assert_report_snapshot!(
-        "builtin_simple_foreign_dep_criteria_pass",
-        &metadata,
-        report
-    );
 }

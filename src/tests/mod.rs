@@ -287,7 +287,6 @@ fn default_exemptions(version: VetVersion, config: &ConfigFile) -> ExemptedDepen
     ExemptedDependency {
         version,
         criteria: vec![config.default_criteria.clone().into()],
-        dependency_criteria: DependencyCriteria::new(),
         notes: None,
         suggest: true,
     }
@@ -296,36 +295,8 @@ fn exemptions(version: VetVersion, criteria: CriteriaStr) -> ExemptedDependency 
     ExemptedDependency {
         version,
         criteria: vec![criteria.to_string().into()],
-        dependency_criteria: DependencyCriteria::new(),
         notes: None,
         suggest: true,
-    }
-}
-
-fn exemptions_dep(
-    version: VetVersion,
-    criteria: CriteriaStr,
-    dependency_criteria: impl IntoIterator<
-        Item = (
-            impl Into<PackageName>,
-            impl IntoIterator<Item = impl Into<CriteriaName>>,
-        ),
-    >,
-) -> ExemptedDependency {
-    ExemptedDependency {
-        version,
-        criteria: vec![criteria.to_string().into()],
-        notes: None,
-        suggest: true,
-        dependency_criteria: dependency_criteria
-            .into_iter()
-            .map(|(k, v)| {
-                (
-                    k.into(),
-                    v.into_iter().map(|s| s.into().into()).collect::<Vec<_>>(),
-                )
-            })
-            .collect(),
     }
 }
 
@@ -334,45 +305,7 @@ fn delta_audit(from: VetVersion, to: VetVersion, criteria: CriteriaStr) -> Audit
         who: vec![],
         notes: None,
         criteria: vec![criteria.to_string().into()],
-        kind: AuditKind::Delta {
-            from,
-            to,
-            dependency_criteria: DependencyCriteria::default(),
-        },
-        aggregated_from: vec![],
-        is_fresh_import: false,
-    }
-}
-
-#[allow(dead_code)]
-fn delta_audit_dep(
-    from: VetVersion,
-    to: VetVersion,
-    criteria: CriteriaStr,
-    dependency_criteria: impl IntoIterator<
-        Item = (
-            impl Into<PackageName>,
-            impl IntoIterator<Item = impl Into<CriteriaName>>,
-        ),
-    >,
-) -> AuditEntry {
-    AuditEntry {
-        who: vec![],
-        notes: None,
-        criteria: vec![criteria.to_string().into()],
-        kind: AuditKind::Delta {
-            from,
-            to,
-            dependency_criteria: dependency_criteria
-                .into_iter()
-                .map(|(k, v)| {
-                    (
-                        k.into(),
-                        v.into_iter().map(|s| s.into().into()).collect::<Vec<_>>(),
-                    )
-                })
-                .collect(),
-        },
+        kind: AuditKind::Delta { from, to },
         aggregated_from: vec![],
         is_fresh_import: false,
     }
@@ -383,10 +316,7 @@ fn full_audit(version: VetVersion, criteria: CriteriaStr) -> AuditEntry {
         who: vec![],
         notes: None,
         criteria: vec![criteria.to_string().into()],
-        kind: AuditKind::Full {
-            version,
-            dependency_criteria: DependencyCriteria::default(),
-        },
+        kind: AuditKind::Full { version },
         aggregated_from: vec![],
         is_fresh_import: false,
     }
@@ -400,41 +330,7 @@ fn full_audit_m(
         who: vec![],
         notes: None,
         criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
-        kind: AuditKind::Full {
-            version,
-            dependency_criteria: DependencyCriteria::default(),
-        },
-        aggregated_from: vec![],
-        is_fresh_import: false,
-    }
-}
-
-fn full_audit_dep(
-    version: VetVersion,
-    criteria: CriteriaStr,
-    dependency_criteria: impl IntoIterator<
-        Item = (
-            impl Into<PackageName>,
-            impl IntoIterator<Item = impl Into<CriteriaName>>,
-        ),
-    >,
-) -> AuditEntry {
-    AuditEntry {
-        who: vec![],
-        notes: None,
-        criteria: vec![criteria.to_string().into()],
-        kind: AuditKind::Full {
-            version,
-            dependency_criteria: dependency_criteria
-                .into_iter()
-                .map(|(k, v)| {
-                    (
-                        k.into(),
-                        v.into_iter().map(|s| s.into().into()).collect::<Vec<_>>(),
-                    )
-                })
-                .collect(),
-        },
+        kind: AuditKind::Full { version },
         aggregated_from: vec![],
         is_fresh_import: false,
     }

@@ -333,18 +333,8 @@ fn builtin_simple_exemptions_nested_weaker_req_regenerate() {
     audits.audits.insert(
         "third-party1".to_string(),
         vec![
-            delta_audit_dep(
-                ver(3),
-                ver(6),
-                SAFE_TO_DEPLOY,
-                [("transitive-third-party1", [SAFE_TO_RUN])],
-            ),
-            delta_audit_dep(
-                ver(6),
-                ver(DEFAULT_VER),
-                SAFE_TO_DEPLOY,
-                [("transitive-third-party1", [SAFE_TO_RUN])],
-            ),
+            delta_audit(ver(3), ver(6), SAFE_TO_DEPLOY),
+            delta_audit(ver(6), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
         ],
     );
     audits.audits.insert(
@@ -355,13 +345,14 @@ fn builtin_simple_exemptions_nested_weaker_req_regenerate() {
         ],
     );
 
+    config.policy.insert(
+        "third-party1".to_string(),
+        dep_policy([("transitive-third-party1", [SAFE_TO_RUN])]),
+    );
+
     config.exemptions.insert(
         "third-party1".to_string(),
-        vec![exemptions_dep(
-            ver(3),
-            SAFE_TO_DEPLOY,
-            [("transitive-third-party1", [SAFE_TO_RUN])],
-        )],
+        vec![exemptions(ver(3), SAFE_TO_DEPLOY)],
     );
 
     config.exemptions.insert(
@@ -398,18 +389,8 @@ fn builtin_simple_exemptions_nested_stronger_req_regenerate() {
     audits.audits.insert(
         "third-party1".to_string(),
         vec![
-            delta_audit_dep(
-                ver(3),
-                ver(6),
-                SAFE_TO_RUN,
-                [("transitive-third-party1", [SAFE_TO_DEPLOY])],
-            ),
-            delta_audit_dep(
-                ver(6),
-                ver(DEFAULT_VER),
-                SAFE_TO_RUN,
-                [("transitive-third-party1", [SAFE_TO_DEPLOY])],
-            ),
+            delta_audit(ver(3), ver(6), SAFE_TO_RUN),
+            delta_audit(ver(6), ver(DEFAULT_VER), SAFE_TO_RUN),
         ],
     );
     audits.audits.insert(
@@ -418,6 +399,11 @@ fn builtin_simple_exemptions_nested_stronger_req_regenerate() {
             delta_audit(ver(4), ver(8), SAFE_TO_DEPLOY),
             delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
         ],
+    );
+
+    config.policy.insert(
+        "third-party1".to_string(),
+        dep_policy([("transitive-third-party1", [SAFE_TO_DEPLOY])]),
     );
 
     config.exemptions.insert(
@@ -609,11 +595,7 @@ fn builtin_simple_exemptions_regenerate_merge() {
 
     audits.audits.insert(
         "third-party1".to_owned(),
-        vec![full_audit_dep(
-            ver(DEFAULT_VER),
-            SAFE_TO_DEPLOY,
-            [("transitive-third-party1", ["criteria1", "criteria2"])],
-        )],
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     audits.audits.insert(
@@ -623,6 +605,12 @@ fn builtin_simple_exemptions_regenerate_merge() {
             delta_audit(ver(5), ver(DEFAULT_VER), "criteria2"),
         ],
     );
+
+    config.policy.insert(
+        "third-party1".to_string(),
+        dep_policy([("transitive-third-party1", ["criteria1", "criteria2"])]),
+    );
+
     config.exemptions.insert(
         "transitive-third-party1".to_owned(),
         vec![
@@ -660,11 +648,7 @@ fn builtin_simple_exemptions_regenerate_merge_nonew() {
 
     audits.audits.insert(
         "third-party1".to_owned(),
-        vec![full_audit_dep(
-            ver(DEFAULT_VER),
-            SAFE_TO_DEPLOY,
-            [("transitive-third-party1", ["criteria1", "criteria2"])],
-        )],
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
     );
 
     audits.audits.insert(
@@ -674,6 +658,12 @@ fn builtin_simple_exemptions_regenerate_merge_nonew() {
             delta_audit(ver(5), ver(DEFAULT_VER), "criteria2"),
         ],
     );
+
+    config.policy.insert(
+        "third-party1".to_string(),
+        dep_policy([("transitive-third-party1", ["criteria1", "criteria2"])]),
+    );
+
     config.exemptions.insert(
         "transitive-third-party1".to_owned(),
         vec![

@@ -18,12 +18,6 @@ criteria = "safe-to-deploy"
 version = "10.0.0"
 notes = "should parse correctly"
 
-[[audits.crate-a]]
-criteria = "safe-to-deploy"
-version = "10.0.0"
-dependency-criteria = { foo = "example" }
-notes = "should parse correctly"
-
 [[audits.crate-c]]
 criteria = "example2"
 version = "10.0.0"
