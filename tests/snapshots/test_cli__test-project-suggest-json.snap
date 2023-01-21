@@ -1107,23 +1107,8 @@ stdout:
             "deletions": 0,
             "files_changed": 12
           }
-        }
-      },
-      {
-        "name": "hyper-tls",
-        "notable_parents": "reqwest",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "0.5.0",
-          "diffstat": {
-            "insertions": 673,
-            "deletions": 0,
-            "files_changed": 11
-          }
-        }
+        },
+        "confident": false
       },
       {
         "name": "hyper-tls",
@@ -1258,23 +1243,8 @@ stdout:
             "deletions": 0,
             "files_changed": 10
           }
-        }
-      },
-      {
-        "name": "tokio-native-tls",
-        "notable_parents": "reqwest, hyper-tls",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "0.3.0",
-          "diffstat": {
-            "insertions": 1089,
-            "deletions": 0,
-            "files_changed": 16
-          }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tokio-native-tls",
@@ -1613,7 +1583,8 @@ stdout:
             "deletions": 0,
             "files_changed": 14
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "unicode-bidi",
@@ -1629,7 +1600,8 @@ stdout:
             "deletions": 0,
             "files_changed": 20
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "wasi",
@@ -1679,7 +1651,8 @@ stdout:
             "deletions": 0,
             "files_changed": 21
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "quote",
@@ -1780,7 +1753,8 @@ stdout:
             "deletions": 0,
             "files_changed": 13
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "futures-channel",
@@ -1796,7 +1770,8 @@ stdout:
             "deletions": 0,
             "files_changed": 18
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tempfile",
@@ -1812,7 +1787,8 @@ stdout:
             "deletions": 0,
             "files_changed": 22
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "ryu",
@@ -2236,7 +2212,8 @@ stdout:
             "deletions": 0,
             "files_changed": 42
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "hyper",
@@ -2273,14 +2250,14 @@ stdout:
         "confident": false
       },
       {
-        "name": "openssl",
-        "notable_parents": "native-tls",
+        "name": "h2",
+        "notable_parents": "hyper, reqwest",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
         "suggested_diff": {
           "from": null,
-          "to": "0.10.38",
+          "to": "0.3.13",
           "diffstat": {
             "insertions": 25417,
             "deletions": 0,
@@ -2337,7 +2314,8 @@ stdout:
             "deletions": 0,
             "files_changed": 24
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "idna",
@@ -2797,23 +2775,8 @@ stdout:
               "deletions": 0,
               "files_changed": 12
             }
-          }
-        },
-        {
-          "name": "hyper-tls",
-          "notable_parents": "reqwest",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "0.5.0",
-            "diffstat": {
-              "insertions": 673,
-              "deletions": 0,
-              "files_changed": 11
-            }
-          }
+          },
+          "confident": false
         },
         {
           "name": "hyper-tls",
@@ -2948,23 +2911,8 @@ stdout:
               "deletions": 0,
               "files_changed": 10
             }
-          }
-        },
-        {
-          "name": "tokio-native-tls",
-          "notable_parents": "reqwest, hyper-tls",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "0.3.0",
-            "diffstat": {
-              "insertions": 1089,
-              "deletions": 0,
-              "files_changed": 16
-            }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tokio-native-tls",
@@ -3303,7 +3251,8 @@ stdout:
               "deletions": 0,
               "files_changed": 14
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "unicode-bidi",
@@ -3319,7 +3268,8 @@ stdout:
               "deletions": 0,
               "files_changed": 20
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "wasi",
@@ -3369,7 +3319,8 @@ stdout:
               "deletions": 0,
               "files_changed": 21
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "quote",
@@ -3470,7 +3421,8 @@ stdout:
               "deletions": 0,
               "files_changed": 13
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "futures-channel",
@@ -3486,7 +3438,8 @@ stdout:
               "deletions": 0,
               "files_changed": 18
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tempfile",
@@ -3502,7 +3455,8 @@ stdout:
               "deletions": 0,
               "files_changed": 22
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "ryu",
@@ -3926,7 +3880,8 @@ stdout:
               "deletions": 0,
               "files_changed": 42
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "hyper",
@@ -3963,14 +3918,14 @@ stdout:
           "confident": false
         },
         {
-          "name": "openssl",
-          "notable_parents": "native-tls",
+          "name": "h2",
+          "notable_parents": "hyper, reqwest",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
           "suggested_diff": {
             "from": null,
-            "to": "0.10.38",
+            "to": "0.3.13",
             "diffstat": {
               "insertions": 25417,
               "deletions": 0,
@@ -4027,7 +3982,8 @@ stdout:
               "deletions": 0,
               "files_changed": 24
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "idna",
