@@ -785,7 +785,8 @@ stdout:
             "deletions": 0,
             "files_changed": 19
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "indexmap",
@@ -2453,7 +2454,8 @@ stdout:
               "deletions": 0,
               "files_changed": 19
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "indexmap",

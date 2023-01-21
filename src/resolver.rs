@@ -75,10 +75,10 @@ use tracing::{error, trace, trace_span};
 use crate::errors::{RegenerateExemptionsError, SuggestError};
 use crate::format::{
     self, AuditKind, AuditsFile, CriteriaName, CriteriaStr, Delta, DiffStat, ExemptedDependency,
-    ImportName, JsonPackage, JsonReport, JsonReportConclusion, JsonReportContext, JsonReportFailForVet,
-    JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest, JsonSuggestItem,
-    JsonVetFailure, PackageName, PackageStr, PolicyEntry, RemoteImport, VetVersion, SAFE_TO_DEPLOY,
-    SAFE_TO_RUN,
+    ImportName, JsonPackage, JsonReport, JsonReportConclusion, JsonReportContext,
+    JsonReportFailForVet, JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest,
+    JsonSuggestItem, JsonVetFailure, PackageName, PackageStr, PolicyEntry, RemoteImport,
+    VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;

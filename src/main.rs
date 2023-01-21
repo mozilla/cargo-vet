@@ -41,7 +41,7 @@ use crate::format::{
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
-use crate::resolver::{CriteriaMapper, CriteriaNamespace, DepGraph, ReportContext, ResolveDepth};
+use crate::resolver::{CriteriaMapper, CriteriaNamespace, DepGraph, ReportContext};
 use crate::storage::{Cache, Store};
 
 mod cli;
