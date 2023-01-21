@@ -653,6 +653,15 @@ pub enum OutputFormat {
     Human,
     /// Print output in a machine-readable form with minimal extra context.
     Json,
+    /// Print output in a machine-readable form with as much additional context
+    /// as possible to enable another tool to operate on that information.
+    ///
+    /// Extra information will be stored in a top-level 'context' field and
+    /// include:
+    ///
+    /// * criteria: The custom criteria this project defines (and their descriptions)
+    /// * store: The location of the store (supply-chain dir)
+    JsonFull,
 }
 
 #[derive(Clone, Debug)]

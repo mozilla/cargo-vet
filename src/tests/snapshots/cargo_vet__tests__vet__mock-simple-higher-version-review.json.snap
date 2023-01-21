@@ -3,6 +3,7 @@ source: src/tests/vet.rs
 expression: json
 ---
 {
+  "context": null,
   "conclusion": "fail (vetting)",
   "failures": [
     {
@@ -29,7 +30,8 @@ expression: json
             "deletions": 21,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       }
     ],
     "suggest_by_criteria": {
@@ -48,7 +50,8 @@ expression: json
               "deletions": 21,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         }
       ]
     },

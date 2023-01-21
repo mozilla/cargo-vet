@@ -3,6 +3,7 @@ source: src/tests/vet.rs
 expression: json
 ---
 {
+  "context": null,
   "conclusion": "fail (vetting)",
   "failures": [
     {
@@ -43,7 +44,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "third-party2",
@@ -59,7 +61,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "transitive-third-party1",
@@ -75,7 +78,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": false
       }
     ],
     "suggest_by_criteria": {
@@ -94,7 +98,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "third-party2",
@@ -110,7 +115,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "transitive-third-party1",
@@ -126,7 +132,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": false
         }
       ]
     },

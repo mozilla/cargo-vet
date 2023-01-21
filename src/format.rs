@@ -657,8 +657,19 @@ pub struct CommandHistory {
 /// up as miette-style json errors.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonReport {
+    /// Additional optional context for automation. Only enabled with `--output-format=json-full`
+    pub context: Option<JsonReportContext>,
     #[serde(flatten)]
     pub conclusion: JsonReportConclusion,
+}
+
+/// Additional context for automation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonReportContext {
+    /// Where the store (supply-chain) is located
+    pub store_path: String,
+    /// The currently defined criteria (currently excludes builtins criteria like `safe-to-deploy`).
+    pub criteria: SortedMap<CriteriaName, CriteriaEntry>,
 }
 
 /// The conclusion of running `check` or `suggest`
@@ -740,6 +751,8 @@ pub struct JsonSuggestItem {
     /// The diff (or full version) we recommend auditing
     // FIXME(SCHEMA): we probably shouldn't expose this internal type
     pub suggested_diff: DiffRecommendation,
+    /// Whether the suggestion is confident or a guess (de-emphasize guesses)
+    pub confident: bool,
 }
 
 /// A string of the form "package:version"

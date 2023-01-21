@@ -4,6 +4,7 @@ expression: format_outputs(&output)
 ---
 stdout:
 {
+  "context": null,
   "conclusion": "fail (vetting)",
   "failures": [
     {
@@ -716,7 +717,8 @@ stdout:
             "deletions": 0,
             "files_changed": 9
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "termcolor",
@@ -732,7 +734,8 @@ stdout:
             "deletions": 0,
             "files_changed": 10
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "os_str_bytes",
@@ -748,7 +751,8 @@ stdout:
             "deletions": 0,
             "files_changed": 21
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "textwrap",
@@ -764,7 +768,8 @@ stdout:
             "deletions": 0,
             "files_changed": 15
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "proc-macro2",
@@ -780,7 +785,8 @@ stdout:
             "deletions": 0,
             "files_changed": 19
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "indexmap",
@@ -796,7 +802,8 @@ stdout:
             "deletions": 0,
             "files_changed": 31
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "reqwest",
@@ -812,7 +819,8 @@ stdout:
             "deletions": 0,
             "files_changed": 60
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "serde_json",
@@ -828,7 +836,8 @@ stdout:
             "deletions": 0,
             "files_changed": 86
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "tokio",
@@ -844,7 +853,8 @@ stdout:
             "deletions": 0,
             "files_changed": 403
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "libc",
@@ -860,7 +870,8 @@ stdout:
             "deletions": 0,
             "files_changed": 215
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "winapi",
@@ -876,7 +887,8 @@ stdout:
             "deletions": 0,
             "files_changed": 410
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tinyvec_macros",
@@ -892,7 +904,8 @@ stdout:
             "deletions": 0,
             "files_changed": 5
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "matches",
@@ -908,7 +921,8 @@ stdout:
             "deletions": 0,
             "files_changed": 6
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "foreign-types-shared",
@@ -924,7 +938,8 @@ stdout:
             "deletions": 0,
             "files_changed": 5
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "try-lock",
@@ -940,7 +955,8 @@ stdout:
             "deletions": 0,
             "files_changed": 6
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "openssl-probe",
@@ -956,7 +972,8 @@ stdout:
             "deletions": 0,
             "files_changed": 9
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tower-service",
@@ -972,7 +989,8 @@ stdout:
             "deletions": 0,
             "files_changed": 6
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "wasm-bindgen-shared",
@@ -988,7 +1006,8 @@ stdout:
             "deletions": 0,
             "files_changed": 7
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "pin-utils",
@@ -1004,7 +1023,8 @@ stdout:
             "deletions": 0,
             "files_changed": 13
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "futures-sink",
@@ -1020,7 +1040,8 @@ stdout:
             "deletions": 0,
             "files_changed": 6
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "cfg-if",
@@ -1036,7 +1057,8 @@ stdout:
             "deletions": 0,
             "files_changed": 9
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "foreign-types",
@@ -1052,7 +1074,8 @@ stdout:
             "deletions": 0,
             "files_changed": 6
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "remove_dir_all",
@@ -1068,7 +1091,8 @@ stdout:
             "deletions": 0,
             "files_changed": 7
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "instant",
@@ -1084,7 +1108,8 @@ stdout:
             "deletions": 0,
             "files_changed": 12
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "hyper-tls",
@@ -1100,7 +1125,8 @@ stdout:
             "deletions": 0,
             "files_changed": 11
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "form_urlencoded",
@@ -1116,7 +1142,8 @@ stdout:
             "deletions": 0,
             "files_changed": 5
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "want",
@@ -1132,7 +1159,8 @@ stdout:
             "deletions": 0,
             "files_changed": 7
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "percent-encoding",
@@ -1148,7 +1176,8 @@ stdout:
             "deletions": 0,
             "files_changed": 5
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "fnv",
@@ -1164,7 +1193,8 @@ stdout:
             "deletions": 0,
             "files_changed": 8
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "itoa",
@@ -1180,7 +1210,8 @@ stdout:
             "deletions": 0,
             "files_changed": 13
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "lazy_static",
@@ -1196,7 +1227,8 @@ stdout:
             "deletions": 0,
             "files_changed": 11
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "httpdate",
@@ -1212,7 +1244,8 @@ stdout:
             "deletions": 0,
             "files_changed": 10
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tokio-native-tls",
@@ -1228,7 +1261,8 @@ stdout:
             "deletions": 0,
             "files_changed": 16
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "winapi-util",
@@ -1244,7 +1278,8 @@ stdout:
             "deletions": 0,
             "files_changed": 13
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "winapi-i686-pc-windows-gnu",
@@ -1260,7 +1295,8 @@ stdout:
             "deletions": 0,
             "files_changed": 1391
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "winapi-x86_64-pc-windows-gnu",
@@ -1276,7 +1312,8 @@ stdout:
             "deletions": 0,
             "files_changed": 1420
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "futures-core",
@@ -1292,7 +1329,8 @@ stdout:
             "deletions": 0,
             "files_changed": 14
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "futures-task",
@@ -1308,7 +1346,8 @@ stdout:
             "deletions": 0,
             "files_changed": 14
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "http-body",
@@ -1324,7 +1363,8 @@ stdout:
             "deletions": 0,
             "files_changed": 17
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "wasm-bindgen-macro",
@@ -1340,7 +1380,8 @@ stdout:
             "deletions": 0,
             "files_changed": 45
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "wasm-bindgen-futures",
@@ -1356,7 +1397,8 @@ stdout:
             "deletions": 0,
             "files_changed": 12
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "fastrand",
@@ -1372,7 +1414,8 @@ stdout:
             "deletions": 0,
             "files_changed": 10
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "mime",
@@ -1388,7 +1431,8 @@ stdout:
             "deletions": 0,
             "files_changed": 13
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "pkg-config",
@@ -1404,7 +1448,8 @@ stdout:
             "deletions": 0,
             "files_changed": 14
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "core-foundation-sys",
@@ -1420,7 +1465,8 @@ stdout:
             "deletions": 0,
             "files_changed": 26
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "wasm-bindgen-macro-support",
@@ -1436,7 +1482,8 @@ stdout:
             "deletions": 0,
             "files_changed": 6
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "security-framework-sys",
@@ -1452,7 +1499,8 @@ stdout:
             "deletions": 0,
             "files_changed": 27
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "unicode-xid",
@@ -1468,7 +1516,8 @@ stdout:
             "deletions": 0,
             "files_changed": 12
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "serde_urlencoded",
@@ -1484,7 +1533,8 @@ stdout:
             "deletions": 0,
             "files_changed": 17
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "slab",
@@ -1500,7 +1550,8 @@ stdout:
             "deletions": 0,
             "files_changed": 9
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "wasm-bindgen-backend",
@@ -1516,7 +1567,8 @@ stdout:
             "deletions": 0,
             "files_changed": 10
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "miow",
@@ -1532,7 +1584,8 @@ stdout:
             "deletions": 0,
             "files_changed": 14
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "unicode-bidi",
@@ -1548,7 +1601,8 @@ stdout:
             "deletions": 0,
             "files_changed": 20
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "wasi",
@@ -1564,7 +1618,8 @@ stdout:
             "deletions": 0,
             "files_changed": 15
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "native-tls",
@@ -1580,7 +1635,8 @@ stdout:
             "deletions": 0,
             "files_changed": 18
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "once_cell",
@@ -1596,7 +1652,8 @@ stdout:
             "deletions": 0,
             "files_changed": 21
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "quote",
@@ -1612,7 +1669,8 @@ stdout:
             "deletions": 0,
             "files_changed": 33
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "redox_syscall",
@@ -1628,7 +1686,8 @@ stdout:
             "deletions": 0,
             "files_changed": 30
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "winreg",
@@ -1644,7 +1703,8 @@ stdout:
             "deletions": 0,
             "files_changed": 26
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "core-foundation",
@@ -1660,7 +1720,8 @@ stdout:
             "deletions": 0,
             "files_changed": 26
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tracing-attributes",
@@ -1676,7 +1737,8 @@ stdout:
             "deletions": 0,
             "files_changed": 18
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "ipnet",
@@ -1692,7 +1754,8 @@ stdout:
             "deletions": 0,
             "files_changed": 13
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "futures-channel",
@@ -1708,7 +1771,8 @@ stdout:
             "deletions": 0,
             "files_changed": 18
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tempfile",
@@ -1724,7 +1788,8 @@ stdout:
             "deletions": 0,
             "files_changed": 22
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "ryu",
@@ -1740,7 +1805,8 @@ stdout:
             "deletions": 0,
             "files_changed": 34
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "schannel",
@@ -1756,7 +1822,8 @@ stdout:
             "deletions": 0,
             "files_changed": 32
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "log",
@@ -1772,7 +1839,8 @@ stdout:
             "deletions": 0,
             "files_changed": 19
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "proc-macro2",
@@ -1788,7 +1856,8 @@ stdout:
             "deletions": 0,
             "files_changed": 20
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "socket2",
@@ -1804,7 +1873,8 @@ stdout:
             "deletions": 0,
             "files_changed": 11
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "pin-project-lite",
@@ -1820,7 +1890,8 @@ stdout:
             "deletions": 0,
             "files_changed": 70
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tracing-core",
@@ -1836,7 +1907,8 @@ stdout:
             "deletions": 0,
             "files_changed": 26
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "cc",
@@ -1852,7 +1924,8 @@ stdout:
             "deletions": 0,
             "files_changed": 19
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "httparse",
@@ -1868,7 +1941,8 @@ stdout:
             "deletions": 0,
             "files_changed": 18
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "memchr",
@@ -1884,7 +1958,8 @@ stdout:
             "deletions": 0,
             "files_changed": 46
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "bytes",
@@ -1900,7 +1975,8 @@ stdout:
             "deletions": 0,
             "files_changed": 43
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "security-framework",
@@ -1916,7 +1992,8 @@ stdout:
             "deletions": 0,
             "files_changed": 42
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "openssl-sys",
@@ -1932,7 +2009,8 @@ stdout:
             "deletions": 0,
             "files_changed": 46
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "bumpalo",
@@ -1948,7 +2026,8 @@ stdout:
             "deletions": 0,
             "files_changed": 17
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tracing",
@@ -1964,7 +2043,8 @@ stdout:
             "deletions": 0,
             "files_changed": 32
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "mio",
@@ -1980,7 +2060,8 @@ stdout:
             "deletions": 0,
             "files_changed": 62
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "js-sys",
@@ -1996,7 +2077,8 @@ stdout:
             "deletions": 0,
             "files_changed": 62
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tokio-util",
@@ -2012,7 +2094,8 @@ stdout:
             "deletions": 0,
             "files_changed": 65
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "hashbrown",
@@ -2028,7 +2111,8 @@ stdout:
             "deletions": 0,
             "files_changed": 31
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "serde",
@@ -2044,7 +2128,8 @@ stdout:
             "deletions": 0,
             "files_changed": 27
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "url",
@@ -2060,7 +2145,8 @@ stdout:
             "deletions": 0,
             "files_changed": 15
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "tinyvec",
@@ -2076,7 +2162,8 @@ stdout:
             "deletions": 0,
             "files_changed": 25
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "http",
@@ -2092,7 +2179,8 @@ stdout:
             "deletions": 0,
             "files_changed": 39
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "wasm-bindgen",
@@ -2108,7 +2196,8 @@ stdout:
             "deletions": 0,
             "files_changed": 242
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "ntapi",
@@ -2124,7 +2213,8 @@ stdout:
             "deletions": 0,
             "files_changed": 42
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "hyper",
@@ -2140,7 +2230,8 @@ stdout:
             "deletions": 0,
             "files_changed": 69
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "futures-util",
@@ -2156,7 +2247,8 @@ stdout:
             "deletions": 0,
             "files_changed": 185
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "h2",
@@ -2172,7 +2264,8 @@ stdout:
             "deletions": 0,
             "files_changed": 63
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "openssl",
@@ -2188,7 +2281,8 @@ stdout:
             "deletions": 0,
             "files_changed": 82
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "syn",
@@ -2204,7 +2298,8 @@ stdout:
             "deletions": 6698,
             "files_changed": 92
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "unicode-normalization",
@@ -2220,7 +2315,8 @@ stdout:
             "deletions": 0,
             "files_changed": 24
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "idna",
@@ -2236,7 +2332,8 @@ stdout:
             "deletions": 0,
             "files_changed": 17
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "vcpkg",
@@ -2252,7 +2349,8 @@ stdout:
             "deletions": 0,
             "files_changed": 832
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "web-sys",
@@ -2268,7 +2366,8 @@ stdout:
             "deletions": 0,
             "files_changed": 2202
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "encoding_rs",
@@ -2284,7 +2383,8 @@ stdout:
             "deletions": 0,
             "files_changed": 102
           }
-        }
+        },
+        "confident": false
       }
     ],
     "suggest_by_criteria": {
@@ -2303,7 +2403,8 @@ stdout:
               "deletions": 0,
               "files_changed": 10
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "os_str_bytes",
@@ -2319,7 +2420,8 @@ stdout:
               "deletions": 0,
               "files_changed": 21
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "textwrap",
@@ -2335,7 +2437,8 @@ stdout:
               "deletions": 0,
               "files_changed": 15
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "proc-macro2",
@@ -2351,7 +2454,8 @@ stdout:
               "deletions": 0,
               "files_changed": 19
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "indexmap",
@@ -2367,7 +2471,8 @@ stdout:
               "deletions": 0,
               "files_changed": 31
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "reqwest",
@@ -2383,7 +2488,8 @@ stdout:
               "deletions": 0,
               "files_changed": 60
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "serde_json",
@@ -2399,7 +2505,8 @@ stdout:
               "deletions": 0,
               "files_changed": 86
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "tokio",
@@ -2415,7 +2522,8 @@ stdout:
               "deletions": 0,
               "files_changed": 403
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "libc",
@@ -2431,7 +2539,8 @@ stdout:
               "deletions": 0,
               "files_changed": 215
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "winapi",
@@ -2447,7 +2556,8 @@ stdout:
               "deletions": 0,
               "files_changed": 410
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tinyvec_macros",
@@ -2463,7 +2573,8 @@ stdout:
               "deletions": 0,
               "files_changed": 5
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "matches",
@@ -2479,7 +2590,8 @@ stdout:
               "deletions": 0,
               "files_changed": 6
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "foreign-types-shared",
@@ -2495,7 +2607,8 @@ stdout:
               "deletions": 0,
               "files_changed": 5
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "try-lock",
@@ -2511,7 +2624,8 @@ stdout:
               "deletions": 0,
               "files_changed": 6
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "openssl-probe",
@@ -2527,7 +2641,8 @@ stdout:
               "deletions": 0,
               "files_changed": 9
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tower-service",
@@ -2543,7 +2658,8 @@ stdout:
               "deletions": 0,
               "files_changed": 6
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "wasm-bindgen-shared",
@@ -2559,7 +2675,8 @@ stdout:
               "deletions": 0,
               "files_changed": 7
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "pin-utils",
@@ -2575,7 +2692,8 @@ stdout:
               "deletions": 0,
               "files_changed": 13
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "futures-sink",
@@ -2591,7 +2709,8 @@ stdout:
               "deletions": 0,
               "files_changed": 6
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "cfg-if",
@@ -2607,7 +2726,8 @@ stdout:
               "deletions": 0,
               "files_changed": 9
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "foreign-types",
@@ -2623,7 +2743,8 @@ stdout:
               "deletions": 0,
               "files_changed": 6
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "remove_dir_all",
@@ -2639,7 +2760,8 @@ stdout:
               "deletions": 0,
               "files_changed": 7
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "instant",
@@ -2655,7 +2777,8 @@ stdout:
               "deletions": 0,
               "files_changed": 12
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "hyper-tls",
@@ -2671,7 +2794,8 @@ stdout:
               "deletions": 0,
               "files_changed": 11
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "form_urlencoded",
@@ -2687,7 +2811,8 @@ stdout:
               "deletions": 0,
               "files_changed": 5
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "want",
@@ -2703,7 +2828,8 @@ stdout:
               "deletions": 0,
               "files_changed": 7
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "percent-encoding",
@@ -2719,7 +2845,8 @@ stdout:
               "deletions": 0,
               "files_changed": 5
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "fnv",
@@ -2735,7 +2862,8 @@ stdout:
               "deletions": 0,
               "files_changed": 8
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "itoa",
@@ -2751,7 +2879,8 @@ stdout:
               "deletions": 0,
               "files_changed": 13
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "lazy_static",
@@ -2767,7 +2896,8 @@ stdout:
               "deletions": 0,
               "files_changed": 11
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "httpdate",
@@ -2783,7 +2913,8 @@ stdout:
               "deletions": 0,
               "files_changed": 10
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tokio-native-tls",
@@ -2799,7 +2930,8 @@ stdout:
               "deletions": 0,
               "files_changed": 16
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "winapi-util",
@@ -2815,7 +2947,8 @@ stdout:
               "deletions": 0,
               "files_changed": 13
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "winapi-i686-pc-windows-gnu",
@@ -2831,7 +2964,8 @@ stdout:
               "deletions": 0,
               "files_changed": 1391
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "winapi-x86_64-pc-windows-gnu",
@@ -2847,7 +2981,8 @@ stdout:
               "deletions": 0,
               "files_changed": 1420
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "futures-core",
@@ -2863,7 +2998,8 @@ stdout:
               "deletions": 0,
               "files_changed": 14
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "futures-task",
@@ -2879,7 +3015,8 @@ stdout:
               "deletions": 0,
               "files_changed": 14
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "http-body",
@@ -2895,7 +3032,8 @@ stdout:
               "deletions": 0,
               "files_changed": 17
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "wasm-bindgen-macro",
@@ -2911,7 +3049,8 @@ stdout:
               "deletions": 0,
               "files_changed": 45
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "wasm-bindgen-futures",
@@ -2927,7 +3066,8 @@ stdout:
               "deletions": 0,
               "files_changed": 12
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "fastrand",
@@ -2943,7 +3083,8 @@ stdout:
               "deletions": 0,
               "files_changed": 10
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "mime",
@@ -2959,7 +3100,8 @@ stdout:
               "deletions": 0,
               "files_changed": 13
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "pkg-config",
@@ -2975,7 +3117,8 @@ stdout:
               "deletions": 0,
               "files_changed": 14
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "core-foundation-sys",
@@ -2991,7 +3134,8 @@ stdout:
               "deletions": 0,
               "files_changed": 26
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "wasm-bindgen-macro-support",
@@ -3007,7 +3151,8 @@ stdout:
               "deletions": 0,
               "files_changed": 6
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "security-framework-sys",
@@ -3023,7 +3168,8 @@ stdout:
               "deletions": 0,
               "files_changed": 27
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "unicode-xid",
@@ -3039,7 +3185,8 @@ stdout:
               "deletions": 0,
               "files_changed": 12
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "serde_urlencoded",
@@ -3055,7 +3202,8 @@ stdout:
               "deletions": 0,
               "files_changed": 17
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "slab",
@@ -3071,7 +3219,8 @@ stdout:
               "deletions": 0,
               "files_changed": 9
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "wasm-bindgen-backend",
@@ -3087,7 +3236,8 @@ stdout:
               "deletions": 0,
               "files_changed": 10
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "miow",
@@ -3103,7 +3253,8 @@ stdout:
               "deletions": 0,
               "files_changed": 14
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "unicode-bidi",
@@ -3119,7 +3270,8 @@ stdout:
               "deletions": 0,
               "files_changed": 20
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "wasi",
@@ -3135,7 +3287,8 @@ stdout:
               "deletions": 0,
               "files_changed": 15
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "native-tls",
@@ -3151,7 +3304,8 @@ stdout:
               "deletions": 0,
               "files_changed": 18
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "once_cell",
@@ -3167,7 +3321,8 @@ stdout:
               "deletions": 0,
               "files_changed": 21
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "quote",
@@ -3183,7 +3338,8 @@ stdout:
               "deletions": 0,
               "files_changed": 33
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "redox_syscall",
@@ -3199,7 +3355,8 @@ stdout:
               "deletions": 0,
               "files_changed": 30
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "winreg",
@@ -3215,7 +3372,8 @@ stdout:
               "deletions": 0,
               "files_changed": 26
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "core-foundation",
@@ -3231,7 +3389,8 @@ stdout:
               "deletions": 0,
               "files_changed": 26
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tracing-attributes",
@@ -3247,7 +3406,8 @@ stdout:
               "deletions": 0,
               "files_changed": 18
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "ipnet",
@@ -3263,7 +3423,8 @@ stdout:
               "deletions": 0,
               "files_changed": 13
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "futures-channel",
@@ -3279,7 +3440,8 @@ stdout:
               "deletions": 0,
               "files_changed": 18
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tempfile",
@@ -3295,7 +3457,8 @@ stdout:
               "deletions": 0,
               "files_changed": 22
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "ryu",
@@ -3311,7 +3474,8 @@ stdout:
               "deletions": 0,
               "files_changed": 34
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "schannel",
@@ -3327,7 +3491,8 @@ stdout:
               "deletions": 0,
               "files_changed": 32
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "log",
@@ -3343,7 +3508,8 @@ stdout:
               "deletions": 0,
               "files_changed": 19
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "proc-macro2",
@@ -3359,7 +3525,8 @@ stdout:
               "deletions": 0,
               "files_changed": 20
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "socket2",
@@ -3375,7 +3542,8 @@ stdout:
               "deletions": 0,
               "files_changed": 11
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "pin-project-lite",
@@ -3391,7 +3559,8 @@ stdout:
               "deletions": 0,
               "files_changed": 70
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tracing-core",
@@ -3407,7 +3576,8 @@ stdout:
               "deletions": 0,
               "files_changed": 26
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "cc",
@@ -3423,7 +3593,8 @@ stdout:
               "deletions": 0,
               "files_changed": 19
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "httparse",
@@ -3439,7 +3610,8 @@ stdout:
               "deletions": 0,
               "files_changed": 18
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "memchr",
@@ -3455,7 +3627,8 @@ stdout:
               "deletions": 0,
               "files_changed": 46
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "bytes",
@@ -3471,7 +3644,8 @@ stdout:
               "deletions": 0,
               "files_changed": 43
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "security-framework",
@@ -3487,7 +3661,8 @@ stdout:
               "deletions": 0,
               "files_changed": 42
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "openssl-sys",
@@ -3503,7 +3678,8 @@ stdout:
               "deletions": 0,
               "files_changed": 46
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "bumpalo",
@@ -3519,7 +3695,8 @@ stdout:
               "deletions": 0,
               "files_changed": 17
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tracing",
@@ -3535,7 +3712,8 @@ stdout:
               "deletions": 0,
               "files_changed": 32
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "mio",
@@ -3551,7 +3729,8 @@ stdout:
               "deletions": 0,
               "files_changed": 62
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "js-sys",
@@ -3567,7 +3746,8 @@ stdout:
               "deletions": 0,
               "files_changed": 62
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tokio-util",
@@ -3583,7 +3763,8 @@ stdout:
               "deletions": 0,
               "files_changed": 65
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "hashbrown",
@@ -3599,7 +3780,8 @@ stdout:
               "deletions": 0,
               "files_changed": 31
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "serde",
@@ -3615,7 +3797,8 @@ stdout:
               "deletions": 0,
               "files_changed": 27
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "url",
@@ -3631,7 +3814,8 @@ stdout:
               "deletions": 0,
               "files_changed": 15
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "tinyvec",
@@ -3647,7 +3831,8 @@ stdout:
               "deletions": 0,
               "files_changed": 25
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "http",
@@ -3663,7 +3848,8 @@ stdout:
               "deletions": 0,
               "files_changed": 39
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "wasm-bindgen",
@@ -3679,7 +3865,8 @@ stdout:
               "deletions": 0,
               "files_changed": 242
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "ntapi",
@@ -3695,7 +3882,8 @@ stdout:
               "deletions": 0,
               "files_changed": 42
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "hyper",
@@ -3711,7 +3899,8 @@ stdout:
               "deletions": 0,
               "files_changed": 69
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "futures-util",
@@ -3727,7 +3916,8 @@ stdout:
               "deletions": 0,
               "files_changed": 185
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "h2",
@@ -3743,7 +3933,8 @@ stdout:
               "deletions": 0,
               "files_changed": 63
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "openssl",
@@ -3759,7 +3950,8 @@ stdout:
               "deletions": 0,
               "files_changed": 82
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "syn",
@@ -3775,7 +3967,8 @@ stdout:
               "deletions": 6698,
               "files_changed": 92
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "unicode-normalization",
@@ -3791,7 +3984,8 @@ stdout:
               "deletions": 0,
               "files_changed": 24
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "idna",
@@ -3807,7 +4001,8 @@ stdout:
               "deletions": 0,
               "files_changed": 17
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "vcpkg",
@@ -3823,7 +4018,8 @@ stdout:
               "deletions": 0,
               "files_changed": 832
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "web-sys",
@@ -3839,7 +4035,8 @@ stdout:
               "deletions": 0,
               "files_changed": 2202
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "encoding_rs",
@@ -3855,7 +4052,8 @@ stdout:
               "deletions": 0,
               "files_changed": 102
             }
-          }
+          },
+          "confident": false
         }
       ],
       "safe-to-run": [
@@ -3873,7 +4071,8 @@ stdout:
               "deletions": 0,
               "files_changed": 9
             }
-          }
+          },
+          "confident": true
         }
       ]
     },

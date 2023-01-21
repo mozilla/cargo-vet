@@ -75,10 +75,10 @@ use tracing::{error, trace, trace_span};
 use crate::errors::{RegenerateExemptionsError, SuggestError};
 use crate::format::{
     self, AuditKind, AuditsFile, CriteriaName, CriteriaStr, Delta, DiffStat, ExemptedDependency,
-    ImportName, JsonPackage, JsonReport, JsonReportConclusion, JsonReportFailForVet,
-    JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest, JsonSuggestItem,
-    JsonVetFailure, PackageName, PackageStr, PolicyEntry, RemoteImport, VetVersion, SAFE_TO_DEPLOY,
-    SAFE_TO_RUN,
+    ImportName, JsonPackage, JsonReport, JsonReportConclusion, JsonReportContext,
+    JsonReportFailForVet, JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest,
+    JsonSuggestItem, JsonVetFailure, PackageName, PackageStr, PolicyEntry, RemoteImport,
+    VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
 };
 use crate::format::{FastMap, FastSet, SortedMap, SortedSet};
 use crate::network::Network;
@@ -2499,6 +2499,12 @@ fn visit_failures<T>(
     Ok(())
 }
 
+/// Additional optional context for printing a json Report for automation.
+pub struct ReportContext<'a> {
+    pub cfg: &'a Config,
+    pub store: &'a Store,
+}
+
 impl<'a> ResolveReport<'a> {
     pub fn has_errors(&self) -> bool {
         // Just check the conclusion
@@ -2816,8 +2822,13 @@ impl<'a> ResolveReport<'a> {
         &self,
         out: &Arc<dyn Out>,
         suggest: Option<&Suggest>,
+        context: Option<ReportContext>,
     ) -> Result<(), miette::Report> {
         let result = JsonReport {
+            context: context.map(|c| JsonReportContext {
+                store_path: c.cfg.metacfg.store_path().display().to_string(),
+                criteria: c.store.audits.criteria.clone(),
+            }),
             conclusion: match &self.conclusion {
                 Conclusion::Success(success) => {
                     let json_package = |pkgidx: &PackageIdx| {
@@ -2869,6 +2880,7 @@ impl<'a> ResolveReport<'a> {
                                 .map(|s| s.to_owned())
                                 .collect(),
                             suggested_diff: item.suggested_diff.clone(),
+                            confident: item.suggested_criteria.is_fully_confident(),
                         }
                     };
                     JsonReportConclusion::FailForVet(JsonReportFailForVet {

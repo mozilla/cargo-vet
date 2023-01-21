@@ -3,6 +3,7 @@ source: src/tests/vet.rs
 expression: json
 ---
 {
+  "context": null,
   "conclusion": "fail (vetting)",
   "failures": [
     {
@@ -64,7 +65,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "dev-cycle-direct",
@@ -80,7 +82,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "normal",
@@ -96,7 +99,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "simple-dev",
@@ -112,7 +116,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": true
       },
       {
         "name": "dev-cycle-indirect",
@@ -128,7 +133,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": false
       },
       {
         "name": "simple-dev-indirect",
@@ -144,7 +150,8 @@ expression: json
             "deletions": 0,
             "files_changed": 1
           }
-        }
+        },
+        "confident": false
       }
     ],
     "suggest_by_criteria": {
@@ -163,7 +170,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "normal",
@@ -179,7 +187,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         }
       ],
       "safe-to-run": [
@@ -197,7 +206,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "simple-dev",
@@ -213,7 +223,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": true
         },
         {
           "name": "dev-cycle-indirect",
@@ -229,7 +240,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": false
         },
         {
           "name": "simple-dev-indirect",
@@ -245,7 +257,8 @@ expression: json
               "deletions": 0,
               "files_changed": 1
             }
-          }
+          },
+          "confident": false
         }
       ]
     },

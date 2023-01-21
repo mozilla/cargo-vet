@@ -41,7 +41,7 @@ use crate::format::{
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
-use crate::resolver::{CriteriaMapper, CriteriaNamespace, DepGraph};
+use crate::resolver::{CriteriaMapper, CriteriaNamespace, DepGraph, ReportContext};
 use crate::storage::{Cache, Store};
 
 mod cli;
@@ -1262,7 +1262,15 @@ fn cmd_suggest(
         OutputFormat::Human => report
             .print_suggest_human(out, cfg, suggest.as_ref())
             .into_diagnostic()?,
-        OutputFormat::Json => report.print_json(out, suggest.as_ref())?,
+        OutputFormat::Json => report.print_json(out, suggest.as_ref(), None)?,
+        OutputFormat::JsonFull => report.print_json(
+            out,
+            suggest.as_ref(),
+            Some(ReportContext {
+                store: &suggest_store,
+                cfg,
+            }),
+        )?,
     }
 
     Ok(())
@@ -1516,8 +1524,8 @@ fn cmd_check(
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &store);
 
-    // Bare `cargo vet` shouldn't suggest in CI
-    let suggest = if !cfg.cli.locked {
+    // Bare `cargo vet` shouldn't suggest in CI (unless you want --output-format=json-full)
+    let suggest = if !cfg.cli.locked || cfg.cli.output_format == OutputFormat::JsonFull {
         report.compute_suggest(cfg, network.as_ref(), true)?
     } else {
         None
@@ -1527,7 +1535,12 @@ fn cmd_check(
         OutputFormat::Human => report
             .print_human(out, cfg, suggest.as_ref())
             .into_diagnostic()?,
-        OutputFormat::Json => report.print_json(out, suggest.as_ref())?,
+        OutputFormat::Json => report.print_json(out, suggest.as_ref(), None)?,
+        OutputFormat::JsonFull => report.print_json(
+            out,
+            suggest.as_ref(),
+            Some(ReportContext { store: &store, cfg }),
+        )?,
     }
 
     // Only save imports if we succeeded, to avoid any modifications on error.
@@ -1747,7 +1760,7 @@ fn cmd_dump_graph(
     let graph = resolver::DepGraph::new(&cfg.metadata, cfg.cli.filter_graph.as_ref(), None);
     match cfg.cli.output_format {
         OutputFormat::Human => graph.print_mermaid(out, sub_args).into_diagnostic()?,
-        OutputFormat::Json => {
+        OutputFormat::Json | OutputFormat::JsonFull => {
             serde_json::to_writer_pretty(&**out, &graph.nodes).into_diagnostic()?
         }
     }
