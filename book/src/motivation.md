@@ -50,7 +50,7 @@ the other two projects, and 107 dependencies are common across all three.
 This creates opportunities to share the analysis burden in an systematic way. If you're able to
 discover that a trusted party has already audited the exact crate release you're using,
 you can gain quite a bit of confidence in its integrity with no additional effort. If
-that part has audited a different version, you could consider either switching to it, or
+that party has audited a different version, you could consider either switching to it, or
 merely auditing the diff between the two. Not every organization
 and project share the same level of risk tolerance, but there is a lot of common
 ground, and substantial room for improvement beyond no sharing at all.

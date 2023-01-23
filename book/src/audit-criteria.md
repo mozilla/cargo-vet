@@ -35,7 +35,7 @@ criteria:
   rather than `safe-to-deploy`, since they don't need to be audited for handling
   adversarial input.
 * **Improving Sharing:** If one project wants to audit for issues A and B, and
-  another project want to audit for B and C, defining separate sets of criteria
+  another project wants to audit for B and C, defining separate sets of criteria
   for A, B, and C allows the two projects to partially share work.
 
 You can define and use as many separate sets of criteria as you like.

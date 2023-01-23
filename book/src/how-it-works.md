@@ -19,7 +19,7 @@ pre-existing third-party dependencies:
 
 ![Existing Repository](images/existing_repo.png)
 
-Cargo-vet can enabled by adding the tool as a linter and running `cargo vet
+Cargo-vet can be enabled by adding the tool as a linter and running `cargo vet
 init`, which creates some metadata in the repository:
 
 ![Repository with Metadata](images/with_metadata.png)
@@ -82,7 +82,7 @@ submit the relevant audits as part of that changeset:
 ## Sharing the Work
 
 Cargo-vet’s mechanisms for sharing and discovery are built on top of this
-decentralized storage. Imports are implementing by pointing directly to the
+decentralized storage. Imports are implemented by pointing directly to the
 audit files in external repositories, and the registry is merely an index of
 such files from well-known organizations:
 
