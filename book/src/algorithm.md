@@ -2,7 +2,7 @@
 
 The heart of `vet` is the "[resolver](https://github.com/mozilla/cargo-vet/blob/main/src/resolver.rs)" which takes in your build graph and your supply_chain dir, and determines whether `vet check` should pass.
 
-If `check` fails, it tries to determine the reason for that failure (which as we'll see is a non-trivial question). If you request a `suggest` it will then try to suggest "good" audits that will definitely satisfy `check` (which is again, non-trivial).
+If `check` fails, it tries to determine the reason for that failure (which as we'll see is a non-trivial question). If you request a `suggest` it will then try to suggest "good" audits that will definitely satisfy `check` (which is again non-trivial).
 
 These results are a basic building block that most other commands will defer to:
 
@@ -44,8 +44,8 @@ initial summary implies:
 5. Suggest audits to fix leaf failures (the dance of a thousand diffs)
 
 Here in all of its glory is the entirety of the resolver algorithm today in
-abbreviated pseudo-rust. Each of these steps will of course be elaborated on
-in the previous sections or subsequent sections.
+abbreviated pseudo-rust. Each of these steps will be elaborated on in the
+subsequent sections.
 
 ```rust ,ignore
 // Step 1a: Build the DepGraph
@@ -190,7 +190,7 @@ node are still true about the "fake" node, and we generally want to talk about t
 node and the "fake" node as if they were one thing. So we actually just analyze the build graph
 in two steps. To understand how this works, we need to first look at how DAGs are analyzed.
 
-Any analysis on a [DAG][] generally starts with a [toplogical sort][], which is just a fancy way of saying you do depth-first-search ([DFS][]) on every root and only use a node only after you've searched all its children (this is the post-order, for graph people). Note that each iteration of DFS reuses the
+Any analysis on a [DAG][] generally starts with a [topological sort][], which is just a fancy way of saying you do depth-first-search ([DFS][]) on every root and only use a node only after you've searched all its children (this is the post-order, for graph people). Note that each iteration of DFS reuses the
 "visited" from the previous iterations, because we only want to visit each node once.
 
 Also note that knowing the roots is simply an optimization, you can just run DFS on every node and you will get a valid topological order -- we run it for all the workspace members, which includes all of
@@ -293,10 +293,10 @@ to avoid bugs, and to make everything more efficient.
 Most of the resolver's operations are things like "union these criteria sets" or
 "check if this criteria set is a superset of the required one".
 
-There is currently an artificial maximum limit of 64 criteria for you and all your
-imports to make CriteriaSets effecient (they're just a u64 internally).
-The code is designed to allow this limit to be easily raised if anyone ever hits it
-(either with a u128 or a proper BitSet).
+There is currently an artificial maximum limit of 64 criteria for you and all
+your imports to make CriteriaSets efficient (they're just a u64 internally).
+The code is designed to allow this limit to be easily raised if anyone ever hits
+it (either with a u128 or a proper BitSet).
 
 The biggest complexity of this process is handling "implies" (and the mapping of
 imported criteria onto local criteria, which is basically another form of "implies"
@@ -329,11 +329,11 @@ The transitive closure for each criteria can then be computed by running depth-f
 That's it!
 
 Being able to precompute the transitive closure massively simplifies the resolver,
-as it means we never have to "re-evaulate" the implies relationships when unioning
+as it means we never have to re-evaulate the implies relationships when unioning
 CriteriaSets, making potentially O(n<sup>3</sup>) operations into constant time ones,
 where n is the number of criteria (the criteria graph can have O(n<sup>2</sup>) criteria,
 and a criteria set can have O(n) criteria, and we might have to look at every edge of
-the graph for every criteria whenever we add a criteria).
+the graph for every criteria whenever we add one).
 
 The *existence* of the transitive closure is however not a fundamental truth. It
 exists because we have artifically limited what import maps and implies is allowed to
@@ -379,7 +379,7 @@ of the criteria required for the audit.
 
 The AuditGraph is the graph of all audits for a particular package *name*.
 The nodes of the graph are [Version][]s and the edges are delta audits (e.g. `0.1.0 -> 0.2.0`).
-Each edge has a list of criteria is claims to certify, and dependency_criteria that the
+Each edge has a list of criteria it claims to certify, and dependency criteria that the
 dependencies of this package must satisfy for the edge to be considered "valid" (see
 the next section for details).
 
@@ -392,14 +392,14 @@ a Target Version to the graph (if it doesn't exist already).
 Full audits are desugarred to delta audits from the Root Version (so an audit for `0.2.0` would
 be lowered to a delta audit from `Root -> 0.2.0`).
 
-Exemptions are desugarred to full audits (and therefore deltas) with a flag indicating their origin.
-This flag is used to "deprioritize" the edges so that we can more easily detect exemptions that
+Exemptions are desugared to full audits (and therefore deltas) with a flag indicating their origin.
+This flag is used to deprioritize the edges so that we can more easily detect exemptions that
 aren't needed anymore.
 
 Imported audits are lowered in the exact same way as local criteria, except their criteria names are
-treated as namespaced when feeding them into the CriteriaMapper. (In the future, another flag may be
-set indicating their origin. This flag would similarly lets us "deprioritize" imported audits, to
-help determine if they're needed.)
+treated as namespaced when feeding them into the CriteriaMapper. In the future, another flag may be
+set indicating their origin. This flag would similarly lets us deprioritize imported audits, to
+help determine if they're needed.
 
 With all of this established. the problem of determining whether a package is audited for a given
 criteria can be reduced to determining if there *exists* a path from the Root Version to the
@@ -562,7 +562,7 @@ we have audits for and diff-stat all the combinations. Smallest diff wins! Does 
 and slow? It is! That's why we have a secret global diff-stat cache on your system.
 
 Also we don't *literally* diff every combination. We turn the O(n<sup>2</sup>) diffs
-into "only" O(n) diffs with a simple heuristic: for each Target Reachable Node,
+into only O(n) diffs with a simple heuristic: for each Target Reachable Node,
 we find the package closest version *smaller* than that version and the closest version
 *bigger* than that version. We then diff that version against only those two versions.
 This may potentially miss some magical diff where a big change is made and then reverted,
@@ -574,17 +574,17 @@ between two other versions. Versions *do* however have a total ordering, so we *
 compute minimum and maximum versions, and say whether a version is bigger or smaller
 than another. As a result it's possible to compute "the largest version that's smaller than X"
 and "the smallest version that's larger than X", which is what we use. There is however
-no way to say whether the smaller-maximum or the bigger-minimum is closer to X, so we "must"
+no way to say whether the smaller-maximum or the bigger-minimum is closer to X, so we must
 try both.
 
-It's also worth reiterating here that diffs *can* "go backwards". If you're on 1.0.0 and
+It's also worth reiterating here that diffs *can* go backwards. If you're on 1.0.0 and
 have an audit for 1.0.1, we will happily recommend the reverse-diff from `1.0.1 -> 1.0.0`.
 This is slightly brain melty at first but nothing really needs to specially handle this,
 it Just Works.
 
 Any diff we recommend from the Root Version is "resugared" into recommending a full audit,
 (and is also computed by diffing against an empty directory). It is impossible
-to recommend a diff *to* the Root Version, because there cannot be audits of the
+to recommend a diff to the Root Version, because there cannot be audits of the
 Root Version.
 
 

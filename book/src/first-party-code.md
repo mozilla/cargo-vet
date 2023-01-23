@@ -29,9 +29,9 @@ audit for the base published version that exists on crates.io, and then one or
 more delta audits from that base version to the specific git commit used by the
 build graph. Git commits are identified with an extended `x.y.z@git:SHA` syntax.
 They may only appear in delta audits and should be performed relative to the
-nearest version published version, which ensures that audit information is
-recorded in terms of published versions wherever possible for the sake of
-reusability by others.
+nearest published version, which ensures that audit information is recorded in
+terms of published versions wherever possible for the sake of reusability by
+others.
 
 When enabled for a path dependency, this enforcement is not precise, because
 cargo-vet lacks a hash by which to uniquely identify the actual package

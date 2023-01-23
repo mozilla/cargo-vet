@@ -77,8 +77,8 @@ $ cargo vet certify baz 1.3
   Recorded full audit of baz version 1.3
 ```
 
-You can also use the `--mode=local` flag to have `inspect` download the crate to
-and drop you into a nested shell to inspect the crate.
+You can also use the `--mode=local` flag to have `inspect` download the crate
+source code and drop you into a nested shell to inspect it.
 
 Similarly, `cargo vet diff` will give you a [Sourcegraph](https://about.sourcegraph.com/)
 link that will display the diff between the two versions.
