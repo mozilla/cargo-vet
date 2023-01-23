@@ -1226,7 +1226,7 @@ fn resolve_requirements(
         }
         let normal_criteria = requirements[pkgidx].clone();
 
-        // For each dependency,
+        // For each dependency, elaborate the dependency criteria from the configured policy and add it to the dependency requirements.
         for &depidx in &package.normal_and_build_deps {
             let dep_package = &graph.nodes[depidx];
             let dependency_criteria = policy
