@@ -84,6 +84,8 @@ pub enum VersionParseError {
     Semver(#[from] semver::Error),
     #[error("unrecognized revision type, expected 'git:' prefix")]
     UnknownRevision,
+    #[error("unrecognized git hash, expected 40 hex digits")]
+    InvalidGitHash,
 }
 
 ///////////////////////////////////////////////////////////
