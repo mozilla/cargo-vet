@@ -68,10 +68,14 @@ impl VetVersion {
     pub fn parse(s: &str) -> Result<Self, VersionParseError> {
         if let Some((ver, rev)) = s.split_once('@') {
             if let Some(hash) = rev.trim_start().strip_prefix("git:") {
-                Ok(VetVersion {
-                    semver: ver.trim_end().parse()?,
-                    git_rev: Some(hash.to_owned()),
-                })
+                if hash.len() != 40 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    Err(VersionParseError::InvalidGitHash)
+                } else {
+                    Ok(VetVersion {
+                        semver: ver.trim_end().parse()?,
+                        git_rev: Some(hash.to_owned()),
+                    })
+                }
             } else {
                 Err(VersionParseError::UnknownRevision)
             }
@@ -752,4 +756,43 @@ pub struct JsonPackage {
     pub name: PackageName,
     /// Version of the package
     pub version: VetVersion,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn vet_version_parsing() {
+        assert_eq!(
+            VetVersion::parse("1.0.0").unwrap(),
+            VetVersion {
+                semver: "1.0.0".parse().unwrap(),
+                git_rev: None
+            }
+        );
+
+        assert_eq!(
+            VetVersion::parse("1.0.1@git:00112233445566778899aabbccddeeff00112233").unwrap(),
+            VetVersion {
+                semver: "1.0.1".parse().unwrap(),
+                git_rev: Some("00112233445566778899aabbccddeeff00112233".into())
+            }
+        );
+
+        match VetVersion::parse("1.0.1@git:00112233445566778899aabbccddeeff0011223g") {
+            Err(VersionParseError::InvalidGitHash) => (),
+            _ => panic!("expected invalid git hash"),
+        }
+
+        match VetVersion::parse("1.0.1@git:00112233") {
+            Err(VersionParseError::InvalidGitHash) => (),
+            _ => panic!("expected invalid git hash"),
+        }
+
+        match VetVersion::parse("1.0.1@pijul:00112233") {
+            Err(VersionParseError::UnknownRevision) => (),
+            _ => panic!("expected unknown revision"),
+        }
+    }
 }
