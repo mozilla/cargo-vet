@@ -225,6 +225,7 @@ pub struct ForeignAuditsFile {
 
 /// Information on a Criteria
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct CriteriaEntry {
     /// Summary of how you evaluate something by this criteria.
     pub description: Option<String>,

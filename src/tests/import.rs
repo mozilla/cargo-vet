@@ -883,7 +883,6 @@ fn foreign_audit_file_to_local() {
                 toml::toml! {
                     description = "example2"
                     implies = ["safe-to-deploy", "will-not-parse"]
-                    unknown = "ignored unknown field"
                 },
             ),
             (
@@ -891,6 +890,14 @@ fn foreign_audit_file_to_local() {
                 toml::toml! {
                     implies = [{ not = "a string" }]
                     description = "will be ignored"
+                },
+            ),
+            (
+                "will-not-parse2".to_string(),
+                toml::toml! {
+                    description = "example2"
+                    implies = "safe-to-deploy"
+                    unknown = "invalid unknown field"
                 },
             ),
         ]
@@ -924,6 +931,11 @@ fn foreign_audit_file_to_local() {
                         criteria = "safe-to-deploy"
                         violation = "invalid"
                         notes = "will be removed"
+                    },
+                    toml::toml! {
+                        criteria = "safe-to-deploy"
+                        version = "20.0.0"
+                        unknown = "invalid unknown field"
                     },
                 ],
             ),
@@ -969,10 +981,13 @@ fn foreign_audit_file_to_local() {
     result.ignored_criteria.sort();
     result.ignored_audits.sort();
 
-    assert_eq!(result.ignored_criteria, &["will-not-parse"]);
+    assert_eq!(
+        result.ignored_criteria,
+        &["will-not-parse", "will-not-parse2"]
+    );
     assert_eq!(
         result.ignored_audits,
-        &["crate-a", "crate-a", "crate-a", "crate-a", "crate-b"]
+        &["crate-a", "crate-a", "crate-a", "crate-a", "crate-a", "crate-b"]
     );
 
     insta::assert_snapshot!(

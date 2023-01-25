@@ -226,6 +226,66 @@ version = "10.0.0"
 }
 
 #[test]
+fn test_unknown_field_config() {
+    let config = r##"
+# cargo-vet config file
+
+[imports.peer1]
+url = "https://peer1.com"
+exclude = ["zzz", "aaa"]
+unknown-field = "hi"
+
+[[exemptions.zzz]]
+version = "1.0.0"
+criteria = "safe-to-deploy"
+unknown-field = "hi"
+"##;
+
+    let imports = r##"
+# cargo-vet imports lock
+
+[[audits.peer1.audits.third-party1]]
+criteria = "safe-to-deploy"
+version = "10.0.0"
+"##;
+
+    let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
+    insta::assert_snapshot!(acquire_errors);
+}
+
+#[test]
+fn test_unknown_field_criteria() {
+    let audits = r##"
+# cargo-vet audits file
+
+[criteria.good]
+description = "great"
+implies = "safe-to-deploy"
+unknown-field = "invalid"
+
+[audits]
+"##;
+
+    let acquire_errors = get_valid_store(EMPTY_CONFIG, audits, EMPTY_IMPORTS);
+    insta::assert_snapshot!(acquire_errors);
+}
+
+#[test]
+fn test_unknown_field_audit() {
+    let audits = r##"
+# cargo-vet audits file
+
+[[audits.zzz]]
+criteria = "safe-to-deploy"
+version = "2.0.0"
+unknown-field = "invalid"
+"##;
+
+    let acquire_errors = get_valid_store(EMPTY_CONFIG, audits, EMPTY_IMPORTS);
+    insta::assert_snapshot!(acquire_errors);
+}
+
+#[test]
 fn test_invalid_formatting() {
     let config = r##"
 # cargo-vet config file
@@ -256,12 +316,10 @@ criteria = "safe-to-deploy"
 [criteria.good]
 description = "great"
 implies = "safe-to-deploy"
-unrecognized-field = "hey there!"
 
 [[audits.serde]]
 criteria = ["safe-to-deploy", "good"]
 version = "2.0.0"
-note = "invalid field"
 
 [[audits.serde]]
 criteria = ["safe-to-deploy", "good"]

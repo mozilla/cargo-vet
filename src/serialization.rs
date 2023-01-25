@@ -187,6 +187,7 @@ pub mod audit {
     use crate::format::{AuditEntry, AuditKind, CriteriaName, Delta, VersionReq, VetVersion};
 
     #[derive(Serialize, Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct AuditEntryAll {
         #[serde(default)]
         #[serde(skip_serializing_if = "Vec::is_empty")]

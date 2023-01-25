@@ -1,0 +1,25 @@
+---
+source: src/tests/store_parsing.rs
+expression: acquire_errors
+---
+
+  × Your cargo-vet store (supply-chain) has consistency errors
+
+Error: 
+  × A file in the store is not correctly formatted:
+  │ 
+  │ --- old/config.toml
+  │ +++ new/config.toml
+  │ @@ -4,9 +4,7 @@
+  │  [imports.peer1]
+  │  url = "https://peer1.com"
+  │  exclude = ["zzz", "aaa"]
+  │ -unknown-field = "hi"
+  │ 
+  │  [[exemptions.zzz]]
+  │  version = "1.0.0"
+  │  criteria = "safe-to-deploy"
+  │ -unknown-field = "hi"
+  │ 
+  help: run `cargo vet` without --locked to reformat files in the store
+

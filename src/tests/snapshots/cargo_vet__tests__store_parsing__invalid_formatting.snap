@@ -35,16 +35,11 @@ Error:
   │ 
   │ --- old/audits.toml
   │ +++ new/audits.toml
-  │ @@ -4,14 +4,12 @@
-  │  [criteria.good]
-  │  description = "great"
-  │  implies = "safe-to-deploy"
-  │ -unrecognized-field = "hey there!"
+  │ @@ -7,9 +7,9 @@
   │ 
   │  [[audits.serde]]
   │  criteria = ["safe-to-deploy", "good"]
   │ -version = "2.0.0"
-  │ -note = "invalid field"
   │ +version = "1.0.0"
   │ +notes = "valid field"
   │ 
