@@ -181,6 +181,49 @@ pub mod dependency_criteria {
     }
 }
 
+pub mod policy {
+    use super::*;
+    use crate::format::{PackagePolicyEntry, PackageVersion, PolicyEntry};
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    pub struct PackagePolicyEntryAll {
+        #[serde(default)]
+        version: SortedMap<PackageVersion, PolicyEntry>,
+        #[serde(flatten)]
+        unversioned: PolicyEntry,
+    }
+
+    impl From<PackagePolicyEntryAll> for PackagePolicyEntry {
+        fn from(
+            PackagePolicyEntryAll {
+                version,
+                unversioned,
+            }: PackagePolicyEntryAll,
+        ) -> Self {
+            if version.is_empty() {
+                PackagePolicyEntry::Unversioned(unversioned)
+            } else {
+                PackagePolicyEntry::Versioned { version }
+            }
+        }
+    }
+
+    impl From<PackagePolicyEntry> for PackagePolicyEntryAll {
+        fn from(e: PackagePolicyEntry) -> Self {
+            match e {
+                PackagePolicyEntry::Versioned { version } => PackagePolicyEntryAll {
+                    version,
+                    unversioned: Default::default(),
+                },
+                PackagePolicyEntry::Unversioned(unversioned) => PackagePolicyEntryAll {
+                    unversioned,
+                    version: Default::default(),
+                },
+            }
+        }
+    }
+}
+
 pub mod audit {
     use super::*;
 

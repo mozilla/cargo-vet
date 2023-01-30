@@ -535,7 +535,12 @@ impl<'a> IntoIterator for &'a Policy {
 /// _all_ and _only_ the versions present in the dependency tree must be provided to set policies.
 /// Otherwise, versions may be omitted.
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-#[serde(untagged)]
+// We have to use a flattened struct rather than `serde(untagged)`, because toml only parses
+// `Spanned` elements (as contained in `PolicyEntry`) through `deserialize_any`, and
+// `serde(untagged)` deserializes everything into a buffer first to try different deserialization
+// branches (which will separate the `toml` Deserializer from being able to handle `Spanned`).
+#[serde(from = "serialization::policy::PackagePolicyEntryAll")]
+#[serde(into = "serialization::policy::PackagePolicyEntryAll")]
 pub enum PackagePolicyEntry {
     Versioned {
         version: SortedMap<PackageVersion, PolicyEntry>,
