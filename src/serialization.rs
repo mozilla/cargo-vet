@@ -625,26 +625,26 @@ mod test {
             vec!["criteria-one".to_owned().into()],
         );
 
-        let mut policy = SortedMap::new();
+        let mut policy = Policy::default();
         policy.insert(
             "long-criteria".to_owned(),
-            PolicyEntry {
+            PackagePolicyEntry::Unversioned(PolicyEntry {
                 audit_as_crates_io: None,
                 criteria: Some(vec!["long-criteria".to_owned().into()]),
                 dev_criteria: None,
                 dependency_criteria: dc_long,
                 notes: Some("notes go here!".to_owned()),
-            },
+            }),
         );
         policy.insert(
             "short-criteria".to_owned(),
-            PolicyEntry {
+            PackagePolicyEntry::Unversioned(PolicyEntry {
                 audit_as_crates_io: None,
                 criteria: Some(vec!["short-criteria".to_owned().into()]),
                 dev_criteria: None,
                 dependency_criteria: dc_short,
                 notes: Some("notes go here!".to_owned()),
-            },
+            }),
         );
 
         let formatted = super::to_formatted_toml(ConfigFile {

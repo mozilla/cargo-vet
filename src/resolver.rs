@@ -1,5 +1,5 @@
 //! The Resolver is the heart of cargo-vet, and does all the work to validate the audits
-//! for your current packages and to suggest fixes. This is done in 4 phases:
+//! for your current packages and to suggest fixes. This is done in 3 phases:
 //!
 //! 1. Resolving required criteria based on your policies
 //! 2. Searching for audits which satisfy the required criteria
@@ -56,8 +56,8 @@ use crate::format::{
     self, AuditEntry, AuditKind, AuditsFile, CriteriaEntry, CriteriaName, CriteriaStr, Delta,
     DiffStat, ExemptedDependency, FastMap, FastSet, ImportName, JsonPackage, JsonReport,
     JsonReportConclusion, JsonReportFailForVet, JsonReportFailForViolationConflict,
-    JsonReportSuccess, JsonSuggest, JsonSuggestItem, JsonVetFailure, PackageName, PackageStr,
-    PolicyEntry, RemoteImport, VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+    JsonReportSuccess, JsonSuggest, JsonSuggestItem, JsonVetFailure, PackageStr, Policy,
+    RemoteImport, VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
 };
 use crate::format::{SortedMap, SortedSet};
 use crate::network::Network;
@@ -680,10 +680,10 @@ impl<'a> DepGraph<'a> {
     pub fn new(
         metadata: &'a Metadata,
         filter_graph: Option<&Vec<GraphFilter>>,
-        policy: Option<&SortedMap<PackageName, PolicyEntry>>,
+        policy: Option<&Policy>,
     ) -> Self {
-        let empty_override = SortedMap::new();
-        let policy = policy.unwrap_or(&empty_override);
+        let default_policy = Policy::default();
+        let policy = policy.unwrap_or(&default_policy);
         let package_list = &*metadata.packages;
         let resolve_list = &*metadata
             .resolve
@@ -713,7 +713,7 @@ impl<'a> DepGraph<'a> {
                 package_id: &resolve_node.id,
                 name: &package.name,
                 version: package.vet_version(),
-                is_third_party: package.is_third_party(policy),
+                is_third_party: package.is_considered_third_party(policy),
                 // These will get (re)computed later
                 normal_deps: vec![],
                 build_deps: vec![],
@@ -1169,7 +1169,7 @@ pub fn resolve<'a>(
 
 fn resolve_requirements(
     graph: &DepGraph<'_>,
-    policy: &SortedMap<PackageName, PolicyEntry>,
+    policy: &Policy,
     criteria_mapper: &CriteriaMapper,
 ) -> Vec<CriteriaSet> {
     let _resolve_requirements = trace_span!("resolve_requirements").entered();
@@ -1183,7 +1183,7 @@ fn resolve_requirements(
             continue;
         }
 
-        let policy = policy.get(package.name);
+        let policy = policy.get(package.name, &package.version);
         let dev_criteria = if let Some(c) = policy.and_then(|p| p.dev_criteria.as_ref()) {
             criteria_mapper.criteria_from_list(c)
         } else {
@@ -1204,7 +1204,7 @@ fn resolve_requirements(
     // dependencies.
     for &pkgidx in graph.topo_index.iter().rev() {
         let package = &graph.nodes[pkgidx];
-        let policy = policy.get(package.name);
+        let policy = policy.get(package.name, &package.version);
 
         if let Some(c) = policy.and_then(|p| p.criteria.as_ref()) {
             // If we specify a policy on ourselves, override any requirements we've

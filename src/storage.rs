@@ -161,7 +161,7 @@ impl Store {
             config: ConfigFile {
                 default_criteria: String::new(),
                 imports: SortedMap::new(),
-                policy: SortedMap::new(),
+                policy: Default::default(),
                 exemptions: SortedMap::new(),
             },
             imports: ImportsFile {
@@ -449,7 +449,7 @@ impl Store {
                 );
             }
         }
-        for (_package, policy) in &self.config.policy {
+        for (_name, _version, policy) in &self.config.policy {
             check_criteria(
                 &self.config_src,
                 &valid_criteria,

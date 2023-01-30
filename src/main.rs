@@ -13,11 +13,16 @@ use console::Term;
 use errors::{
     AggregateCriteriaDescription, AggregateCriteriaDescriptionMismatchError,
     AggregateCriteriaImplies, AggregateError, AggregateErrors, AggregateImpliesMismatchError,
-    AuditAsError, AuditAsErrors, CacheAcquireError, CertifyError, FetchAuditError, LoadTomlError,
-    NeedsAuditAsError, NeedsAuditAsErrors, ShouldntBeAuditAsError, ShouldntBeAuditAsErrors,
-    TomlParseError, UnusedAuditAsError, UnusedAuditAsErrors, UserInfoError,
+    AuditAsError, AuditAsErrors, AuditAsPackageError, CacheAcquireError, CertifyError,
+    CratePolicyError, CratePolicyErrors, FetchAuditError, LoadTomlError, NeedsAuditAsErrors,
+    NeedsPolicyVersionError, NeedsPolicyVersionErrors, ShouldntBeAuditAsErrors, TomlParseError,
+    UnusedAuditAsError, UnusedAuditAsErrors, UnusedPolicyVersionError, UnusedPolicyVersionErrors,
+    UserInfoError,
 };
-use format::{CriteriaName, CriteriaStr, PackageName, PolicyEntry, SortedSet};
+use format::{
+    CriteriaName, CriteriaStr, PackageName, PackagePolicyEntry, PackageVersion, Policy,
+    PolicyEntry, SortedSet,
+};
 use futures_util::future::{join_all, try_join_all};
 use indicatif::ProgressDrawTarget;
 use lazy_static::lazy_static;
@@ -87,24 +92,35 @@ impl Deref for Config {
 }
 
 pub trait PackageExt {
-    fn is_third_party(&self, policy: &SortedMap<PackageName, PolicyEntry>) -> bool;
+    fn is_considered_third_party(&self, policy: &Policy) -> bool;
+    fn is_third_party(&self) -> bool;
+    fn policy_entry<'a>(&self, policy: &'a Policy) -> Option<&'a PolicyEntry>;
     fn vet_version(&self) -> VetVersion;
 }
 
 impl PackageExt for Package {
-    fn is_third_party(&self, policy: &SortedMap<PackageName, PolicyEntry>) -> bool {
-        let forced_third_party = policy
-            .get(&self.name)
+    fn is_considered_third_party(&self, policy: &Policy) -> bool {
+        let forced_third_party = self
+            .policy_entry(policy)
             .and_then(|policy| policy.audit_as_crates_io)
             .unwrap_or(false);
-        let is_crates_io = self
-            .source
-            .as_ref()
-            .map(|s| s.is_crates_io())
-            .unwrap_or(false);
+
+        let is_crates_io = self.is_third_party();
 
         forced_third_party || is_crates_io
     }
+
+    fn is_third_party(&self) -> bool {
+        self.source
+            .as_ref()
+            .map(|s| s.is_crates_io())
+            .unwrap_or(false)
+    }
+
+    fn policy_entry<'a>(&self, policy: &'a Policy) -> Option<&'a PolicyEntry> {
+        policy.get(&self.name, &self.vet_version())
+    }
+
     fn vet_version(&self) -> VetVersion {
         VetVersion {
             semver: self.version.clone(),
@@ -481,6 +497,7 @@ fn cmd_init(_out: &Arc<dyn Out>, cfg: &Config, _sub_args: &InitArgs) -> Result<(
     store.audits = audits;
     store.imports = imports;
 
+    check_crate_policies(cfg, &store)?;
     fix_audit_as(cfg, &mut store)?;
 
     store.commit()?;
@@ -533,7 +550,7 @@ pub fn init_files(
             default_criteria: format::get_default_criteria(),
             imports: SortedMap::new(),
             exemptions: dependencies,
-            policy: SortedMap::new(),
+            policy: Default::default(),
         }
     };
 
@@ -1317,35 +1334,53 @@ fn fix_audit_as(cfg: &Config, store: &mut Store) -> Result<(), CacheAcquireError
     // and guarantees a fully populated and up to date index, so we can just rely on that and know
     // this is Networkless.
     let mut cache = Cache::acquire(cfg)?;
+
+    let third_party_packages = cfg
+        .metadata
+        .packages
+        .iter()
+        .filter(|p| p.is_third_party())
+        .map(|p| &p.name)
+        .collect::<SortedSet<_>>();
+
     let issues = check_audit_as_crates_io(cfg, store, &mut cache);
     if let Err(AuditAsErrors { errors }) = issues {
         for error in errors {
             match error {
-                AuditAsError::NeedsAuditAs(needs) => {
-                    for err in needs.errors {
-                        store
-                            .config
-                            .policy
-                            .entry(err.package)
-                            .or_default()
-                            .audit_as_crates_io = Some(false);
-                    }
-                }
-                AuditAsError::ShouldntBeAuditAs(shouldnts) => {
-                    for err in shouldnts.errors {
-                        store
-                            .config
-                            .policy
-                            .entry(err.package)
-                            .or_default()
-                            .audit_as_crates_io = Some(false);
+                AuditAsError::NeedsAuditAs(NeedsAuditAsErrors { errors })
+                | AuditAsError::ShouldntBeAuditAs(ShouldntBeAuditAsErrors { errors }) => {
+                    for err in errors {
+                        let is_third_party = third_party_packages.contains(&err.package);
+                        let all_versions = || {
+                            cfg.metadata
+                                .packages
+                                .iter()
+                                .filter_map(|p| (p.name == err.package).then(|| p.vet_version()))
+                                .collect()
+                        };
+                        let policy_entry = store.config.policy.get_mut_or_default(
+                            err.package.clone(),
+                            is_third_party.then_some(&err.version),
+                            all_versions,
+                        );
+
+                        // policy_entry will only be None if there is a logical error in check_crate_policies
+                        if let Some(entry) = policy_entry {
+                            entry.audit_as_crates_io = Some(false);
+                        } else {
+                            warn!("unexpected crate policy state");
+                        }
                     }
                 }
                 AuditAsError::UnusedAuditAs(unuseds) => {
                     for err in unuseds.errors {
                         // XXX: consider removing the policy completely if
                         // there's nothing left in it anymore?
-                        if let Some(policy) = store.config.policy.get_mut(&err.package) {
+                        if let Some(policy) = store
+                            .config
+                            .policy
+                            .get_mut(&err.package, err.version.as_ref())
+                        {
                             policy.audit_as_crates_io = None;
                         }
                     }
@@ -1503,6 +1538,9 @@ fn cmd_check(
     if !cfg.cli.locked {
         // Check if any of our first-parties are in the crates.io registry
         let mut cache = Cache::acquire(cfg).into_diagnostic()?;
+        // Check crate policies prior to audit_as_crates_io because the suggestions of
+        // check_audit_as_crates_io will rely on the correct structure of crate policies.
+        check_crate_policies(cfg, &store)?;
         check_audit_as_crates_io(cfg, &store, &mut cache)?;
     }
 
@@ -2015,7 +2053,7 @@ fn foreign_packages<'a>(
     metadata
         .packages
         .iter()
-        .filter(|package| package.is_third_party(&config.policy))
+        .filter(|package| package.is_considered_third_party(&config.policy))
 }
 
 /// All first-party packages, **without** the audit-as-crates-io policy applied
@@ -2025,11 +2063,11 @@ fn first_party_packages_strict<'a>(
     _config: &'a ConfigFile,
 ) -> impl Iterator<Item = &'a Package> + 'a {
     // Opposite of third-party, but with an empty `policy`
-    let empty_policy = SortedMap::new();
+    let empty_policy = Policy::default();
     metadata
         .packages
         .iter()
-        .filter(move |package| !package.is_third_party(&empty_policy))
+        .filter(move |package| !package.is_considered_third_party(&empty_policy))
 }
 
 fn check_audit_as_crates_io(
@@ -2045,21 +2083,35 @@ fn check_audit_as_crates_io(
     let mut needs_audit_as_entry = vec![];
     let mut shouldnt_be_audit_as = vec![];
 
-    let mut unused_audit_as: SortedSet<PackageName> = store
+    // Unfortunately, tuples don't nicely implement Borrow through element references on their own,
+    // so we use a wrapper to be able to call SortedSet::remove.
+    #[derive(PartialEq, Eq, PartialOrd, Ord)]
+    struct PackageRef<'a>((&'a PackageName, Option<&'a PackageVersion>));
+
+    impl<'a, 'b: 'a> std::borrow::Borrow<(&'a PackageName, Option<&'a PackageVersion>)>
+        for PackageRef<'b>
+    {
+        fn borrow(&self) -> &(&'a PackageName, Option<&'a PackageVersion>) {
+            &self.0
+        }
+    }
+
+    let mut unused_audit_as: SortedSet<PackageRef> = store
         .config
         .policy
         .iter()
-        .filter(|(_, policy)| policy.audit_as_crates_io.is_some())
-        .map(|(name, _)| name.clone())
+        .filter(|(_, _, policy)| policy.audit_as_crates_io.is_some())
+        .map(|(name, version, _)| PackageRef((name, version)))
         .collect();
 
     for package in first_party_packages_strict(&cfg.metadata, &store.config) {
-        unused_audit_as.remove(&package.name);
+        // Remove both versioned and unversioned entries
+        let vet_version = package.vet_version();
+        unused_audit_as.remove(&(&package.name, Some(&vet_version)));
+        //unused_audit_as.remove(&(&package.name, None));
 
-        let audit_policy = store
-            .config
-            .policy
-            .get(&package.name)
+        let audit_policy = package
+            .policy_entry(&store.config.policy)
             .and_then(|policy| policy.audit_as_crates_io);
         if audit_policy == Some(false) {
             // They've explicitly said this is first-party so we don't care about what's in the registry
@@ -2071,9 +2123,9 @@ fn check_audit_as_crates_io(
                 // We found a version of this package in the registry!
                 if audit_policy.is_none() {
                     // At this point, having no policy is an error
-                    needs_audit_as_entry.push(NeedsAuditAsError {
+                    needs_audit_as_entry.push(AuditAsPackageError {
                         package: package.name.clone(),
-                        version: package.version.clone(),
+                        version: package.vet_version(),
                     });
                 }
                 // Now that we've found a version match, we're done with this package
@@ -2092,9 +2144,9 @@ fn check_audit_as_crates_io(
                 return check_audit_as_crates_io(cfg, store, cache);
             }
 
-            shouldnt_be_audit_as.push(ShouldntBeAuditAsError {
+            shouldnt_be_audit_as.push(AuditAsPackageError {
                 package: package.name.clone(),
-                version: package.version.clone(),
+                version: package.vet_version(),
             });
         }
     }
@@ -2118,7 +2170,10 @@ fn check_audit_as_crates_io(
             errors.push(AuditAsError::UnusedAuditAs(UnusedAuditAsErrors {
                 errors: unused_audit_as
                     .into_iter()
-                    .map(|package| UnusedAuditAsError { package })
+                    .map(|PackageRef((package, version))| UnusedAuditAsError {
+                        package: package.clone(),
+                        version: version.cloned(),
+                    })
                     .collect(),
             }))
         }
@@ -2126,4 +2181,80 @@ fn check_audit_as_crates_io(
     }
 
     Ok(())
+}
+
+/// Check crate policies for correctness.
+///
+/// This verifies two rules:
+/// 1. Policies relating to third-party crates must have associated version(s). If a crate exists
+///    as a third-party dependency anywhere in the dependency graph, all versions must be specified.
+/// 2. Any versioned policies must correspond to a crate in the graph.
+fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyErrors> {
+    // See explanation at `PackageRef` in `check_audit_as_crates_io`.
+    #[derive(PartialEq, Eq, PartialOrd, Ord)]
+    struct PackageRef<'a>((&'a PackageName, &'a PackageVersion));
+
+    impl<'a, 'b: 'a> std::borrow::Borrow<(&'a PackageName, &'a PackageVersion)> for PackageRef<'b> {
+        fn borrow(&self) -> &(&'a PackageName, &'a PackageVersion) {
+            &self.0
+        }
+    }
+
+    // Get all defined policy (name, version) pairs
+    let mut versioned_policy_crates: SortedSet<PackageRef> = store
+        .config
+        .policy
+        .package
+        .iter()
+        .filter_map(|(name, entry)| match entry {
+            PackagePolicyEntry::Versioned { version } => Some(
+                version
+                    .keys()
+                    .map(move |version| PackageRef((name, version))),
+            ),
+            PackagePolicyEntry::Unversioned(_) => None,
+        })
+        .flatten()
+        .collect();
+
+    let mut needs_policy_version_errors = Vec::new();
+
+    for package in cfg.metadata.packages.iter().filter(|p| p.is_third_party()) {
+        let vet_version = package.vet_version();
+        let versioned_policy_exists =
+            versioned_policy_crates.remove(&(&package.name, &vet_version));
+        let crate_policy_exists = store.config.policy.package.contains_key(&package.name);
+        if !versioned_policy_exists && crate_policy_exists {
+            // If a crate policy exists, a versioned policy for all used versions must exist.
+            needs_policy_version_errors.push(NeedsPolicyVersionError {
+                package: package.name.clone(),
+                version: package.vet_version(),
+            });
+        }
+    }
+
+    let unused_policy_version_errors: Vec<_> = versioned_policy_crates
+        .into_iter()
+        .map(|PackageRef((name, version))| UnusedPolicyVersionError {
+            package: name.clone(),
+            version: version.clone(),
+        })
+        .collect();
+
+    if !needs_policy_version_errors.is_empty() || !unused_policy_version_errors.is_empty() {
+        let mut errors = Vec::new();
+        if !needs_policy_version_errors.is_empty() {
+            errors.push(CratePolicyError::NeedsVersion(NeedsPolicyVersionErrors {
+                errors: needs_policy_version_errors,
+            }));
+        }
+        if !unused_policy_version_errors.is_empty() {
+            errors.push(CratePolicyError::UnusedVersion(UnusedPolicyVersionErrors {
+                errors: unused_policy_version_errors,
+            }));
+        }
+        Err(CratePolicyErrors { errors })
+    } else {
+        Ok(())
+    }
 }

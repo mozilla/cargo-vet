@@ -10,7 +10,7 @@ use cargo_metadata::semver;
 use miette::{Diagnostic, MietteSpanContents, SourceCode, SourceOffset, SourceSpan};
 use thiserror::Error;
 
-use crate::format::{CriteriaName, ForeignCriteriaName, ImportName, PackageName};
+use crate::format::{CriteriaName, ForeignCriteriaName, ImportName, PackageName, PackageVersion};
 use crate::network::PayloadEncoding;
 
 #[derive(Eq, PartialEq)]
@@ -118,7 +118,7 @@ pub enum AuditAsError {
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(help("Add a `policy.*.audit-as-crates-io` entry for them"))]
 pub struct NeedsAuditAsErrors {
-    pub errors: Vec<NeedsAuditAsError>,
+    pub errors: Vec<AuditAsPackageError>,
 }
 
 impl Display for NeedsAuditAsErrors {
@@ -134,7 +134,7 @@ impl Display for NeedsAuditAsErrors {
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(help("Remove the audit-as-crates-io entries or make them `false`"))]
 pub struct ShouldntBeAuditAsErrors {
-    pub errors: Vec<ShouldntBeAuditAsError>,
+    pub errors: Vec<AuditAsPackageError>,
 }
 
 impl Display for ShouldntBeAuditAsErrors {
@@ -165,22 +165,86 @@ impl Display for UnusedAuditAsErrors {
 
 #[derive(Debug, Error)]
 #[error("{package}:{version}")]
-pub struct NeedsAuditAsError {
+pub struct AuditAsPackageError {
     pub package: PackageName,
-    pub version: semver::Version,
+    pub version: PackageVersion,
+}
+
+#[derive(Debug, Error)]
+#[error("{package}{}", .version.as_ref().map(|v| format!(":{v}")).unwrap_or_default())]
+pub struct UnusedAuditAsError {
+    pub package: PackageName,
+    pub version: Option<PackageVersion>,
+}
+
+///////////////////////////////////////////////////////////
+// CratePolicyErrors
+///////////////////////////////////////////////////////////
+#[derive(Debug, Error, Diagnostic)]
+#[error("There are some issues with your third-party policy entries")]
+#[diagnostic()]
+pub struct CratePolicyErrors {
+    #[related]
+    pub errors: Vec<CratePolicyError>,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum CratePolicyError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    NeedsVersion(NeedsPolicyVersionErrors),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnusedVersion(UnusedPolicyVersionErrors),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[diagnostic(help("Add a `policy.<crate>.version` entry for them"))]
+pub struct NeedsPolicyVersionErrors {
+    pub errors: Vec<NeedsPolicyVersionError>,
+}
+
+impl Display for NeedsPolicyVersionErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            "some third-party crates have policies that are missing an associated version",
+        )?;
+        for e in &self.errors {
+            f.write_fmt(format_args!("\n  {}", e))?
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]
 #[error("{package}:{version}")]
-pub struct ShouldntBeAuditAsError {
+pub struct NeedsPolicyVersionError {
     pub package: PackageName,
-    pub version: semver::Version,
+    pub version: PackageVersion,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[diagnostic(help("Remove the `policy.<crate>.version` entries"))]
+pub struct UnusedPolicyVersionErrors {
+    pub errors: Vec<UnusedPolicyVersionError>,
+}
+
+impl Display for UnusedPolicyVersionErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("some third-party crate policies don't correspond to crates being used")?;
+        for e in &self.errors {
+            f.write_fmt(format_args!("\n  {}", e))?
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]
-#[error("{package}")]
-pub struct UnusedAuditAsError {
+#[error("{package}:{version}")]
+pub struct UnusedPolicyVersionError {
     pub package: PackageName,
+    pub version: PackageVersion,
 }
 
 ///////////////////////////////////////////////////////////
