@@ -200,7 +200,7 @@ pub enum CratePolicyError {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[diagnostic(help("Add a `policy.<crate>.version` entry for them"))]
+#[diagnostic(help("Add a `policy.\"<crate>:<version>\"` entry for them"))]
 pub struct NeedsPolicyVersionErrors {
     pub errors: Vec<NeedsPolicyVersionError>,
 }
@@ -225,7 +225,7 @@ pub struct NeedsPolicyVersionError {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[diagnostic(help("Remove the `policy.<crate>.version` entries"))]
+#[diagnostic(help("Remove the `policy.\"<crate>:<version>\"` entries"))]
 pub struct UnusedPolicyVersionErrors {
     pub errors: Vec<UnusedPolicyVersionError>,
 }

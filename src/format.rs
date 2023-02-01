@@ -397,7 +397,8 @@ fn is_default_criteria(val: &CriteriaName) -> bool {
 
 /// The table of crate policies.
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
-#[serde(transparent)]
+#[serde(try_from = "serialization::policy::AllPolicies")]
+#[serde(into = "serialization::policy::AllPolicies")]
 pub struct Policy {
     pub package: SortedMap<PackageName, PackagePolicyEntry>,
 }
@@ -534,13 +535,11 @@ impl<'a> IntoIterator for &'a Policy {
 /// If the crate exists as a third-party crate anywhere in the dependency tree, crate versions for
 /// _all_ and _only_ the versions present in the dependency tree must be provided to set policies.
 /// Otherwise, versions may be omitted.
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-// We have to use a flattened struct rather than `serde(untagged)`, because toml only parses
-// `Spanned` elements (as contained in `PolicyEntry`) through `deserialize_any`, and
+#[derive(Debug, Clone)]
+// We have to use a slightly different serialization than than `serde(untagged)`, because toml only
+// parses `Spanned` elements (as contained in `PolicyEntry`) through their own Deseralizer, and
 // `serde(untagged)` deserializes everything into a buffer first to try different deserialization
-// branches (which will separate the `toml` Deserializer from being able to handle `Spanned`).
-#[serde(from = "serialization::policy::PackagePolicyEntryAll")]
-#[serde(into = "serialization::policy::PackagePolicyEntryAll")]
+// branches (which will use an internal `serde` Deserializer rather than the `toml` Deserializer).
 pub enum PackagePolicyEntry {
     Versioned {
         version: SortedMap<PackageVersion, PolicyEntry>,

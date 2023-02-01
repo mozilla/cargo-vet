@@ -2108,7 +2108,7 @@ fn check_audit_as_crates_io(
         // Remove both versioned and unversioned entries
         let vet_version = package.vet_version();
         unused_audit_as.remove(&(&package.name, Some(&vet_version)));
-        //unused_audit_as.remove(&(&package.name, None));
+        unused_audit_as.remove(&(&package.name, None));
 
         let audit_policy = package
             .policy_entry(&store.config.policy)
@@ -2219,12 +2219,12 @@ fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyEr
 
     let mut needs_policy_version_errors = Vec::new();
 
-    for package in cfg.metadata.packages.iter().filter(|p| p.is_third_party()) {
+    for package in &cfg.metadata.packages {
         let vet_version = package.vet_version();
         let versioned_policy_exists =
             versioned_policy_crates.remove(&(&package.name, &vet_version));
         let crate_policy_exists = store.config.policy.package.contains_key(&package.name);
-        if !versioned_policy_exists && crate_policy_exists {
+        if package.is_third_party() && !versioned_policy_exists && crate_policy_exists {
             // If a crate policy exists, a versioned policy for all used versions must exist.
             needs_policy_version_errors.push(NeedsPolicyVersionError {
                 package: package.name.clone(),

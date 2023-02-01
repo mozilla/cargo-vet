@@ -1,10 +1,12 @@
 
 # cargo-vet config file
 
-[policy.clap]
+[policy."clap:3.1.8"]
 dependency-criteria = { atty = "safe-to-run", bitflags = ["audited", "fuzzed"] }
 
-[policy.proc-macro2]
+[policy."proc-macro2:1.0.37"]
+
+[policy."proc-macro2:1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9"]
 audit-as-crates-io = true
 
 [policy.test-project]
