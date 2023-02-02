@@ -118,7 +118,7 @@ pub enum AuditAsError {
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(help("Add a `policy.*.audit-as-crates-io` entry for them"))]
 pub struct NeedsAuditAsErrors {
-    pub errors: Vec<AuditAsPackageError>,
+    pub errors: Vec<PackageError>,
 }
 
 impl Display for NeedsAuditAsErrors {
@@ -134,7 +134,7 @@ impl Display for NeedsAuditAsErrors {
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(help("Remove the audit-as-crates-io entries or make them `false`"))]
 pub struct ShouldntBeAuditAsErrors {
-    pub errors: Vec<AuditAsPackageError>,
+    pub errors: Vec<PackageError>,
 }
 
 impl Display for ShouldntBeAuditAsErrors {
@@ -150,7 +150,7 @@ impl Display for ShouldntBeAuditAsErrors {
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(help("Remove the audit-as-crates-io entries"))]
 pub struct UnusedAuditAsErrors {
-    pub errors: Vec<UnusedAuditAsError>,
+    pub errors: Vec<PackageError>,
 }
 
 impl Display for UnusedAuditAsErrors {
@@ -163,16 +163,9 @@ impl Display for UnusedAuditAsErrors {
     }
 }
 
-#[derive(Debug, Error)]
-#[error("{package}:{version}")]
-pub struct AuditAsPackageError {
-    pub package: PackageName,
-    pub version: PackageVersion,
-}
-
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 #[error("{package}{}", .version.as_ref().map(|v| format!(":{v}")).unwrap_or_default())]
-pub struct UnusedAuditAsError {
+pub struct PackageError {
     pub package: PackageName,
     pub version: Option<PackageVersion>,
 }
@@ -180,7 +173,7 @@ pub struct UnusedAuditAsError {
 ///////////////////////////////////////////////////////////
 // CratePolicyErrors
 ///////////////////////////////////////////////////////////
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Error, Diagnostic, PartialEq, Eq)]
 #[error("There are some issues with your third-party policy entries")]
 #[diagnostic()]
 pub struct CratePolicyErrors {
@@ -188,7 +181,7 @@ pub struct CratePolicyErrors {
     pub errors: Vec<CratePolicyError>,
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Error, Diagnostic, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum CratePolicyError {
     #[error(transparent)]
@@ -199,10 +192,10 @@ pub enum CratePolicyError {
     UnusedVersion(UnusedPolicyVersionErrors),
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Error, Diagnostic, PartialEq, Eq)]
 #[diagnostic(help("Add a `policy.\"<crate>:<version>\"` entry for them"))]
 pub struct NeedsPolicyVersionErrors {
-    pub errors: Vec<NeedsPolicyVersionError>,
+    pub errors: Vec<PackageError>,
 }
 
 impl Display for NeedsPolicyVersionErrors {
@@ -217,17 +210,10 @@ impl Display for NeedsPolicyVersionErrors {
     }
 }
 
-#[derive(Debug, Error)]
-#[error("{package}:{version}")]
-pub struct NeedsPolicyVersionError {
-    pub package: PackageName,
-    pub version: PackageVersion,
-}
-
-#[derive(Debug, Error, Diagnostic)]
-#[diagnostic(help("Remove the `policy.\"<crate>:<version>\"` entries"))]
+#[derive(Debug, Error, Diagnostic, PartialEq, Eq)]
+#[diagnostic(help("Remove the `policy` entries"))]
 pub struct UnusedPolicyVersionErrors {
-    pub errors: Vec<UnusedPolicyVersionError>,
+    pub errors: Vec<PackageError>,
 }
 
 impl Display for UnusedPolicyVersionErrors {
@@ -238,13 +224,6 @@ impl Display for UnusedPolicyVersionErrors {
         }
         Ok(())
     }
-}
-
-#[derive(Debug, Error)]
-#[error("{package}:{version}")]
-pub struct UnusedPolicyVersionError {
-    pub package: PackageName,
-    pub version: PackageVersion,
 }
 
 ///////////////////////////////////////////////////////////

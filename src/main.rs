@@ -13,15 +13,13 @@ use console::Term;
 use errors::{
     AggregateCriteriaDescription, AggregateCriteriaDescriptionMismatchError,
     AggregateCriteriaImplies, AggregateError, AggregateErrors, AggregateImpliesMismatchError,
-    AuditAsError, AuditAsErrors, AuditAsPackageError, CacheAcquireError, CertifyError,
-    CratePolicyError, CratePolicyErrors, FetchAuditError, LoadTomlError, NeedsAuditAsErrors,
-    NeedsPolicyVersionError, NeedsPolicyVersionErrors, ShouldntBeAuditAsErrors, TomlParseError,
-    UnusedAuditAsError, UnusedAuditAsErrors, UnusedPolicyVersionError, UnusedPolicyVersionErrors,
-    UserInfoError,
+    AuditAsError, AuditAsErrors, CacheAcquireError, CertifyError, CratePolicyError,
+    CratePolicyErrors, FetchAuditError, LoadTomlError, NeedsAuditAsErrors,
+    NeedsPolicyVersionErrors, PackageError, ShouldntBeAuditAsErrors, TomlParseError,
+    UnusedAuditAsErrors, UnusedPolicyVersionErrors, UserInfoError,
 };
 use format::{
-    CriteriaName, CriteriaStr, PackageName, PackagePolicyEntry, PackageVersion, Policy,
-    PolicyEntry, SortedSet,
+    CriteriaName, CriteriaStr, PackageName, PackageVersion, Policy, PolicyEntry, SortedSet,
 };
 use futures_util::future::{join_all, try_join_all};
 use indicatif::ProgressDrawTarget;
@@ -1360,7 +1358,7 @@ fn fix_audit_as(cfg: &Config, store: &mut Store) -> Result<(), CacheAcquireError
                         };
                         let policy_entry = store.config.policy.get_mut_or_default(
                             err.package.clone(),
-                            is_third_party.then_some(&err.version),
+                            is_third_party.then_some(err.version.as_ref()).flatten(),
                             all_versions,
                         );
 
@@ -2123,9 +2121,9 @@ fn check_audit_as_crates_io(
                 // We found a version of this package in the registry!
                 if audit_policy.is_none() {
                     // At this point, having no policy is an error
-                    needs_audit_as_entry.push(AuditAsPackageError {
+                    needs_audit_as_entry.push(PackageError {
                         package: package.name.clone(),
-                        version: package.vet_version(),
+                        version: Some(package.vet_version()),
                     });
                 }
                 // Now that we've found a version match, we're done with this package
@@ -2144,9 +2142,9 @@ fn check_audit_as_crates_io(
                 return check_audit_as_crates_io(cfg, store, cache);
             }
 
-            shouldnt_be_audit_as.push(AuditAsPackageError {
+            shouldnt_be_audit_as.push(PackageError {
                 package: package.name.clone(),
-                version: package.vet_version(),
+                version: Some(package.vet_version()),
             });
         }
     }
@@ -2170,7 +2168,7 @@ fn check_audit_as_crates_io(
             errors.push(AuditAsError::UnusedAuditAs(UnusedAuditAsErrors {
                 errors: unused_audit_as
                     .into_iter()
-                    .map(|PackageRef((package, version))| UnusedAuditAsError {
+                    .map(|PackageRef((package, version))| PackageError {
                         package: package.clone(),
                         version: version.cloned(),
                     })
@@ -2200,45 +2198,64 @@ fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyEr
         }
     }
 
-    // Get all defined policy (name, version) pairs
+    // All defined policy package names (to be removed).
+    let mut policy_crates: SortedSet<&PackageName> = store.config.policy.package.keys().collect();
+
+    // All defined policy (name, version) pairs (to be visited and removed).
     let mut versioned_policy_crates: SortedSet<PackageRef> = store
         .config
         .policy
-        .package
         .iter()
-        .filter_map(|(name, entry)| match entry {
-            PackagePolicyEntry::Versioned { version } => Some(
-                version
-                    .keys()
-                    .map(move |version| PackageRef((name, version))),
-            ),
-            PackagePolicyEntry::Unversioned(_) => None,
-        })
-        .flatten()
+        .filter_map(|(name, version, _)| version.map(|version| PackageRef((name, version))))
         .collect();
+
+    // A set of all third-party packages (for lookup of whether a crate has any third-party
+    // versions in use).
+    let third_party_packages = cfg
+        .metadata
+        .packages
+        .iter()
+        .filter(|p| p.is_third_party())
+        .map(|p| &p.name)
+        .collect::<SortedSet<_>>();
 
     let mut needs_policy_version_errors = Vec::new();
 
     for package in &cfg.metadata.packages {
+        policy_crates.remove(&package.name);
+
         let vet_version = package.vet_version();
         let versioned_policy_exists =
             versioned_policy_crates.remove(&(&package.name, &vet_version));
         let crate_policy_exists = store.config.policy.package.contains_key(&package.name);
-        if package.is_third_party() && !versioned_policy_exists && crate_policy_exists {
-            // If a crate policy exists, a versioned policy for all used versions must exist.
-            needs_policy_version_errors.push(NeedsPolicyVersionError {
+
+        // If a crate has at least one third-party package and a crate policy exists, a versioned
+        // policy for all used versions must exist.
+        if third_party_packages.contains(&package.name)
+            && crate_policy_exists
+            && !versioned_policy_exists
+        {
+            needs_policy_version_errors.push(PackageError {
                 package: package.name.clone(),
-                version: package.vet_version(),
+                version: Some(package.vet_version()),
             });
         }
     }
 
-    let unused_policy_version_errors: Vec<_> = versioned_policy_crates
+    let unused_policy_version_errors: Vec<_> = policy_crates
         .into_iter()
-        .map(|PackageRef((name, version))| UnusedPolicyVersionError {
+        .map(|name| PackageError {
             package: name.clone(),
-            version: version.clone(),
+            version: None,
         })
+        .chain(
+            versioned_policy_crates
+                .into_iter()
+                .map(|PackageRef((name, version))| PackageError {
+                    package: name.clone(),
+                    version: Some(version.clone()),
+                }),
+        )
         .collect();
 
     if !needs_policy_version_errors.is_empty() || !unused_policy_version_errors.is_empty() {

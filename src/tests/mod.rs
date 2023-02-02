@@ -42,6 +42,7 @@ macro_rules! assert_report_snapshot {
 mod aggregate;
 mod audit_as_crates_io;
 mod certify;
+mod crate_policies;
 mod import;
 mod regenerate_unaudited;
 mod store_parsing;
@@ -574,6 +575,37 @@ impl MockMetadata {
             MockPackage {
                 name: "third-core",
                 version: ver(5),
+                ..Default::default()
+            },
+        ])
+    }
+
+    /// The `third-party` crate is used as both a first- and third-party crate (with different
+    /// versions).
+    fn overlapping() -> Self {
+        MockMetadata::new(vec![
+            MockPackage {
+                name: "root-package",
+                is_workspace: true,
+                is_first_party: true,
+                deps: vec![dep("first-party"), dep_ver("third-party", 1)],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "first-party",
+                is_first_party: true,
+                deps: vec![dep_ver("third-party", 2)],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "third-party",
+                is_first_party: true,
+                version: ver(1),
+                ..Default::default()
+            },
+            MockPackage {
+                name: "third-party",
+                version: ver(2),
                 ..Default::default()
             },
         ])
