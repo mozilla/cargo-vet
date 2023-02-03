@@ -2,12 +2,11 @@ use super::*;
 
 // Helper function for imports tests. Performs a vet and updates imports based
 // on it, returning a diff of the two.
-fn get_imports_file_changes(metadata: &Metadata, store: &Store, force_updates: bool) -> String {
+fn get_imports_file_changes(metadata: &Metadata, store: &Store) -> String {
     // Run the resolver before calling `get_imports_file` to compute the new
     // imports file.
     let report = crate::resolver::resolve(metadata, None, store);
-    let new_imports =
-        store.get_updated_imports_file(&report.graph, &report.conclusion, force_updates);
+    let new_imports = store.get_updated_imports_file(&report.graph, &report.results);
 
     // Format the old and new files as TOML, and write out a diff using `similar`.
     let old_imports = crate::serialization::to_formatted_toml(&store.imports)
@@ -24,9 +23,8 @@ fn get_imports_file_changes(metadata: &Metadata, store: &Store, force_updates: b
 
 #[test]
 fn new_peer_import() {
-    // (Pass) We import all audits for our third-party packages from a brand-new
-    // peer even though we are already fully audited. This won't force an import
-    // from existing peers.
+    // (Pass) We don't import any audits from a brand-new peer as we're fully
+    // audited, however we do add an entry to the table for it.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -39,7 +37,7 @@ fn new_peer_import() {
         audits: [
             (
                 "third-party2".to_owned(),
-                vec![delta_audit(ver(100), ver(200), SAFE_TO_DEPLOY)],
+                vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
             ),
             (
                 "unused-package".to_owned(),
@@ -59,7 +57,7 @@ fn new_peer_import() {
         criteria: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
-            vec![delta_audit(ver(200), ver(300), SAFE_TO_DEPLOY)],
+            vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
         )]
         .into_iter()
         .collect(),
@@ -97,7 +95,7 @@ fn new_peer_import() {
     )
     .unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -122,7 +120,7 @@ fn existing_peer_skip_import() {
         audits: [
             (
                 "third-party2".to_owned(),
-                vec![delta_audit(ver(100), ver(200), SAFE_TO_DEPLOY)],
+                vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
             ),
             (
                 "unused-package".to_owned(),
@@ -154,7 +152,7 @@ fn existing_peer_skip_import() {
     )
     .unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -167,14 +165,21 @@ fn existing_peer_remove_unused() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, audits, mut imports) = builtin_files_full_audited(&metadata);
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
         audits: [
             (
                 "third-party2".to_owned(),
-                vec![delta_audit(ver(100), ver(200), SAFE_TO_DEPLOY)],
+                vec![
+                    full_audit(ver(5), SAFE_TO_DEPLOY),
+                    delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+                    delta_audit(ver(100), ver(200), SAFE_TO_DEPLOY),
+                    full_audit(ver(10), SAFE_TO_RUN),
+                ],
             ),
             (
                 "unused-package".to_owned(),
@@ -208,7 +213,7 @@ fn existing_peer_remove_unused() {
     )
     .unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -239,7 +244,7 @@ fn existing_peer_import_delta_audit() {
         criteria: SortedMap::new(),
         audits: [
             // A new audit for third-party2 should fix our audit, so we should
-            // import all of these.
+            // import it, but not other useless audits.
             (
                 "third-party2".to_owned(),
                 vec![
@@ -266,7 +271,7 @@ fn existing_peer_import_delta_audit() {
 
     let new_other_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
-        // We'll also import unrelated audits from other sources.
+        // We won't import unrelated audits from other sources.
         audits: [(
             "third-party2".to_owned(),
             vec![delta_audit(ver(200), ver(300), SAFE_TO_DEPLOY)],
@@ -311,13 +316,13 @@ fn existing_peer_import_delta_audit() {
     )
     .unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
 #[test]
 fn existing_peer_import_custom_criteria() {
-    // (Pass) We'll immediately import criteria changes wen unlocked, even if
+    // (Pass) We'll immediately import criteria changes when unlocked, even if
     // our peer hasn't changed or we aren't mapping them locally. This doesn't
     // force an import of other crates.
 
@@ -325,7 +330,10 @@ fn existing_peer_import_custom_criteria() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, audits, mut imports) = builtin_files_full_audited(&metadata);
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
+
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
         audits: [(
@@ -372,7 +380,7 @@ fn existing_peer_import_custom_criteria() {
     )
     .unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
 
     insta::assert_snapshot!(output);
 }
@@ -386,7 +394,10 @@ fn new_audit_for_unused_criteria_basic() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, audits, mut imports) = builtin_files_full_audited(&metadata);
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
+
     let old_foreign_audits = AuditsFile {
         criteria: [("fuzzed".to_string(), criteria("fuzzed"))]
             .into_iter()
@@ -427,7 +438,7 @@ fn new_audit_for_unused_criteria_basic() {
     )
     .unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
 
     insta::assert_snapshot!(output);
 }
@@ -441,7 +452,10 @@ fn new_audit_for_unused_criteria_transitive() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, audits, mut imports) = builtin_files_full_audited(&metadata);
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party1");
+
     let old_foreign_audits = AuditsFile {
         criteria: [("fuzzed".to_string(), criteria("fuzzed"))]
             .into_iter()
@@ -486,7 +500,7 @@ fn new_audit_for_unused_criteria_transitive() {
     )
     .unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
 
     insta::assert_snapshot!(output);
 }
@@ -494,19 +508,21 @@ fn new_audit_for_unused_criteria_transitive() {
 #[test]
 fn existing_peer_revoked_audit() {
     // (Pass) If a previously-imported audit is removed, we should also remove
-    // it locally, even if we don't use it.
+    // it locally, even if doing so would cause vet to fail.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, audits, mut imports) = builtin_files_full_audited(&metadata);
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
-            vec![delta_audit(ver(100), ver(200), SAFE_TO_DEPLOY)],
+            vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
         )]
         .into_iter()
         .collect(),
@@ -538,7 +554,7 @@ fn existing_peer_revoked_audit() {
     )
     .unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -552,13 +568,15 @@ fn existing_peer_add_violation() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, audits, mut imports) = builtin_files_full_audited(&metadata);
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
-            vec![delta_audit(ver(100), ver(200), SAFE_TO_DEPLOY)],
+            vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
         )]
         .into_iter()
         .collect(),
@@ -569,8 +587,8 @@ fn existing_peer_add_violation() {
         audits: [(
             "third-party2".to_owned(),
             vec![
-                delta_audit(ver(100), ver(200), SAFE_TO_DEPLOY),
-                delta_audit(ver(200), ver(300), SAFE_TO_DEPLOY),
+                full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+                delta_audit(ver(DEFAULT_VER), ver(20), SAFE_TO_DEPLOY),
                 violation(VersionReq::parse("99.*").unwrap(), SAFE_TO_DEPLOY),
             ],
         )]
@@ -599,7 +617,7 @@ fn existing_peer_add_violation() {
     )
     .unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -650,7 +668,7 @@ fn peer_audits_exemption_no_minimize() {
     )
     .unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -704,7 +722,7 @@ fn peer_audits_exemption_minimize() {
     // Capture the old imports before minimizing exemptions
     let old = store.mock_commit();
 
-    crate::resolver::regenerate_exemptions(&mock_cfg(&metadata), &mut store, true, false).unwrap();
+    crate::resolver::regenerate_exemptions(&mock_cfg(&metadata), &mut store, true).unwrap();
 
     // Capture after minimizing exemptions, and generate a diff.
     let new = store.mock_commit();
@@ -789,7 +807,7 @@ fn peer_audits_import_exclusion() {
         "The `transitive-third-party1` crate should still be present in `imported_audits`"
     );
 
-    let output = get_imports_file_changes(&metadata, &store, false);
+    let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -857,6 +875,196 @@ fn existing_peer_updated_description() {
         Err(err) => miette::Report::from(err),
     };
     insta::assert_snapshot!("existing_peer_updated_description", format!("{error:?}"));
+}
+
+#[test]
+fn fresh_import_preferred_audits() {
+    // (Pass) We prefer shorter audit chains over longer ones.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
+
+    let new_foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: [(
+            "third-party2".to_owned(),
+            vec![
+                full_audit(ver(5), SAFE_TO_DEPLOY),
+                delta_audit(ver(5), ver(6), SAFE_TO_DEPLOY),
+                delta_audit(ver(6), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+            ],
+        )]
+        .into_iter()
+        .collect(),
+    };
+
+    let new_other_foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: [(
+            "third-party2".to_owned(),
+            vec![delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        )]
+        .into_iter()
+        .collect(),
+    };
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            ..Default::default()
+        },
+    );
+    config.imports.insert(
+        OTHER_FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: OTHER_FOREIGN_URL.to_owned(),
+            ..Default::default()
+        },
+    );
+
+    let store = Store::mock_online(
+        config,
+        audits,
+        imports,
+        vec![
+            (FOREIGN.to_owned(), new_foreign_audits),
+            (OTHER_FOREIGN.to_owned(), new_other_foreign_audits),
+        ],
+        true,
+    )
+    .unwrap();
+
+    let output = get_imports_file_changes(&metadata, &store);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn old_import_preferred_audits() {
+    // (Pass) we don't switch to a shorter audit path if we already have a longer one imported.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
+
+    let old_foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: [(
+            "third-party2".to_owned(),
+            vec![
+                full_audit(ver(5), SAFE_TO_DEPLOY),
+                delta_audit(ver(5), ver(6), SAFE_TO_DEPLOY),
+                delta_audit(ver(6), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+            ],
+        )]
+        .into_iter()
+        .collect(),
+    };
+
+    let new_foreign_audits = old_foreign_audits.clone();
+
+    let new_other_foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: [(
+            "third-party2".to_owned(),
+            vec![delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        )]
+        .into_iter()
+        .collect(),
+    };
+
+    imports
+        .audits
+        .insert(FOREIGN.to_owned(), old_foreign_audits);
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            ..Default::default()
+        },
+    );
+    config.imports.insert(
+        OTHER_FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: OTHER_FOREIGN_URL.to_owned(),
+            ..Default::default()
+        },
+    );
+
+    let store = Store::mock_online(
+        config,
+        audits,
+        imports,
+        vec![
+            (FOREIGN.to_owned(), new_foreign_audits),
+            (OTHER_FOREIGN.to_owned(), new_other_foreign_audits),
+        ],
+        true,
+    )
+    .unwrap();
+
+    let output = get_imports_file_changes(&metadata, &store);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn equal_length_preferred_audits() {
+    // (Pass) Between two audit paths of the same length, we prefer one
+    // arbitrarily (the output of this test documents our preference, which is
+    // based on how quickly the edges approach the start node).
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
+
+    let new_foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: [(
+            "third-party2".to_owned(),
+            vec![
+                full_audit(ver(2), SAFE_TO_DEPLOY),
+                full_audit(ver(8), SAFE_TO_DEPLOY),
+                delta_audit(ver(2), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+                delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+            ],
+        )]
+        .into_iter()
+        .collect(),
+    };
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            ..Default::default()
+        },
+    );
+
+    let store = Store::mock_online(
+        config,
+        audits,
+        imports,
+        vec![(FOREIGN.to_owned(), new_foreign_audits)],
+        true,
+    )
+    .unwrap();
+
+    let output = get_imports_file_changes(&metadata, &store);
+    insta::assert_snapshot!(output);
 }
 
 #[test]
@@ -997,7 +1205,3 @@ fn foreign_audit_file_to_local() {
             .to_string()
     );
 }
-
-// Other tests worth adding:
-//
-// - used edges with dependency-criteria should cause criteria to be imported

@@ -98,8 +98,6 @@ pub struct Success {
     pub vetted_partially: Vec<PackageIdx>,
     /// Third-party packages that were successfully vetted using only 'audits'
     pub vetted_fully: Vec<PackageIdx>,
-    /// Third-party packages that needed fresh imports to be successfully vetted
-    pub needed_fresh_imports: SortedSet<PackageIdx>,
 }
 
 #[derive(Debug, Clone)]
@@ -276,7 +274,10 @@ pub struct ResolveResult<'a> {
     /// Graph used to compute audits for this package.
     pub audit_graph: AuditGraph<'a>,
     /// Cache of search results for each criteria.
-    pub search_results: Vec<Result<Caveats, SearchFailure>>,
+    pub search_results: Vec<Result<Vec<DeltaEdgeOrigin>, SearchFailure>>,
+    /// Which edges which were used to satisfy required criteria, or `None` if
+    /// the package failed to vet.
+    pub required_edges: Option<SortedSet<DeltaEdgeOrigin>>,
 }
 
 #[derive(Debug, Clone)]
@@ -291,17 +292,6 @@ pub struct SearchFailure {
     pub reachable_from_root: SortedSet<Option<VetVersion>>,
     /// Nodes we could reach from the "target"
     pub reachable_from_target: SortedSet<Option<VetVersion>>,
-}
-
-/// Caveats which apply to the results of an audit.
-#[derive(Debug, Clone, Default)]
-pub struct Caveats {
-    /// The audit was certified directly because of an exemption.
-    pub directly_exempted: bool,
-    /// The audit required at least one exemption.
-    pub needed_exemptions: bool,
-    /// The audit required at least one fresh import.
-    pub needed_fresh_imports: bool,
 }
 
 type DirectedAuditGraph<'a> = SortedMap<Option<&'a VetVersion>, Vec<DeltaEdge<'a>>>;
@@ -337,19 +327,19 @@ pub struct AuditGraph<'a> {
     backward_audits: DirectedAuditGraph<'a>,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum DeltaEdgeOrigin {
-    /// This edge represents an audit from the store, either within audits.toml
-    /// or within the cached imports.lock file. These edges will be tried first.
-    StoredAudit,
-    /// This edge represents an exemption. These edges will be tried after
-    /// stored audits, but before freshly-imported audits have been attempted.
-    Exemption,
-    /// This edge represents an imported audit from a peer which is only present
-    /// on the remote server, and not present in the cached imports.lock file.
-    /// These edges will be tried after all locally-available audits have been
-    /// attempted.
-    FreshImportedAudit,
+/// The precise origin of an edge in the audit graph.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum DeltaEdgeOrigin {
+    /// This edge represents an audit from the local audits.toml.
+    StoredLocalAudit { audit_index: usize },
+    /// This edge represents an audit imported from a peer, potentially stored
+    /// in the local imports.lock.
+    ImportedAudit {
+        import_index: usize,
+        audit_index: usize,
+    },
+    /// This edge represents an exemption from the local config.toml.
+    Exemption { exemption_index: usize },
 }
 
 /// A directed edge in the graph of audits. This may be forward or backwards,
@@ -364,6 +354,9 @@ struct DeltaEdge<'a> {
     /// The origin of this edge. See `DeltaEdgeOrigin`'s documentation for more
     /// details.
     origin: DeltaEdgeOrigin,
+    /// Whether or not the edge is a "fresh import", and should be
+    /// de-prioritized to avoid unnecessary imports.lock updates.
+    is_fresh_import: bool,
 }
 
 const NUM_BUILTINS: usize = 2;
@@ -1252,7 +1245,6 @@ fn resolve_audits<'a>(
     let mut vetted_with_exemptions = Vec::new();
     let mut vetted_partially = Vec::new();
     let mut vetted_fully = Vec::new();
-    let mut needed_fresh_imports = SortedSet::new();
     let results: Vec<_> = requirements
         .iter()
         .enumerate()
@@ -1274,39 +1266,51 @@ fn resolve_audits<'a>(
                 .map(|criteria_idx| audit_graph.search(criteria_idx, &package.version))
                 .collect();
 
-            let mut caveats = Caveats::default();
+            let mut needed_exemptions = false;
+            let mut directly_exempted = false;
             let mut criteria_failures = criteria_mapper.no_criteria();
             for criteria_idx in required_criteria.indices() {
                 match &search_results[criteria_idx] {
-                    Ok(criteria_caveats) => {
-                        caveats.directly_exempted |= criteria_caveats.directly_exempted;
-                        caveats.needed_exemptions |= criteria_caveats.needed_exemptions;
-                        caveats.needed_fresh_imports |= criteria_caveats.needed_fresh_imports;
+                    Ok(path) => {
+                        needed_exemptions |= path
+                            .iter()
+                            .any(|o| matches!(o, DeltaEdgeOrigin::Exemption { .. }));
+                        directly_exempted |=
+                            path.len() == 1 && matches!(path[0], DeltaEdgeOrigin::Exemption { .. });
                     }
                     Err(_) => criteria_failures.set_criteria(criteria_idx),
                 }
             }
 
-            if !criteria_failures.is_empty() {
+            let required_edges = if criteria_failures.is_empty() {
+                // Only collect required edges from minimal_indices as those
+                // edges will be sufficient for a full audit.
+                Some(
+                    criteria_mapper
+                        .minimal_indices(required_criteria)
+                        .flat_map(|criteria_idx| search_results[criteria_idx].as_ref().unwrap())
+                        .cloned()
+                        .collect(),
+                )
+            } else {
                 failures.push((pkgidx, AuditFailure { criteria_failures }));
-            }
+                None
+            };
 
             // XXX: Callers using these fields in success should perhaps be
             // changed to instead walk the results?
-            if !caveats.needed_exemptions {
+            if !needed_exemptions {
                 vetted_fully.push(pkgidx);
-            } else if caveats.directly_exempted {
+            } else if directly_exempted {
                 vetted_with_exemptions.push(pkgidx);
             } else {
                 vetted_partially.push(pkgidx);
-            }
-            if caveats.needed_fresh_imports {
-                needed_fresh_imports.insert(pkgidx);
             }
 
             Some(ResolveResult {
                 audit_graph,
                 search_results,
+                required_edges,
             })
         })
         .collect();
@@ -1323,7 +1327,6 @@ fn resolve_audits<'a>(
             vetted_with_exemptions,
             vetted_partially,
             vetted_fully,
-            needed_fresh_imports,
         })
     };
 
@@ -1355,7 +1358,14 @@ impl<'a> AuditGraph<'a> {
             .map(|v| &v[..])
             .unwrap_or(&[])
             .iter()
-            .map(|audit| (&CriteriaNamespace::Local, audit));
+            .enumerate()
+            .map(|(audit_index, audit)| {
+                (
+                    &CriteriaNamespace::Local,
+                    DeltaEdgeOrigin::StoredLocalAudit { audit_index },
+                    audit,
+                )
+            });
 
         // Each foreign audit should be put into a "foreign" criteria namespace.
         let foreign_audits =
@@ -1363,15 +1373,25 @@ impl<'a> AuditGraph<'a> {
                 .imported_audits()
                 .values()
                 .enumerate()
-                .flat_map(|(idx, audits)| {
-                    let namespace = &foreign_namespaces[idx];
+                .flat_map(|(import_index, audits)| {
+                    let namespace = &foreign_namespaces[import_index];
                     audits
                         .audits
                         .get(package)
                         .map(|v| &v[..])
                         .unwrap_or(&[])
                         .iter()
-                        .map(move |audit| (namespace, audit))
+                        .enumerate()
+                        .map(move |(audit_index, audit)| {
+                            (
+                                namespace,
+                                DeltaEdgeOrigin::ImportedAudit {
+                                    import_index,
+                                    audit_index,
+                                },
+                                audit,
+                            )
+                        })
                 });
 
         let all_audits = own_audits.chain(foreign_audits);
@@ -1382,7 +1402,7 @@ impl<'a> AuditGraph<'a> {
         let mut violation_nodes = Vec::new();
 
         // Collect up all the deltas, and their criteria
-        for (namespace, entry) in all_audits.clone() {
+        for (namespace, origin, entry) in all_audits.clone() {
             // For uniformity, model a Full Audit as `None -> x.y.z`
             let (from_ver, to_ver) = match &entry.kind {
                 AuditKind::Full { version } => (None, version),
@@ -1395,16 +1415,11 @@ impl<'a> AuditGraph<'a> {
 
             let criteria = criteria_mapper.criteria_from_namespaced_entry(namespace, entry);
 
-            let origin = if entry.is_fresh_import {
-                DeltaEdgeOrigin::FreshImportedAudit
-            } else {
-                DeltaEdgeOrigin::StoredAudit
-            };
-
             forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: Some(to_ver),
                 criteria: criteria.clone(),
                 origin,
+                is_fresh_import: entry.is_fresh_import,
             });
             backward_audits
                 .entry(Some(to_ver))
@@ -1413,26 +1428,30 @@ impl<'a> AuditGraph<'a> {
                     version: from_ver,
                     criteria,
                     origin,
+                    is_fresh_import: entry.is_fresh_import,
                 });
         }
 
         // Exempted entries are equivalent to full-audits
         if let Some(alloweds) = exemptions {
-            for allowed in alloweds {
+            for (exemption_index, allowed) in alloweds.iter().enumerate() {
                 let from_ver = None;
                 let to_ver = Some(&allowed.version);
                 let criteria = criteria_mapper.criteria_from_list(&allowed.criteria);
+                let origin = DeltaEdgeOrigin::Exemption { exemption_index };
 
                 // For simplicity, turn 'exemptions' entries into deltas from None.
                 forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                     version: to_ver,
                     criteria: criteria.clone(),
-                    origin: DeltaEdgeOrigin::Exemption,
+                    origin,
+                    is_fresh_import: false,
                 });
                 backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                     version: from_ver,
                     criteria,
-                    origin: DeltaEdgeOrigin::Exemption,
+                    origin,
+                    is_fresh_import: false,
                 });
             }
         }
@@ -1492,7 +1511,7 @@ impl<'a> AuditGraph<'a> {
             }
 
             // Note if this entry conflicts with any audits
-            for (namespace, audit) in all_audits.clone() {
+            for (namespace, _origin, audit) in all_audits.clone() {
                 let audit_criteria =
                     criteria_mapper.criteria_from_namespaced_entry(namespace, audit);
                 let has_violation = violation_criterias
@@ -1541,22 +1560,26 @@ impl<'a> AuditGraph<'a> {
     }
 
     /// Search for a path in this AuditGraph which indicates that the given
-    /// version of the crate satisfies the given criteria. Returns the `Caveats`
-    /// which were required for that proof if successful, and information about
-    /// the versions which could be reached from both the target and root if
-    /// unsuccessful.
+    /// version of the crate satisfies the given criteria. Returns the path used
+    /// for that proof if successful, and information about the versions which
+    /// could be reached from both the target and root if unsuccessful.
     pub fn search(
         &self,
         criteria_idx: usize,
         version: &VetVersion,
-    ) -> Result<Caveats, SearchFailure> {
-        search_for_path(&self.forward_audits, criteria_idx, None, Some(version)).map_err(
-            |reachable_from_root| {
-                // The search failed, perform the search backwards in order to
-                // also get the set of nodes reachable from the target. We can
-                // `unwrap_err()` here, as we'll definitely fail.
-                let reachable_from_target =
-                    search_for_path(&self.backward_audits, criteria_idx, Some(version), None)
+    ) -> Result<Vec<DeltaEdgeOrigin>, SearchFailure> {
+        // First, search backwards, starting from the target, as that's more
+        // likely to have a limited graph to traverse.
+        // This also interacts well with the search ordering from
+        // search_for_path, which prefers edges closer to `None` when
+        // traversing.
+        search_for_path(&self.backward_audits, criteria_idx, Some(version), None).map_err(
+            |reachable_from_target| {
+                // The search failed, perform the search in the other direction
+                // in order to also get the set of nodes reachable from the
+                // root. We can `unwrap_err()` here, as we'll definitely fail.
+                let reachable_from_root =
+                    search_for_path(&self.forward_audits, criteria_idx, None, Some(version))
                         .unwrap_err();
                 SearchFailure {
                     reachable_from_root,
@@ -1575,7 +1598,7 @@ fn search_for_path(
     criteria_idx: usize,
     from_version: Option<&VetVersion>,
     to_version: Option<&VetVersion>,
-) -> Result<Caveats, SortedSet<Option<VetVersion>>> {
+) -> Result<Vec<DeltaEdgeOrigin>, SortedSet<Option<VetVersion>>> {
     // Search for any path through the graph with edges that satisfy criteria.
     // Finding any path validates that we satisfy that criteria.
     //
@@ -1594,18 +1617,26 @@ fn search_for_path(
     // fresh imports (the most-important caveat).
     struct Node<'a> {
         version: Option<&'a VetVersion>,
-        caveats: Caveats,
+        path: Vec<DeltaEdgeOrigin>,
+        needed_fresh_imports: bool,
+        needed_exemptions: bool,
     }
 
-    impl<'a> Node<'a> {
-        fn key(&self) -> Reverse<(bool, bool, bool)> {
+    impl Node<'_> {
+        fn key(&self) -> impl Ord + '_ {
             // Nodes are compared whether they require fresh imports or
             // exemptions, in that order. Fewer caveats makes the node sort
             // higher, as it will be stored in a max heap.
+            // Once we've sorted by all caveats, we sort by the length of the
+            // path (preferring short paths), the version (preferring lower
+            // versions), and then the most recently added DeltaEdgeOrigin
+            // (preferring more-local audits).
             Reverse((
-                self.caveats.needed_fresh_imports,
-                self.caveats.needed_exemptions,
-                self.caveats.directly_exempted,
+                self.needed_fresh_imports,
+                self.needed_exemptions,
+                self.version,
+                self.path.len(),
+                self.path.last(),
             ))
         }
     }
@@ -1629,11 +1660,19 @@ fn search_for_path(
     let mut queue = BinaryHeap::new();
     queue.push(Node {
         version: from_version,
-        caveats: Caveats::default(),
+        path: Vec::new(),
+        needed_fresh_imports: false,
+        needed_exemptions: false,
     });
 
     let mut visited = SortedSet::new();
-    while let Some(Node { version, caveats }) = queue.pop() {
+    while let Some(Node {
+        version,
+        path,
+        needed_fresh_imports,
+        needed_exemptions,
+    }) = queue.pop()
+    {
         // If We've been to a version before, We're not going to get a better
         // result revisiting it, as we visit the "best" edges first.
         if !visited.insert(version) {
@@ -1643,7 +1682,7 @@ fn search_for_path(
         // We found a path! Return a search result reflecting what we
         // discovered.
         if version == to_version {
-            return Ok(caveats);
+            return Ok(path);
         }
 
         // Apply deltas to move along to the next layer of the search, adding it
@@ -1659,23 +1698,12 @@ fn search_for_path(
                 continue;
             }
 
-            let mut edge_caveats = caveats.clone();
-            edge_caveats.directly_exempted = false;
-
-            match edge.origin {
-                DeltaEdgeOrigin::Exemption => {
-                    edge_caveats.needed_exemptions = true;
-                    edge_caveats.directly_exempted = true;
-                }
-                DeltaEdgeOrigin::FreshImportedAudit => {
-                    edge_caveats.needed_fresh_imports = true;
-                }
-                DeltaEdgeOrigin::StoredAudit => {}
-            }
-
             queue.push(Node {
                 version: edge.version,
-                caveats: edge_caveats,
+                path: path.iter().cloned().chain([edge.origin]).collect(),
+                needed_fresh_imports: needed_fresh_imports || edge.is_fresh_import,
+                needed_exemptions: needed_exemptions
+                    || matches!(edge.origin, DeltaEdgeOrigin::Exemption { .. }),
             });
         }
     }
@@ -2360,7 +2388,6 @@ pub fn regenerate_exemptions(
     cfg: &Config,
     store: &mut Store,
     allow_new_exemptions: bool,
-    force_update_imports: bool,
 ) -> Result<(), RegenerateExemptionsError> {
     // While minimizing exemptions, a number of different calls to the resolver
     // will be made using the same DepGraph, CriteriaMapper and requirements,
@@ -2382,10 +2409,9 @@ pub fn regenerate_exemptions(
     // immediately. We'll also do this if automatic exemption minimization is
     // disabled through the CLI.
     if !allow_new_exemptions {
-        let (_, conclusion) = resolve_audits(&graph, store, &criteria_mapper, &requirements);
+        let (results, conclusion) = resolve_audits(&graph, store, &criteria_mapper, &requirements);
         if !matches!(conclusion, Conclusion::Success(_)) || cfg.cli.no_minimize_exemptions {
-            store.imports =
-                store.get_updated_imports_file(&graph, &conclusion, force_update_imports);
+            store.imports = store.get_updated_imports_file(&graph, &results);
             return Ok(());
         }
     }
@@ -2443,16 +2469,14 @@ pub fn regenerate_exemptions(
                 // Also force an update even if we're seeing a violation
                 // conflict (to save the potentially-newly-imported violation),
                 // although our caller is unlikely to commit these changes.
-                store.imports =
-                    store.get_updated_imports_file(&graph, &conclusion, force_update_imports);
+                store.imports = store.get_updated_imports_file(&graph, &results);
                 return Err(RegenerateExemptionsError::ViolationConflict);
             }
             Conclusion::Success(..) => {
                 // We succeeded! Whatever exemptions we've recorded so-far are
                 // suficient, so we're done. Record any imports which ended up
                 // being required for the vet to pass.
-                store.imports =
-                    store.get_updated_imports_file(&graph, &conclusion, force_update_imports);
+                store.imports = store.get_updated_imports_file(&graph, &results);
                 return Ok(());
             }
         };
