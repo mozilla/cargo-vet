@@ -856,7 +856,7 @@ fn existing_peer_updated_description() {
         Ok(_) => panic!("expected store creation to fail due to updated criteria"),
         Err(err) => miette::Report::from(err),
     };
-    insta::assert_snapshot!("existing_peer_updated_description", format!("{:?}", error));
+    insta::assert_snapshot!("existing_peer_updated_description", format!("{error:?}"));
 }
 
 #[test]

@@ -1267,7 +1267,7 @@ impl Cache {
 
                 let version = &version.semver;
 
-                let dir_name = format!("{}-{}", package, version);
+                let dir_name = format!("{package}-{version}");
 
                 // First try to get a cached copy from cargo's registry.
                 if let Some(reg) = self.cargo_registry.as_ref() {
@@ -1280,7 +1280,7 @@ impl Cache {
                 // Paths for the fetched package and checkout in our local cache.
                 let fetched_package = root
                     .join(CACHE_REGISTRY_CACHE)
-                    .join(format!("{}.crate", dir_name));
+                    .join(format!("{dir_name}.crate"));
                 let fetched_src = root.join(CACHE_REGISTRY_SRC).join(&dir_name);
 
                 // Check if the resource is already available in our local cache.
@@ -1955,7 +1955,7 @@ where
     T: Serialize,
 {
     let toml_document = to_formatted_toml(val)?;
-    Ok(format!("{}{}", heading, toml_document))
+    Ok(format!("{heading}{toml_document}"))
 }
 fn load_json<T>(reader: impl Read) -> Result<T, LoadJsonError>
 where

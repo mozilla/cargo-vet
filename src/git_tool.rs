@@ -99,7 +99,7 @@ pub fn editor_command() -> Command {
         (Some(git_sh), Some(git_editor)) => {
             let mut cmd = Command::new(git_sh);
             cmd.arg("-c")
-                .arg(format!("{} \"$@\"", git_editor))
+                .arg(format!("{git_editor} \"$@\""))
                 .arg(git_editor);
             return cmd;
         }
@@ -140,7 +140,7 @@ impl<'a> Editor<'a> {
     /// Create a new editor for a temporary file.
     pub fn new(name: &str) -> io::Result<Self> {
         let tempfile = tempfile::Builder::new()
-            .prefix(&format!("{}.", name))
+            .prefix(&format!("{name}."))
             .tempfile()?;
         Ok(Editor {
             tempfile,
@@ -207,7 +207,7 @@ impl<'a> Editor<'a> {
     pub fn add_text(&mut self, text: &str) -> io::Result<()> {
         let text = text.trim();
         if text.is_empty() {
-            write!(self.tempfile, "{}", LINE_ENDING)?;
+            write!(self.tempfile, "{LINE_ENDING}")?;
         }
         for line in text.lines() {
             assert!(
@@ -215,7 +215,7 @@ impl<'a> Editor<'a> {
                 "non-comment lines cannot start with a '{}' comment character",
                 self.comment_char
             );
-            write!(self.tempfile, "{}{}", line, LINE_ENDING)?;
+            write!(self.tempfile, "{line}{LINE_ENDING}")?;
         }
         Ok(())
     }
@@ -293,7 +293,7 @@ fn pager_command(out: &dyn Out) -> Option<Command> {
 
     let mut cmd = Command::new(git_sh);
     cmd.arg("-c")
-        .arg(format!("{} \"$@\"", git_pager))
+        .arg(format!("{git_pager} \"$@\""))
         .arg(git_pager);
     // These environment variables are hard-coded into `git` at build
     // time, and are required to support colors in `less`.
