@@ -9,10 +9,12 @@
 
 use std::{
     ffi::{OsStr, OsString},
+    io::Write,
     path::{Path, PathBuf},
     time::Duration,
 };
 
+use base64_stream::FromBase64Writer;
 use reqwest::{Client, Url};
 use tokio::io::AsyncWriteExt;
 
@@ -28,6 +30,55 @@ pub struct Network {
 static DEFAULT_TIMEOUT_SECS: u64 = 60;
 
 const MAX_CONCURRENT_CONNECTIONS: usize = 40;
+
+/// Payload decoder type handling multiple encodings.
+///
+/// This is only used in `download` (not `download_and_persist`) because (for now) it's only needed
+/// in downloading imports (not packages, which is what `download_and_persist` is used for) to
+/// workaround known server shortcomings. It could be added to `download_and_persist`, but due to
+/// the use of `tokio::io::File` it gets messy and either this or that would need a refactor.
+enum PayloadDecoder<W: Write> {
+    Plaintext { inner: W },
+    Base64 { inner: FromBase64Writer<W> },
+}
+
+impl<W: Write> PayloadDecoder<W> {
+    /// Create a new decoder based on the response.
+    pub fn new(response: &reqwest::Response, target: W) -> Self {
+        // gitiles always encodes content in base64
+        if response.headers().contains_key("x-gitiles-object-type") {
+            Self::Base64 {
+                inner: FromBase64Writer::new(target),
+            }
+        } else {
+            Self::Plaintext { inner: target }
+        }
+    }
+
+    /// Get the encoding name that is decoded.
+    pub fn encoding_name(&self) -> &'static str {
+        match self {
+            Self::Plaintext { .. } => "plaintext",
+            Self::Base64 { .. } => "base64",
+        }
+    }
+}
+
+impl<W: Write> Write for PayloadDecoder<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Plaintext { inner } => inner.write(buf),
+            Self::Base64 { inner } => inner.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Self::Plaintext { inner } => inner.flush(),
+            Self::Base64 { inner } => inner.flush(),
+        }
+    }
+}
 
 impl Network {
     /// Acquire access to the network
@@ -87,6 +138,7 @@ impl Network {
                         target: download_tmp_path.clone(),
                         error,
                     })?;
+
             while let Some(chunk) =
                 res.chunk()
                     .await
@@ -141,16 +193,29 @@ impl Network {
             })?;
 
         let mut output = vec![];
-        while let Some(chunk) =
-            res.chunk()
-                .await
-                .map_err(|error| DownloadError::FailedToReadDownload {
-                    url: Box::new(url.clone()),
-                    error,
-                })?
         {
-            let network_bytes = &chunk[..];
-            output.extend_from_slice(network_bytes);
+            let mut payload_decoder = PayloadDecoder::new(&res, &mut output);
+            while let Some(chunk) =
+                res.chunk()
+                    .await
+                    .map_err(|error| DownloadError::FailedToReadDownload {
+                        url: Box::new(url.clone()),
+                        error,
+                    })?
+            {
+                payload_decoder.write_all(&chunk[..]).map_err(|error| {
+                    DownloadError::InvalidEncoding {
+                        encoding: payload_decoder.encoding_name().into(),
+                        error,
+                    }
+                })?;
+            }
+            payload_decoder
+                .flush()
+                .map_err(|error| DownloadError::InvalidEncoding {
+                    encoding: payload_decoder.encoding_name().into(),
+                    error,
+                })?;
         }
 
         Ok(output)
