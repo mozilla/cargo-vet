@@ -280,7 +280,7 @@ fn acquire(
         }
     }
 
-    let _spinner = indeterminate_spinner("Blocking", format!("waiting for file lock on {}", msg));
+    let _spinner = indeterminate_spinner("Blocking", format!("waiting for file lock on {msg}"));
 
     lock_block()?;
     return Ok(());

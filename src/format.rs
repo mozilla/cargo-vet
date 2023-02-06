@@ -47,7 +47,7 @@ impl core::ops::Deref for VersionReq {
 }
 impl cmp::PartialOrd for VersionReq {
     fn partial_cmp(&self, other: &VersionReq) -> Option<cmp::Ordering> {
-        format!("{}", self).partial_cmp(&format!("{}", other))
+        format!("{self}").partial_cmp(&format!("{other}"))
     }
 }
 impl VersionReq {

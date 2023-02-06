@@ -5,8 +5,7 @@ fn get_exemptions(store: &Store) -> String {
         assert!(
             // `is_sorted` is unstable
             exemptions.windows(2).all(|elts| elts[0] <= elts[1]),
-            "exemptions for {} aren't sorted",
-            name
+            "exemptions for {name} aren't sorted"
         );
     }
     toml_edit::ser::to_string_pretty(&store.config.exemptions).unwrap()

@@ -146,7 +146,7 @@ fn set_report_errors_as_json(out: Arc<dyn Out>) {
         miette::JSONReportHandler::new()
             .render_report(&mut report, error.as_ref())
             .unwrap();
-        writeln!(out, r#"{{"error": {}}}"#, report);
+        writeln!(out, r#"{{"error": {report}}}"#);
     }));
 }
 
@@ -621,7 +621,7 @@ fn cmd_inspect(
     #[cfg(target_family = "unix")]
     if let Some(shell) = std::env::var_os("SHELL") {
         // Loosely borrowed from cargo crev.
-        writeln!(out, "Opening nested shell in: {:#?}", fetched);
+        writeln!(out, "Opening nested shell in: {fetched:#?}");
         writeln!(out, "Use `exit` or Ctrl-D to finish.",);
         let status = std::process::Command::new(shell)
             .current_dir(fetched.clone())
@@ -638,7 +638,7 @@ fn cmd_inspect(
         return Ok(());
     }
 
-    writeln!(out, "  fetched to {:#?}", fetched);
+    writeln!(out, "  fetched to {fetched:#?}");
     writeln!(out, "\nUse |cargo vet certify| to record your audit.");
     Ok(())
 }
@@ -763,10 +763,10 @@ fn do_cmd_certify(
         // Prompt for criteria
         loop {
             out.clear_screen()?;
-            write!(out, "choose criteria to certify for {}", package);
+            write!(out, "choose criteria to certify for {package}");
             match &kind {
-                AuditKind::Full { version, .. } => write!(out, ":{}", version),
-                AuditKind::Delta { from, to, .. } => write!(out, ":{} -> {}", from, to),
+                AuditKind::Full { version, .. } => write!(out, ":{version}"),
+                AuditKind::Delta { from, to, .. } => write!(out, ":{from} -> {to}"),
                 AuditKind::Violation { .. } => unreachable!(),
             }
             writeln!(out);
@@ -858,16 +858,15 @@ fn do_cmd_certify(
 
     let what_version = match &kind {
         AuditKind::Full { version, .. } => {
-            format!("version {}", version)
+            format!("version {version}")
         }
         AuditKind::Delta { from, to, .. } => {
-            format!("the changes from version {} to {}", from, to)
+            format!("the changes from version {from} to {to}")
         }
         AuditKind::Violation { .. } => unreachable!(),
     };
     let statement = format!(
-        "I, {}, certify that I have audited {} of {} in accordance with the above criteria.",
-        username, what_version, package,
+        "I, {username}, certify that I have audited {what_version} of {package} in accordance with the above criteria.",
     );
 
     let mut notes = sub_args.notes.clone();
@@ -893,7 +892,7 @@ fn do_cmd_certify(
         editor.add_text("")?;
 
         for (criteria, eula) in &eulas {
-            editor.add_comments(&format!("=== BEGIN CRITERIA {:?} ===", criteria))?;
+            editor.add_comments(&format!("=== BEGIN CRITERIA {criteria:?} ==="))?;
             editor.add_comments("")?;
             editor.add_comments(eula)?;
             editor.add_comments("")?;
@@ -1033,12 +1032,9 @@ async fn prompt_criteria_eulas(
     url: Option<&str>,
 ) -> Result<(), io::Error> {
     let description = if let Some(from) = from {
-        format!(
-            "You are about to diff versions {} and {} of '{}'",
-            from, to, package
-        )
+        format!("You are about to diff versions {from} and {to} of '{package}'")
     } else {
-        format!("You are about to inspect version {} of '{}'", to, package)
+        format!("You are about to inspect version {to} of '{package}'")
     };
 
     // Guess which criteria the user is going to be auditing the package for.
@@ -1061,12 +1057,9 @@ async fn prompt_criteria_eulas(
 
         for (idx, (criteria, eula)) in eulas.into_iter().enumerate() {
             let prompt = if idx == 0 {
-                format!(
-                    "{}, likely to certify it for {:?}, which means:",
-                    description, criteria
-                )
+                format!("{description}, likely to certify it for {criteria:?}, which means:")
             } else {
-                format!("... and for {:?}, which means:", criteria)
+                format!("... and for {criteria:?}, which means:")
             };
             writeln!(
                 out,
@@ -1611,7 +1604,7 @@ fn cmd_aggregate(
             urls.push(
                 Url::parse(trimmed)
                     .into_diagnostic()
-                    .wrap_err_with(|| format!("failed to parse url: {:?}", trimmed))?,
+                    .wrap_err_with(|| format!("failed to parse url: {trimmed:?}"))?,
             );
         }
     }
@@ -1640,7 +1633,7 @@ fn cmd_aggregate(
 
     let merged_audits = do_aggregate_audits(sources).into_diagnostic()?;
     let document = serialization::to_formatted_toml(merged_audits).into_diagnostic()?;
-    write!(out, "{}", document);
+    write!(out, "{document}");
     Ok(())
 }
 
@@ -1985,11 +1978,10 @@ async fn eula_for_criteria(
     // ERRORS: the caller should have verified this entry already!
     let criteria_entry = criteria_map
         .get(criteria)
-        .unwrap_or_else(|| panic!("no entry for the criteria {}", criteria));
+        .unwrap_or_else(|| panic!("no entry for the criteria {criteria}"));
     assert!(
         criteria_entry.description.is_some() || criteria_entry.description_url.is_some(),
-        "entry for criteria {} is corrupt!",
-        criteria
+        "entry for criteria {criteria} is corrupt!"
     );
 
     // Now try the description

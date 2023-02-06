@@ -143,7 +143,7 @@ fn mock_simple_certify_flow() {
 
     let audits = crate::serialization::to_formatted_toml(&store.audits).unwrap();
 
-    let result = format!("OUTPUT:\n{}\nAUDITS:\n{}", output, audits);
+    let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
 
     insta::assert_snapshot!("mock-simple-certify-flow", result);
 }

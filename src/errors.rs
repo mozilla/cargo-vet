@@ -124,7 +124,7 @@ impl Display for NeedsAuditAsErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Some non-crates.io-fetched packages match published crates.io versions")?;
         for e in &self.errors {
-            f.write_fmt(format_args!("\n  {}", e))?
+            f.write_fmt(format_args!("\n  {e}"))?
         }
         Ok(())
     }
@@ -140,7 +140,7 @@ impl Display for ShouldntBeAuditAsErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("some audit-as-crates-io packages don't match published crates.io versions")?;
         for e in &self.errors {
-            f.write_fmt(format_args!("\n  {}", e))?
+            f.write_fmt(format_args!("\n  {e}"))?
         }
         Ok(())
     }
@@ -156,7 +156,7 @@ impl Display for UnusedAuditAsErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("some audit-as-crates-io policies don't match first-party crates")?;
         for e in &self.errors {
-            f.write_fmt(format_args!("\n  {}", e))?
+            f.write_fmt(format_args!("\n  {e}"))?
         }
         Ok(())
     }
@@ -775,7 +775,7 @@ impl Display for AggregateCriteriaImplies {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}:", self.source)?;
         for implied in &self.implies {
-            write!(f, "\n - {}", implied)?;
+            write!(f, "\n - {implied}")?;
         }
         Ok(())
     }

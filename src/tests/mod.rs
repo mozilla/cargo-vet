@@ -1070,10 +1070,10 @@ impl Out for BasicTestOutput {
     }
 
     fn read_line_with_prompt(&self, initial: &str) -> io::Result<String> {
-        write!(self, "{}", initial);
+        write!(self, "{initial}");
         if let Some(on_read_line) = &self.on_read_line {
             let response = on_read_line(initial)?;
-            writeln!(self, "{}", response);
+            writeln!(self, "{response}");
             Ok(response)
         } else {
             Err(io::ErrorKind::Unsupported.into())
@@ -1085,10 +1085,10 @@ impl Out for BasicTestOutput {
             let mut editor = Editor::new(name)?;
             editor.set_run_editor(move |path| {
                 let original = fs::read_to_string(path)?;
-                writeln!(self, "<<<EDITING {}>>>\n{}", name, original);
+                writeln!(self, "<<<EDITING {name}>>>\n{original}");
                 match on_edit(original) {
                     Ok(contents) => {
-                        writeln!(self, "<<<EDIT OK>>>\n{}\n<<<END EDIT>>>", contents);
+                        writeln!(self, "<<<EDIT OK>>>\n{contents}\n<<<END EDIT>>>");
                         fs::write(path, contents)?;
                         Ok(true)
                     }
@@ -1109,7 +1109,7 @@ impl Out for BasicTestOutput {
 fn generate_diff(old: &str, new: &str) -> String {
     similar::utils::diff_lines(similar::Algorithm::Myers, old, new)
         .into_iter()
-        .map(|(tag, line)| format!("{}{}", tag, line))
+        .map(|(tag, line)| format!("{tag}{line}"))
         .collect()
 }
 

@@ -402,7 +402,7 @@ impl CriteriaMapper {
             audit_file.criteria.iter().map(move |(k, v)| CriteriaInfo {
                 namespace: CriteriaNamespace::Foreign(import.clone()),
                 raw_name: k.clone(),
-                namespaced_name: format!("{}::{}", import, k),
+                namespaced_name: format!("{import}::{k}"),
                 implies: v.implies.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
             })
         });
@@ -1748,7 +1748,7 @@ impl<'a> ResolveReport<'a> {
                         let remainder = cutoff_index.map(|i| reverse_deps.len() - i).unwrap_or(0);
                         if remainder > 1 {
                             reverse_deps.truncate(cutoff_index.unwrap());
-                            reverse_deps.push(format!("and {} others", remainder));
+                            reverse_deps.push(format!("and {remainder} others"));
                         }
                         reverse_deps.join(", ")
                     };
@@ -2132,21 +2132,21 @@ impl Success {
             write!(out, "Vetting Succeeded (");
 
             if fully_audited_count != 0 {
-                write!(out, "{} fully audited", fully_audited_count);
+                write!(out, "{fully_audited_count} fully audited");
                 count_count -= 1;
                 if count_count > 0 {
                     write!(out, ", ");
                 }
             }
             if partially_audited_count != 0 {
-                write!(out, "{} partially audited", partially_audited_count);
+                write!(out, "{partially_audited_count} partially audited");
                 count_count -= 1;
                 if count_count > 0 {
                     write!(out, ", ");
                 }
             }
             if exemptions_count != 0 {
-                write!(out, "{} exempted", exemptions_count);
+                write!(out, "{exemptions_count} exempted");
                 count_count -= 1;
                 if count_count > 0 {
                     write!(out, ", ");
@@ -2166,7 +2166,7 @@ impl Suggest {
         report: &ResolveReport<'_>,
     ) -> Result<(), std::io::Error> {
         for (criteria, suggestions) in &self.suggestions_by_criteria {
-            writeln!(out, "recommended audits for {}:", criteria);
+            writeln!(out, "recommended audits for {criteria}:");
 
             let strings = suggestions
                 .iter()
@@ -2205,9 +2205,9 @@ impl Suggest {
                     out.style()
                         .cyan()
                         .bold()
-                        .apply_to(format_args!("    {s0:width$}", width = max0))
+                        .apply_to(format_args!("    {s0:max0$}"))
                 );
-                writeln!(out, "  {s1:width$}  {s2}", width = max1);
+                writeln!(out, "  {s1:max1$}  {s2}");
             }
 
             writeln!(out);
@@ -2246,7 +2246,7 @@ impl FailForVet {
                 .collect::<Vec<_>>();
 
             let label = format!("  {}:{}", failed_package.name, failed_package.version);
-            writeln!(out, "{} missing {:?}", label, criteria);
+            writeln!(out, "{label} missing {criteria:?}");
         }
 
         // Suggest output generally requires hitting the network.
@@ -2325,7 +2325,7 @@ impl FailForViolationConflict {
                     writeln!(out, "audit {version}");
                 }
                 AuditKind::Delta { from, to, .. } => {
-                    writeln!(out, "audit {} -> {}", from, to);
+                    writeln!(out, "audit {from} -> {to}");
                 }
                 AuditKind::Violation { violation } => {
                     writeln!(out, "violation against {violation}");
