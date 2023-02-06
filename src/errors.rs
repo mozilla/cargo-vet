@@ -670,11 +670,17 @@ pub enum DownloadError {
         #[source]
         error: std::io::Error,
     },
-    #[error("Download wasn't valid utf8: {url}")]
+    #[error("download wasn't valid utf8: {url}")]
     InvalidText {
         url: Box<reqwest::Url>,
         #[source]
         error: FromUtf8Error,
+    },
+    #[error("download decoding error for {encoding}")]
+    InvalidEncoding {
+        encoding: String,
+        #[source]
+        error: std::io::Error,
     },
 }
 
