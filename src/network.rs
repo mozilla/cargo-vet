@@ -66,9 +66,16 @@ pub struct Network {
     mock_network: Option<std::collections::HashMap<Url, Bytes>>,
 }
 
-static DEFAULT_TIMEOUT_SECS: u64 = 60;
-
+const DEFAULT_TIMEOUT_SECS: u64 = 60;
 const MAX_CONCURRENT_CONNECTIONS: usize = 40;
+const USER_AGENT: &str = concat!(
+    env!("CARGO_PKG_NAME"),
+    "/",
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("CARGO_PKG_HOMEPAGE"),
+    ")"
+);
 
 /// The network payload encoding.
 ///
@@ -122,6 +129,7 @@ impl Network {
             let timeout = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
             // TODO: make this configurable on the CLI or something
             let client = Client::builder()
+                .user_agent(USER_AGENT)
                 .timeout(timeout)
                 .build()
                 .expect("Couldn't construct HTTP Client?");
