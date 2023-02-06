@@ -51,8 +51,8 @@ GLOBAL OPTIONS:
         --output-format <OUTPUT_FORMAT>
             The format of the output [default: human] [possible values: human, json]
 
-        --diff-cache <DIFF_CACHE>
-            Use the following path as the diff-cache
+        --cache-dir <CACHE_DIR>
+            Use the following path instead of the global cache directory
 
         --filter-graph <FILTER_GRAPH>
             Filter out different parts of the build graph and pretend that's the true graph

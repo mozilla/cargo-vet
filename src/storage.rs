@@ -1127,11 +1127,7 @@ impl Cache {
         })?;
 
         // Setup the diff_cache.
-        let diff_cache_path = cfg
-            .cli
-            .diff_cache
-            .clone()
-            .unwrap_or_else(|| root.join(CACHE_DIFF_CACHE));
+        let diff_cache_path = root.join(CACHE_DIFF_CACHE);
         let diff_cache: DiffCache = File::open(&diff_cache_path)
             .ok()
             .and_then(|f| load_toml(CACHE_DIFF_CACHE, f).map(|v| v.1).ok())

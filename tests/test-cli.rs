@@ -19,11 +19,6 @@ use std::{
     process::{Command, Output, Stdio},
 };
 
-// Some tests need to write files (and read them back).
-// To keep this tidy and hidden, we make a new directory
-// in `target`.
-// const TEST_TMP: &str = "../target/testdata/";
-
 // NOTE: We filter out the "Blocking: waiting for file lock" lines, as they are
 // printed out non-deterministically when there is file contention.
 fn filter_blocking_lines(stderr: &[u8]) -> String {
@@ -151,8 +146,8 @@ fn test_project() {
         .arg("vet")
         .arg("--manifest-path")
         .arg("Cargo.toml")
-        .arg("--diff-cache")
-        .arg("../diff-cache.toml")
+        .arg("--cache-dir")
+        .arg("../cache")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -173,8 +168,8 @@ fn test_project_json() {
         .arg("vet")
         .arg("--manifest-path")
         .arg("Cargo.toml")
-        .arg("--diff-cache")
-        .arg("../diff-cache.toml")
+        .arg("--cache-dir")
+        .arg("../cache")
         .arg("--output-format=json")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -195,8 +190,8 @@ fn test_project_suggest() {
         .current_dir(&project)
         .arg("vet")
         .arg("suggest")
-        .arg("--diff-cache")
-        .arg("../diff-cache.toml")
+        .arg("--cache-dir")
+        .arg("../cache")
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .stdout(Stdio::piped())
@@ -218,8 +213,8 @@ fn test_project_suggest_json() {
         .current_dir(&project)
         .arg("vet")
         .arg("suggest")
-        .arg("--diff-cache")
-        .arg("../diff-cache.toml")
+        .arg("--cache-dir")
+        .arg("../cache")
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--output-format=json")
@@ -242,8 +237,8 @@ fn test_project_dump_graph_full_json() {
         .current_dir(&project)
         .arg("vet")
         .arg("dump-graph")
-        .arg("--diff-cache")
-        .arg("../diff-cache.toml")
+        .arg("--cache-dir")
+        .arg("../cache")
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--output-format=json")
@@ -267,8 +262,8 @@ fn test_project_dump_graph_full() {
         .current_dir(&project)
         .arg("vet")
         .arg("dump-graph")
-        .arg("--diff-cache")
-        .arg("../diff-cache.toml")
+        .arg("--cache-dir")
+        .arg("../cache")
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--depth=full")
@@ -291,6 +286,8 @@ fn test_project_bad_certify_human() {
         .current_dir(&project)
         .arg("vet")
         .arg("certify")
+        .arg("--cache-dir")
+        .arg("../cache")
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("asdfsdfs")
@@ -313,6 +310,8 @@ fn test_project_bad_certify_json() {
         .current_dir(&project)
         .arg("vet")
         .arg("certify")
+        .arg("--cache-dir")
+        .arg("../cache")
         .arg("--output-format=json")
         .arg("--manifest-path")
         .arg("Cargo.toml")
@@ -339,6 +338,8 @@ fn test_project_diff_output() {
         .current_dir(&project)
         .arg("vet")
         .arg("diff")
+        .arg("--cache-dir")
+        .arg("../cache")
         .arg("--mode")
         .arg("local")
         .arg("syn")
@@ -370,6 +371,8 @@ fn test_project_diff_output_git() {
         .current_dir(&project)
         .arg("vet")
         .arg("diff")
+        .arg("--cache-dir")
+        .arg("../cache")
         .arg("--mode")
         .arg("local")
         .arg("proc-macro2")

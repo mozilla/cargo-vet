@@ -309,10 +309,11 @@ fn real_main() -> Result<(), miette::Report> {
     // Potentially handle freestanding commands
     ////////////////////////////////////////////////////
 
-    // TODO: make this configurable
-    let cache_dir = dirs::cache_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join(CACHE_DIR_SUFFIX);
+    let cache_dir = cli.cache_dir.clone().unwrap_or_else(|| {
+        dirs::cache_dir()
+            .unwrap_or_else(std::env::temp_dir)
+            .join(CACHE_DIR_SUFFIX)
+    });
     let partial_cfg = PartialConfig {
         cli,
         cache_dir,

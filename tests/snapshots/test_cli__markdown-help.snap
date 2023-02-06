@@ -74,12 +74,12 @@ The format of the output
 \[default: human]  
 \[possible values: human, json]  
 
-#### `--diff-cache <DIFF_CACHE>`
-Use the following path as the diff-cache
+#### `--cache-dir <CACHE_DIR>`
+Use the following path instead of the global cache directory
 
-The diff-cache stores the summary results used by vet's suggestion machinery. This is
-automatically managed in vet's tempdir, but if you want to manually store it somewhere
-more reliable, you can.
+The cache stores information such as the summary results used by vet's suggestion
+machinery, cached results from crates.io APIs, and checkouts of crates from crates.io in
+some cases. This is generally automatically managed in the system cache directory.
 
 This mostly exists for testing vet itself.
 

@@ -1,0 +1,4 @@
+# Don't check in anything in the testing cache directory other than
+# diff-cache.toml
+cache/*
+!cache/diff-cache.toml
