@@ -254,31 +254,21 @@ impl Store {
     }
 
     /// Create a mock store, also mocking out the unlocked import fetching
-    /// process by providing the live values of imported AuditsFiles.
+    /// process by providing a mocked `Network` instance.
     #[cfg(test)]
     pub fn mock_online(
         config: ConfigFile,
         audits: AuditsFile,
         imports: ImportsFile,
-        fetched_audits: Vec<(ImportName, AuditsFile)>,
+        network: &Network,
         allow_criteria_changes: bool,
-    ) -> Result<Self, CriteriaChangeErrors> {
-        // For extra checking of import serialization, serialize the fetched
-        // audits, convert them to a ForeignAuditsFile, and then deserialize
-        // them back into an AuditsFile to ensure they round-trip through
-        // that process successfully, as the parsing codepaths are different.
-        for (_, original_file) in &fetched_audits {
-            let orig_toml = to_formatted_toml(original_file).unwrap().to_string();
-            let result = foreign_audit_file_to_local(toml::de::from_str(&orig_toml).unwrap());
-            assert_eq!(result.ignored_criteria, Vec::<String>::new());
-            assert_eq!(result.ignored_audits, Vec::<String>::new());
-            let new_toml = to_formatted_toml(&result.audit_file).unwrap().to_string();
-            assert_eq!(new_toml, orig_toml);
-        }
-
+    ) -> Result<Self, StoreAcquireError> {
+        let fetched_audits =
+            tokio::runtime::Handle::current().block_on(fetch_imported_audits(network, &config))?;
         let live_imports =
             process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
-        Ok(Self {
+
+        let store = Self {
             lock: None,
             config,
             imports,
@@ -287,7 +277,11 @@ impl Store {
             config_src: SourceFile::new_empty(CONFIG_TOML),
             audits_src: SourceFile::new_empty(AUDITS_TOML),
             imports_src: SourceFile::new_empty(IMPORTS_LOCK),
-        })
+        };
+
+        store.validate(false)?;
+
+        Ok(store)
     }
 
     #[cfg(test)]

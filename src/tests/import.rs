@@ -1,3 +1,5 @@
+use crate::network::Network;
+
 use super::*;
 
 // Helper function for imports tests. Performs a vet and updates imports based
@@ -83,17 +85,11 @@ fn new_peer_import() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![
-            (FOREIGN.to_owned(), new_foreign_audits),
-            (OTHER_FOREIGN.to_owned(), new_other_foreign_audits),
-        ],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+    network.mock_serve_toml(OTHER_FOREIGN_URL, &new_other_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -143,14 +139,10 @@ fn existing_peer_skip_import() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -204,14 +196,10 @@ fn existing_peer_remove_unused() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -304,17 +292,11 @@ fn existing_peer_import_delta_audit() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![
-            (FOREIGN.to_owned(), new_foreign_audits),
-            (OTHER_FOREIGN.to_owned(), new_other_foreign_audits),
-        ],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+    network.mock_serve_toml(OTHER_FOREIGN_URL, &new_other_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -371,14 +353,10 @@ fn existing_peer_import_custom_criteria() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
 
@@ -429,14 +407,10 @@ fn new_audit_for_unused_criteria_basic() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
 
@@ -491,14 +465,10 @@ fn new_audit_for_unused_criteria_transitive() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
 
@@ -545,14 +515,10 @@ fn existing_peer_revoked_audit() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -608,14 +574,10 @@ fn existing_peer_add_violation() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -659,14 +621,10 @@ fn peer_audits_exemption_no_minimize() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -710,14 +668,10 @@ fn peer_audits_exemption_minimize() {
         },
     );
 
-    let mut store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let mut store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     // Capture the old imports before minimizing exemptions
     let old = store.mock_commit();
@@ -780,14 +734,10 @@ fn peer_audits_import_exclusion() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let imported = store
         .imported_audits()
@@ -864,13 +814,10 @@ fn existing_peer_updated_description() {
         },
     );
 
-    let error = match Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        false,
-    ) {
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let error = match Store::mock_online(config, audits, imports, &network, false) {
         Ok(_) => panic!("expected store creation to fail due to updated criteria"),
         Err(err) => miette::Report::from(err),
     };
@@ -928,17 +875,11 @@ fn fresh_import_preferred_audits() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![
-            (FOREIGN.to_owned(), new_foreign_audits),
-            (OTHER_FOREIGN.to_owned(), new_other_foreign_audits),
-        ],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+    network.mock_serve_toml(OTHER_FOREIGN_URL, &new_other_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -1001,17 +942,11 @@ fn old_import_preferred_audits() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![
-            (FOREIGN.to_owned(), new_foreign_audits),
-            (OTHER_FOREIGN.to_owned(), new_other_foreign_audits),
-        ],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+    network.mock_serve_toml(OTHER_FOREIGN_URL, &new_other_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -1054,14 +989,10 @@ fn equal_length_preferred_audits() {
         },
     );
 
-    let store = Store::mock_online(
-        config,
-        audits,
-        imports,
-        vec![(FOREIGN.to_owned(), new_foreign_audits)],
-        true,
-    )
-    .unwrap();
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);

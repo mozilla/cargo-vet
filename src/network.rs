@@ -15,16 +15,55 @@ use std::{
 };
 
 use base64_stream::FromBase64Writer;
-use reqwest::{Client, Response, Url};
+use bytes::Bytes;
+use reqwest::{Client, Url};
 use tokio::io::AsyncWriteExt;
 
 use crate::{errors::DownloadError, PartialConfig};
+
+/// Wrapper for the pair of a `reqwest::Response` and the `SemaphorePermit` used
+/// to limit concurrent connections, with a test-only variant for mocking.
+enum Response<'a> {
+    Real(reqwest::Response, tokio::sync::SemaphorePermit<'a>),
+    #[cfg(test)]
+    Mock(Option<Bytes>),
+}
+
+impl Response<'_> {
+    fn has_header(&self, name: &str) -> bool {
+        match self {
+            Response::Real(response, _) => response.headers().contains_key(name),
+            #[cfg(test)]
+            Response::Mock(_) => false,
+        }
+    }
+
+    /// Get the next chunk in the response stream, or `None` if at the end of
+    /// the stream.
+    async fn chunk(&mut self) -> Result<Option<Bytes>, DownloadError> {
+        match self {
+            Response::Real(res, _) => {
+                res.chunk()
+                    .await
+                    .map_err(|error| DownloadError::FailedToReadDownload {
+                        url: Box::new(res.url().clone()),
+                        error,
+                    })
+            }
+            #[cfg(test)]
+            Response::Mock(data) => Ok(data.take()),
+        }
+    }
+}
 
 pub struct Network {
     /// The HTTP client all requests go through
     client: Client,
     /// Semaphore preventing exceeding the maximum number of connections.
     connection_semaphore: tokio::sync::Semaphore,
+    /// Test-only override for download requests.
+    #[cfg(test)]
+    mock_network: Option<std::collections::HashMap<Url, Bytes>>,
 }
 
 static DEFAULT_TIMEOUT_SECS: u64 = 60;
@@ -44,9 +83,9 @@ pub enum PayloadEncoding {
 }
 
 impl PayloadEncoding {
-    pub fn for_response(response: &Response) -> Self {
+    fn for_response(response: &Response) -> Self {
         // gitiles always encodes content in base64
-        if response.headers().contains_key("x-gitiles-object-type") {
+        if response.has_header("x-gitiles-object-type") {
             Self::Base64
         } else {
             Self::Plaintext
@@ -89,6 +128,8 @@ impl Network {
             Some(Self {
                 client,
                 connection_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS),
+                #[cfg(test)]
+                mock_network: None,
             })
         }
     }
@@ -104,22 +145,7 @@ impl Network {
             OsStr::new(".part"),
         ]));
         {
-            let _permit = self
-                .connection_semaphore
-                .acquire()
-                .await
-                .expect("Semaphore dropped?!");
-
-            let mut res = self
-                .client
-                .get(url.clone())
-                .send()
-                .await
-                .and_then(|res| res.error_for_status())
-                .map_err(|error| DownloadError::FailedToStartDownload {
-                    url: Box::new(url.clone()),
-                    error,
-                })?;
+            let mut res = self.fetch_core(url).await?;
 
             let mut download_tmp =
                 tokio::fs::File::create(&download_tmp_path)
@@ -129,22 +155,13 @@ impl Network {
                         error,
                     })?;
 
-            while let Some(chunk) =
-                res.chunk()
-                    .await
-                    .map_err(|error| DownloadError::FailedToReadDownload {
-                        url: Box::new(url.clone()),
-                        error,
-                    })?
-            {
-                let network_bytes = &chunk[..];
-                download_tmp
-                    .write_all(network_bytes)
-                    .await
-                    .map_err(|error| DownloadError::FailedToWriteDownload {
+            while let Some(chunk) = res.chunk().await? {
+                download_tmp.write_all(&chunk[..]).await.map_err(|error| {
+                    DownloadError::FailedToWriteDownload {
                         target: download_tmp_path.clone(),
                         error,
-                    })?;
+                    }
+                })?;
             }
         }
 
@@ -165,13 +182,51 @@ impl Network {
 
     /// Download a file into memory
     pub async fn download(&self, url: Url) -> Result<Vec<u8>, DownloadError> {
-        let _permit = self
+        let mut res = self.fetch_core(url).await?;
+
+        let encoding = PayloadEncoding::for_response(&res);
+
+        let mut output = vec![];
+        {
+            let mut writer = encoding.to_plaintext(&mut output);
+            while let Some(chunk) = res.chunk().await? {
+                writer
+                    .write_all(&chunk[..])
+                    .map_err(|error| DownloadError::InvalidEncoding { encoding, error })?;
+            }
+            writer
+                .flush()
+                .map_err(|error| DownloadError::InvalidEncoding { encoding, error })?;
+        }
+        Ok(output)
+    }
+
+    /// Internal core implementation of network fetching which is shared between
+    /// `download` and `download_and_persist`.
+    async fn fetch_core(&self, url: Url) -> Result<Response, DownloadError> {
+        #[cfg(test)]
+        if let Some(mock_network) = &self.mock_network {
+            let chunk = mock_network
+                .get(&url)
+                .cloned()
+                // The error is complete nonsense, but this is test-only.
+                .ok_or(DownloadError::FailedToWriteDownload {
+                    target: url.to_string().into(),
+                    error: std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("mock network does not support URL: {url}"),
+                    ),
+                })?;
+            return Ok(Response::Mock(Some(chunk)));
+        }
+
+        let permit = self
             .connection_semaphore
             .acquire()
             .await
             .expect("Semaphore dropped?!");
 
-        let mut res = self
+        let res = self
             .client
             .get(url.clone())
             .send()
@@ -182,28 +237,40 @@ impl Network {
                 error,
             })?;
 
-        let encoding = PayloadEncoding::for_response(&res);
+        Ok(Response::Real(res, permit))
+    }
+}
 
-        let mut output = vec![];
-        {
-            let mut writer = encoding.to_plaintext(&mut output);
-            while let Some(chunk) =
-                res.chunk()
-                    .await
-                    .map_err(|error| DownloadError::FailedToReadDownload {
-                        url: Box::new(url.clone()),
-                        error,
-                    })?
-            {
-                writer
-                    .write_all(&chunk[..])
-                    .map_err(|error| DownloadError::InvalidEncoding { encoding, error })?;
-            }
-            writer
-                .flush()
-                .map_err(|error| DownloadError::InvalidEncoding { encoding, error })?;
+#[cfg(test)]
+impl Network {
+    /// Create a new Network which is serving mocked out resources.
+    pub(crate) fn new_mock() -> Self {
+        Network {
+            client: Client::new(),
+            connection_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS),
+            #[cfg(test)]
+            mock_network: Some(Default::default()),
         }
+    }
 
-        Ok(output)
+    /// Add a new resource to be served by a mocked-out network.
+    pub(crate) fn mock_serve(&mut self, url: impl AsRef<str>, data: impl AsRef<[u8]>) {
+        self.mock_network
+            .as_mut()
+            .expect("not a mock network")
+            .insert(
+                url.as_ref().parse().unwrap(),
+                Bytes::copy_from_slice(data.as_ref()),
+            );
+    }
+
+    /// Add a new toml resource to be served by a mocked-out network.
+    pub(crate) fn mock_serve_toml(&mut self, url: impl AsRef<str>, data: &impl serde::Serialize) {
+        self.mock_serve(
+            url,
+            crate::serialization::to_formatted_toml(data)
+                .unwrap()
+                .to_string(),
+        );
     }
 }
