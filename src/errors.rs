@@ -11,6 +11,7 @@ use miette::{Diagnostic, MietteSpanContents, SourceCode, SourceOffset, SourceSpa
 use thiserror::Error;
 
 use crate::format::{CriteriaName, ForeignCriteriaName, ImportName, PackageName};
+use crate::network::PayloadEncoding;
 
 #[derive(Eq, PartialEq)]
 struct SourceFileInner {
@@ -676,9 +677,9 @@ pub enum DownloadError {
         #[source]
         error: FromUtf8Error,
     },
-    #[error("download decoding error for {encoding}")]
+    #[error("download encoding ({encoding}) error")]
     InvalidEncoding {
-        encoding: String,
+        encoding: PayloadEncoding,
         #[source]
         error: std::io::Error,
     },
