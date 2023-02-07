@@ -15,7 +15,7 @@ use std::{
 };
 
 use base64_stream::FromBase64Writer;
-use reqwest::{Client, Url};
+use reqwest::{Client, Response, Url};
 use tokio::io::AsyncWriteExt;
 
 use crate::{errors::DownloadError, PartialConfig};
@@ -31,51 +31,43 @@ static DEFAULT_TIMEOUT_SECS: u64 = 60;
 
 const MAX_CONCURRENT_CONNECTIONS: usize = 40;
 
-/// Payload decoder type handling multiple encodings.
+/// The network payload encoding.
 ///
 /// This is only used in `download` (not `download_and_persist`) because (for now) it's only needed
 /// in downloading imports (not packages, which is what `download_and_persist` is used for) to
 /// workaround known server shortcomings. It could be added to `download_and_persist`, but due to
 /// the use of `tokio::io::File` it gets messy and either this or that would need a refactor.
-enum PayloadDecoder<W: Write> {
-    Plaintext { inner: W },
-    Base64 { inner: FromBase64Writer<W> },
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PayloadEncoding {
+    Plaintext,
+    Base64,
 }
 
-impl<W: Write> PayloadDecoder<W> {
-    /// Create a new decoder based on the response.
-    pub fn new(response: &reqwest::Response, target: W) -> Self {
+impl From<&Response> for PayloadEncoding {
+    fn from(response: &Response) -> Self {
         // gitiles always encodes content in base64
         if response.headers().contains_key("x-gitiles-object-type") {
-            Self::Base64 {
-                inner: FromBase64Writer::new(target),
-            }
+            Self::Base64
         } else {
-            Self::Plaintext { inner: target }
-        }
-    }
-
-    /// Get the encoding name that is decoded.
-    pub fn encoding_name(&self) -> &'static str {
-        match self {
-            Self::Plaintext { .. } => "plaintext",
-            Self::Base64 { .. } => "base64",
+            Self::Plaintext
         }
     }
 }
 
-impl<W: Write> Write for PayloadDecoder<W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+impl PayloadEncoding {
+    pub fn to_plaintext<'a, W: Write + 'a>(&self, target: W) -> Box<dyn Write + 'a> {
         match self {
-            Self::Plaintext { inner } => inner.write(buf),
-            Self::Base64 { inner } => inner.write(buf),
+            Self::Plaintext => Box::new(target),
+            Self::Base64 => Box::new(FromBase64Writer::new(target)),
         }
     }
+}
 
-    fn flush(&mut self) -> std::io::Result<()> {
+impl std::fmt::Display for PayloadEncoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Plaintext { inner } => inner.flush(),
-            Self::Base64 { inner } => inner.flush(),
+            Self::Plaintext => write!(f, "plaintext"),
+            Self::Base64 => write!(f, "base64"),
         }
     }
 }
@@ -192,9 +184,11 @@ impl Network {
                 error,
             })?;
 
+        let encoding = PayloadEncoding::from(&res);
+
         let mut output = vec![];
         {
-            let mut payload_decoder = PayloadDecoder::new(&res, &mut output);
+            let mut writer = encoding.to_plaintext(&mut output);
             while let Some(chunk) =
                 res.chunk()
                     .await
@@ -203,19 +197,13 @@ impl Network {
                         error,
                     })?
             {
-                payload_decoder.write_all(&chunk[..]).map_err(|error| {
-                    DownloadError::InvalidEncoding {
-                        encoding: payload_decoder.encoding_name().into(),
-                        error,
-                    }
-                })?;
+                writer
+                    .write_all(&chunk[..])
+                    .map_err(|error| DownloadError::InvalidEncoding { encoding, error })?;
             }
-            payload_decoder
+            writer
                 .flush()
-                .map_err(|error| DownloadError::InvalidEncoding {
-                    encoding: payload_decoder.encoding_name().into(),
-                    error,
-                })?;
+                .map_err(|error| DownloadError::InvalidEncoding { encoding, error })?;
         }
 
         Ok(output)
