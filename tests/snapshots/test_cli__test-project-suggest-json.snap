@@ -434,13 +434,6 @@ stdout:
       ]
     },
     {
-      "name": "serde",
-      "version": "1.0.136",
-      "missing_criteria": [
-        "safe-to-deploy"
-      ]
-    },
-    {
       "name": "serde_json",
       "version": "1.0.79",
       "missing_criteria": [
@@ -1947,22 +1940,6 @@ stdout:
             "insertions": 14603,
             "deletions": 0,
             "files_changed": 31
-          }
-        }
-      },
-      {
-        "name": "serde",
-        "notable_parents": "reqwest, serde_json, serde_urlencoded",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "1.0.136",
-          "diffstat": {
-            "insertions": 16141,
-            "deletions": 0,
-            "files_changed": 27
           }
         }
       },
@@ -3522,22 +3499,6 @@ stdout:
           }
         },
         {
-          "name": "serde",
-          "notable_parents": "reqwest, serde_json, serde_urlencoded",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "1.0.136",
-            "diffstat": {
-              "insertions": 16141,
-              "deletions": 0,
-              "files_changed": 27
-            }
-          }
-        },
-        {
           "name": "url",
           "notable_parents": "reqwest",
           "suggested_criteria": [
@@ -3877,7 +3838,7 @@ stdout:
         }
       ]
     },
-    "total_lines": 1739832
+    "total_lines": 1723691
   }
 }
 stderr:

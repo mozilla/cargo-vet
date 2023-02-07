@@ -1,4 +1,9 @@
 
 # cargo-vet imports lock
 
-[audits]
+[[publisher.serde]]
+version = "1.0.136"
+when = "2022-01-25"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"

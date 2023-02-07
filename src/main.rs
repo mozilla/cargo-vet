@@ -507,11 +507,13 @@ pub fn init_files(
     // Default audits file is empty
     let audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
     // Default imports file is empty
     let imports = ImportsFile {
+        publisher: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
@@ -1670,6 +1672,7 @@ fn do_aggregate_audits(sources: Vec<(String, AuditsFile)>) -> Result<AuditsFile,
     let mut errors = Vec::new();
     let mut aggregate = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
@@ -1748,6 +1751,16 @@ fn do_aggregate_audits(sources: Vec<(String, AuditsFile)>) -> Result<AuditsFile,
                 .extend(audits.into_iter().map(|mut audit_entry| {
                     audit_entry.aggregated_from.push(source.clone().into());
                     audit_entry
+                }));
+        }
+        for (package_name, audits) in audit_file.wildcard_audits {
+            aggregate
+                .wildcard_audits
+                .entry(package_name)
+                .or_default()
+                .extend(audits.into_iter().map(|mut wildcard_entry| {
+                    wildcard_entry.aggregated_from.push(source.clone().into());
+                    wildcard_entry
                 }));
         }
     }

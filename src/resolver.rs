@@ -275,9 +275,9 @@ pub struct ResolveResult<'a> {
     pub audit_graph: AuditGraph<'a>,
     /// Cache of search results for each criteria.
     pub search_results: Vec<Result<Vec<DeltaEdgeOrigin>, SearchFailure>>,
-    /// Which edges which were used to satisfy required criteria, or `None` if
-    /// the package failed to vet.
-    pub required_edges: Option<SortedSet<DeltaEdgeOrigin>>,
+    /// Entries which were used to satisfy required criteria, or `None` if the
+    /// package failed to vet.
+    pub required_entries: Option<SortedSet<RequiredEntry>>,
 }
 
 #[derive(Debug, Clone)]
@@ -338,8 +338,34 @@ pub enum DeltaEdgeOrigin {
         import_index: usize,
         audit_index: usize,
     },
+    /// This edge represents a reified wildcard audit.
+    WildcardAudit {
+        import_index: Option<usize>,
+        audit_index: usize,
+        publisher_index: usize,
+    },
     /// This edge represents an exemption from the local config.toml.
     Exemption { exemption_index: usize },
+}
+
+/// An indication of a required imported entry or exemption. Used to compute the
+/// minimal set of possible imports for imports.lock.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum RequiredEntry {
+    Audit {
+        import_index: usize,
+        audit_index: usize,
+    },
+    WildcardAudit {
+        import_index: usize,
+        audit_index: usize,
+    },
+    Publisher {
+        publisher_index: usize,
+    },
+    Exemption {
+        exemption_index: usize,
+    },
 }
 
 /// A directed edge in the graph of audits. This may be forward or backwards,
@@ -1282,16 +1308,44 @@ fn resolve_audits<'a>(
                 }
             }
 
-            let required_edges = if criteria_failures.is_empty() {
+            let required_entries = if criteria_failures.is_empty() {
                 // Only collect required edges from minimal_indices as those
                 // edges will be sufficient for a full audit.
-                Some(
-                    criteria_mapper
-                        .minimal_indices(required_criteria)
-                        .flat_map(|criteria_idx| search_results[criteria_idx].as_ref().unwrap())
-                        .cloned()
-                        .collect(),
-                )
+                let mut required_entries = SortedSet::new();
+                for &origin in criteria_mapper
+                    .minimal_indices(required_criteria)
+                    .flat_map(|criteria_idx| search_results[criteria_idx].as_ref().unwrap())
+                {
+                    match origin {
+                        DeltaEdgeOrigin::Exemption { exemption_index } => {
+                            required_entries.insert(RequiredEntry::Exemption { exemption_index });
+                        }
+                        DeltaEdgeOrigin::ImportedAudit {
+                            import_index,
+                            audit_index,
+                        } => {
+                            required_entries.insert(RequiredEntry::Audit {
+                                import_index,
+                                audit_index,
+                            });
+                        }
+                        DeltaEdgeOrigin::WildcardAudit {
+                            import_index,
+                            audit_index,
+                            publisher_index,
+                        } => {
+                            if let Some(import_index) = import_index {
+                                required_entries.insert(RequiredEntry::WildcardAudit {
+                                    import_index,
+                                    audit_index,
+                                });
+                            }
+                            required_entries.insert(RequiredEntry::Publisher { publisher_index });
+                        }
+                        DeltaEdgeOrigin::StoredLocalAudit { .. } => {}
+                    }
+                }
+                Some(required_entries)
             } else {
                 failures.push((pkgidx, AuditFailure { criteria_failures }));
                 None
@@ -1310,7 +1364,7 @@ fn resolve_audits<'a>(
             Some(ResolveResult {
                 audit_graph,
                 search_results,
-                required_edges,
+                required_entries,
             })
         })
         .collect();
@@ -1350,32 +1404,26 @@ impl<'a> AuditGraph<'a> {
             .map(|import_name| CriteriaNamespace::Foreign(import_name.clone()))
             .collect();
 
-        // Each of our own audits should be put into the "local" criteria namespace.
-        let own_audits = store
-            .audits
-            .audits
-            .get(package)
-            .map(|v| &v[..])
-            .unwrap_or(&[])
-            .iter()
+        // Iterator over every audits file, including imported audits.
+        let all_audits_files = store
+            .imported_audits()
+            .values()
             .enumerate()
-            .map(|(audit_index, audit)| {
+            .map(|(import_index, audits_file)| {
                 (
-                    &CriteriaNamespace::Local,
-                    DeltaEdgeOrigin::StoredLocalAudit { audit_index },
-                    audit,
+                    Some(import_index),
+                    &foreign_namespaces[import_index],
+                    audits_file,
                 )
-            });
+            })
+            .chain([(None, &CriteriaNamespace::Local, &store.audits)]);
 
-        // Each foreign audit should be put into a "foreign" criteria namespace.
-        let foreign_audits =
-            store
-                .imported_audits()
-                .values()
-                .enumerate()
-                .flat_map(|(import_index, audits)| {
-                    let namespace = &foreign_namespaces[import_index];
-                    audits
+        // Iterator over every normal audit.
+        let all_audits =
+            all_audits_files
+                .clone()
+                .flat_map(|(import_index, namespace, audits_file)| {
+                    audits_file
                         .audits
                         .get(package)
                         .map(|v| &v[..])
@@ -1385,16 +1433,41 @@ impl<'a> AuditGraph<'a> {
                         .map(move |(audit_index, audit)| {
                             (
                                 namespace,
-                                DeltaEdgeOrigin::ImportedAudit {
-                                    import_index,
-                                    audit_index,
+                                match import_index {
+                                    Some(import_index) => DeltaEdgeOrigin::ImportedAudit {
+                                        import_index,
+                                        audit_index,
+                                    },
+                                    None => DeltaEdgeOrigin::StoredLocalAudit { audit_index },
                                 },
                                 audit,
                             )
                         })
                 });
 
-        let all_audits = own_audits.chain(foreign_audits);
+        // Iterator over every wildcard audit.
+        let all_wildcard_audits =
+            all_audits_files
+                .clone()
+                .flat_map(|(import_index, namespace, audits_file)| {
+                    audits_file
+                        .wildcard_audits
+                        .get(package)
+                        .map(|v| &v[..])
+                        .unwrap_or(&[])
+                        .iter()
+                        .enumerate()
+                        .map(move |(audit_index, audit)| {
+                            (namespace, import_index, audit_index, audit)
+                        })
+                });
+
+        let publishers = store
+            .publishers()
+            .get(package)
+            .map(|v| &v[..])
+            .unwrap_or(&[]);
+
         let exemptions = store.config.exemptions.get(package);
 
         let mut forward_audits = DirectedAuditGraph::new();
@@ -1430,6 +1503,42 @@ impl<'a> AuditGraph<'a> {
                     origin,
                     is_fresh_import: entry.is_fresh_import,
                 });
+        }
+
+        // For each published version of the crate we're aware of, check if any
+        // wildcard audits apply and add full-audits to those versions if they
+        // do.
+        for (publisher_index, publisher) in publishers.iter().enumerate() {
+            for (namespace, import_index, audit_index, entry) in all_wildcard_audits.clone() {
+                if entry.user_id == publisher.user_id
+                    && *entry.start <= publisher.when
+                    && publisher.when < *entry.end
+                {
+                    let from_ver = None;
+                    let to_ver = Some(&publisher.version);
+                    let criteria =
+                        criteria_mapper.criteria_from_namespaced_list(namespace, &entry.criteria);
+                    let origin = DeltaEdgeOrigin::WildcardAudit {
+                        import_index,
+                        audit_index,
+                        publisher_index,
+                    };
+                    let is_fresh_import = entry.is_fresh_import || publisher.is_fresh_import;
+
+                    forward_audits.entry(from_ver).or_default().push(DeltaEdge {
+                        version: to_ver,
+                        criteria: criteria.clone(),
+                        origin,
+                        is_fresh_import,
+                    });
+                    backward_audits.entry(to_ver).or_default().push(DeltaEdge {
+                        version: from_ver,
+                        criteria,
+                        origin,
+                        is_fresh_import,
+                    });
+                }
+            }
         }
 
         // Exempted entries are equivalent to full-audits

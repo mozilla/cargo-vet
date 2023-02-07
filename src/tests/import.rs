@@ -36,6 +36,7 @@ fn new_peer_import() {
 
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [
             (
                 "third-party2".to_owned(),
@@ -52,11 +53,13 @@ fn new_peer_import() {
 
     let old_other_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
     let new_other_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -85,11 +88,13 @@ fn new_peer_import() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
     network.mock_serve_toml(OTHER_FOREIGN_URL, &new_other_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -108,11 +113,13 @@ fn existing_peer_skip_import() {
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [
             (
                 "third-party2".to_owned(),
@@ -139,10 +146,12 @@ fn existing_peer_skip_import() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -163,6 +172,7 @@ fn existing_peer_remove_unused() {
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [
             (
                 "third-party2".to_owned(),
@@ -196,10 +206,12 @@ fn existing_peer_remove_unused() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -220,6 +232,7 @@ fn existing_peer_import_delta_audit() {
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
             vec![full_audit(ver(9), SAFE_TO_DEPLOY)],
@@ -230,6 +243,7 @@ fn existing_peer_import_delta_audit() {
 
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [
             // A new audit for third-party2 should fix our audit, so we should
             // import it, but not other useless audits.
@@ -254,11 +268,13 @@ fn existing_peer_import_delta_audit() {
 
     let old_other_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
     let new_other_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         // We won't import unrelated audits from other sources.
         audits: [(
             "third-party2".to_owned(),
@@ -292,11 +308,13 @@ fn existing_peer_import_delta_audit() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
     network.mock_serve_toml(OTHER_FOREIGN_URL, &new_other_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -318,6 +336,7 @@ fn existing_peer_import_custom_criteria() {
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -330,6 +349,7 @@ fn existing_peer_import_custom_criteria() {
         criteria: [("fuzzed".to_string(), criteria("fuzzed"))]
             .into_iter()
             .collect(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
             vec![
@@ -353,10 +373,12 @@ fn existing_peer_import_custom_criteria() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
 
@@ -380,6 +402,7 @@ fn new_audit_for_unused_criteria_basic() {
         criteria: [("fuzzed".to_string(), criteria("fuzzed"))]
             .into_iter()
             .collect(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -407,10 +430,12 @@ fn new_audit_for_unused_criteria_basic() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
 
@@ -434,6 +459,7 @@ fn new_audit_for_unused_criteria_transitive() {
         criteria: [("fuzzed".to_string(), criteria("fuzzed"))]
             .into_iter()
             .collect(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party1".to_owned(),
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -465,10 +491,12 @@ fn new_audit_for_unused_criteria_transitive() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
 
@@ -490,6 +518,7 @@ fn existing_peer_revoked_audit() {
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -500,6 +529,7 @@ fn existing_peer_revoked_audit() {
 
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
@@ -515,10 +545,12 @@ fn existing_peer_revoked_audit() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -540,6 +572,7 @@ fn existing_peer_add_violation() {
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -550,6 +583,7 @@ fn existing_peer_add_violation() {
 
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
             vec![
@@ -574,10 +608,12 @@ fn existing_peer_add_violation() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -596,11 +632,13 @@ fn peer_audits_exemption_no_minimize() {
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -621,10 +659,12 @@ fn peer_audits_exemption_no_minimize() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -643,11 +683,13 @@ fn peer_audits_exemption_minimize() {
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -668,10 +710,12 @@ fn peer_audits_exemption_minimize() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let mut store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     // Capture the old imports before minimizing exemptions
     let old = store.mock_commit();
@@ -701,6 +745,7 @@ fn peer_audits_import_exclusion() {
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: [
             (
                 "third-party2".to_owned(),
@@ -734,10 +779,12 @@ fn peer_audits_import_exclusion() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let imported = store
         .imported_audits()
@@ -784,6 +831,7 @@ fn existing_peer_updated_description() {
         )]
         .into_iter()
         .collect(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
@@ -799,6 +847,7 @@ fn existing_peer_updated_description() {
         )]
         .into_iter()
         .collect(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
@@ -814,10 +863,12 @@ fn existing_peer_updated_description() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let error = match Store::mock_online(config, audits, imports, &network, false) {
+    let error = match Store::mock_online(&cfg, config, audits, imports, &network, false) {
         Ok(_) => panic!("expected store creation to fail due to updated criteria"),
         Err(err) => miette::Report::from(err),
     };
@@ -848,6 +899,7 @@ fn fresh_import_preferred_audits() {
         )]
         .into_iter()
         .collect(),
+        wildcard_audits: SortedMap::new(),
     };
 
     let new_other_foreign_audits = AuditsFile {
@@ -858,6 +910,7 @@ fn fresh_import_preferred_audits() {
         )]
         .into_iter()
         .collect(),
+        wildcard_audits: SortedMap::new(),
     };
 
     config.imports.insert(
@@ -875,11 +928,13 @@ fn fresh_import_preferred_audits() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
     network.mock_serve_toml(OTHER_FOREIGN_URL, &new_other_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -909,6 +964,7 @@ fn old_import_preferred_audits() {
         )]
         .into_iter()
         .collect(),
+        wildcard_audits: SortedMap::new(),
     };
 
     let new_foreign_audits = old_foreign_audits.clone();
@@ -921,6 +977,7 @@ fn old_import_preferred_audits() {
         )]
         .into_iter()
         .collect(),
+        wildcard_audits: SortedMap::new(),
     };
 
     imports
@@ -942,11 +999,13 @@ fn old_import_preferred_audits() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
     network.mock_serve_toml(OTHER_FOREIGN_URL, &new_other_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -979,6 +1038,7 @@ fn equal_length_preferred_audits() {
         )]
         .into_iter()
         .collect(),
+        wildcard_audits: SortedMap::new(),
     };
 
     config.imports.insert(
@@ -989,10 +1049,12 @@ fn equal_length_preferred_audits() {
         },
     );
 
+    let cfg = mock_cfg(&metadata);
+
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let store = Store::mock_online(config, audits, imports, &network, true).unwrap();
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes(&metadata, &store);
     insta::assert_snapshot!(output);
@@ -1038,6 +1100,49 @@ fn foreign_audit_file_to_local() {
                     implies = "safe-to-deploy"
                     unknown = "invalid unknown field"
                 },
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        wildcard_audits: [
+            (
+                "crate-a".to_string(),
+                vec![toml::toml! {
+                    criteria = "safe-to-deploy"
+                    user-id = 1
+                    start = "2022-12-25"
+                    end = "2023-12-25"
+                    notes = "should parse correctly"
+                }],
+            ),
+            (
+                "crate-b".to_string(),
+                vec![toml::toml! {
+                    criteria = "example"
+                    user-id = "invalid"
+                    start = "2022-12-25"
+                    end = "2023-12-25"
+                    notes = "will be removed, along with the entire crate"
+                }],
+            ),
+            (
+                "crate-c".to_string(),
+                vec![
+                    toml::toml! {
+                        criteria = "example2"
+                        user-id = 1
+                        start = "2022-12-25"
+                        end = "2023-12-25"
+                        notes = "will not be removed"
+                    },
+                    toml::toml! {
+                        criteria = ["example2", "example3"]
+                        user-id = 1
+                        start = "2022-12-25"
+                        end = "2023-12-25"
+                        notes = "will not be removed"
+                    },
+                ],
             ),
         ]
         .into_iter()
@@ -1126,7 +1231,7 @@ fn foreign_audit_file_to_local() {
     );
     assert_eq!(
         result.ignored_audits,
-        &["crate-a", "crate-a", "crate-a", "crate-a", "crate-a", "crate-b"]
+        &["crate-a", "crate-a", "crate-a", "crate-a", "crate-a", "crate-b", "crate-b"]
     );
 
     insta::assert_snapshot!(
@@ -1135,4 +1240,121 @@ fn foreign_audit_file_to_local() {
             .unwrap()
             .to_string()
     );
+}
+
+#[test]
+fn import_wildcard_audit_publisher() {
+    // (Pass) We should fetch information from the crates.io API about crates
+    // with wildcard audits both locally and from peers, though preferring local
+    // wildcard audits if they are sufficient.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
+    audits.audits.remove("third-party1");
+
+    audits.wildcard_audits.insert(
+        "third-party2".to_owned(),
+        vec![wildcard_audit(1, SAFE_TO_DEPLOY)],
+    );
+
+    let old_foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
+    };
+
+    let mut new_foreign_audits = old_foreign_audits.clone();
+    new_foreign_audits.wildcard_audits.insert(
+        "third-party2".to_owned(),
+        vec![wildcard_audit(1, SAFE_TO_DEPLOY)],
+    );
+    new_foreign_audits.wildcard_audits.insert(
+        "third-party1".to_owned(),
+        vec![wildcard_audit(2, SAFE_TO_DEPLOY)],
+    );
+
+    imports
+        .audits
+        .insert(FOREIGN.to_owned(), old_foreign_audits);
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            ..Default::default()
+        },
+    );
+
+    let cfg = mock_cfg(&metadata);
+
+    let mut network = Network::new_mock();
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/third-party1",
+        &serde_json::json!({
+            "versions": [
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "user2",
+                        "name": "User Two",
+                        "url": "https://github.com/user2"
+                    }
+                },
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "5.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "user2",
+                        "name": "User Two",
+                        "url": "https://github.com/user2"
+                    }
+                }
+            ]
+        }),
+    );
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/third-party2",
+        &serde_json::json!({
+            "versions": [
+                {
+                    "crate": "third-party2",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 1,
+                        "login": "user1",
+                        "name": "User One",
+                        "url": "https://github.com/user1"
+                    }
+                },
+                {
+                    "crate": "third-party2",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "5.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "user2",
+                        "name": "User Two",
+                        "url": "https://github.com/user2"
+                    }
+                }
+            ]
+        }),
+    );
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+
+    let output = get_imports_file_changes(&metadata, &store);
+    insta::assert_snapshot!(output);
 }

@@ -8,6 +8,13 @@ implies = "safe-to-deploy"
 [criteria.fuzzed]
 description = "fuzzed"
 
+[[wildcard-audits.serde]]
+who = "Person One <personone@example.com>"
+criteria = "safe-to-deploy"
+user-id = 3618
+start = "2022-01-01"
+end = "2022-07-01"
+
 [[audits.atty]]
 criteria = "safe-to-run"
 version = "0.2.14"

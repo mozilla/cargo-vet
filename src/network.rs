@@ -281,4 +281,9 @@ impl Network {
                 .to_string(),
         );
     }
+
+    /// Add a new json resource to be served by a mocked-out network.
+    pub(crate) fn mock_serve_json(&mut self, url: impl AsRef<str>, data: &impl serde::Serialize) {
+        self.mock_serve(url, serde_json::to_string(data).unwrap());
+    }
 }

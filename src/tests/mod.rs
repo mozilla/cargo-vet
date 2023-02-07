@@ -12,9 +12,9 @@ use serde_json::{json, Value};
 
 use crate::{
     format::{
-        AuditKind, CriteriaName, CriteriaStr, DependencyCriteria, FastMap, MetaConfig, PackageName,
-        PackagePolicyEntry, PackageStr, PolicyEntry, SortedSet, VersionReq, VetVersion,
-        SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        AuditKind, CratesPublisher, CriteriaName, CriteriaStr, DependencyCriteria, FastMap,
+        MetaConfig, PackageName, PackagePolicyEntry, PackageStr, PolicyEntry, SortedSet,
+        VersionReq, VetVersion, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     git_tool::Editor,
     init_files,
@@ -48,6 +48,7 @@ mod regenerate_unaudited;
 mod store_parsing;
 mod vet;
 mod violations;
+mod wildcard;
 
 // Some room above and below
 const DEFAULT_VER: u64 = 10;
@@ -370,6 +371,46 @@ fn violation_m(
         criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         kind: AuditKind::Violation { violation: version },
         aggregated_from: vec![],
+        is_fresh_import: false,
+    }
+}
+
+fn wildcard_audit(user_id: u64, criteria: CriteriaStr) -> WildcardEntry {
+    WildcardEntry {
+        who: vec![],
+        notes: None,
+        criteria: vec![criteria.to_string().into()],
+        user_id,
+        start: chrono::NaiveDate::from_ymd_opt(2022, 12, 1).unwrap().into(),
+        end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
+        aggregated_from: vec![],
+        is_fresh_import: false,
+    }
+}
+
+fn wildcard_audit_m(
+    user_id: u64,
+    criteria: impl IntoIterator<Item = impl Into<CriteriaName>>,
+) -> WildcardEntry {
+    WildcardEntry {
+        who: vec![],
+        notes: None,
+        criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
+        user_id,
+        start: chrono::NaiveDate::from_ymd_opt(2022, 12, 1).unwrap().into(),
+        end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
+        aggregated_from: vec![],
+        is_fresh_import: false,
+    }
+}
+
+fn publisher_entry(version: VetVersion, user_id: u64) -> CratesPublisher {
+    CratesPublisher {
+        version,
+        when: chrono::NaiveDate::from_ymd_opt(2022, 12, 15).unwrap(),
+        user_id,
+        user_login: format!("user{user_id}"),
+        user_name: None,
         is_fresh_import: false,
     }
 }

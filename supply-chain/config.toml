@@ -53,6 +53,10 @@ criteria = "safe-to-deploy"
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
+[[exemptions.chrono]]
+version = "0.4.23"
+criteria = "safe-to-deploy"
+
 [[exemptions.clap]]
 version = "3.2.6"
 criteria = "safe-to-deploy"
