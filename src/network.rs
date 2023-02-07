@@ -43,8 +43,8 @@ pub enum PayloadEncoding {
     Base64,
 }
 
-impl From<&Response> for PayloadEncoding {
-    fn from(response: &Response) -> Self {
+impl PayloadEncoding {
+    pub fn for_response(response: &Response) -> Self {
         // gitiles always encodes content in base64
         if response.headers().contains_key("x-gitiles-object-type") {
             Self::Base64
@@ -52,9 +52,7 @@ impl From<&Response> for PayloadEncoding {
             Self::Plaintext
         }
     }
-}
 
-impl PayloadEncoding {
     pub fn to_plaintext<'a, W: Write + 'a>(&self, target: W) -> Box<dyn Write + 'a> {
         match self {
             Self::Plaintext => Box::new(target),
@@ -184,7 +182,7 @@ impl Network {
                 error,
             })?;
 
-        let encoding = PayloadEncoding::from(&res);
+        let encoding = PayloadEncoding::for_response(&res);
 
         let mut output = vec![];
         {
