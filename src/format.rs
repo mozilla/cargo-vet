@@ -481,7 +481,7 @@ impl Policy {
     /// Return an iterator over defined policies.
     pub fn iter(&self) -> PolicyIter {
         PolicyIter {
-            iter: (&self.package).into_iter(),
+            iter: self.package.iter(),
             versioned: None,
         }
     }
@@ -511,7 +511,7 @@ impl<'a> Iterator for PolicyIter<'a> {
                 let (name, ppe) = self.iter.next()?;
                 match ppe {
                     PackagePolicyEntry::Versioned { version } => {
-                        self.versioned = Some((name, version.into_iter()));
+                        self.versioned = Some((name, version.iter()));
                         self.next()
                     }
                     PackagePolicyEntry::Unversioned(p) => Some((name, None, p)),

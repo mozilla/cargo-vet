@@ -188,7 +188,7 @@ pub mod policy {
     };
     use serde::de::value::Error as SerdeError;
 
-    const VERSION_SEPARATOR: &'static str = ":";
+    const VERSION_SEPARATOR: &str = ":";
 
     #[derive(serde::Serialize, serde::Deserialize)]
     #[serde(transparent)]

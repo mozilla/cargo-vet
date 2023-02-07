@@ -204,7 +204,7 @@ impl Display for NeedsPolicyVersionErrors {
             "some third-party crates have policies that are missing an associated version",
         )?;
         for e in &self.errors {
-            f.write_fmt(format_args!("\n  {}", e))?
+            f.write_fmt(format_args!("\n  {e}"))?
         }
         Ok(())
     }
@@ -220,7 +220,7 @@ impl Display for UnusedPolicyVersionErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("some third-party crate policies don't correspond to crates being used")?;
         for e in &self.errors {
-            f.write_fmt(format_args!("\n  {}", e))?
+            f.write_fmt(format_args!("\n  {e}"))?
         }
         Ok(())
     }
