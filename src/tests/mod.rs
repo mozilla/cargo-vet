@@ -965,7 +965,7 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
 
     let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
-        if package.is_considered_third_party(&config.policy) {
+        if package.is_third_party(&config.policy) {
             audited
                 .entry(package.name.clone())
                 .or_default()
@@ -994,7 +994,7 @@ fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
 
     let mut audited = SortedMap::<PackageName, Vec<AuditEntry>>::new();
     for package in &metadata.packages {
-        if package.is_considered_third_party(&config.policy) {
+        if package.is_third_party(&config.policy) {
             audited
                 .entry(package.name.clone())
                 .or_default()

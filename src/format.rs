@@ -22,7 +22,6 @@ pub type CriteriaName = String;
 pub type CriteriaStr<'a> = &'a str;
 pub type ForeignCriteriaName = String;
 pub type PackageName = String;
-pub type PackageVersion = VetVersion;
 pub type PackageStr<'a> = &'a str;
 pub type ImportName = String;
 
@@ -405,7 +404,7 @@ pub struct Policy {
 
 impl Policy {
     /// Get the policy entry for the given crate, if any.
-    pub fn get(&self, name: PackageStr, version: &PackageVersion) -> Option<&PolicyEntry> {
+    pub fn get(&self, name: PackageStr, version: &VetVersion) -> Option<&PolicyEntry> {
         self.package
             .get(name)
             .and_then(|pkg_policy| match pkg_policy {
@@ -418,7 +417,7 @@ impl Policy {
     pub fn get_mut(
         &mut self,
         name: PackageStr,
-        version: Option<&PackageVersion>,
+        version: Option<&VetVersion>,
     ) -> Option<&mut PolicyEntry> {
         self.package
             .get_mut(name)
@@ -438,10 +437,10 @@ impl Policy {
     ///
     /// `all_versions` is required to maintain proper structure of the policy map if the entry is
     /// missing: if one policy version is provided, they all must be.
-    pub fn get_mut_or_default<F: FnOnce() -> Vec<PackageVersion>>(
+    pub fn get_mut_or_default<F: FnOnce() -> Vec<VetVersion>>(
         &mut self,
         name: PackageName,
-        version: Option<&PackageVersion>,
+        version: Option<&VetVersion>,
         all_versions: F,
     ) -> Option<&mut PolicyEntry> {
         let pkg_policy = self.package.entry(name).or_insert_with(|| {
@@ -491,12 +490,12 @@ pub struct PolicyIter<'a> {
     iter: <&'a SortedMap<PackageName, PackagePolicyEntry> as IntoIterator>::IntoIter,
     versioned: Option<(
         &'a PackageName,
-        <&'a SortedMap<PackageVersion, PolicyEntry> as IntoIterator>::IntoIter,
+        <&'a SortedMap<VetVersion, PolicyEntry> as IntoIterator>::IntoIter,
     )>,
 }
 
 impl<'a> Iterator for PolicyIter<'a> {
-    type Item = (&'a PackageName, Option<&'a PackageVersion>, &'a PolicyEntry);
+    type Item = (&'a PackageName, Option<&'a VetVersion>, &'a PolicyEntry);
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.versioned {
@@ -542,7 +541,7 @@ impl<'a> IntoIterator for &'a Policy {
 // branches (which will use an internal `serde` Deserializer rather than the `toml` Deserializer).
 pub enum PackagePolicyEntry {
     Versioned {
-        version: SortedMap<PackageVersion, PolicyEntry>,
+        version: SortedMap<VetVersion, PolicyEntry>,
     },
     Unversioned(PolicyEntry),
 }

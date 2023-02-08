@@ -1,9 +1,23 @@
 use super::*;
 
-use crate::errors::{
-    CratePolicyError, CratePolicyErrors, NeedsPolicyVersionErrors, PackageError,
-    UnusedPolicyVersionErrors,
-};
+struct CratePolicyTest(pub MockMetadata);
+
+impl CratePolicyTest {
+    pub fn insta_crate_policy_errors<N: AsRef<str>, F>(&self, name: N, alter_config: F)
+    where
+        F: FnOnce(&mut ConfigFile),
+    {
+        let metadata = self.0.metadata();
+        let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
+        alter_config(&mut config);
+        let store = Store::mock(config, audits, imports);
+        let cfg = mock_cfg(&metadata);
+
+        let e = crate::check_crate_policies(&cfg, &store)
+            .expect_err("crate policy check should have failed");
+        insta::assert_snapshot!(name.as_ref(), format!("{:?}", miette::Report::new(e)));
+    }
+}
 
 /// Checks that if a third-party crate is present, and an unversioned policy is used, an error
 /// occurs indicating that versions need to be specified.
@@ -11,33 +25,14 @@ use crate::errors::{
 fn simple_crate_policies_third_party_crates_imply_versions() {
     let _enter = TEST_RUNTIME.enter();
 
-    let mock = MockMetadata::overlapping();
-    let metadata = mock.metadata();
-    let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
-    config.policy.insert(
-        "third-party".into(),
-        PackagePolicyEntry::Unversioned(Default::default()),
-    );
-    let store = Store::mock(config, audits, imports);
-    let cfg = mock_cfg(&metadata);
-
-    let result = crate::check_crate_policies(&cfg, &store);
-    assert_eq!(
-        result,
-        Err(CratePolicyErrors {
-            errors: vec![CratePolicyError::NeedsVersion(NeedsPolicyVersionErrors {
-                errors: vec![
-                    PackageError {
-                        package: "third-party".into(),
-                        version: Some(ver(1))
-                    },
-                    PackageError {
-                        package: "third-party".into(),
-                        version: Some(ver(2))
-                    }
-                ]
-            })]
-        })
+    CratePolicyTest(MockMetadata::overlapping()).insta_crate_policy_errors(
+        "third_party_crates_imply_versions",
+        |config| {
+            config.policy.insert(
+                "third-party".into(),
+                PackagePolicyEntry::Unversioned(Default::default()),
+            );
+        },
     );
 }
 
@@ -48,31 +43,19 @@ fn simple_crate_policies_third_party_crates_imply_versions() {
 fn simple_crate_policies_third_party_crates_need_all_versions() {
     let _enter = TEST_RUNTIME.enter();
 
-    let mock = MockMetadata::overlapping();
-    let metadata = mock.metadata();
+    let test = CratePolicyTest(MockMetadata::overlapping());
 
-    for (a, b) in [(1, 2), (2, 1)] {
-        let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
-        config.policy.insert(
-            "third-party".into(),
-            PackagePolicyEntry::Versioned {
-                version: [(ver(a), Default::default())].into(),
+    for which in [1, 2] {
+        test.insta_crate_policy_errors(
+            format!("third_party_crates_need_all_versions_{which}"),
+            |config| {
+                config.policy.insert(
+                    "third-party".into(),
+                    PackagePolicyEntry::Versioned {
+                        version: [(ver(which), Default::default())].into(),
+                    },
+                );
             },
-        );
-        let store = Store::mock(config, audits, imports);
-        let cfg = mock_cfg(&metadata);
-
-        let result = crate::check_crate_policies(&cfg, &store);
-        assert_eq!(
-            result,
-            Err(CratePolicyErrors {
-                errors: vec![CratePolicyError::NeedsVersion(NeedsPolicyVersionErrors {
-                    errors: vec![PackageError {
-                        package: "third-party".into(),
-                        version: Some(ver(b))
-                    }]
-                })]
-            })
         );
     }
 }
@@ -83,34 +66,21 @@ fn simple_crate_policies_third_party_crates_need_all_versions() {
 fn simple_crate_policies_extraneous_crate_versions() {
     let _enter = TEST_RUNTIME.enter();
 
-    let mock = MockMetadata::overlapping();
-    let metadata = mock.metadata();
-    let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
-    config.policy.insert(
-        "third-party".into(),
-        PackagePolicyEntry::Versioned {
-            version: [
-                (ver(1), Default::default()),
-                (ver(2), Default::default()),
-                (ver(3), Default::default()),
-            ]
-            .into(),
+    CratePolicyTest(MockMetadata::overlapping()).insta_crate_policy_errors(
+        "extraneous_crate_versions",
+        |config| {
+            config.policy.insert(
+                "third-party".into(),
+                PackagePolicyEntry::Versioned {
+                    version: [
+                        (ver(1), Default::default()),
+                        (ver(2), Default::default()),
+                        (ver(3), Default::default()),
+                    ]
+                    .into(),
+                },
+            );
         },
-    );
-    let store = Store::mock(config, audits, imports);
-    let cfg = mock_cfg(&metadata);
-
-    let result = crate::check_crate_policies(&cfg, &store);
-    assert_eq!(
-        result,
-        Err(CratePolicyErrors {
-            errors: vec![CratePolicyError::UnusedVersion(UnusedPolicyVersionErrors {
-                errors: vec![PackageError {
-                    package: "third-party".into(),
-                    version: Some(ver(3))
-                },]
-            })]
-        })
     );
 }
 
@@ -120,26 +90,13 @@ fn simple_crate_policies_extraneous_crate_versions() {
 fn simple_crate_policies_extraneous_crates() {
     let _enter = TEST_RUNTIME.enter();
 
-    let mock = MockMetadata::overlapping();
-    let metadata = mock.metadata();
-    let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
-    config.policy.insert(
-        "non-existent".into(),
-        PackagePolicyEntry::Unversioned(Default::default()),
-    );
-    let store = Store::mock(config, audits, imports);
-    let cfg = mock_cfg(&metadata);
-
-    let result = crate::check_crate_policies(&cfg, &store);
-    assert_eq!(
-        result,
-        Err(CratePolicyErrors {
-            errors: vec![CratePolicyError::UnusedVersion(UnusedPolicyVersionErrors {
-                errors: vec![PackageError {
-                    package: "non-existent".into(),
-                    version: None
-                }]
-            })]
-        })
+    CratePolicyTest(MockMetadata::overlapping()).insta_crate_policy_errors(
+        "extraneous_crates",
+        |config| {
+            config.policy.insert(
+                "non-existent".into(),
+                PackagePolicyEntry::Unversioned(Default::default()),
+            );
+        },
     );
 }

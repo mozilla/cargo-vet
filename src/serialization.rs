@@ -183,16 +183,13 @@ pub mod dependency_criteria {
 
 pub mod policy {
     use super::*;
-    use crate::format::{
-        PackageName, PackagePolicyEntry, PackageVersion, Policy, PolicyEntry, VetVersion,
-    };
-    use serde::de::value::Error as SerdeError;
+    use crate::format::{PackageName, PackagePolicyEntry, Policy, PolicyEntry, VetVersion};
 
     const VERSION_SEPARATOR: &str = ":";
 
     #[derive(serde::Serialize, serde::Deserialize)]
     #[serde(transparent)]
-    pub struct AllPolicies(SortedMap<Spanned<String>, PolicyEntry>);
+    pub struct AllPolicies(SortedMap<String, PolicyEntry>);
 
     #[derive(Debug, thiserror::Error)]
     pub enum FromAllPoliciesError {
@@ -201,13 +198,10 @@ pub mod policy {
         #[error("more than one policy provided for {name}:{version}")]
         Duplicate {
             name: PackageName,
-            version: PackageVersion,
+            version: VetVersion,
         },
-        #[error("deserialization error")]
-        Deserialization {
-            #[from]
-            source: Spanned<SerdeError>,
-        },
+        #[error(transparent)]
+        VersionParse(#[from] crate::errors::VersionParseError),
     }
 
     impl std::convert::TryFrom<AllPolicies> for Policy {
@@ -215,9 +209,8 @@ pub mod policy {
 
         fn try_from(value: AllPolicies) -> Result<Self, Self::Error> {
             let mut policy = Policy::default();
-            for (k, entry) in value.0 {
-                let span = Spanned::span(&k);
-                match k.split_once(VERSION_SEPARATOR) {
+            for (name, entry) in value.0 {
+                match name.split_once(VERSION_SEPARATOR) {
                     Some((crate_name, crate_version)) => {
                         match policy
                             .package
@@ -226,22 +219,7 @@ pub mod policy {
                                 version: Default::default(),
                             }) {
                             PackagePolicyEntry::Versioned { version } => {
-                                // Unfortunately, there's no way to inject spanned elements into
-                                // the toml deserializer, otherwise we could get nicer error
-                                // messages by using the toml deserializer when deserializing
-                                // VetVersion here.
-                                use serde::de::{value::StrDeserializer, IntoDeserializer};
-                                version.insert(
-                                    VetVersion::deserialize(crate_version.into_deserializer()
-                                        as StrDeserializer<SerdeError>)
-                                    .map_err(|e| {
-                                        Spanned::from_end(
-                                            Spanned::with_source_span(e, span),
-                                            crate_version.len(),
-                                        )
-                                    })?,
-                                    entry,
-                                );
+                                version.insert(crate_version.parse()?, entry);
                             }
                             PackagePolicyEntry::Unversioned(_) => {
                                 return Err(FromAllPoliciesError::MixedVersioning {
@@ -251,16 +229,15 @@ pub mod policy {
                         }
                     }
                     None => {
-                        let k = Spanned::into_inner(k);
                         if policy
                             .package
-                            .insert(k.clone(), PackagePolicyEntry::Unversioned(entry))
+                            .insert(name.clone(), PackagePolicyEntry::Unversioned(entry))
                             .is_some()
                         {
                             // The entry _must_ have been `PackagePolicyEntry::Versioned`, because
                             // if it were unversioned there would be no way for more than one entry
                             // to exist in the AllPolicies map.
-                            return Err(FromAllPoliciesError::MixedVersioning { name: k });
+                            return Err(FromAllPoliciesError::MixedVersioning { name });
                         }
                     }
                 }
@@ -277,11 +254,11 @@ pub mod policy {
                 match v {
                     PackagePolicyEntry::Versioned { version } => {
                         for (version, entry) in version {
-                            ret.insert(format!("{name}{VERSION_SEPARATOR}{version}").into(), entry);
+                            ret.insert(format!("{name}{VERSION_SEPARATOR}{version}"), entry);
                         }
                     }
                     PackagePolicyEntry::Unversioned(entry) => {
-                        ret.insert(name.into(), entry);
+                        ret.insert(name, entry);
                     }
                 }
             }

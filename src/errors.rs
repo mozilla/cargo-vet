@@ -10,7 +10,7 @@ use cargo_metadata::semver;
 use miette::{Diagnostic, MietteSpanContents, SourceCode, SourceOffset, SourceSpan};
 use thiserror::Error;
 
-use crate::format::{CriteriaName, ForeignCriteriaName, ImportName, PackageName, PackageVersion};
+use crate::format::{CriteriaName, ForeignCriteriaName, ImportName, PackageName, VetVersion};
 use crate::network::PayloadEncoding;
 
 #[derive(Eq, PartialEq)]
@@ -167,7 +167,7 @@ impl Display for UnusedAuditAsErrors {
 #[error("{package}{}", .version.as_ref().map(|v| format!(":{v}")).unwrap_or_default())]
 pub struct PackageError {
     pub package: PackageName,
-    pub version: Option<PackageVersion>,
+    pub version: Option<VetVersion>,
 }
 
 ///////////////////////////////////////////////////////////
@@ -200,9 +200,7 @@ pub struct NeedsPolicyVersionErrors {
 
 impl Display for NeedsPolicyVersionErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(
-            "some third-party crates have policies that are missing an associated version",
-        )?;
+        f.write_str("some crates have policies that are missing an associated version")?;
         for e in &self.errors {
             f.write_fmt(format_args!("\n  {e}"))?
         }
@@ -218,7 +216,7 @@ pub struct UnusedPolicyVersionErrors {
 
 impl Display for UnusedPolicyVersionErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("some third-party crate policies don't correspond to crates being used")?;
+        f.write_str("some versioned policy entries don't correspond to crates being used")?;
         for e in &self.errors {
             f.write_fmt(format_args!("\n  {e}"))?
         }

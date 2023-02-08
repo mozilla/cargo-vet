@@ -713,7 +713,7 @@ impl<'a> DepGraph<'a> {
                 package_id: &resolve_node.id,
                 name: &package.name,
                 version: package.vet_version(),
-                is_third_party: package.is_considered_third_party(policy),
+                is_third_party: package.is_third_party(policy),
                 // These will get (re)computed later
                 normal_deps: vec![],
                 build_deps: vec![],
