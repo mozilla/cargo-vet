@@ -7,6 +7,18 @@ criteria = "safe-to-deploy"
 delta = "0.3.66 -> 0.3.65"
 notes = "Only changes were to the miri backend, which will be checked"
 
+[[audits.base64-stream]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "1.2.7"
+notes = """
+The crate is fairly straightforward. There are a few unsafe blocks to elide
+bounds-checking when copying data, but I have manually verified that the unsafe
+blocks will always have lengths within bounds of source and destination
+pointers. Some `debug_assert!`s document and check these invariants as well
+(though there could be more).
+"""
+
 [[audits.cargo_metadata]]
 who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"

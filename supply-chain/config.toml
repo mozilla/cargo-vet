@@ -33,10 +33,6 @@ criteria = "safe-to-deploy"
 version = "0.13.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.base64-stream]]
-version = "1.2.7"
-criteria = "safe-to-deploy"
-
 [[exemptions.bitflags]]
 version = "1.3.2"
 criteria = "safe-to-deploy"
