@@ -661,7 +661,7 @@ fn cmd_certify(
     // potentially update imports, and remove now-unnecessary exemptions.
     // Explicitly disallow new exemptions so that exemptions are only updated
     // once we start passing vet.
-    match resolver::regenerate_exemptions(cfg, &mut store, false, false) {
+    match resolver::regenerate_exemptions(cfg, &mut store, false) {
         Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
     }
 
@@ -1284,7 +1284,7 @@ fn cmd_regenerate_imports(
 
     // NOTE: Explicitly ignore the `ViolationConflict` error, as we still want
     // to update imports in that case.
-    match resolver::regenerate_exemptions(cfg, &mut store, false, true) {
+    match resolver::regenerate_exemptions(cfg, &mut store, false) {
         Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
     }
 
@@ -1365,7 +1365,7 @@ fn cmd_regenerate_exemptions(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
-    resolver::regenerate_exemptions(cfg, &mut store, true, false)?;
+    resolver::regenerate_exemptions(cfg, &mut store, true)?;
 
     // We were successful, commit the store
     store.commit()?;
@@ -1531,7 +1531,7 @@ fn cmd_check(
     } else {
         if !cfg.cli.locked {
             #[allow(clippy::single_match)]
-            match resolver::regenerate_exemptions(cfg, &mut store, false, false) {
+            match resolver::regenerate_exemptions(cfg, &mut store, false) {
                 Err(RegenerateExemptionsError::ViolationConflict) => {
                     unreachable!("unexpeced violation conflict regenerating exemptions?")
                 }
@@ -1568,7 +1568,7 @@ fn cmd_fetch_imports(
 
     // NOTE: Explicitly ignore the `ViolationConflict` error, as we still want
     // to update imports in that case.
-    match resolver::regenerate_exemptions(cfg, &mut store, false, true) {
+    match resolver::regenerate_exemptions(cfg, &mut store, false) {
         Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
     }
 

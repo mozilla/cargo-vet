@@ -36,7 +36,7 @@ use crate::{
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
-    resolver::{self, Conclusion},
+    resolver,
     serialization::{parse_from_value, spanned::Spanned, to_formatted_toml},
     Config, PackageExt, PartialConfig, CARGO_ENV,
 };
@@ -254,31 +254,21 @@ impl Store {
     }
 
     /// Create a mock store, also mocking out the unlocked import fetching
-    /// process by providing the live values of imported AuditsFiles.
+    /// process by providing a mocked `Network` instance.
     #[cfg(test)]
     pub fn mock_online(
         config: ConfigFile,
         audits: AuditsFile,
         imports: ImportsFile,
-        fetched_audits: Vec<(ImportName, AuditsFile)>,
+        network: &Network,
         allow_criteria_changes: bool,
-    ) -> Result<Self, CriteriaChangeErrors> {
-        // For extra checking of import serialization, serialize the fetched
-        // audits, convert them to a ForeignAuditsFile, and then deserialize
-        // them back into an AuditsFile to ensure they round-trip through
-        // that process successfully, as the parsing codepaths are different.
-        for (_, original_file) in &fetched_audits {
-            let orig_toml = to_formatted_toml(original_file).unwrap().to_string();
-            let result = foreign_audit_file_to_local(toml::de::from_str(&orig_toml).unwrap());
-            assert_eq!(result.ignored_criteria, Vec::<String>::new());
-            assert_eq!(result.ignored_audits, Vec::<String>::new());
-            let new_toml = to_formatted_toml(&result.audit_file).unwrap().to_string();
-            assert_eq!(new_toml, orig_toml);
-        }
-
+    ) -> Result<Self, StoreAcquireError> {
+        let fetched_audits =
+            tokio::runtime::Handle::current().block_on(fetch_imported_audits(network, &config))?;
         let live_imports =
             process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
-        Ok(Self {
+
+        let store = Self {
             lock: None,
             config,
             imports,
@@ -287,7 +277,11 @@ impl Store {
             config_src: SourceFile::new_empty(CONFIG_TOML),
             audits_src: SourceFile::new_empty(AUDITS_TOML),
             imports_src: SourceFile::new_empty(IMPORTS_LOCK),
-        })
+        };
+
+        store.validate(false)?;
+
+        Ok(store)
     }
 
     #[cfg(test)]
@@ -593,74 +587,73 @@ impl Store {
     /// Return an updated version of the `imports.lock` file taking into account
     /// the result of running the resolver, to pick which audits need to be
     /// vendored.
-    ///
-    /// If `force_update` is specified, audits for all crates will be updated,
-    /// even if the currently vendored audits would be sufficient.
     #[must_use]
     pub fn get_updated_imports_file(
         &self,
         graph: &resolver::DepGraph<'_>,
-        conclusion: &resolver::Conclusion,
-        force_update: bool,
+        results: &[Option<resolver::ResolveResult>],
     ) -> ImportsFile {
-        if self.live_imports.is_none() {
+        let Some(live_imports) = &self.live_imports else {
             // We're locked, so can't update anything.
             return self.imports.clone();
-        }
-
-        // Determine which packages were used.
-        let mut used_packages = SortedMap::new();
-        for package in graph.nodes.iter() {
-            used_packages.insert(package.name, false);
-        }
-
-        // If we succeeded, also record which packages need fresh imports.
-        if let Conclusion::Success(success) = conclusion {
-            for &node_idx in &success.needed_fresh_imports {
-                let package = &graph.nodes[node_idx];
-                used_packages.insert(package.name, true);
-            }
-        }
+        };
 
         let mut new_imports = ImportsFile {
             audits: SortedMap::new(),
         };
-        for import_name in self.config.imports.keys() {
-            let live_audit_file = self
-                .imported_audits()
-                .get(import_name)
-                .expect("Live audits missing for import?");
-
-            // Is this the first time we're doing this import? If it is we'll
-            // want to effectively force-update this peer.
-            let first_import = !self.imports.audits.contains_key(import_name);
-
-            // Create the new audits file, and copy criteria into it on a
-            // per-package basis, only including used packages.
-            // We always use the live version of criteria in the new file.
+        for (import_index, (import_name, live_audits_file)) in
+            live_imports.audits.iter().enumerate()
+        {
             let mut new_audits_file = AuditsFile {
-                criteria: live_audit_file.criteria.clone(),
+                criteria: live_audits_file.criteria.clone(),
                 audits: SortedMap::new(),
             };
-            for (&package, &need_fresh_imports) in &used_packages {
-                // Always pull audit entries from the live version to pull in
-                // revocations, violations, updated notes, etc.
-                // Filter out entries which are fresh unless we're updating
-                // entries for this package or it's a violation.
-                let update_package = first_import || need_fresh_imports || force_update;
-                let audits = live_audit_file
+            for (pkgidx, result) in results.iter().enumerate() {
+                let package = &graph.nodes[pkgidx];
+
+                // Don't import audits for first-party packages.
+                if !package.is_third_party {
+                    continue;
+                }
+
+                // If the audit succeeded, get the set of required audits.
+                let required_edges = match result {
+                    Some(resolver::ResolveResult {
+                        required_edges: Some(required_edges),
+                        ..
+                    }) => Some(required_edges),
+                    _ => None,
+                };
+
+                // Filter the set of audits from the live audits file to
+                // only required audits.
+                let audits = live_audits_file
                     .audits
-                    .get(package)
+                    .get(package.name)
                     .map(|v| &v[..])
                     .unwrap_or(&[])
                     .iter()
-                    .filter(|audit| {
-                        update_package
-                            || !audit.is_fresh_import
-                            || matches!(audit.kind, AuditKind::Violation { .. })
+                    .enumerate()
+                    .filter(|&(audit_index, audit)| {
+                        // Always keep any violations.
+                        if matches!(audit.kind, AuditKind::Violation { .. }) {
+                            return true;
+                        }
+
+                        // If vetting succeeded for this package, keep
+                        // only the required edges, otherwise just keep
+                        // all existing imports for now.
+                        if let Some(required_edges) = required_edges {
+                            required_edges.contains(&resolver::DeltaEdgeOrigin::ImportedAudit {
+                                import_index,
+                                audit_index,
+                            })
+                        } else {
+                            !audit.is_fresh_import
+                        }
                     })
-                    .cloned()
-                    .map(|mut audit| {
+                    .map(|(_, audit)| {
+                        let mut audit = audit.clone();
                         audit.is_fresh_import = false;
                         audit
                     })
@@ -668,7 +661,9 @@ impl Store {
 
                 // Record audits in the new audits file, if there are any.
                 if !audits.is_empty() {
-                    new_audits_file.audits.insert(package.to_owned(), audits);
+                    new_audits_file
+                        .audits
+                        .insert(package.name.to_owned(), audits);
                 }
             }
             new_imports
