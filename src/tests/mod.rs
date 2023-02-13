@@ -13,7 +13,8 @@ use serde_json::{json, Value};
 use crate::{
     format::{
         AuditKind, CriteriaName, CriteriaStr, DependencyCriteria, FastMap, MetaConfig, PackageName,
-        PackageStr, PolicyEntry, SortedSet, VersionReq, VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        PackagePolicyEntry, PackageStr, PolicyEntry, SortedSet, VersionReq, VetVersion,
+        SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     git_tool::Editor,
     init_files,
@@ -41,6 +42,7 @@ macro_rules! assert_report_snapshot {
 mod aggregate;
 mod audit_as_crates_io;
 mod certify;
+mod crate_policies;
 mod import;
 mod regenerate_unaudited;
 mod store_parsing;
@@ -382,18 +384,30 @@ fn default_policy() -> PolicyEntry {
     }
 }
 
-fn audit_as_policy(audit_as_crates_io: Option<bool>) -> PolicyEntry {
-    PolicyEntry {
+fn audit_as_policy(audit_as_crates_io: Option<bool>) -> PackagePolicyEntry {
+    PackagePolicyEntry::Unversioned(PolicyEntry {
         audit_as_crates_io,
         ..default_policy()
-    }
+    })
 }
 
-fn self_policy(criteria: impl IntoIterator<Item = impl Into<CriteriaName>>) -> PolicyEntry {
-    PolicyEntry {
+fn audit_as_policy_with<F: Fn(&mut PolicyEntry)>(
+    audit_as_crates_io: Option<bool>,
+    alter: F,
+) -> PackagePolicyEntry {
+    let mut entry = PolicyEntry {
+        audit_as_crates_io,
+        ..default_policy()
+    };
+    alter(&mut entry);
+    PackagePolicyEntry::Unversioned(entry)
+}
+
+fn self_policy(criteria: impl IntoIterator<Item = impl Into<CriteriaName>>) -> PackagePolicyEntry {
+    PackagePolicyEntry::Unversioned(PolicyEntry {
         criteria: Some(criteria.into_iter().map(|s| s.into().into()).collect()),
         ..default_policy()
-    }
+    })
 }
 
 fn dep_policy(
@@ -403,8 +417,8 @@ fn dep_policy(
             impl IntoIterator<Item = impl Into<CriteriaName>>,
         ),
     >,
-) -> PolicyEntry {
-    PolicyEntry {
+) -> PackagePolicyEntry {
+    PackagePolicyEntry::Unversioned(PolicyEntry {
         dependency_criteria: dependency_criteria
             .into_iter()
             .map(|(k, v)| {
@@ -415,7 +429,7 @@ fn dep_policy(
             })
             .collect(),
         ..default_policy()
-    }
+    })
 }
 
 fn criteria(description: &str) -> CriteriaEntry {
@@ -561,6 +575,37 @@ impl MockMetadata {
             MockPackage {
                 name: "third-core",
                 version: ver(5),
+                ..Default::default()
+            },
+        ])
+    }
+
+    /// The `third-party` crate is used as both a first- and third-party crate (with different
+    /// versions).
+    fn overlapping() -> Self {
+        MockMetadata::new(vec![
+            MockPackage {
+                name: "root-package",
+                is_workspace: true,
+                is_first_party: true,
+                deps: vec![dep("first-party"), dep_ver("third-party", 1)],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "first-party",
+                is_first_party: true,
+                deps: vec![dep_ver("third-party", 2)],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "third-party",
+                is_first_party: true,
+                version: ver(1),
+                ..Default::default()
+            },
+            MockPackage {
+                name: "third-party",
+                version: ver(2),
                 ..Default::default()
             },
         ])
@@ -882,13 +927,13 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
             if package.id == *pkgid {
                 config.policy.insert(
                     package.name.clone(),
-                    PolicyEntry {
+                    PackagePolicyEntry::Unversioned(PolicyEntry {
                         audit_as_crates_io: None,
                         criteria: Some(vec![DEFAULT_CRIT.to_string().into()]),
                         dev_criteria: Some(vec![DEFAULT_CRIT.to_string().into()]),
                         dependency_criteria: DependencyCriteria::new(),
                         notes: None,
-                    },
+                    }),
                 );
             }
         }

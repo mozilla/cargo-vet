@@ -355,7 +355,7 @@ impl Serialize for Delta {
 ////////////////////////////////////////////////////////////////////////////////////
 
 /// config.toml
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ConfigFile {
     /// This top-level key specifies the default criteria that cargo vet certify will use
     /// when recording audits. If unspecified, this defaults to "safe-to-deploy".
@@ -369,10 +369,10 @@ pub struct ConfigFile {
     #[serde(default)]
     pub imports: SortedMap<ImportName, RemoteImport>,
 
-    /// A table of policies for first-party crates.
-    #[serde(skip_serializing_if = "SortedMap::is_empty")]
+    /// A table of policies for crates.
+    #[serde(skip_serializing_if = "Policy::is_empty")]
     #[serde(default)]
-    pub policy: SortedMap<PackageName, PolicyEntry>,
+    pub policy: Policy,
 
     /// All of the "foreign" dependencies that we rely on but haven't audited yet.
     /// Foreign dependencies are just "things on crates.io", everything else
@@ -394,21 +394,172 @@ fn is_default_criteria(val: &CriteriaName) -> bool {
     val == DEFAULT_CRITERIA
 }
 
-/// Policies that first-party (non-foreign) crates must pass.
+/// The table of crate policies.
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
+#[serde(try_from = "serialization::policy::AllPolicies")]
+#[serde(into = "serialization::policy::AllPolicies")]
+pub struct Policy {
+    pub package: SortedMap<PackageName, PackagePolicyEntry>,
+}
+
+impl Policy {
+    /// Get the policy entry for the given crate, if any.
+    pub fn get(&self, name: PackageStr, version: &VetVersion) -> Option<&PolicyEntry> {
+        self.package
+            .get(name)
+            .and_then(|pkg_policy| match pkg_policy {
+                PackagePolicyEntry::Unversioned(e) => Some(e),
+                PackagePolicyEntry::Versioned { version: v } => v.get(version),
+            })
+    }
+
+    /// Get the mutable policy entry for the given crate, if any.
+    pub fn get_mut(
+        &mut self,
+        name: PackageStr,
+        version: Option<&VetVersion>,
+    ) -> Option<&mut PolicyEntry> {
+        self.package
+            .get_mut(name)
+            .and_then(|pkg_policy| match pkg_policy {
+                PackagePolicyEntry::Unversioned(e) => Some(e),
+                PackagePolicyEntry::Versioned { version: v } => {
+                    version.and_then(|version| v.get_mut(version))
+                }
+            })
+    }
+
+    /// Get the mutable policy entry for the given crate, creating a default if none exists.
+    ///
+    /// Unlike `get_mut`, this guarantees that the policy is represented as versioned or
+    /// unversioned based on the whether the `version` is provided. If the `version` passed is
+    /// incompatible with the current policy, None is returned.
+    ///
+    /// `all_versions` is required to maintain proper structure of the policy map if the entry is
+    /// missing: if one policy version is provided, they all must be.
+    pub fn get_mut_or_default<F: FnOnce() -> Vec<VetVersion>>(
+        &mut self,
+        name: PackageName,
+        version: Option<&VetVersion>,
+        all_versions: F,
+    ) -> Option<&mut PolicyEntry> {
+        let pkg_policy = self.package.entry(name).or_insert_with(|| {
+            if version.is_none() {
+                PackagePolicyEntry::Unversioned(Default::default())
+            } else {
+                PackagePolicyEntry::Versioned {
+                    version: all_versions()
+                        .into_iter()
+                        .map(|v| (v, Default::default()))
+                        .collect(),
+                }
+            }
+        });
+
+        match (pkg_policy, version) {
+            (PackagePolicyEntry::Unversioned(e), None) => Some(e),
+            (PackagePolicyEntry::Versioned { version }, Some(v)) => version.get_mut(v),
+            _ => None,
+        }
+    }
+
+    /// Insert a new package policy entry.
+    pub fn insert(
+        &mut self,
+        name: PackageName,
+        entry: PackagePolicyEntry,
+    ) -> Option<PackagePolicyEntry> {
+        self.package.insert(name, entry)
+    }
+
+    /// Return whether there are no policies defined.
+    pub fn is_empty(&self) -> bool {
+        self.package.is_empty()
+    }
+
+    /// Return an iterator over defined policies.
+    pub fn iter(&self) -> PolicyIter {
+        PolicyIter {
+            iter: self.package.iter(),
+            versioned: None,
+        }
+    }
+}
+
+pub struct PolicyIter<'a> {
+    iter: <&'a SortedMap<PackageName, PackagePolicyEntry> as IntoIterator>::IntoIter,
+    versioned: Option<(
+        &'a PackageName,
+        <&'a SortedMap<VetVersion, PolicyEntry> as IntoIterator>::IntoIter,
+    )>,
+}
+
+impl<'a> Iterator for PolicyIter<'a> {
+    type Item = (&'a PackageName, Option<&'a VetVersion>, &'a PolicyEntry);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.versioned {
+            Some((name, versioned)) => match versioned.next() {
+                Some((v, p)) => Some((name, Some(v), p)),
+                None => {
+                    self.versioned = None;
+                    self.next()
+                }
+            },
+            None => {
+                let (name, ppe) = self.iter.next()?;
+                match ppe {
+                    PackagePolicyEntry::Versioned { version } => {
+                        self.versioned = Some((name, version.iter()));
+                        self.next()
+                    }
+                    PackagePolicyEntry::Unversioned(p) => Some((name, None, p)),
+                }
+            }
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a Policy {
+    type IntoIter = PolicyIter<'a>;
+    type Item = <PolicyIter<'a> as Iterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// Policies for a particular package (crate).
 ///
-/// This is basically the first-party equivalent of audits.toml, which is separated out
-/// because it's not supposed to be shared (or, doesn't really make sense to share,
-/// since first-party crates are defined by "not on crates.io").
+/// If the crate exists as a third-party crate anywhere in the dependency tree, crate versions for
+/// _all_ and _only_ the versions present in the dependency tree must be provided to set policies.
+/// Otherwise, versions may be omitted.
+#[derive(Debug, Clone)]
+// We have to use a slightly different serialization than than `serde(untagged)`, because toml only
+// parses `Spanned` elements (as contained in `PolicyEntry`) through their own Deseralizer, and
+// `serde(untagged)` deserializes everything into a buffer first to try different deserialization
+// branches (which will use an internal `serde` Deserializer rather than the `toml` Deserializer).
+pub enum PackagePolicyEntry {
+    Versioned {
+        version: SortedMap<VetVersion, PolicyEntry>,
+    },
+    Unversioned(PolicyEntry),
+}
+
+/// Policies that crates must pass.
 ///
-/// Because first-party crates are implicitly trusted, really the only purpose of this
-/// table is to define the boundary between a first-party crates and third-party ones.
-/// More specifically, the criteria of the dependency edges between a first-party crate
-/// and its direct third-party dependencies.
+/// Policy settings here are basically the equivalent of audits.toml, which is separated out
+/// because it's not supposed to be shared (or, doesn't really make sense to share, since
+/// first-party crates are defined by "not on crates.io").
+///
+/// Because first-party crates are implicitly trusted, the only purpose of this table is to define
+/// the boundary between first-party and third-party ones.  More specifically, the criteria of the
+/// dependency edges between a first-party crate and its direct third-party dependencies.
 ///
 /// If this sounds overwhelming, don't worry, everything defaults to "nothing special"
 /// and an empty PolicyTable basically just means "everything should satisfy the
 /// default criteria in audits.toml".
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct PolicyEntry {
     /// Whether this nominally-first-party crate should actually be subject to audits
     /// as-if it was third-party, based on matches to crates.io packages with the same
@@ -433,23 +584,21 @@ pub struct PolicyEntry {
     #[serde(rename = "audit-as-crates-io")]
     pub audit_as_crates_io: Option<bool>,
 
-    /// Default criteria that must be satisfied by all *direct* third-party (foreign)
-    /// dependencies of first-party crates. If satisfied, the first-party crate is
-    /// set to satisfying all criteria.
+    /// Default criteria that must be satisfied by all *direct* third-party (foreign) dependencies
+    /// of the crate. If satisfied, the crate is set to satisfying all criteria.
     ///
     /// If not present, this defaults to the default criteria in the audits table.
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec_or_none")]
     pub criteria: Option<Vec<Spanned<CriteriaName>>>,
 
-    /// Same as `criteria`, but for first-party(?) crates/dependencies that are only
-    /// used as dev-dependencies.
+    /// Same as `criteria`, but for crates that are only used as dev-dependencies.
     #[serde(rename = "dev-criteria")]
     #[serde(default)]
     #[serde(with = "serialization::string_or_vec_or_none")]
     pub dev_criteria: Option<Vec<Spanned<CriteriaName>>>,
 
-    /// Custom criteria for a specific first-party crate's dependencies.
+    /// Custom criteria for a specific crate's dependencies.
     ///
     /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
     #[serde(rename = "dependency-criteria")]
@@ -476,7 +625,7 @@ pub static DEFAULT_POLICY_CRITERIA: CriteriaStr = SAFE_TO_DEPLOY;
 pub static DEFAULT_POLICY_DEV_CRITERIA: CriteriaStr = SAFE_TO_RUN;
 
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct RemoteImport {
     /// URL of the foreign audits.toml
     pub url: String,
@@ -492,7 +641,7 @@ pub struct RemoteImport {
 }
 
 /// Translations of foreign criteria to local criteria.
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct CriteriaMapping {
     /// This local criteria is implied...
     pub ours: CriteriaName,

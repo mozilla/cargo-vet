@@ -2392,10 +2392,9 @@ fn builtin_simple_audit_as_weaker_root() {
 
     config.policy.insert(
         "root-package".to_string(),
-        PolicyEntry {
-            criteria: Some(vec![SAFE_TO_RUN.to_string().into()]),
-            ..audit_as_policy(Some(true))
-        },
+        audit_as_policy_with(Some(true), |policy| {
+            policy.criteria = Some(vec![SAFE_TO_RUN.to_string().into()]);
+        }),
     );
     config.exemptions.insert(
         "root-package".to_string(),

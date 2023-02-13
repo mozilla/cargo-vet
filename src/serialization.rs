@@ -181,6 +181,93 @@ pub mod dependency_criteria {
     }
 }
 
+pub mod policy {
+    use super::*;
+    use crate::format::{PackageName, PackagePolicyEntry, Policy, PolicyEntry, VetVersion};
+
+    const VERSION_SEPARATOR: &str = ":";
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    #[serde(transparent)]
+    pub struct AllPolicies(SortedMap<String, PolicyEntry>);
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum FromAllPoliciesError {
+        #[error("cannot mix versioned and unversioned policies for {name}")]
+        MixedVersioning { name: PackageName },
+        #[error("more than one policy provided for {name}:{version}")]
+        Duplicate {
+            name: PackageName,
+            version: VetVersion,
+        },
+        #[error(transparent)]
+        VersionParse(#[from] crate::errors::VersionParseError),
+    }
+
+    impl std::convert::TryFrom<AllPolicies> for Policy {
+        type Error = FromAllPoliciesError;
+
+        fn try_from(value: AllPolicies) -> Result<Self, Self::Error> {
+            let mut policy = Policy::default();
+            for (name, entry) in value.0 {
+                match name.split_once(VERSION_SEPARATOR) {
+                    Some((crate_name, crate_version)) => {
+                        match policy
+                            .package
+                            .entry(crate_name.to_owned())
+                            .or_insert_with(|| PackagePolicyEntry::Versioned {
+                                version: Default::default(),
+                            }) {
+                            PackagePolicyEntry::Versioned { version } => {
+                                version.insert(crate_version.parse()?, entry);
+                            }
+                            PackagePolicyEntry::Unversioned(_) => {
+                                return Err(FromAllPoliciesError::MixedVersioning {
+                                    name: crate_name.to_owned(),
+                                });
+                            }
+                        }
+                    }
+                    None => {
+                        if policy
+                            .package
+                            .insert(name.clone(), PackagePolicyEntry::Unversioned(entry))
+                            .is_some()
+                        {
+                            // The entry _must_ have been `PackagePolicyEntry::Versioned`, because
+                            // if it were unversioned there would be no way for more than one entry
+                            // to exist in the AllPolicies map.
+                            return Err(FromAllPoliciesError::MixedVersioning { name });
+                        }
+                    }
+                }
+            }
+            Ok(policy)
+        }
+    }
+
+    impl From<Policy> for AllPolicies {
+        fn from(policy: Policy) -> Self {
+            let mut ret = SortedMap::default();
+
+            for (name, v) in policy.package {
+                match v {
+                    PackagePolicyEntry::Versioned { version } => {
+                        for (version, entry) in version {
+                            ret.insert(format!("{name}{VERSION_SEPARATOR}{version}"), entry);
+                        }
+                    }
+                    PackagePolicyEntry::Unversioned(entry) => {
+                        ret.insert(name, entry);
+                    }
+                }
+            }
+
+            AllPolicies(ret)
+        }
+    }
+}
+
 pub mod audit {
     use super::*;
 
@@ -398,6 +485,15 @@ pub mod spanned {
     }
 
     impl<T> Spanned<T> {
+        /// Create a Spanned with a specific SourceSpan.
+        pub fn with_source_span(value: T, source: SourceSpan) -> Self {
+            Spanned {
+                start: source.offset(),
+                end: source.offset() + source.len(),
+                value,
+            }
+        }
+
         /// Access the start of the span of the contained value.
         pub fn start(this: &Self) -> usize {
             this.start
@@ -412,6 +508,12 @@ pub mod spanned {
         pub fn update_span(this: &mut Self, start: usize, end: usize) {
             this.start = start;
             this.end = end;
+        }
+
+        /// Alter a span to a length anchored from the end.
+        pub fn from_end(mut this: Self, length: usize) -> Self {
+            this.start = this.end - length;
+            this
         }
 
         /// Get the span of the contained value.
@@ -625,26 +727,26 @@ mod test {
             vec!["criteria-one".to_owned().into()],
         );
 
-        let mut policy = SortedMap::new();
+        let mut policy = Policy::default();
         policy.insert(
             "long-criteria".to_owned(),
-            PolicyEntry {
+            PackagePolicyEntry::Unversioned(PolicyEntry {
                 audit_as_crates_io: None,
                 criteria: Some(vec!["long-criteria".to_owned().into()]),
                 dev_criteria: None,
                 dependency_criteria: dc_long,
                 notes: Some("notes go here!".to_owned()),
-            },
+            }),
         );
         policy.insert(
             "short-criteria".to_owned(),
-            PolicyEntry {
+            PackagePolicyEntry::Unversioned(PolicyEntry {
                 audit_as_crates_io: None,
                 criteria: Some(vec!["short-criteria".to_owned().into()]),
                 dev_criteria: None,
                 dependency_criteria: dc_short,
                 notes: Some("notes go here!".to_owned()),
-            },
+            }),
         );
 
         let formatted = super::to_formatted_toml(ConfigFile {
