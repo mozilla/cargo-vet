@@ -333,6 +333,9 @@ pub enum StoreAcquireError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     CriteriaChange(#[from] CriteriaChangeErrors),
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    CacheAcquire(#[from] Box<CacheAcquireError>),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -387,6 +390,9 @@ pub enum StoreValidateError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     BadFormat(BadFormatError),
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    BadWildcardEndDate(BadWildcardEndDateError),
     #[error("imports.lock is out-of-date with respect to configuration")]
     #[diagnostic(help("run `cargo vet` without --locked to update imports"))]
     ImportsLockOutdated,
@@ -409,6 +415,18 @@ pub struct InvalidCriteriaError {
 #[diagnostic(help("run `cargo vet` without --locked to reformat files in the store"))]
 pub struct BadFormatError {
     pub unified_diff: String,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("'{date}' is more than a year in the future")]
+#[diagnostic(help("wildcard audits must end at most a year in the future ({max})"))]
+pub struct BadWildcardEndDateError {
+    #[source_code]
+    pub source_code: SourceFile,
+    #[label]
+    pub span: SourceSpan,
+    pub date: chrono::NaiveDate,
+    pub max: chrono::NaiveDate,
 }
 
 //////////////////////////////////////////////////////////
@@ -673,6 +691,9 @@ pub enum FetchAuditError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     Toml(#[from] LoadTomlError),
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    Json(#[from] LoadJsonError),
 }
 
 //////////////////////////////////////////////////////////

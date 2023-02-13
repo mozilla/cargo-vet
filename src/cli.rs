@@ -92,16 +92,17 @@ pub struct Cli {
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub output_format: OutputFormat,
 
-    /// Use the following path as the diff-cache
+    /// Use the following path instead of the global cache directory
     ///
-    /// The diff-cache stores the summary results used by vet's suggestion machinery.
-    /// This is automatically managed in vet's tempdir, but if you want to manually store
-    /// it somewhere more reliable, you can.
+    /// The cache stores information such as the summary results used by vet's
+    /// suggestion machinery, cached results from crates.io APIs, and checkouts
+    /// of crates from crates.io in some cases. This is generally automatically
+    /// managed in the system cache directory.
     ///
     /// This mostly exists for testing vet itself.
     #[clap(long, action)]
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
-    pub diff_cache: Option<PathBuf>,
+    pub cache_dir: Option<PathBuf>,
 
     /// Filter out different parts of the build graph and pretend that's the true graph
     ///

@@ -3,7 +3,7 @@ source: tests/test-cli.rs
 expression: format_outputs(&output)
 ---
 stdout:
-Vetting Succeeded (5 fully audited, 1 partially audited, 99 exempted)
+Vetting Succeeded (6 fully audited, 1 partially audited, 98 exempted)
 
 stderr:
 

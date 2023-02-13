@@ -25,6 +25,10 @@ stdout:
     {
       "name": "clap",
       "version": "3.1.8"
+    },
+    {
+      "name": "serde",
+      "version": "1.0.136"
     }
   ],
   "vetted_partially": [
@@ -277,10 +281,6 @@ stdout:
     {
       "name": "security-framework-sys",
       "version": "2.6.1"
-    },
-    {
-      "name": "serde",
-      "version": "1.0.136"
     },
     {
       "name": "serde_json",

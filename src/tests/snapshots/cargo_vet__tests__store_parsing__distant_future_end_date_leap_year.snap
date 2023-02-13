@@ -1,0 +1,17 @@
+---
+source: src/tests/store_parsing.rs
+expression: acquire_errors
+---
+
+  × Your cargo-vet store (supply-chain) has consistency errors
+
+Error: 
+  × '2021-03-01' is more than a year in the future
+   ╭─[audits.toml:7:1]
+ 7 │ start = "2015-05-15"
+ 8 │ end = "2021-03-01"
+   ·       ────────────
+ 9 │ 
+   ╰────
+  help: wildcard audits must end at most a year in the future (2021-02-28)
+

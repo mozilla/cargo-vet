@@ -309,10 +309,11 @@ fn real_main() -> Result<(), miette::Report> {
     // Potentially handle freestanding commands
     ////////////////////////////////////////////////////
 
-    // TODO: make this configurable
-    let cache_dir = dirs::cache_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join(CACHE_DIR_SUFFIX);
+    let cache_dir = cli.cache_dir.clone().unwrap_or_else(|| {
+        dirs::cache_dir()
+            .unwrap_or_else(std::env::temp_dir)
+            .join(CACHE_DIR_SUFFIX)
+    });
     let partial_cfg = PartialConfig {
         cli,
         cache_dir,
@@ -506,11 +507,13 @@ pub fn init_files(
     // Default audits file is empty
     let audits = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
     // Default imports file is empty
     let imports = ImportsFile {
+        publisher: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
@@ -1669,6 +1672,7 @@ fn do_aggregate_audits(sources: Vec<(String, AuditsFile)>) -> Result<AuditsFile,
     let mut errors = Vec::new();
     let mut aggregate = AuditsFile {
         criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
     };
 
@@ -1747,6 +1751,16 @@ fn do_aggregate_audits(sources: Vec<(String, AuditsFile)>) -> Result<AuditsFile,
                 .extend(audits.into_iter().map(|mut audit_entry| {
                     audit_entry.aggregated_from.push(source.clone().into());
                     audit_entry
+                }));
+        }
+        for (package_name, audits) in audit_file.wildcard_audits {
+            aggregate
+                .wildcard_audits
+                .entry(package_name)
+                .or_default()
+                .extend(audits.into_iter().map(|mut wildcard_entry| {
+                    wildcard_entry.aggregated_from.push(source.clone().into());
+                    wildcard_entry
                 }));
         }
     }

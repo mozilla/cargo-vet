@@ -20,6 +20,12 @@ fn test_merge_audits_files_basic() {
             "https://source1.example.com/supply_chain/audits.toml".to_owned(),
             AuditsFile {
                 criteria: [].into_iter().collect(),
+                wildcard_audits: [(
+                    "package2".to_owned(),
+                    vec![wildcard_audit(1, "safe-to-deploy")],
+                )]
+                .into_iter()
+                .collect(),
                 audits: [(
                     "package1".to_owned(),
                     vec![full_audit(ver(DEFAULT_VER), "safe-to-deploy")],
@@ -32,6 +38,18 @@ fn test_merge_audits_files_basic() {
             "https://source2.example.com/supply_chain/audits.toml".to_owned(),
             AuditsFile {
                 criteria: [].into_iter().collect(),
+                wildcard_audits: [
+                    (
+                        "package2".to_owned(),
+                        vec![wildcard_audit(2, "safe-to-deploy")],
+                    ),
+                    (
+                        "package3".to_owned(),
+                        vec![wildcard_audit(1, "safe-to-deploy")],
+                    ),
+                ]
+                .into_iter()
+                .collect(),
                 audits: [
                     (
                         "package1".to_owned(),
@@ -87,6 +105,7 @@ fn test_merge_audits_files_custom_criteria() {
                 ]
                 .into_iter()
                 .collect(),
+                wildcard_audits: [].into_iter().collect(),
                 audits: [(
                     "package1".to_owned(),
                     vec![
@@ -125,6 +144,7 @@ fn test_merge_audits_files_custom_criteria() {
                 ]
                 .into_iter()
                 .collect(),
+                wildcard_audits: [].into_iter().collect(),
                 audits: [
                     (
                         "package1".to_owned(),
@@ -184,6 +204,7 @@ fn test_merge_audits_files_custom_criteria_conflict() {
                 ]
                 .into_iter()
                 .collect(),
+                wildcard_audits: [].into_iter().collect(),
                 audits: [].into_iter().collect(),
             },
         ),
@@ -221,6 +242,7 @@ fn test_merge_audits_files_custom_criteria_conflict() {
                 ]
                 .into_iter()
                 .collect(),
+                wildcard_audits: [].into_iter().collect(),
                 audits: [].into_iter().collect(),
             },
         ),

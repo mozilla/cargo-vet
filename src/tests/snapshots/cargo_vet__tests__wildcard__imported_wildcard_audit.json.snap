@@ -1,0 +1,23 @@
+---
+source: src/tests/wildcard.rs
+expression: json
+---
+{
+  "conclusion": "success",
+  "vetted_fully": [
+    {
+      "name": "third-party1",
+      "version": "10.0.0"
+    },
+    {
+      "name": "third-party2",
+      "version": "10.0.0"
+    },
+    {
+      "name": "transitive-third-party1",
+      "version": "10.0.0"
+    }
+  ],
+  "vetted_partially": [],
+  "vetted_with_exemptions": []
+}

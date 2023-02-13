@@ -13,6 +13,27 @@ description = "example2"
 description = "example2"
 implies = "safe-to-deploy"
 
+[[wildcard-audits.crate-a]]
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2022-12-25"
+end = "2023-12-25"
+notes = "should parse correctly"
+
+[[wildcard-audits.crate-c]]
+criteria = "example2"
+user-id = 1
+start = "2022-12-25"
+end = "2023-12-25"
+notes = "will not be removed"
+
+[[wildcard-audits.crate-c]]
+criteria = ["example2", "example3"]
+user-id = 1
+start = "2022-12-25"
+end = "2023-12-25"
+notes = "will not be removed"
+
 [[audits.crate-a]]
 criteria = "safe-to-deploy"
 version = "10.0.0"

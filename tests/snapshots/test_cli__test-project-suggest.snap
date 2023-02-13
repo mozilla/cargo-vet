@@ -81,7 +81,6 @@ recommended audits for safe-to-deploy:
     cargo vet inspect js-sys 0.3.57                                                    (used by reqwest, web-sys, wasm-bindgen-futures)            (12874 lines)
     cargo vet inspect tokio-util 0.7.1                                                 (used by h2)                                                (13870 lines)
     cargo vet inspect hashbrown 0.11.2                                                 (used by indexmap)                                          (14603 lines)
-    cargo vet inspect serde 1.0.136                                                    (used by reqwest, serde_json, serde_urlencoded)             (16141 lines)
     cargo vet inspect url 2.2.2                                                        (used by reqwest)                                           (16344 lines)
     cargo vet inspect tinyvec 1.5.1                                                    (used by unicode-normalization)                             (16751 lines)
     cargo vet inspect http 0.2.6                                                       (used by h2, hyper, reqwest, http-body)                     (16819 lines)
@@ -106,7 +105,7 @@ recommended audits for safe-to-deploy:
 recommended audits for safe-to-run:
     cargo vet inspect hermit-abi 0.1.19  (used by atty)  (932 lines)
 
-estimated audit backlog: 1739832 lines
+estimated audit backlog: 1723691 lines
 
 Use |cargo vet certify| to record the audits.
 

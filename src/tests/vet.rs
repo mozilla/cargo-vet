@@ -2552,6 +2552,7 @@ fn builtin_simple_foreign_tag_team() {
         FOREIGN.to_owned(),
         AuditsFile {
             criteria: SortedMap::new(),
+            wildcard_audits: SortedMap::new(),
             audits: [(
                 "transitive-third-party1".to_owned(),
                 vec![delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
@@ -2591,6 +2592,7 @@ fn builtin_simple_mega_foreign_tag_team() {
         FOREIGN.to_owned(),
         AuditsFile {
             criteria: SortedMap::new(),
+            wildcard_audits: SortedMap::new(),
             audits: [(
                 "transitive-third-party1".to_owned(),
                 vec![delta_audit(ver(3), ver(6), SAFE_TO_DEPLOY)],
@@ -2610,6 +2612,7 @@ fn builtin_simple_mega_foreign_tag_team() {
         OTHER_FOREIGN.to_owned(),
         AuditsFile {
             criteria: SortedMap::new(),
+            wildcard_audits: SortedMap::new(),
             audits: [(
                 "transitive-third-party1".to_owned(),
                 vec![delta_audit(ver(6), ver(DEFAULT_VER), SAFE_TO_DEPLOY)],

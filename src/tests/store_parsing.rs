@@ -8,12 +8,11 @@ const EMPTY_AUDITS: &str = r##"
 "##;
 const EMPTY_IMPORTS: &str = r##"
 # cargo-vet imports lock
-
-[audits]
 "##;
 
 fn get_valid_store(config: &str, audits: &str, imports: &str) -> String {
-    let res = crate::Store::mock_acquire(config, audits, imports, true);
+    let today = chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
+    let res = crate::Store::mock_acquire(config, audits, imports, today, true);
     match res {
         Ok(_) => String::new(),
         Err(e) => format!("{:?}", miette::Report::new(e)),
@@ -282,6 +281,51 @@ unknown-field = "invalid"
 "##;
 
     let acquire_errors = get_valid_store(EMPTY_CONFIG, audits, EMPTY_IMPORTS);
+    insta::assert_snapshot!(acquire_errors);
+}
+
+#[test]
+fn test_distant_future_end_date() {
+    // NOTE: `get_valid_store` pretends that "today" is 2023-01-01, so this will
+    // always be over a year in the future.
+    let audits = r##"
+# cargo-vet audits file
+
+[[wildcard-audits.zzz]]
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2015-05-15"
+end = "2024-05-15"
+
+[audits]
+"##;
+
+    let acquire_errors = get_valid_store(EMPTY_CONFIG, audits, EMPTY_IMPORTS);
+    insta::assert_snapshot!(acquire_errors);
+}
+
+#[test]
+fn test_distant_future_end_date_leap_year() {
+    // Make sure that we handle the day being on Feb. 29th. We'll treat 1 year
+    // in the future as Feb. 28th, as it won't be a leap-year.
+    let audits = r##"
+# cargo-vet audits file
+
+[[wildcard-audits.zzz]]
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2015-05-15"
+end = "2021-03-01"
+
+[audits]
+"##;
+
+    let today = chrono::NaiveDate::from_ymd_opt(2020, 2, 29).unwrap();
+    let acquire_errors =
+        match crate::Store::mock_acquire(EMPTY_CONFIG, audits, EMPTY_IMPORTS, today, true) {
+            Ok(_) => String::new(),
+            Err(e) => format!("{:?}", miette::Report::new(e)),
+        };
     insta::assert_snapshot!(acquire_errors);
 }
 

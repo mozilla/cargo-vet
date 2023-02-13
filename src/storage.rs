@@ -20,19 +20,21 @@ use tracing::{error, info, log::warn, trace};
 
 use crate::{
     errors::{
-        BadFormatError, CacheAcquireError, CacheCommitError, CommandError, CriteriaChangeError,
-        CriteriaChangeErrors, DiffError, DownloadError, FetchAndDiffError, FetchAuditError,
-        FetchError, FlockError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError,
-        SourceFile, StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError,
-        StoreTomlError, StoreValidateError, StoreValidateErrors, TomlParseError,
-        UnpackCheckoutError, UnpackError,
+        BadFormatError, BadWildcardEndDateError, CacheAcquireError, CacheCommitError, CommandError,
+        CriteriaChangeError, CriteriaChangeErrors, DiffError, DownloadError, FetchAndDiffError,
+        FetchAuditError, FetchError, FlockError, InvalidCriteriaError, JsonParseError,
+        LoadJsonError, LoadTomlError, SourceFile, StoreAcquireError, StoreCommitError,
+        StoreCreateError, StoreJsonError, StoreTomlError, StoreValidateError, StoreValidateErrors,
+        TomlParseError, UnpackCheckoutError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
         self, AuditEntry, AuditKind, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
-        CriteriaEntry, CriteriaName, Delta, DiffCache, DiffStat, FastMap, FetchCommand,
-        ForeignAuditsFile, ImportName, ImportsFile, MetaConfig, PackageName, PackageStr, SortedMap,
-        VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        CratesAPICrate, CratesPublisher, CriteriaEntry, CriteriaName, Delta, DiffCache, DiffStat,
+        FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName, ImportsFile, MetaConfig,
+        PackageName, PackageStr, PublisherCache, PublisherCacheEntry, PublisherCacheUser,
+        PublisherCacheVersion, SortedMap, VetVersion, WildcardAudits, WildcardEntry,
+        SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
@@ -52,6 +54,7 @@ type CratesIndex = crate::tests::MockIndex;
 // tmp cache for various shenanigans
 const CACHE_DIFF_CACHE: &str = "diff-cache.toml";
 const CACHE_COMMAND_HISTORY: &str = "command-history.json";
+const CACHE_PUBLISHER_CACHE: &str = "publisher-cache.json";
 const CACHE_EMPTY_PACKAGE: &str = "empty";
 const CACHE_REGISTRY_SRC: &str = "src";
 const CACHE_REGISTRY_CACHE: &str = "cache";
@@ -62,6 +65,7 @@ const CACHE_VET_LOCK: &str = ".vet-lock";
 const CACHE_ALLOWED_FILES: &[&str] = &[
     CACHE_DIFF_CACHE,
     CACHE_COMMAND_HISTORY,
+    CACHE_PUBLISHER_CACHE,
     CACHE_EMPTY_PACKAGE,
     CACHE_REGISTRY_SRC,
     CACHE_REGISTRY_CACHE,
@@ -86,6 +90,9 @@ const DIFF_SKIP_PATHS: &[&str] = &["Cargo.lock", ".cargo_vcs_info.json", ".cargo
 
 // FIXME: This is a completely arbitrary number, and may be too high or too low.
 const MAX_CONCURRENT_DIFFS: usize = 40;
+
+// Re-check if a relevant version was not published every day.
+const NONINDEX_VERSION_PUBLISHER_REFRESH_DAYS: i64 = 1;
 
 struct StoreLock {
     config: FileLock,
@@ -165,10 +172,12 @@ impl Store {
                 exemptions: SortedMap::new(),
             },
             imports: ImportsFile {
+                publisher: SortedMap::new(),
                 audits: SortedMap::new(),
             },
             audits: AuditsFile {
                 criteria: SortedMap::new(),
+                wildcard_audits: SortedMap::new(),
                 audits: SortedMap::new(),
             },
             live_imports: None,
@@ -214,8 +223,9 @@ impl Store {
         let live_imports = if let (false, Some(network)) = (cfg.cli.locked, network) {
             let fetched_audits = tokio::runtime::Handle::current()
                 .block_on(fetch_imported_audits(network, &config))?;
-            let live_imports =
+            let mut live_imports =
                 process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
+            import_publisher_versions(cfg, network, &config, &audits, &imports, &mut live_imports)?;
             Some(live_imports)
         } else {
             None
@@ -232,8 +242,11 @@ impl Store {
             imports_src,
         };
 
+        // We need to know today's date to validate that end dates are valid.
+        let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
+
         // Check that the store isn't corrupt
-        store.validate(cfg.cli.locked)?;
+        store.validate(today, cfg.cli.locked)?;
 
         Ok(store)
     }
@@ -255,8 +268,12 @@ impl Store {
 
     /// Create a mock store, also mocking out the unlocked import fetching
     /// process by providing a mocked `Network` instance.
+    ///
+    /// NOTE: When validating the store, `mock_online` will use a "today" date
+    /// of 2023-01-01.
     #[cfg(test)]
     pub fn mock_online(
+        cfg: &Config,
         config: ConfigFile,
         audits: AuditsFile,
         imports: ImportsFile,
@@ -265,8 +282,9 @@ impl Store {
     ) -> Result<Self, StoreAcquireError> {
         let fetched_audits =
             tokio::runtime::Handle::current().block_on(fetch_imported_audits(network, &config))?;
-        let live_imports =
+        let mut live_imports =
             process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
+        import_publisher_versions(cfg, network, &config, &audits, &imports, &mut live_imports)?;
 
         let store = Self {
             lock: None,
@@ -279,7 +297,9 @@ impl Store {
             imports_src: SourceFile::new_empty(IMPORTS_LOCK),
         };
 
-        store.validate(false)?;
+        let today = chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
+
+        store.validate(today, false)?;
 
         Ok(store)
     }
@@ -289,6 +309,7 @@ impl Store {
         config: &str,
         audits: &str,
         imports: &str,
+        today: chrono::NaiveDate,
         check_file_formatting: bool,
     ) -> Result<Self, StoreAcquireError> {
         let (config_src, config): (_, ConfigFile) = load_toml(CONFIG_TOML, config.as_bytes())?;
@@ -306,7 +327,7 @@ impl Store {
             imports_src,
         };
 
-        store.validate(check_file_formatting)?;
+        store.validate(today, check_file_formatting)?;
 
         Ok(store)
     }
@@ -350,6 +371,18 @@ impl Store {
         }
     }
 
+    /// Returns the set of publisher information which should be operated upon.
+    ///
+    /// If the store was acquired unlocked, whis may include publisher
+    /// information which is not stored in imports.lock, otherwise it will only
+    /// contain imports stored locally.
+    pub fn publishers(&self) -> &SortedMap<PackageName, Vec<CratesPublisher>> {
+        match &self.live_imports {
+            Some(live_imports) => &live_imports.publisher,
+            None => &self.imports.publisher,
+        }
+    }
+
     /// Commit the store's contents back to disk
     pub fn commit(self) -> Result<(), StoreCommitError> {
         // TODO: make this truly transactional?
@@ -389,9 +422,15 @@ impl Store {
 
     /// Validate the store's integrity
     #[allow(clippy::for_kv_map)]
-    pub fn validate(&self, check_file_formatting: bool) -> Result<(), StoreValidateErrors> {
+    pub fn validate(
+        &self,
+        today: chrono::NaiveDate,
+        check_file_formatting: bool,
+    ) -> Result<(), StoreValidateErrors> {
         // ERRORS: ideally these are all gathered diagnostics, want to report as many errors
         // at once as possible!
+
+        let max_end_date = today + chrono::Months::new(12);
 
         // TODO(#66): implement validation
         //
@@ -411,20 +450,22 @@ impl Store {
         fn check_criteria(
             source_code: &SourceFile,
             valid: &Arc<Vec<CriteriaName>>,
-            errors: &mut Vec<InvalidCriteriaError>,
+            errors: &mut Vec<StoreValidateError>,
             criteria: &[Spanned<CriteriaName>],
         ) {
             for criteria in criteria {
                 if !valid.contains(criteria) {
-                    errors.push(InvalidCriteriaError {
+                    errors.push(StoreValidateError::InvalidCriteria(InvalidCriteriaError {
                         source_code: source_code.clone(),
                         span: Spanned::span(criteria),
                         invalid: criteria.to_string(),
                         valid_names: valid.clone(),
-                    })
+                    }))
                 }
             }
         }
+
+        let mut errors = Vec::new();
 
         // Fixme: this should probably be a Map...? Sorted? Stable?
         let valid_criteria = Arc::new(
@@ -437,14 +478,13 @@ impl Store {
                 .collect::<Vec<_>>(),
         );
         let no_criteria = vec![];
-        let mut invalid_criteria_errors = vec![];
 
         for (_package, entries) in &self.config.exemptions {
             for entry in entries {
                 check_criteria(
                     &self.config_src,
                     &valid_criteria,
-                    &mut invalid_criteria_errors,
+                    &mut errors,
                     &entry.criteria,
                 );
             }
@@ -453,22 +493,17 @@ impl Store {
             check_criteria(
                 &self.config_src,
                 &valid_criteria,
-                &mut invalid_criteria_errors,
+                &mut errors,
                 policy.criteria.as_ref().unwrap_or(&no_criteria),
             );
             check_criteria(
                 &self.config_src,
                 &valid_criteria,
-                &mut invalid_criteria_errors,
+                &mut errors,
                 policy.dev_criteria.as_ref().unwrap_or(&no_criteria),
             );
             for (_dep_package, dep_criteria) in &policy.dependency_criteria {
-                check_criteria(
-                    &self.config_src,
-                    &valid_criteria,
-                    &mut invalid_criteria_errors,
-                    dep_criteria,
-                );
+                check_criteria(&self.config_src, &valid_criteria, &mut errors, dep_criteria);
             }
         }
         for (_new_criteria, entry) in &self.audits.criteria {
@@ -476,7 +511,7 @@ impl Store {
             check_criteria(
                 &self.audits_src,
                 &valid_criteria,
-                &mut invalid_criteria_errors,
+                &mut errors,
                 &entry.implies,
             );
         }
@@ -486,9 +521,30 @@ impl Store {
                 check_criteria(
                     &self.audits_src,
                     &valid_criteria,
-                    &mut invalid_criteria_errors,
+                    &mut errors,
                     &entry.criteria,
                 );
+            }
+        }
+        for (_package, entries) in &self.audits.wildcard_audits {
+            for entry in entries {
+                check_criteria(
+                    &self.audits_src,
+                    &valid_criteria,
+                    &mut errors,
+                    &entry.criteria,
+                );
+
+                if entry.end > max_end_date {
+                    errors.push(StoreValidateError::BadWildcardEndDate(
+                        BadWildcardEndDateError {
+                            source_code: self.audits_src.clone(),
+                            span: Spanned::span(&entry.end),
+                            date: *entry.end,
+                            max: max_end_date,
+                        },
+                    ))
+                }
             }
         }
 
@@ -496,7 +552,6 @@ impl Store {
         // and have no unrecognized fields. We don't want to be reformatting
         // them or dropping unused fields while in CI, as those changes will be
         // ignored.
-        let mut bad_format_errors = Vec::new();
         if check_file_formatting {
             for (name, old, new) in [
                 (
@@ -519,7 +574,7 @@ impl Store {
                 ),
             ] {
                 if old.trim_end() != new.trim_end() {
-                    bad_format_errors.push(BadFormatError {
+                    errors.push(StoreValidateError::BadFormat(BadFormatError {
                         unified_diff: unified_diff(
                             Algorithm::Myers,
                             old,
@@ -527,29 +582,17 @@ impl Store {
                             3,
                             Some((&format!("old/{name}"), &format!("new/{name}"))),
                         ),
-                    });
+                    }));
                 }
             }
         }
 
         // If we're locked, and therefore not fetching new live imports,
         // validate that our imports.lock is in sync with config.toml.
-        let imports_lock_outdated = if self.imports_lock_outdated() {
-            Some(StoreValidateError::ImportsLockOutdated)
-        } else {
-            None
+        if self.imports_lock_outdated() {
+            errors.push(StoreValidateError::ImportsLockOutdated);
         };
 
-        let errors = invalid_criteria_errors
-            .into_iter()
-            .map(StoreValidateError::InvalidCriteria)
-            .chain(imports_lock_outdated)
-            .chain(
-                bad_format_errors
-                    .into_iter()
-                    .map(StoreValidateError::BadFormat),
-            )
-            .collect::<Vec<_>>();
         if !errors.is_empty() {
             return Err(StoreValidateErrors { errors });
         }
@@ -599,6 +642,7 @@ impl Store {
         };
 
         let mut new_imports = ImportsFile {
+            publisher: SortedMap::new(),
             audits: SortedMap::new(),
         };
         for (import_index, (import_name, live_audits_file)) in
@@ -606,6 +650,7 @@ impl Store {
         {
             let mut new_audits_file = AuditsFile {
                 criteria: live_audits_file.criteria.clone(),
+                wildcard_audits: SortedMap::new(),
                 audits: SortedMap::new(),
             };
             for (pkgidx, result) in results.iter().enumerate() {
@@ -617,11 +662,11 @@ impl Store {
                 }
 
                 // If the audit succeeded, get the set of required audits.
-                let required_edges = match result {
+                let required_entries = match result {
                     Some(resolver::ResolveResult {
-                        required_edges: Some(required_edges),
+                        required_entries: Some(required_entries),
                         ..
-                    }) => Some(required_edges),
+                    }) => Some(required_entries),
                     _ => None,
                 };
 
@@ -640,11 +685,38 @@ impl Store {
                             return true;
                         }
 
-                        // If vetting succeeded for this package, keep
-                        // only the required edges, otherwise just keep
-                        // all existing imports for now.
-                        if let Some(required_edges) = required_edges {
-                            required_edges.contains(&resolver::DeltaEdgeOrigin::ImportedAudit {
+                        // If vetting succeeded for this package, keep only the
+                        // required entries, otherwise just keep all existing
+                        // imports for now.
+                        if let Some(required_entries) = required_entries {
+                            required_entries.contains(&resolver::RequiredEntry::Audit {
+                                import_index,
+                                audit_index,
+                            })
+                        } else {
+                            !audit.is_fresh_import
+                        }
+                    })
+                    .map(|(_, audit)| {
+                        let mut audit = audit.clone();
+                        audit.is_fresh_import = false;
+                        audit
+                    })
+                    .collect::<Vec<_>>();
+
+                let wildcard_audits = live_audits_file
+                    .wildcard_audits
+                    .get(package.name)
+                    .map(|v| &v[..])
+                    .unwrap_or(&[])
+                    .iter()
+                    .enumerate()
+                    .filter(|&(audit_index, audit)| {
+                        // If vetting succeeded for this package, keep only the
+                        // required entries, otherwise just keep all existing
+                        // imports for now.
+                        if let Some(required_entries) = required_entries {
+                            required_entries.contains(&resolver::RequiredEntry::WildcardAudit {
                                 import_index,
                                 audit_index,
                             })
@@ -665,10 +737,63 @@ impl Store {
                         .audits
                         .insert(package.name.to_owned(), audits);
                 }
+                if !wildcard_audits.is_empty() {
+                    new_audits_file
+                        .wildcard_audits
+                        .insert(package.name.to_owned(), wildcard_audits);
+                }
             }
             new_imports
                 .audits
                 .insert(import_name.to_owned(), new_audits_file);
+        }
+
+        for (pkgidx, result) in results.iter().enumerate() {
+            let package = &graph.nodes[pkgidx];
+
+            // Don't import publisher information for first-party packages.
+            if !package.is_third_party {
+                continue;
+            }
+
+            // If the audit succeeded, get the set of required audits.
+            let required_entries = match result {
+                Some(resolver::ResolveResult {
+                    required_entries: Some(required_entries),
+                    ..
+                }) => Some(required_entries),
+                _ => None,
+            };
+
+            let publishers = live_imports
+                .publisher
+                .get(package.name)
+                .map(|v| &v[..])
+                .unwrap_or(&[])
+                .iter()
+                .enumerate()
+                .filter(|&(publisher_index, publisher)| {
+                    // If vetting succeeded for this package, keep only the
+                    // required entries, otherwise just keep all existing
+                    // imports for now.
+                    if let Some(required_entries) = required_entries {
+                        required_entries
+                            .contains(&resolver::RequiredEntry::Publisher { publisher_index })
+                    } else {
+                        !publisher.is_fresh_import
+                    }
+                })
+                .map(|(_, publisher)| {
+                    let mut publisher = publisher.clone();
+                    publisher.is_fresh_import = false;
+                    publisher
+                })
+                .collect::<Vec<_>>();
+            if !publishers.is_empty() {
+                new_imports
+                    .publisher
+                    .insert(package.name.to_owned(), publishers);
+            }
         }
 
         new_imports
@@ -684,6 +809,7 @@ fn process_imported_audits(
     allow_criteria_changes: bool,
 ) -> Result<ImportsFile, CriteriaChangeErrors> {
     let mut new_imports = ImportsFile {
+        publisher: SortedMap::new(),
         audits: SortedMap::new(),
     };
     let mut changed_criteria = Vec::new();
@@ -741,13 +867,22 @@ fn process_imported_audits(
                     .unwrap_or(&mut []);
                 for existing_audit in existing_audits {
                     for new_audit in &mut *new_audits {
-                        // Ignore `who` and `notes` for comparison, as they
-                        // are not relevant semantically and might have been
-                        // updated uneventfully.
-                        if new_audit.is_fresh_import
-                            && new_audit.kind == existing_audit.kind
-                            && new_audit.criteria == existing_audit.criteria
-                        {
+                        if new_audit.is_fresh_import && new_audit.same_audit_as(existing_audit) {
+                            new_audit.is_fresh_import = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            for (package, existing_audits) in &existing_audits_file.wildcard_audits {
+                let new_audits = audits_file
+                    .wildcard_audits
+                    .get_mut(package)
+                    .map(|v| &mut v[..])
+                    .unwrap_or(&mut []);
+                for existing_audit in existing_audits {
+                    for new_audit in &mut *new_audits {
+                        if new_audit.is_fresh_import && new_audit.same_audit_as(existing_audit) {
                             new_audit.is_fresh_import = false;
                             break;
                         }
@@ -952,8 +1087,33 @@ pub(crate) fn foreign_audit_file_to_local(
         .filter(|(_, audits)| !audits.is_empty())
         .collect();
 
+    let wildcard_audits: WildcardAudits = foreign_audit_file
+        .wildcard_audits
+        .into_iter()
+        .map(|(package, audits)| {
+            let parsed: Vec<_> = audits
+                .into_iter()
+                .filter_map(
+                    |value| match parse_imported_wildcard_audit(&valid_criteria, value) {
+                        Some(audit) => Some(audit),
+                        None => {
+                            ignored_audits.push(package.clone());
+                            None
+                        }
+                    },
+                )
+                .collect();
+            (package, parsed)
+        })
+        .filter(|(_, audits)| !audits.is_empty())
+        .collect();
+
     ForeignAuditFileToLocalResult {
-        audit_file: AuditsFile { criteria, audits },
+        audit_file: AuditsFile {
+            criteria,
+            wildcard_audits,
+            audits,
+        },
         ignored_criteria,
         ignored_audits,
     }
@@ -984,6 +1144,141 @@ fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> 
     }
 
     Some(audit)
+}
+
+/// Parse an unparsed wildcard audit entry, validating and returning it.
+fn parse_imported_wildcard_audit(
+    valid_criteria: &[CriteriaName],
+    value: toml::Value,
+) -> Option<WildcardEntry> {
+    let mut audit: WildcardEntry = parse_from_value(value)
+        .map_err(|err| info!("imported wildcard audit parsing failed due to {err}"))
+        .ok()?;
+
+    audit
+        .criteria
+        .retain(|criteria_name| is_known_criteria(valid_criteria, criteria_name));
+    if audit.criteria.is_empty() {
+        info!("imported wildcard audit parsing failed due to no known criteria");
+        return None;
+    }
+
+    Some(audit)
+}
+
+fn import_publisher_versions(
+    cfg: &Config,
+    network: &Network,
+    config_file: &ConfigFile,
+    audits_file: &AuditsFile,
+    imports_lock: &ImportsFile,
+    live_imports: &mut ImportsFile,
+) -> Result<(), StoreAcquireError> {
+    // Determine which versions are relevant for the purposes of wildcard audit
+    // checks. We'll only care about crates which have associated wildcard
+    // audits.
+    let relevant_packages: FastSet<_> = audits_file
+        .wildcard_audits
+        .keys()
+        .chain(
+            live_imports
+                .audits
+                .values()
+                .flat_map(|audits_file| audits_file.wildcard_audits.keys()),
+        )
+        .collect();
+
+    // We also only care about versions for third-party packages which are
+    // actually used in-tree.
+    let mut relevant_versions: FastMap<PackageStr<'_>, FastSet<&semver::Version>> = FastMap::new();
+    for pkg in &cfg.metadata.packages {
+        if relevant_packages.contains(&pkg.name) && pkg.is_third_party(&config_file.policy) {
+            relevant_versions
+                .entry(&pkg.name)
+                .or_default()
+                .insert(&pkg.version);
+        }
+    }
+
+    // Acquire the cache so we can use it to access the publisher cache.
+    // FIXME: Consider providing a way to keep this acquired cache after
+    // acquring the store to reduce the number of times we need to acquire the
+    // cache during an execution?
+    let cache = Cache::acquire(cfg).map_err(Box::new)?;
+
+    // We may care about other versions for these packages as well if they
+    // appear on the `from` side of a delta audit, or if they are named by an
+    // exemption.
+    let mut relevant_publishers = Vec::new();
+    for (pkg_name, mut versions) in relevant_versions {
+        // If there is a delta audit originating from a specific version, that
+        // version may be relevant, so record it.
+        for audit in [audits_file]
+            .into_iter()
+            .chain(live_imports.audits.values())
+            .flat_map(|audits_file| audits_file.audits.get(pkg_name))
+            .flatten()
+        {
+            if let AuditKind::Delta { from, .. } = &audit.kind {
+                versions.insert(&from.semver);
+            }
+        }
+
+        // If there is an exemption naming a specific version, it is also
+        // potentially relevant.
+        if let Some(exemptions) = config_file.exemptions.get(pkg_name) {
+            for exemption in exemptions {
+                versions.insert(&exemption.version.semver);
+            }
+        }
+
+        // Access the set of publishers. We provide the set of relevant versions
+        // to help decide whether or not to fetch new publisher information from
+        // crates.io, to reduce API activity.
+        let publishers = cache
+            .get_publishers(network, pkg_name, versions)
+            .map_err(Box::new)?;
+        relevant_publishers.push((pkg_name, publishers));
+    }
+
+    // NOTE: We make sure to process all imports before we look up user
+    // information in the cache, to ensure we're fetching consistent user
+    // information.
+    for (pkg_name, publishers) in relevant_publishers {
+        // Fill in the live imports table with the relevant information.
+        let nonfresh_versions: FastSet<_> = imports_lock
+            .publisher
+            .get(pkg_name)
+            .into_iter()
+            .flatten()
+            .map(|publisher| &publisher.version.semver)
+            .collect();
+
+        live_imports.publisher.insert(
+            pkg_name.to_owned(),
+            publishers
+                .into_iter()
+                .filter_map(|crates_version| {
+                    let user_id = crates_version.published_by?;
+                    let user_info = cache.get_crates_user_info(user_id)?;
+                    let is_fresh_import = !nonfresh_versions.contains(&crates_version.num);
+                    Some(CratesPublisher {
+                        version: VetVersion {
+                            semver: crates_version.num,
+                            git_rev: None,
+                        },
+                        user_id,
+                        user_login: user_info.login,
+                        user_name: user_info.name,
+                        when: crates_version.created_at.date_naive(),
+                        is_fresh_import,
+                    })
+                })
+                .collect(),
+        );
+    }
+
+    Ok(())
 }
 
 /// A Registry in CARGO_HOME (usually the crates.io one)
@@ -1017,6 +1312,8 @@ struct CacheState {
     diff_cache: DiffCache,
     /// Command history to provide some persistent magic smarts
     command_history: CommandHistory,
+    /// Cache of fetched info from crates.io about who published which versions of crates.
+    publisher_cache: PublisherCache,
     /// Paths for unpacked packages from this version.
     fetched_packages: FastMap<(String, VetVersion), Arc<tokio::sync::OnceCell<PathBuf>>>,
     /// Computed diffstats from this version.
@@ -1037,6 +1334,8 @@ pub struct Cache {
     diff_cache_path: Option<PathBuf>,
     /// Path to the CommandHistory (for when we want to save it back)
     command_history_path: Option<PathBuf>,
+    /// Path to the PublisherCache (for when we want to save it back)
+    publisher_cache_path: Option<PathBuf>,
     /// Semaphore preventing exceeding the maximum number of concurrent diffs.
     diff_semaphore: tokio::sync::Semaphore,
     /// Common mutable state for the cache which can be mutated concurrently
@@ -1064,7 +1363,17 @@ impl Drop for Cache {
                 fs::write(command_history_path, command_history)?;
                 Ok(())
             }() {
-                error!("error writing back changes to diff-cache: {:?}", err);
+                error!("error writing back changes to command history: {:?}", err);
+            }
+        }
+        if let Some(publisher_cache_path) = &self.publisher_cache_path {
+            // Write back the publisher_cache
+            if let Err(err) = || -> Result<(), CacheCommitError> {
+                let publisher_cache = store_publisher_cache(mem::take(&mut state.publisher_cache))?;
+                fs::write(publisher_cache_path, publisher_cache)?;
+                Ok(())
+            }() {
+                error!("error writing back changes to publisher-cache: {:?}", err);
             }
         }
         // `_lock: FileLock` implicitly released here
@@ -1089,10 +1398,12 @@ impl Cache {
                 cargo_registry: cargo_registry.ok(),
                 diff_cache_path: None,
                 command_history_path: None,
+                publisher_cache_path: None,
                 diff_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_DIFFS),
                 state: Mutex::new(CacheState {
                     diff_cache: DiffCache::default(),
                     command_history: CommandHistory::default(),
+                    publisher_cache: PublisherCache::default(),
                     fetched_packages: FastMap::new(),
                     diffed: FastMap::new(),
                 }),
@@ -1127,11 +1438,7 @@ impl Cache {
         })?;
 
         // Setup the diff_cache.
-        let diff_cache_path = cfg
-            .cli
-            .diff_cache
-            .clone()
-            .unwrap_or_else(|| root.join(CACHE_DIFF_CACHE));
+        let diff_cache_path = root.join(CACHE_DIFF_CACHE);
         let diff_cache: DiffCache = File::open(&diff_cache_path)
             .ok()
             .and_then(|f| load_toml(CACHE_DIFF_CACHE, f).map(|v| v.1).ok())
@@ -1144,16 +1451,25 @@ impl Cache {
             .and_then(|f| load_json(f).ok())
             .unwrap_or_default();
 
+        // Setup the publisher_cache.
+        let publisher_cache_path = root.join(CACHE_PUBLISHER_CACHE);
+        let publisher_cache: PublisherCache = File::open(&publisher_cache_path)
+            .ok()
+            .and_then(|f| load_json(f).ok())
+            .unwrap_or_default();
+
         Ok(Self {
             _lock: Some(lock),
             root: Some(root),
             diff_cache_path: Some(diff_cache_path),
             command_history_path: Some(command_history_path),
+            publisher_cache_path: Some(publisher_cache_path),
             cargo_registry: cargo_registry.ok(),
             diff_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_DIFFS),
             state: Mutex::new(CacheState {
                 diff_cache,
                 command_history,
+                publisher_cache,
                 fetched_packages: FastMap::new(),
                 diffed: FastMap::new(),
             }),
@@ -1633,17 +1949,18 @@ impl Cache {
     /// Delete every file in the cache directory other than the cache lock, and
     /// clear out the command history and diff cache files.
     ///
-    /// NOTE: The diff_cache and command_history files will be re-created when
-    /// the cache is unlocked, however they will be empty.
+    /// NOTE: The diff_cache, command_history, and publisher_cache files will be
+    /// re-created when the cache is unlocked, however they will be empty.
     pub async fn clean(&self) -> Result<(), io::Error> {
         let root = self.root.as_ref().expect("cannot clean a mocked cache");
 
-        // Make sure we don't write back the command history and diff cache when
-        // dropping.
+        // Make sure we don't write back the command history, diff cache, or
+        // publisher cache when dropping.
         {
             let mut guard = self.state.lock().unwrap();
             guard.command_history = Default::default();
             guard.diff_cache = Default::default();
+            guard.publisher_cache = Default::default();
         }
 
         let mut root_entries = tokio::fs::read_dir(&root).await?;
@@ -1668,6 +1985,124 @@ impl Cache {
     pub fn set_last_fetch(&self, last_fetch: FetchCommand) {
         let mut guard = self.state.lock().unwrap();
         guard.command_history.last_fetch = Some(last_fetch);
+    }
+
+    /// Look up information about who published each version of the specified
+    /// crates. Versions for each crate are also specified in order to avoid
+    /// hitting the network in the case where the cache already has the relevant
+    /// information.
+    fn get_publishers(
+        &self,
+        network: &Network,
+        name: PackageStr<'_>,
+        versions: FastSet<&semver::Version>,
+    ) -> Result<Vec<PublisherCacheVersion>, FetchAuditError> {
+        let now: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
+
+        // Load the cached response from our publisher-cache.
+        {
+            let guard = self.state.lock().unwrap();
+            if let Some(published) = guard.publisher_cache.crates.get(name) {
+                // Check if there are any relevant versions which are not present in
+                // the local cache. If none are missing, we have everything cached
+                // and can continue as normal.
+                let missing_versions: Vec<_> = versions
+                    .iter()
+                    .filter(|&&v| !published.versions.iter().any(|p| &p.num == v))
+                    .collect();
+                if missing_versions.is_empty() {
+                    info!("using cached publisher info for {name} - relevant versions in cache");
+                    return Ok(published.versions.clone());
+                }
+
+                // If we last fetched this package's published versions less than a
+                // day ago, double-check if the versions we care about appear in the
+                // local crates.io index.
+                // If none of the versions appear in the local index, we can skip
+                // fetching. This should help in cases where a crate is marked as
+                // `audit-as-crates-io` but is not actually published, as we'll
+                // never find publisher information in those cases.
+                if now - published.last_fetched
+                    < chrono::Duration::days(NONINDEX_VERSION_PUBLISHER_REFRESH_DAYS)
+                {
+                    if let Some(index_crate) = self.query_package_from_index(name) {
+                        if missing_versions
+                            .iter()
+                            .all(|version| exact_version(&index_crate, version).is_none())
+                        {
+                            info!("using cached publisher info for {name} - missing versions appear unpublished");
+                            return Ok(published.versions.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we don't know the publisher for every "relevant" version
+        // of this crate, we want to make sure we have the most
+        // up-to-date information about the publisher of packages from
+        // crates.io, so need to fetch information from the crates.io
+        // API.
+        //
+        // NOTE: The official scraper policy requests a rate limit of 1
+        // request per second (https://crates.io/policies#crawlers).
+        // This wouldn't be a very good user-experience to require a
+        // multi-second wait to fetch each crate's information, however
+        // the local caching and infrequent user-driven calls to the API
+        // should hopefully ensure we remain under the 1 request per
+        // second limit over time.
+        //
+        // If this ends up being an issue, we can look into adding some form
+        // of cross-call tracking in the cache to ensure that we don't
+        // exceed the rate over a slightly-extended period of time, (e.g. by
+        // throttling requests from consecutive calls).
+        assert!(!name.contains('/'), "invalid crate name");
+        let url = Url::parse(&format!("https://crates.io/api/v1/crates/{name}"))
+            .expect("invalid crate name");
+
+        // NOTE: Our caller isn't able to do anything else at the same
+        // time, and we don't want to do multiple crates.io API calls at
+        // the same time, so we'll do the network fetch sync for now.
+        let response = tokio::runtime::Handle::current().block_on(network.download(url))?;
+        let result = load_json::<CratesAPICrate>(&response[..])?.versions;
+
+        // Update the users cache and individual crates caches, and return our
+        // set of versions.
+        let mut guard = self.state.lock().unwrap();
+        let versions: Vec<_> = result
+            .into_iter()
+            .map(|api_version| PublisherCacheVersion {
+                num: api_version.num,
+                created_at: api_version.created_at,
+                published_by: api_version.published_by.map(|api_user| {
+                    info!("recording user info for {api_user:?}");
+                    guard.publisher_cache.users.insert(
+                        api_user.id,
+                        PublisherCacheUser {
+                            login: api_user.login,
+                            name: api_user.name,
+                        },
+                    );
+                    api_user.id
+                }),
+            })
+            .collect();
+        info!("found {} versions for crate {}", versions.len(), name);
+        guard.publisher_cache.crates.insert(
+            name.to_owned(),
+            PublisherCacheEntry {
+                last_fetched: now,
+                versions: versions.clone(),
+            },
+        );
+
+        Ok(versions)
+    }
+
+    /// Look up user information for a crates.io user from the publisher cache.
+    fn get_crates_user_info(&self, user_id: u64) -> Option<PublisherCacheUser> {
+        let guard = self.state.lock().unwrap();
+        guard.publisher_cache.users.get(&user_id).cloned()
     }
 }
 
@@ -2007,4 +2442,7 @@ fn store_diff_cache(diff_cache: DiffCache) -> Result<String, StoreTomlError> {
 }
 fn store_command_history(command_history: CommandHistory) -> Result<String, StoreJsonError> {
     store_json(command_history)
+}
+fn store_publisher_cache(publisher_cache: PublisherCache) -> Result<String, StoreJsonError> {
+    store_json(publisher_cache)
 }

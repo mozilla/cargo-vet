@@ -24,6 +24,8 @@ pub type ForeignCriteriaName = String;
 pub type PackageName = String;
 pub type PackageStr<'a> = &'a str;
 pub type ImportName = String;
+pub type ImportStr<'a> = &'a str;
+pub type CratesUserId = u64;
 
 // newtype VersionReq so that we can implement PartialOrd on it.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -201,25 +203,36 @@ impl MetaConfig {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
+pub type WildcardAudits = SortedMap<PackageName, Vec<WildcardEntry>>;
+
 pub type AuditedDependencies = SortedMap<PackageName, Vec<AuditEntry>>;
 
 /// audits.toml
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AuditsFile {
     /// A map of criteria_name to details on that criteria.
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
     pub criteria: SortedMap<CriteriaName, CriteriaEntry>,
+    /// Wildcard audits
+    #[serde(rename = "wildcard-audits")]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
+    #[serde(default)]
+    pub wildcard_audits: WildcardAudits,
     /// Actual audits.
     pub audits: AuditedDependencies,
 }
 
 /// Foreign audits.toml with unparsed entries and audits. Should have the same
 /// structure as `AuditsFile`, but with individual audits and criteria unparsed.
-#[derive(serde::Deserialize, Clone)]
+#[derive(serde::Deserialize, Clone, Debug)]
 pub struct ForeignAuditsFile {
     #[serde(default)]
     pub criteria: SortedMap<CriteriaName, toml::Value>,
+    #[serde(default)]
+    #[serde(rename = "wildcard-audits")]
+    pub wildcard_audits: SortedMap<PackageName, Vec<toml::Value>>,
+    #[serde(default)]
     pub audits: SortedMap<PackageName, Vec<toml::Value>>,
 }
 
@@ -265,6 +278,16 @@ pub struct AuditEntry {
     /// import handling code.
     #[serde(skip)]
     pub is_fresh_import: bool,
+}
+
+impl AuditEntry {
+    /// Should `self` be considered to be the same audit as `other`, e.g. for
+    /// the purposes of `is_fresh_import` checks?
+    pub fn same_audit_as(&self, other: &AuditEntry) -> bool {
+        // Ignore `who` and `notes` for comparison, as they are not relevant
+        // semantically and might have been updated uneventfully.
+        self.kind == other.kind && self.criteria == other.criteria
+    }
 }
 
 /// Implement PartialOrd manually because the order we want for sorting is
@@ -341,6 +364,46 @@ impl Serialize for Delta {
             Some(from) => format!("{} -> {}", from, self.to).serialize(serializer),
             None => self.to.serialize(serializer),
         }
+    }
+}
+
+/// An entry specifying a wildcard audit for a specific crate based on crates.io
+/// publication time and user-id.
+///
+/// These audits will be reified in the imports.lock file when unlocked.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WildcardEntry {
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(with = "serialization::string_or_vec")]
+    pub who: Vec<Spanned<String>>,
+    #[serde(with = "serialization::string_or_vec")]
+    pub criteria: Vec<Spanned<CriteriaName>>,
+    #[serde(rename = "user-id")]
+    pub user_id: CratesUserId,
+    pub start: Spanned<chrono::NaiveDate>,
+    pub end: Spanned<chrono::NaiveDate>,
+    pub notes: Option<String>,
+    #[serde(rename = "aggregated-from")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(with = "serialization::string_or_vec")]
+    #[serde(default)]
+    pub aggregated_from: Vec<Spanned<String>>,
+    /// See `AuditEntry::is_fresh_import`.
+    #[serde(skip)]
+    pub is_fresh_import: bool,
+}
+
+impl WildcardEntry {
+    /// Should `self` be considered to be the same audit as `other`, e.g. for
+    /// the purposes of `is_fresh_import` checks?
+    pub fn same_audit_as(&self, other: &WildcardEntry) -> bool {
+        // Ignore `who` and `notes` for comparison, as they are not relevant
+        // semantically and might have been updated uneventfully.
+        self.user_id == other.user_id
+            && self.start == other.start
+            && self.end == other.end
+            && self.criteria == other.criteria
     }
 }
 
@@ -688,10 +751,34 @@ fn is_default_exemptions_suggest(val: &bool) -> bool {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-/// imports.lock, not sure what I want to put in here yet.
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ImportsFile {
+    #[serde(default)]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
+    pub publisher: SortedMap<PackageName, Vec<CratesPublisher>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
     pub audits: SortedMap<ImportName, AuditsFile>,
+}
+
+/// Information about who published a specific version of a crate to be cached
+/// in imports.lock.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CratesPublisher {
+    // NOTE: This will only ever be a `semver::Version`, however the resolver
+    // code works on borrowed `VetVersion` instances, so we use one here so it
+    // is easier to use within the resolver.
+    pub version: VetVersion,
+    pub when: chrono::NaiveDate,
+    #[serde(rename = "user-id")]
+    pub user_id: CratesUserId,
+    #[serde(rename = "user-login")]
+    pub user_login: String,
+    #[serde(rename = "user-name")]
+    pub user_name: Option<String>,
+    /// See `AuditEntry::is_fresh_import`.
+    #[serde(skip)]
+    pub is_fresh_import: bool,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -789,6 +876,79 @@ impl FetchCommand {
 pub struct CommandHistory {
     #[serde(flatten)]
     pub last_fetch: Option<FetchCommand>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+//                                                                                //
+//                                                                                //
+//                                                                                //
+//                             publisher-cache.json                               //
+//                                                                                //
+//                                                                                //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PublisherCacheUser {
+    pub login: String,
+    pub name: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PublisherCacheVersion {
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub num: semver::Version,
+    pub published_by: Option<CratesUserId>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PublisherCacheEntry {
+    pub last_fetched: chrono::DateTime<chrono::Utc>,
+    pub versions: Vec<PublisherCacheVersion>,
+}
+
+/// The current DiffCache file format in a tagged enum.
+///
+/// If we fail to read the DiffCache it will be silently re-built, meaning that
+/// the version enum tag can be changed to force the DiffCache to be
+/// re-generated after a breaking change to the format, such as a change to how
+/// diffs are computed or identified.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PublisherCache {
+    pub users: SortedMap<CratesUserId, PublisherCacheUser>,
+    pub crates: SortedMap<PackageName, PublisherCacheEntry>,
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+//                                                                                //
+//                                                                                //
+//                                                                                //
+//                                 crates.io API                                  //
+//                                                                                //
+//                                                                                //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+
+// NOTE: This is a subset of the format returned from the crates.io v1 API.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CratesAPIUser {
+    pub id: CratesUserId,
+    pub login: String,
+    pub name: Option<String>,
+}
+
+// NOTE: This is a subset of the format returned from the crates.io v1 API.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CratesAPIVersion {
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub num: semver::Version,
+    pub published_by: Option<CratesAPIUser>,
+}
+
+// NOTE: This is a subset of the format returned from the crates.io v1 API.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CratesAPICrate {
+    pub versions: Vec<CratesAPIVersion>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
