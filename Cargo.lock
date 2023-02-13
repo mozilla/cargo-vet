@@ -150,7 +150,7 @@ dependencies = [
  "similar",
  "tar",
  "tempfile",
- "textwrap",
+ "textwrap 0.15.0",
  "thiserror",
  "tokio",
  "toml",
@@ -203,9 +203,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.6"
+version = "3.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f1fe12880bae935d142c8702d500c63a4e8634b6c3c57ad72bf978fc7b6249a"
+checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
 dependencies = [
  "atty",
  "bitflags",
@@ -215,7 +215,7 @@ dependencies = [
  "once_cell",
  "strsim",
  "termcolor",
- "textwrap",
+ "textwrap 0.16.0",
 ]
 
 [[package]]
@@ -230,9 +230,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "3.2.6"
+version = "3.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed6db9e867166a43a53f7199b5e4d1f522a1e5bd626654be263c999ce59df39a"
+checksum = "ea0c8bce528c4be4da13ea6fead8965e95b6073585a2f05204bd8f4119f82a65"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -811,7 +811,7 @@ dependencies = [
  "supports-hyperlinks",
  "supports-unicode",
  "terminal_size",
- "textwrap",
+ "textwrap 0.15.0",
  "thiserror",
  "unicode-width",
 ]
@@ -1421,6 +1421,12 @@ dependencies = [
  "unicode-linebreak",
  "unicode-width",
 ]
+
+[[package]]
+name = "textwrap"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "222a222a5bfe1bba4a77b45ec488a741b3cb8872e5e499451fd7d0129c9c7c3d"
 
 [[package]]
 name = "thiserror"
