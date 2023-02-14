@@ -20,12 +20,12 @@ use tracing::{error, info, log::warn, trace};
 
 use crate::{
     errors::{
-        BadFormatError, BadWildcardEndDateError, CacheAcquireError, CacheCommitError, CommandError,
-        CriteriaChangeError, CriteriaChangeErrors, DiffError, DownloadError, FetchAndDiffError,
-        FetchAuditError, FetchError, FlockError, InvalidCriteriaError, JsonParseError,
-        LoadJsonError, LoadTomlError, SourceFile, StoreAcquireError, StoreCommitError,
-        StoreCreateError, StoreJsonError, StoreTomlError, StoreValidateError, StoreValidateErrors,
-        TomlParseError, UnpackCheckoutError, UnpackError,
+        BadFormatError, BadWildcardEndDateError, CacheAcquireError, CacheCommitError, CertifyError,
+        CommandError, CriteriaChangeError, CriteriaChangeErrors, DiffError, DownloadError,
+        FetchAndDiffError, FetchAuditError, FetchError, FlockError, InvalidCriteriaError,
+        JsonParseError, LoadJsonError, LoadTomlError, SourceFile, StoreAcquireError,
+        StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError, StoreValidateError,
+        StoreValidateErrors, TomlParseError, UnpackCheckoutError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
@@ -225,7 +225,20 @@ impl Store {
                 .block_on(fetch_imported_audits(network, &config))?;
             let mut live_imports =
                 process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
-            import_publisher_versions(cfg, network, &config, &audits, &imports, &mut live_imports)?;
+            // XXX: Allow callers to hold on to this cache so we don't need to
+            // re-acquire it after `Store::acquire`.
+            let cache = Cache::acquire(cfg).map_err(Box::new)?;
+            import_publisher_versions(
+                &cfg.metadata,
+                network,
+                &cache,
+                &wildcard_audits_packages(&audits, &live_imports),
+                &config,
+                &audits,
+                &imports,
+                &mut live_imports,
+            )
+            .map_err(Box::new)?;
             Some(live_imports)
         } else {
             None
@@ -284,7 +297,18 @@ impl Store {
             tokio::runtime::Handle::current().block_on(fetch_imported_audits(network, &config))?;
         let mut live_imports =
             process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
-        import_publisher_versions(cfg, network, &config, &audits, &imports, &mut live_imports)?;
+        let cache = Cache::acquire(cfg).map_err(Box::new)?;
+        import_publisher_versions(
+            &cfg.metadata,
+            network,
+            &cache,
+            &wildcard_audits_packages(&audits, &live_imports),
+            &config,
+            &audits,
+            &imports,
+            &mut live_imports,
+        )
+        .map_err(Box::new)?;
 
         let store = Self {
             lock: None,
@@ -798,6 +822,38 @@ impl Store {
 
         new_imports
     }
+
+    /// Called to ensure that there is publisher information in the store's live
+    /// imports for the given crate. This is used when adding new wildcard
+    /// audits from `certify`.
+    pub fn ensure_publisher_versions(
+        &mut self,
+        cfg: &Config,
+        network: Option<&Network>,
+        package: PackageStr<'_>,
+    ) -> Result<&[CratesPublisher], CertifyError> {
+        if let (Some(network), Some(live_imports)) = (network, self.live_imports.as_mut()) {
+            let cache = Cache::acquire(cfg)?;
+            import_publisher_versions(
+                &cfg.metadata,
+                network,
+                &cache,
+                &[package.to_owned()].into_iter().collect(),
+                &self.config,
+                &self.audits,
+                &self.imports,
+                live_imports,
+            )?;
+
+            Ok(live_imports
+                .publisher
+                .get(package)
+                .map(|v| &v[..])
+                .unwrap_or(&[]))
+        } else {
+            Ok(&[])
+        }
+    }
 }
 
 /// Process imported audits from the network, generating a `LiveImports`
@@ -1166,32 +1222,41 @@ fn parse_imported_wildcard_audit(
     Some(audit)
 }
 
-fn import_publisher_versions(
-    cfg: &Config,
-    network: &Network,
-    config_file: &ConfigFile,
+fn wildcard_audits_packages(
     audits_file: &AuditsFile,
-    imports_lock: &ImportsFile,
-    live_imports: &mut ImportsFile,
-) -> Result<(), StoreAcquireError> {
+    imports_file: &ImportsFile,
+) -> FastSet<PackageName> {
     // Determine which versions are relevant for the purposes of wildcard audit
     // checks. We'll only care about crates which have associated wildcard
     // audits.
-    let relevant_packages: FastSet<_> = audits_file
+    audits_file
         .wildcard_audits
         .keys()
         .chain(
-            live_imports
+            imports_file
                 .audits
                 .values()
                 .flat_map(|audits_file| audits_file.wildcard_audits.keys()),
         )
-        .collect();
+        .cloned()
+        .collect()
+}
 
+#[allow(clippy::too_many_arguments)]
+fn import_publisher_versions(
+    metadata: &cargo_metadata::Metadata,
+    network: &Network,
+    cache: &Cache,
+    relevant_packages: &FastSet<PackageName>,
+    config_file: &ConfigFile,
+    audits_file: &AuditsFile,
+    imports_lock: &ImportsFile,
+    live_imports: &mut ImportsFile,
+) -> Result<(), FetchAuditError> {
     // We also only care about versions for third-party packages which are
     // actually used in-tree.
     let mut relevant_versions: FastMap<PackageStr<'_>, FastSet<&semver::Version>> = FastMap::new();
-    for pkg in &cfg.metadata.packages {
+    for pkg in &metadata.packages {
         if relevant_packages.contains(&pkg.name) && pkg.is_third_party(&config_file.policy) {
             relevant_versions
                 .entry(&pkg.name)
@@ -1199,12 +1264,6 @@ fn import_publisher_versions(
                 .insert(&pkg.version);
         }
     }
-
-    // Acquire the cache so we can use it to access the publisher cache.
-    // FIXME: Consider providing a way to keep this acquired cache after
-    // acquring the store to reduce the number of times we need to acquire the
-    // cache during an execution?
-    let cache = Cache::acquire(cfg).map_err(Box::new)?;
 
     // We may care about other versions for these packages as well if they
     // appear on the `from` side of a delta audit, or if they are named by an
@@ -1235,9 +1294,7 @@ fn import_publisher_versions(
         // Access the set of publishers. We provide the set of relevant versions
         // to help decide whether or not to fetch new publisher information from
         // crates.io, to reduce API activity.
-        let publishers = cache
-            .get_publishers(network, pkg_name, versions)
-            .map_err(Box::new)?;
+        let publishers = cache.get_publishers(network, pkg_name, versions)?;
         relevant_publishers.push((pkg_name, publishers));
     }
 

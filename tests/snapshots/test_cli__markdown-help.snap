@@ -337,6 +337,11 @@ The version to certify as audited
 If present, instead certify a diff from version1->version2
 
 ### OPTIONS
+#### `--wildcard <WILDCARD>`
+If present, certify a wildcard audit for the user with the given username.
+
+Use the --start-date and --end-date options to specify the date range to certify for.
+
 #### `--criteria <CRITERIA>`
 The criteria to certify for this audit
 
@@ -351,6 +356,21 @@ If not provided, we will collect this information from the local git.
 A free-form string to include with the new audit entry
 
 If not provided, there will be no notes.
+
+#### `--start-date <START_DATE>`
+Start date to create a wildcard audit from.
+
+Only valid with `--wildcard`.
+
+If not provided, will be the publication date of the first version published by the
+given user.
+
+#### `--end-date <END_DATE>`
+End date to create a wildcard audit from. May be at most 1 year in the future.
+
+Only valid with `--wildcard`.
+
+If not provided, will be 1 year from the current date.
 
 #### `--accept-all`
 Accept all criteria without an interactive prompt

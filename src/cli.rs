@@ -445,6 +445,12 @@ pub struct CertifyArgs {
     /// If present, instead certify a diff from version1->version2
     #[clap(action)]
     pub version2: Option<VetVersion>,
+    /// If present, certify a wildcard audit for the user with the given username.
+    ///
+    /// Use the --start-date and --end-date options to specify the date range to
+    /// certify for.
+    #[clap(long, action, conflicts_with("version1"), requires("package"))]
+    pub wildcard: Option<String>,
     /// The criteria to certify for this audit
     ///
     /// If not provided, we will prompt you for this information.
@@ -460,6 +466,21 @@ pub struct CertifyArgs {
     /// If not provided, there will be no notes.
     #[clap(long, action)]
     pub notes: Option<String>,
+    /// Start date to create a wildcard audit from.
+    ///
+    /// Only valid with `--wildcard`.
+    ///
+    /// If not provided, will be the publication date of the first version
+    /// published by the given user.
+    #[clap(long, action, requires("wildcard"))]
+    pub start_date: Option<chrono::NaiveDate>,
+    /// End date to create a wildcard audit from. May be at most 1 year in the future.
+    ///
+    /// Only valid with `--wildcard`.
+    ///
+    /// If not provided, will be 1 year from the current date.
+    #[clap(long, action, requires("wildcard"))]
+    pub end_date: Option<chrono::NaiveDate>,
     /// Accept all criteria without an interactive prompt
     #[clap(long, action)]
     pub accept_all: bool,

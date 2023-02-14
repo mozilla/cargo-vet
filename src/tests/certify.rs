@@ -1,3 +1,5 @@
+use crate::network::Network;
+
 use super::*;
 use std::fmt::Write;
 
@@ -138,6 +140,7 @@ fn mock_simple_certify_flow() {
         &mut store,
         None,
         None,
+        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
     )
     .expect("do_cmd_certify failed");
 
@@ -146,4 +149,97 @@ fn mock_simple_certify_flow() {
     let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
 
     insta::assert_snapshot!("mock-simple-certify-flow", result);
+}
+
+#[test]
+fn mock_wildcard_certify_flow() {
+    let mock = MockMetadata::simple();
+
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = mock.metadata();
+
+    let (config, audits, imports) = files_inited(&metadata);
+
+    let output = BasicTestOutput::with_callbacks(
+        |_| Ok("\n".to_owned()),
+        |_| {
+            Ok("\
+            I, testing, certify that I have audited all versions published by user 'testuser' between 2022-12-12 and 2024-01-01 of third-party1 in accordance with the above criteria.\n\
+            \n\
+            These are testing notes. They contain some\n\
+            newlines. Trailing whitespace        \n    \
+            and leading whitespace\n\
+            \n".to_owned())
+        },
+    );
+
+    let cfg = mock_cfg_args(
+        &metadata,
+        [
+            "cargo",
+            "vet",
+            "certify",
+            "third-party1",
+            "--wildcard",
+            "testuser",
+            "--who",
+            "testing",
+        ],
+    );
+    let sub_args = if let Some(crate::cli::Commands::Certify(sub_args)) = &cfg.cli.command {
+        sub_args
+    } else {
+        unreachable!();
+    };
+
+    let mut network = Network::new_mock();
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/third-party1",
+        &serde_json::json!({
+            "versions": [
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "9.0.0",
+                    "published_by": {
+                        "id": 5,
+                        "login": "otheruser",
+                        "name": "Other User",
+                        "url": "https://github.com/otheruser"
+                    }
+                },
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+            ]
+        }),
+    );
+
+    let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
+        .expect("store acquisition failed");
+
+    crate::do_cmd_certify(
+        &output.clone().as_dyn(),
+        &cfg,
+        sub_args,
+        &mut store,
+        Some(&network),
+        None,
+        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+    )
+    .expect("do_cmd_certify failed");
+
+    let audits = crate::serialization::to_formatted_toml(&store.audits).unwrap();
+
+    let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
+
+    insta::assert_snapshot!(result);
 }

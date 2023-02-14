@@ -4,7 +4,7 @@ use std::ops::Deref;
 use std::panic::panic_any;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{fs::File, io, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package};
@@ -37,8 +37,9 @@ use crate::errors::{
     SourceFile,
 };
 use crate::format::{
-    AuditEntry, AuditKind, AuditsFile, ConfigFile, CriteriaEntry, ExemptedDependency, FetchCommand,
-    ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo,
+    AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesUserId, CriteriaEntry, ExemptedDependency,
+    FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo,
+    WildcardEntry,
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
@@ -669,7 +670,16 @@ fn cmd_certify(
     // Grab the last fetch and immediately drop the cache
     let last_fetch = Cache::acquire(cfg)?.get_last_fetch();
 
-    do_cmd_certify(out, cfg, sub_args, &mut store, network.as_ref(), last_fetch)?;
+    let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
+    do_cmd_certify(
+        out,
+        cfg,
+        sub_args,
+        &mut store,
+        network.as_ref(),
+        last_fetch,
+        today,
+    )?;
 
     // Minimize exemptions after adding the new `certify`. This will be used to
     // potentially update imports, and remove now-unnecessary exemptions.
@@ -690,6 +700,7 @@ fn do_cmd_certify(
     store: &mut Store,
     network: Option<&Network>,
     last_fetch: Option<FetchCommand>,
+    today: chrono::NaiveDate,
 ) -> Result<(), CertifyError> {
     // Before setting up magic, we need to agree on a package
     let package = if let Some(package) = &sub_args.package {
@@ -708,27 +719,71 @@ fn do_cmd_certify(
         return Err(CertifyError::NotAPackage(package));
     }
 
-    let kind = if let Some(v1) = &sub_args.version1 {
+    #[derive(Debug)]
+    enum CertifyKind {
+        Delta {
+            from: VetVersion,
+            to: VetVersion,
+        },
+        Full {
+            version: VetVersion,
+        },
+        Wildcard {
+            user_login: String,
+            user_id: CratesUserId,
+            start: chrono::NaiveDate,
+            end: chrono::NaiveDate,
+        },
+    }
+
+    let kind = if let Some(login) = &sub_args.wildcard {
+        // Fetch publisher information for relevant versions of `package`.
+        let publishers = store.ensure_publisher_versions(cfg, network, &package)?;
+        let published_versions = publishers
+            .iter()
+            .filter(|publisher| &publisher.user_login == login);
+
+        let earliest = published_versions
+            .min_by_key(|p| p.when)
+            .ok_or_else(|| CertifyError::NotAPublisher(login.to_owned(), package.to_owned()))?;
+
+        // Get the from and to dates, defaulting to a from date of the earliest
+        // published package by the user, and a to date of 12 months from today.
+        let start = sub_args.start_date.unwrap_or(earliest.when);
+
+        let max_end = today + chrono::Months::new(12);
+        let end = sub_args.end_date.unwrap_or(max_end);
+        if end > max_end {
+            return Err(CertifyError::BadWildcardEndDate(end));
+        }
+
+        CertifyKind::Wildcard {
+            user_login: earliest.user_login.to_owned(),
+            user_id: earliest.user_id,
+            start,
+            end,
+        }
+    } else if let Some(v1) = &sub_args.version1 {
         // If explicit versions were provided, use those
         if let Some(v2) = &sub_args.version2 {
             // This is a delta audit
-            AuditKind::Delta {
+            CertifyKind::Delta {
                 from: v1.clone(),
                 to: v2.clone(),
             }
         } else {
             // This is a full audit
-            AuditKind::Full {
+            CertifyKind::Full {
                 version: v1.clone(),
             }
         }
     } else if let Some(fetch) = last_fetch.filter(|f| f.package() == package) {
         // Otherwise, is we just fetched this package, use the version(s) we fetched
         match fetch {
-            FetchCommand::Inspect { version, .. } => AuditKind::Full { version },
+            FetchCommand::Inspect { version, .. } => CertifyKind::Full { version },
             FetchCommand::Diff {
                 version1, version2, ..
-            } => AuditKind::Delta {
+            } => CertifyKind::Delta {
                 from: version1,
                 to: version2,
             },
@@ -759,12 +814,6 @@ fn do_cmd_certify(
     );
 
     let criteria_names = if sub_args.criteria.is_empty() {
-        let (from, to) = match &kind {
-            AuditKind::Full { version, .. } => (None, version),
-            AuditKind::Delta { from, to, .. } => (Some(from), to),
-            _ => unreachable!(),
-        };
-
         // If we don't have explicit cli criteria, guess the criteria
         //
         // * Check what would cause `cargo vet` to encounter fewer errors
@@ -772,18 +821,29 @@ fn do_cmd_certify(
         // * Otherwise guess nothing
         //
         // Regardless of the guess, prompt the user to confirm (just needs to mash enter)
-        let mut chosen_criteria = guess_audit_criteria(cfg, store, &package, from, to);
+        let (mut chosen_criteria, version_suffix) = match &kind {
+            CertifyKind::Full { version } => (
+                guess_audit_criteria(cfg, store, &package, None, version),
+                version.to_string(),
+            ),
+            CertifyKind::Delta { from, to } => (
+                guess_audit_criteria(cfg, store, &package, Some(from), to),
+                format!("{from} -> {to}"),
+            ),
+            CertifyKind::Wildcard { .. } => {
+                // FIXME: Consider predicting the criteria better for wildcard
+                // audits in the future.
+                (vec![format::SAFE_TO_DEPLOY.to_owned()], "*".to_owned())
+            }
+        };
 
         // Prompt for criteria
         loop {
             out.clear_screen()?;
-            write!(out, "choose criteria to certify for {package}");
-            match &kind {
-                AuditKind::Full { version, .. } => write!(out, ":{version}"),
-                AuditKind::Delta { from, to, .. } => write!(out, ":{from} -> {to}"),
-                AuditKind::Violation { .. } => unreachable!(),
-            }
-            writeln!(out);
+            writeln!(
+                out,
+                "choose criteria to certify for {package}:{version_suffix}"
+            );
             writeln!(out, "  0. <clear selections>");
             let implied_criteria = criteria_mapper.criteria_from_list(&chosen_criteria);
             // Iterate over all the local criteria. Note that it's fine for us to do the enumerate
@@ -871,13 +931,20 @@ fn do_cmd_certify(
         .collect::<Vec<_>>();
 
     let what_version = match &kind {
-        AuditKind::Full { version, .. } => {
+        CertifyKind::Full { version } => {
             format!("version {version}")
         }
-        AuditKind::Delta { from, to, .. } => {
+        CertifyKind::Delta { from, to } => {
             format!("the changes from version {from} to {to}")
         }
-        AuditKind::Violation { .. } => unreachable!(),
+        CertifyKind::Wildcard {
+            user_login,
+            start,
+            end,
+            ..
+        } => {
+            format!("all versions published by user '{user_login}' between {start} and {end}")
+        }
     };
     let statement = format!(
         "I, {username}, certify that I have audited {what_version} of {package} in accordance with the above criteria.",
@@ -952,12 +1019,41 @@ fn do_cmd_certify(
         };
     }
 
+    let criteria = criteria_names
+        .iter()
+        .map(|s| s.to_string().into())
+        .collect();
+    let audit_kind = match kind {
+        CertifyKind::Full { version } => AuditKind::Full { version },
+        CertifyKind::Delta { from, to } => AuditKind::Delta { from, to },
+        CertifyKind::Wildcard {
+            user_id,
+            start,
+            end,
+            ..
+        } => {
+            store
+                .audits
+                .wildcard_audits
+                .entry(package.clone())
+                .or_default()
+                .push(WildcardEntry {
+                    who,
+                    criteria,
+                    user_id,
+                    start: start.into(),
+                    end: end.into(),
+                    notes,
+                    aggregated_from: vec![],
+                    is_fresh_import: false,
+                });
+            return Ok(());
+        }
+    };
+
     let new_entry = AuditEntry {
-        kind: kind.clone(),
-        criteria: criteria_names
-            .iter()
-            .map(|s| s.to_string().into())
-            .collect(),
+        kind: audit_kind,
+        criteria,
         who,
         notes,
         aggregated_from: vec![],
@@ -971,24 +1067,9 @@ fn do_cmd_certify(
         .or_default()
         .push(new_entry);
 
-    // If we're submitting a full audit, look for a matching exemption entry to remove
-    if let AuditKind::Full { version, .. } = &kind {
-        if let Some(exemption_list) = store.config.exemptions.get_mut(&package) {
-            let cur_criteria_set = criteria_mapper.criteria_from_list(criteria_names);
-            // Iterate backwards so that we can delete while iterating
-            // (will only affect indices that we've already visited!)
-            for idx in (0..exemption_list.len()).rev() {
-                let entry = &exemption_list[idx];
-                let entry_criteria_set = criteria_mapper.criteria_from_list(&entry.criteria);
-                if &entry.version == version && cur_criteria_set.contains(&entry_criteria_set) {
-                    exemption_list.remove(idx);
-                }
-            }
-            if exemption_list.is_empty() {
-                store.config.exemptions.remove(&package);
-            }
-        }
-    }
+    store
+        .validate(today, false)
+        .expect("the new audit entry made the store invalid?");
 
     Ok(())
 }
