@@ -245,12 +245,22 @@ pub enum CertifyError {
     #[error("'{0}' isn't one of your foreign packages")]
     #[diagnostic(help("use --force to ignore this error"))]
     NotAPackage(PackageName),
+    #[error("'{0}' has not published any relevant version of '{1}'")]
+    #[diagnostic(help("please specify a user who has published a version of '{1}'"))]
+    NotAPublisher(String, PackageName),
+    #[error("end date of {0} is too far in the future")]
+    #[diagnostic(help("wildcard audit end dates may be at most 1 year in the future"))]
+    BadWildcardEndDate(chrono::NaiveDate),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
     #[error(transparent)]
     EditError(#[from] EditError),
     #[error(transparent)]
     UserInfoError(#[from] UserInfoError),
+    #[error(transparent)]
+    FetchAuditError(#[from] FetchAuditError),
+    #[error(transparent)]
+    CacheAcquire(#[from] CacheAcquireError),
 }
 
 ///////////////////////////////////////////////////////////
