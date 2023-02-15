@@ -8,7 +8,7 @@ fn get_imports_file_changes(metadata: &Metadata, store: &Store) -> String {
     // Run the resolver before calling `get_imports_file` to compute the new
     // imports file.
     let report = crate::resolver::resolve(metadata, None, store);
-    let new_imports = store.get_updated_imports_file(&report.graph, &report.results);
+    let new_imports = store.get_updated_imports_file(&report.collect_required_entries());
 
     // Format the old and new files as TOML, and write out a diff using `similar`.
     let old_imports = crate::serialization::to_formatted_toml(&store.imports)
@@ -1034,6 +1034,53 @@ fn equal_length_preferred_audits() {
                 full_audit(ver(8), SAFE_TO_DEPLOY),
                 delta_audit(ver(2), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
                 delta_audit(ver(8), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+            ],
+        )]
+        .into_iter()
+        .collect(),
+        wildcard_audits: SortedMap::new(),
+    };
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            ..Default::default()
+        },
+    );
+
+    let cfg = mock_cfg(&metadata);
+
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+
+    let output = get_imports_file_changes(&metadata, &store);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn import_multiple_versions() {
+    // (Pass) If multiple versions of a crate in the graph need to import
+    // audits, we need to import the required audits for all versions, not just
+    // one of them.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::complex();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-core");
+
+    let new_foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: [(
+            "third-core".to_owned(),
+            vec![
+                full_audit(ver(5), "safe-to-deploy"),
+                full_audit(ver(DEFAULT_VER), "safe-to-deploy"),
             ],
         )]
         .into_iter()
