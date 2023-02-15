@@ -193,7 +193,10 @@ pub enum CratePolicyError {
 }
 
 #[derive(Debug, Error, Diagnostic, PartialEq, Eq)]
-#[diagnostic(help("Add a `policy.\"<crate>:<version>\"` entry for them"))]
+#[diagnostic(help(
+    "Specifing `dependency-criteria` requires explicit policies for each version of \
+     a crate. Add a `policy.\"<crate>:<version>\"` entry for them."
+))]
 pub struct NeedsPolicyVersionErrors {
     pub errors: Vec<PackageError>,
 }
