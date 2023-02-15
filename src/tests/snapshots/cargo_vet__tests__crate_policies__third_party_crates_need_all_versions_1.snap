@@ -8,5 +8,7 @@ expression: "format!(\"{:?}\", miette :: Report :: new(e))"
 Error: 
   × some crates have policies that are missing an associated version
   │   third-party:2.0.0
-  help: Add a `policy."<crate>:<version>"` entry for them
+  help: Specifing `dependency-criteria` requires explicit policies for each
+        version of a crate. Add a `policy."<crate>:<version>"` entry for
+        them.
 

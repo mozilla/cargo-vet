@@ -2183,8 +2183,9 @@ fn check_audit_as_crates_io(
 /// Check crate policies for correctness.
 ///
 /// This verifies two rules:
-/// 1. Policies relating to third-party crates must have associated version(s). If a crate exists
-///    as a third-party dependency anywhere in the dependency graph, all versions must be specified.
+/// 1. Policies using `dependency-criteria` which relate to third-party crates must have associated
+///    version(s). If a crate has any `dependency-criteria` specified and exists as a third-party
+///    dependency anywhere in the dependency graph, all versions must be specified.
 /// 2. Any versioned policies must correspond to a crate in the graph.
 fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyErrors> {
     // All defined policy package names (to be removed).
@@ -2198,10 +2199,18 @@ fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyEr
         .filter_map(|(name, version, _)| version.map(|version| (name.clone(), version.clone())))
         .collect();
 
-    // A set of all third-party packages (for lookup of whether a crate has any third-party
+    // The set of all third-party packages (for lookup of whether a crate has any third-party
     // versions in use).
     let third_party_packages = foreign_packages_strict(&cfg.metadata, &store.config)
         .map(|p| &p.name)
+        .collect::<SortedSet<_>>();
+
+    // The set of all packages which have a `dependency-criteria` specified in a policy.
+    let dependency_criteria_packages = store
+        .config
+        .policy
+        .iter()
+        .filter_map(|(name, _, entry)| (!entry.dependency_criteria.is_empty()).then_some(name))
         .collect::<SortedSet<_>>();
 
     let mut needs_policy_version_errors = Vec::new();
@@ -2211,12 +2220,11 @@ fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyEr
 
         let versioned_policy_exists =
             versioned_policy_crates.remove(&(package.name.clone(), package.vet_version()));
-        let crate_policy_exists = store.config.policy.package.contains_key(&package.name);
 
-        // If a crate has at least one third-party package and a crate policy exists, a versioned
-        // policy for all used versions must exist.
+        // If a crate has at least one third-party package and some crate policy specifies a
+        // `dependency-criteria`, a versioned policy for all used versions must exist.
         if third_party_packages.contains(&package.name)
-            && crate_policy_exists
+            && dependency_criteria_packages.contains(&package.name)
             && !versioned_policy_exists
         {
             needs_policy_version_errors.push(PackageError {
