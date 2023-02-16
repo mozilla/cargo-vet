@@ -2,10 +2,6 @@
 source: src/tests/regenerate_unaudited.rs
 expression: exemptions
 ---
-[[random-crate]]
-version = "300.0.0"
-criteria = "safe-to-deploy"
-
 [[third-party1]]
 version = "300.0.0"
 criteria = "safe-to-deploy"

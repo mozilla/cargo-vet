@@ -681,14 +681,6 @@ fn cmd_certify(
         today,
     )?;
 
-    // Minimize exemptions after adding the new `certify`. This will be used to
-    // potentially update imports, and remove now-unnecessary exemptions.
-    // Explicitly disallow new exemptions so that exemptions are only updated
-    // once we start passing vet.
-    match resolver::regenerate_exemptions(cfg, &mut store, false) {
-        Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
-    }
-
     store.commit()?;
     Ok(())
 }
@@ -1071,6 +1063,20 @@ fn do_cmd_certify(
         .validate(today, false)
         .expect("the new audit entry made the store invalid?");
 
+    // Minimize exemptions after adding the new audit. This will be used to
+    // potentially update imports, and remove now-unnecessary exemptions for the
+    // target package.
+    // Explicitly disallow new exemptions so that exemptions are only updated
+    // once we start passing vet.
+    match resolver::regenerate_exemptions(
+        cfg,
+        store,
+        resolver::PreferFreshImports::Only(&package[..]),
+        false,
+    ) {
+        Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
+    }
+
     Ok(())
 }
 
@@ -1379,7 +1385,8 @@ fn cmd_regenerate_imports(
 
     // NOTE: Explicitly ignore the `ViolationConflict` error, as we still want
     // to update imports in that case.
-    match resolver::regenerate_exemptions(cfg, &mut store, false) {
+    match resolver::regenerate_exemptions(cfg, &mut store, resolver::PreferFreshImports::All, false)
+    {
         Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
     }
 
@@ -1474,7 +1481,7 @@ fn cmd_regenerate_exemptions(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
-    resolver::regenerate_exemptions(cfg, &mut store, true)?;
+    resolver::regenerate_exemptions(cfg, &mut store, resolver::PreferFreshImports::All, true)?;
 
     // We were successful, commit the store
     store.commit()?;
@@ -1643,9 +1650,14 @@ fn cmd_check(
     } else {
         if !cfg.cli.locked {
             #[allow(clippy::single_match)]
-            match resolver::regenerate_exemptions(cfg, &mut store, false) {
+            match resolver::regenerate_exemptions(
+                cfg,
+                &mut store,
+                resolver::PreferFreshImports::None,
+                false,
+            ) {
                 Err(RegenerateExemptionsError::ViolationConflict) => {
-                    unreachable!("unexpeced violation conflict regenerating exemptions?")
+                    unreachable!("unexpected violation conflict regenerating exemptions?")
                 }
                 Ok(()) => {}
             }
@@ -1680,7 +1692,8 @@ fn cmd_fetch_imports(
 
     // NOTE: Explicitly ignore the `ViolationConflict` error, as we still want
     // to update imports in that case.
-    match resolver::regenerate_exemptions(cfg, &mut store, false) {
+    match resolver::regenerate_exemptions(cfg, &mut store, resolver::PreferFreshImports::All, false)
+    {
         Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
     }
 

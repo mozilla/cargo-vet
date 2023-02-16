@@ -679,7 +679,12 @@ fn peer_audits_exemption_minimize() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, audits, mut imports) = builtin_files_inited(&metadata);
+    let (mut config, mut audits, mut imports) = builtin_files_inited(&metadata);
+
+    audits.audits.insert(
+        "transitive-third-party1".to_owned(),
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
@@ -690,10 +695,16 @@ fn peer_audits_exemption_minimize() {
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
-        audits: [(
-            "third-party2".to_owned(),
-            vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
-        )]
+        audits: [
+            (
+                "third-party1".to_owned(),
+                vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+            ),
+            (
+                "third-party2".to_owned(),
+                vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+            ),
+        ]
         .into_iter()
         .collect(),
     };
@@ -715,18 +726,41 @@ fn peer_audits_exemption_minimize() {
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+    for (name, prefer_imports) in [
+        ("all", crate::resolver::PreferFreshImports::All),
+        (
+            "only",
+            crate::resolver::PreferFreshImports::Only("third-party2"),
+        ),
+        ("none", crate::resolver::PreferFreshImports::None),
+    ] {
+        let mut store = Store::mock_online(
+            &cfg,
+            config.clone(),
+            audits.clone(),
+            imports.clone(),
+            &network,
+            true,
+        )
+        .unwrap();
 
-    // Capture the old imports before minimizing exemptions
-    let old = store.mock_commit();
+        // Capture the old imports before minimizing exemptions
+        let old = store.mock_commit();
 
-    crate::resolver::regenerate_exemptions(&mock_cfg(&metadata), &mut store, true).unwrap();
+        crate::resolver::regenerate_exemptions(
+            &mock_cfg(&metadata),
+            &mut store,
+            prefer_imports,
+            true,
+        )
+        .unwrap();
 
-    // Capture after minimizing exemptions, and generate a diff.
-    let new = store.mock_commit();
+        // Capture after minimizing exemptions, and generate a diff.
+        let new = store.mock_commit();
 
-    let output = diff_store_commits(&old, &new);
-    insta::assert_snapshot!(output);
+        let output = diff_store_commits(&old, &new);
+        insta::assert_snapshot!(format!("peer_audits_exemption_minimize_{name}"), output);
+    }
 }
 
 #[test]

@@ -13,14 +13,14 @@ config.toml:
  [[exemptions.third-party1]]
  version = "10.0.0"
  criteria = "safe-to-deploy"
- 
+-
 -[[exemptions.third-party2]]
 -version = "10.0.0"
 -criteria = "safe-to-deploy"
 -
- [[exemptions.transitive-third-party1]]
- version = "10.0.0"
- criteria = "safe-to-deploy"
+-[[exemptions.transitive-third-party1]]
+-version = "10.0.0"
+-criteria = "safe-to-deploy"
 
 imports.lock:
  

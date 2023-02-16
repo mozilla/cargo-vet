@@ -2527,6 +2527,31 @@ fn collect_required_entries<'a>(
     required_entries
 }
 
+/// Filter to specify which packages we prefer fresh imports over existing
+/// exemptions when regenerating exemptions.
+///
+/// NOTE: Filtering a crate to prefer exemptions over fresh imports will not
+/// prevent imports from being fetched if no existing exemption is sufficient.
+#[derive(Copy, Clone, Debug)]
+pub enum PreferFreshImports<'a> {
+    /// All crates should prefer fresh imports.
+    All,
+    /// Only the named crate should prefer fresh imports.
+    Only(PackageStr<'a>),
+    /// No crates should prefer fresh imports.
+    None,
+}
+
+impl PreferFreshImports<'_> {
+    fn matches(&self, package: PackageStr<'_>) -> bool {
+        match *self {
+            PreferFreshImports::All => true,
+            PreferFreshImports::Only(name) => name == package,
+            PreferFreshImports::None => false,
+        }
+    }
+}
+
 /// Ensure that vet will pass on the store by adding new exemptions, as well as
 /// removing existing ones which are no longer necessary. Regenerating
 /// exemptions generally tries to avoid unnecessary changes, and to continue to
@@ -2534,6 +2559,7 @@ fn collect_required_entries<'a>(
 pub fn regenerate_exemptions(
     cfg: &Config,
     store: &mut Store,
+    prefer_imports: PreferFreshImports<'_>,
     allow_new_exemptions: bool,
 ) -> Result<(), RegenerateExemptionsError> {
     // While minimizing exemptions, a number of different calls to the resolver
@@ -2558,8 +2584,7 @@ pub fn regenerate_exemptions(
     if !allow_new_exemptions {
         let (results, conclusion) = resolve_audits(&graph, store, &criteria_mapper, &requirements);
         if !matches!(conclusion, Conclusion::Success(_)) || cfg.cli.no_minimize_exemptions {
-            store.imports =
-                store.get_updated_imports_file(&collect_required_entries(&graph, &results));
+            minimize_imports_and_exemptions(store, &collect_required_entries(&graph, &results));
             return Ok(());
         }
     }
@@ -2568,18 +2593,16 @@ pub fn regenerate_exemptions(
     // re-add exemptions as-needed.
     let old_exemptions = mem::take(&mut store.config.exemptions);
 
-    // Build a list of all relevant versions of each crate used in this crate
-    // graph by-name. We sort this in ascending order, meaning that we try to
-    // add exemptions for earlier (in-use) versions first when needed.
+    // Build a list of all relevant versions of each third-party crate used in
+    // this crate graph by-name.
     let mut pkg_versions_by_name: SortedMap<PackageStr<'_>, Vec<&VetVersion>> = SortedMap::new();
     for package in &graph.nodes {
-        pkg_versions_by_name
-            .entry(package.name)
-            .or_default()
-            .push(&package.version);
-    }
-    for versions in pkg_versions_by_name.values_mut() {
-        versions.sort();
+        if package.is_third_party {
+            pkg_versions_by_name
+                .entry(package.name)
+                .or_default()
+                .push(&package.version);
+        }
     }
 
     /// A single exemption which we may or may not end up mapping into the final
@@ -2603,9 +2626,109 @@ pub fn regenerate_exemptions(
         }
     }
 
-    let mut potential_exemptions = SortedMap::<PackageStr<'_>, Vec<PotentialExemption<'_>>>::new();
+    // For each third-party crate in the tree, we'll build out the list of
+    // potential exemptions which we can consider adding.
+    let mut potential_exemptions: SortedMap<_, _> = pkg_versions_by_name
+        .into_iter()
+        .map(|(name, mut versions)| {
+            let existing_exemptions = old_exemptions.get(name).map(|v| &v[..]).unwrap_or(&[]);
+            // First, we will consider all existing exemptions in the order they
+            // appear in the exemption list to satisfy our criteria.
+            let mut potentials: Vec<_> = existing_exemptions
+                .iter()
+                .map(|exemption| {
+                    let mut potential = PotentialExemption {
+                        version: &exemption.version,
+                        max_criteria: criteria_mapper.all_criteria(),
+                        useful_criteria: criteria_mapper.no_criteria(),
+                        suggest: exemption.suggest,
+                        notes: &exemption.notes,
+                    };
+                    // We don't allow special exemptions (criteria with `suggest
+                    // = false`) to expand the allowed criteria, so record the
+                    // existing criteria as our maximum.  We also don't allow
+                    // expanding criteria if we aren't allowing new exemptions.
+                    if potential.is_special() || !allow_new_exemptions {
+                        potential.max_criteria = criteria_mapper.criteria_from_namespaced_list(
+                            &CriteriaNamespace::Local,
+                            &exemption.criteria,
+                        );
+                    }
+                    // If we don't prefer imports for this package, set
+                    // useful_criteria to the full set of original criteria to
+                    // start, so that we don't drop the entry.
+                    if !prefer_imports.matches(name) {
+                        potential.useful_criteria = criteria_mapper.criteria_from_namespaced_list(
+                            &CriteriaNamespace::Local,
+                            &exemption.criteria,
+                        );
+                    }
+                    potential
+                })
+                .collect();
+            // The existing exemptions are the only potential exemptions unless
+            // we're allowing adding new exemptions.
+            if allow_new_exemptions {
+                // Next, for criteria with `suggest = false`, we'll consider
+                // adding a suggestable expanded exemption at the same version
+                // without criteria limitations, to try to pin exemptions at
+                // specific past versions.
+                for exemption in existing_exemptions {
+                    if !exemption.suggest {
+                        potentials.push(PotentialExemption {
+                            version: &exemption.version,
+                            max_criteria: criteria_mapper.all_criteria(),
+                            useful_criteria: criteria_mapper.no_criteria(),
+                            suggest: true,
+                            notes: &exemption.notes,
+                        })
+                    }
+                }
+                // Then, if none of those apply, we'll consider adding a new
+                // exemption for each version in the DepGraph.
+                // Sort versions in ascending order, meaning that we try to add
+                // exemptions for earlier (in-use) versions first when needed.
+                versions.sort();
+                potentials.extend(versions.iter().map(|version| PotentialExemption {
+                    version,
+                    max_criteria: criteria_mapper.all_criteria(),
+                    useful_criteria: criteria_mapper.no_criteria(),
+                    suggest: true,
+                    notes: &None,
+                }));
+            }
+            (name, potentials)
+        })
+        .collect();
 
     loop {
+        // Update `store.config.exemptions` to reflect currently selected
+        // exemptions.
+        store.config.exemptions = potential_exemptions
+            .iter()
+            .filter_map(|(&package_name, potential)| {
+                let mut exemptions: Vec<_> = potential
+                    .iter()
+                    .filter(|potential| !potential.useful_criteria.is_empty())
+                    .map(|potential| ExemptedDependency {
+                        version: potential.version.clone(),
+                        criteria: criteria_mapper
+                            .criteria_names(&potential.useful_criteria)
+                            .map(|criteria| criteria.to_owned().into())
+                            .collect(),
+                        suggest: potential.suggest,
+                        notes: potential.notes.clone(),
+                    })
+                    .collect();
+                exemptions.sort();
+                if exemptions.is_empty() {
+                    None
+                } else {
+                    Some((package_name.to_owned(), exemptions))
+                }
+            })
+            .collect();
+
         // Try to vet.
         let (results, conclusion) = resolve_audits(&graph, store, &criteria_mapper, &requirements);
 
@@ -2617,16 +2740,14 @@ pub fn regenerate_exemptions(
                 // Also force an update even if we're seeing a violation
                 // conflict (to save the potentially-newly-imported violation),
                 // although our caller is unlikely to commit these changes.
-                store.imports =
-                    store.get_updated_imports_file(&collect_required_entries(&graph, &results));
+                minimize_imports_and_exemptions(store, &collect_required_entries(&graph, &results));
                 return Err(RegenerateExemptionsError::ViolationConflict);
             }
             Conclusion::Success(..) => {
                 // We succeeded! Whatever exemptions we've recorded so-far are
                 // suficient, so we're done. Record any imports which ended up
                 // being required for the vet to pass.
-                store.imports =
-                    store.get_updated_imports_file(&collect_required_entries(&graph, &results));
+                minimize_imports_and_exemptions(store, &collect_required_entries(&graph, &results));
                 return Ok(());
             }
         };
@@ -2649,76 +2770,9 @@ pub fn regenerate_exemptions(
 
             trace!("minimizing exemptions for {}", package.name);
 
-            let potential_exemptions =
-                potential_exemptions.entry(package.name).or_insert_with(|| {
-                    let existing_exemptions = old_exemptions
-                        .get(package.name)
-                        .map(|v| &v[..])
-                        .unwrap_or(&[]);
-                    // First, we will consider all existing exemptions in the
-                    // order they appear in the exemption list to satisfy our
-                    // criteria.
-                    let mut potentials: Vec<_> = existing_exemptions
-                        .iter()
-                        .map(|exemption| {
-                            let mut potential = PotentialExemption {
-                                version: &exemption.version,
-                                max_criteria: criteria_mapper.all_criteria(),
-                                useful_criteria: criteria_mapper.no_criteria(),
-                                suggest: exemption.suggest,
-                                notes: &exemption.notes,
-                            };
-                            // We don't allow special exemptions (criteria with
-                            // `suggest = false`) to expand the allowed
-                            // criteria, so record the existing criteria as our
-                            // maximum.  We also don't allow expanding criteria
-                            // if we aren't allowing new exemptions.
-                            if potential.is_special() || !allow_new_exemptions {
-                                potential.max_criteria = criteria_mapper
-                                    .criteria_from_namespaced_list(
-                                        &CriteriaNamespace::Local,
-                                        &exemption.criteria,
-                                    );
-                            }
-                            potential
-                        })
-                        .collect();
-                    // The existing exemptions are the only potential exemptions
-                    // unless we're allowing adding new exemptions.
-                    if allow_new_exemptions {
-                        // Next, for criteria with `suggest = false`, we'll
-                        // consider adding a suggestable expanded exemption at
-                        // the same version without criteria limitations, to try
-                        // to pin exemptions at specific past versions.
-                        for exemption in existing_exemptions {
-                            if !exemption.suggest {
-                                potentials.push(PotentialExemption {
-                                    version: &exemption.version,
-                                    max_criteria: criteria_mapper.all_criteria(),
-                                    useful_criteria: criteria_mapper.no_criteria(),
-                                    suggest: true,
-                                    notes: &exemption.notes,
-                                })
-                            }
-                        }
-                        // Then, if none of those apply, we'll consider adding a new
-                        // exemption for each version in the DepGraph.
-                        potentials.extend(
-                            pkg_versions_by_name
-                                .get(package.name)
-                                .expect("no versions of failed package?")
-                                .iter()
-                                .map(|version| PotentialExemption {
-                                    version,
-                                    max_criteria: criteria_mapper.all_criteria(),
-                                    useful_criteria: criteria_mapper.no_criteria(),
-                                    suggest: true,
-                                    notes: &None,
-                                }),
-                        );
-                    }
-                    potentials
-                });
+            let potential_exemptions = potential_exemptions
+                .get_mut(package.name)
+                .expect("failed package without potential exemptions?");
 
             // We only want to add exemptions which we're certain of the
             // requirements for. We'll loop around again to add more audits
@@ -2816,39 +2870,57 @@ pub fn regenerate_exemptions(
             }
         }
 
-        if made_progress {
-            // Update `store.config.exemptions` to reflect changed exemptions and
-            // loop back around.
-            store.config.exemptions = potential_exemptions
-                .iter()
-                .filter_map(|(&package_name, potential)| {
-                    let mut exemptions: Vec<_> = potential
-                        .iter()
-                        .filter(|potential| !potential.useful_criteria.is_empty())
-                        .map(|potential| ExemptedDependency {
-                            version: potential.version.clone(),
-                            criteria: criteria_mapper
-                                .criteria_names(&potential.useful_criteria)
-                                .map(|criteria| criteria.to_owned().into())
-                                .collect(),
-                            suggest: potential.suggest,
-                            notes: potential.notes.clone(),
-                        })
-                        .collect();
-                    exemptions.sort();
-                    if exemptions.is_empty() {
-                        None
-                    } else {
-                        Some((package_name.to_owned(), exemptions))
-                    }
-                })
-                .collect();
-        } else {
+        // If we failed to make forward progress, keep all existing exemptions.
+        if !made_progress {
             assert!(
                 !allow_new_exemptions,
                 "failed to make progress while allowing new exemptions?"
             );
             store.config.exemptions = old_exemptions.clone();
+
+            let (results, conclusion) =
+                resolve_audits(&graph, store, &criteria_mapper, &requirements);
+            assert!(
+                matches!(conclusion, Conclusion::Success(_)),
+                "we confirmed exemptions passed before entering the loop"
+            );
+            minimize_imports_and_exemptions(store, &collect_required_entries(&graph, &results));
+            return Ok(());
         }
     }
+}
+
+fn minimize_imports_and_exemptions(
+    store: &mut Store,
+    required_entries: &SortedMap<PackageStr<'_>, Option<SortedSet<RequiredEntry>>>,
+) {
+    // Based on required_entries, remove any exemptions which are unused and are
+    // `suggest = true`. We do this last so it will apply to all crates even if
+    // we are not preferring fresh imports.
+    let mut new_exemptions = SortedMap::new();
+    for (&pkgname, required_entries) in required_entries {
+        let exemptions = store
+            .config
+            .exemptions
+            .get(pkgname)
+            .map(|v| &v[..])
+            .unwrap_or(&[])
+            .iter()
+            .enumerate()
+            .filter(|&(exemption_index, exemption)| {
+                if let Some(required_entries) = required_entries {
+                    !exemption.suggest
+                        || required_entries.contains(&RequiredEntry::Exemption { exemption_index })
+                } else {
+                    true
+                }
+            })
+            .map(|(_, exemption)| exemption.clone())
+            .collect::<Vec<_>>();
+        if !exemptions.is_empty() {
+            new_exemptions.insert(pkgname.to_owned(), exemptions);
+        }
+    }
+    store.config.exemptions = new_exemptions;
+    store.imports = store.get_updated_imports_file(required_entries);
 }
