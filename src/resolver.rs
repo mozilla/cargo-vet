@@ -1832,6 +1832,12 @@ impl<'a> ResolveReport<'a> {
         false
     }
 
+    pub fn collect_required_entries(
+        &self,
+    ) -> SortedMap<PackageStr<'a>, Option<SortedSet<RequiredEntry>>> {
+        collect_required_entries(&self.graph, &self.results)
+    }
+
     pub fn compute_suggest(
         &self,
         cfg: &Config,
@@ -2489,6 +2495,38 @@ impl FailForViolationConflict {
     }
 }
 
+fn collect_required_entries<'a>(
+    graph: &DepGraph<'a>,
+    results: &[Option<ResolveResult<'_>>],
+) -> SortedMap<PackageStr<'a>, Option<SortedSet<RequiredEntry>>> {
+    let mut required_entries = SortedMap::new();
+    for (package, result) in graph.nodes.iter().zip(results.iter()) {
+        // We never need entries for non-third-party crates.
+        if !package.is_third_party {
+            continue;
+        }
+
+        // If any package with the name failed to vet, assume every package
+        // failed to vet, otherwise combine all sets together.
+        if let Some(ResolveResult {
+            required_entries: Some(req),
+            ..
+        }) = result
+        {
+            match required_entries
+                .entry(package.name)
+                .or_insert(Some(SortedSet::new()))
+            {
+                Some(entries) => entries.extend(req.iter().cloned()),
+                None => {}
+            }
+        } else {
+            required_entries.insert(package.name, None);
+        }
+    }
+    required_entries
+}
+
 /// Ensure that vet will pass on the store by adding new exemptions, as well as
 /// removing existing ones which are no longer necessary. Regenerating
 /// exemptions generally tries to avoid unnecessary changes, and to continue to
@@ -2520,7 +2558,8 @@ pub fn regenerate_exemptions(
     if !allow_new_exemptions {
         let (results, conclusion) = resolve_audits(&graph, store, &criteria_mapper, &requirements);
         if !matches!(conclusion, Conclusion::Success(_)) || cfg.cli.no_minimize_exemptions {
-            store.imports = store.get_updated_imports_file(&graph, &results);
+            store.imports =
+                store.get_updated_imports_file(&collect_required_entries(&graph, &results));
             return Ok(());
         }
     }
@@ -2578,14 +2617,16 @@ pub fn regenerate_exemptions(
                 // Also force an update even if we're seeing a violation
                 // conflict (to save the potentially-newly-imported violation),
                 // although our caller is unlikely to commit these changes.
-                store.imports = store.get_updated_imports_file(&graph, &results);
+                store.imports =
+                    store.get_updated_imports_file(&collect_required_entries(&graph, &results));
                 return Err(RegenerateExemptionsError::ViolationConflict);
             }
             Conclusion::Success(..) => {
                 // We succeeded! Whatever exemptions we've recorded so-far are
                 // suficient, so we're done. Record any imports which ended up
                 // being required for the vet to pass.
-                store.imports = store.get_updated_imports_file(&graph, &results);
+                store.imports =
+                    store.get_updated_imports_file(&collect_required_entries(&graph, &results));
                 return Ok(());
             }
         };

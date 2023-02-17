@@ -33,12 +33,12 @@ use crate::{
         CratesAPICrate, CratesPublisher, CriteriaEntry, CriteriaName, Delta, DiffCache, DiffStat,
         FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName, ImportsFile, MetaConfig,
         PackageName, PackageStr, PublisherCache, PublisherCacheEntry, PublisherCacheUser,
-        PublisherCacheVersion, SortedMap, VetVersion, WildcardAudits, WildcardEntry,
+        PublisherCacheVersion, SortedMap, SortedSet, VetVersion, WildcardAudits, WildcardEntry,
         SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
-    resolver,
+    resolver::{self, RequiredEntry},
     serialization::{parse_from_value, spanned::Spanned, to_formatted_toml},
     Config, PackageExt, PartialConfig, CARGO_ENV,
 };
@@ -657,8 +657,7 @@ impl Store {
     #[must_use]
     pub fn get_updated_imports_file(
         &self,
-        graph: &resolver::DepGraph<'_>,
-        results: &[Option<resolver::ResolveResult>],
+        required_entries: &SortedMap<PackageStr<'_>, Option<SortedSet<RequiredEntry>>>,
     ) -> ImportsFile {
         let Some(live_imports) = &self.live_imports else {
             // We're locked, so can't update anything.
@@ -677,28 +676,12 @@ impl Store {
                 wildcard_audits: SortedMap::new(),
                 audits: SortedMap::new(),
             };
-            for (pkgidx, result) in results.iter().enumerate() {
-                let package = &graph.nodes[pkgidx];
-
-                // Don't import audits for first-party packages.
-                if !package.is_third_party {
-                    continue;
-                }
-
-                // If the audit succeeded, get the set of required audits.
-                let required_entries = match result {
-                    Some(resolver::ResolveResult {
-                        required_entries: Some(required_entries),
-                        ..
-                    }) => Some(required_entries),
-                    _ => None,
-                };
-
+            for (&pkgname, required_entries) in required_entries {
                 // Filter the set of audits from the live audits file to
                 // only required audits.
                 let audits = live_audits_file
                     .audits
-                    .get(package.name)
+                    .get(pkgname)
                     .map(|v| &v[..])
                     .unwrap_or(&[])
                     .iter()
@@ -730,7 +713,7 @@ impl Store {
 
                 let wildcard_audits = live_audits_file
                     .wildcard_audits
-                    .get(package.name)
+                    .get(pkgname)
                     .map(|v| &v[..])
                     .unwrap_or(&[])
                     .iter()
@@ -757,14 +740,12 @@ impl Store {
 
                 // Record audits in the new audits file, if there are any.
                 if !audits.is_empty() {
-                    new_audits_file
-                        .audits
-                        .insert(package.name.to_owned(), audits);
+                    new_audits_file.audits.insert(pkgname.to_owned(), audits);
                 }
                 if !wildcard_audits.is_empty() {
                     new_audits_file
                         .wildcard_audits
-                        .insert(package.name.to_owned(), wildcard_audits);
+                        .insert(pkgname.to_owned(), wildcard_audits);
                 }
             }
             new_imports
@@ -772,26 +753,10 @@ impl Store {
                 .insert(import_name.to_owned(), new_audits_file);
         }
 
-        for (pkgidx, result) in results.iter().enumerate() {
-            let package = &graph.nodes[pkgidx];
-
-            // Don't import publisher information for first-party packages.
-            if !package.is_third_party {
-                continue;
-            }
-
-            // If the audit succeeded, get the set of required audits.
-            let required_entries = match result {
-                Some(resolver::ResolveResult {
-                    required_entries: Some(required_entries),
-                    ..
-                }) => Some(required_entries),
-                _ => None,
-            };
-
+        for (&pkgname, required_entries) in required_entries {
             let publishers = live_imports
                 .publisher
-                .get(package.name)
+                .get(pkgname)
                 .map(|v| &v[..])
                 .unwrap_or(&[])
                 .iter()
@@ -814,9 +779,7 @@ impl Store {
                 })
                 .collect::<Vec<_>>();
             if !publishers.is_empty() {
-                new_imports
-                    .publisher
-                    .insert(package.name.to_owned(), publishers);
+                new_imports.publisher.insert(pkgname.to_owned(), publishers);
             }
         }
 
