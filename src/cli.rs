@@ -315,12 +315,12 @@ pub enum Commands {
     #[clap(disable_version_flag = true)]
     Fmt(FmtArgs),
 
-    /// Explicitly fetch the imports (foreign audit files)
+    /// Prune unnecessary imports and exemptions
     ///
-    /// `cargo vet check` will implicitly do this, so this mostly exists as "plumbing"
-    /// for building tools on top of vet.
+    /// This will fetch the updated state of imports, and attempt to remove any
+    /// now-unnecessary imports or exemptions from the supply-chain.
     #[clap(disable_version_flag = true)]
-    FetchImports(FetchImportsArgs),
+    Prune(PruneArgs),
 
     /// Fetch and merge audits from multiple sources into a single `audits.toml`
     /// file.
@@ -561,7 +561,14 @@ pub struct SuggestArgs {}
 pub struct FmtArgs {}
 
 #[derive(clap::Args)]
-pub struct FetchImportsArgs {}
+pub struct PruneArgs {
+    /// Don't prune unused imports
+    #[clap(long, action)]
+    pub no_imports: bool,
+    /// Don't prune unused exemptions
+    #[clap(long, action)]
+    pub no_exemptions: bool,
+}
 
 #[derive(clap::Args)]
 pub struct RegenerateExemptionsArgs {}

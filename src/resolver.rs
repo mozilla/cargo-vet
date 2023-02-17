@@ -10,7 +10,7 @@
 //! * [`resolve`] is the main entry point, Validating and Searching and producing a [`ResolveReport`]
 //! * [`ResolveReport::compute_suggest`] does Suggesting and produces a [`Suggest`]
 //! * various methods on [`ResolveReport`] and [`Suggest`] handle printing
-//! * [`regenerate_exemptions`] handles automatically minimizing and generating exemptions
+//! * [`update_store`] handles automatically minimizing and generating exemptions and imports
 //!
 //! # Low-level Design
 //!
@@ -46,18 +46,19 @@ use miette::IntoDiagnostic;
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
+use std::fmt;
 use std::sync::Arc;
-use std::{fmt, mem};
 use tracing::{error, trace, trace_span};
 
 use crate::cli::{DumpGraphArgs, GraphFilter, GraphFilterProperty, GraphFilterQuery};
-use crate::errors::{RegenerateExemptionsError, SuggestError};
+use crate::errors::SuggestError;
 use crate::format::{
-    self, AuditEntry, AuditKind, AuditsFile, CriteriaEntry, CriteriaName, CriteriaStr, Delta,
-    DiffStat, ExemptedDependency, FastMap, FastSet, ImportName, JsonPackage, JsonReport,
-    JsonReportConclusion, JsonReportFailForVet, JsonReportFailForViolationConflict,
-    JsonReportSuccess, JsonSuggest, JsonSuggestItem, JsonVetFailure, PackageStr, Policy,
-    RemoteImport, VetVersion, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+    self, AuditEntry, AuditKind, AuditsFile, CratesPublisher, CriteriaEntry, CriteriaName,
+    CriteriaStr, Delta, DiffStat, ExemptedDependency, FastMap, FastSet, ImportName, ImportsFile,
+    JsonPackage, JsonReport, JsonReportConclusion, JsonReportFailForVet,
+    JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest, JsonSuggestItem,
+    JsonVetFailure, PackageName, PackageStr, Policy, RemoteImport, VetVersion, WildcardEntry,
+    SAFE_TO_DEPLOY, SAFE_TO_RUN,
 };
 use crate::format::{SortedMap, SortedSet};
 use crate::network::Network;
@@ -275,9 +276,6 @@ pub struct ResolveResult<'a> {
     pub audit_graph: AuditGraph<'a>,
     /// Cache of search results for each criteria.
     pub search_results: Vec<Result<Vec<DeltaEdgeOrigin>, SearchFailure>>,
-    /// Entries which were used to satisfy required criteria, or `None` if the
-    /// package failed to vet.
-    pub required_entries: Option<SortedSet<RequiredEntry>>,
 }
 
 #[derive(Debug, Clone)]
@@ -328,7 +326,7 @@ pub struct AuditGraph<'a> {
 }
 
 /// The precise origin of an edge in the audit graph.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum DeltaEdgeOrigin {
     /// This edge represents an audit from the local audits.toml.
     StoredLocalAudit { audit_index: usize },
@@ -346,11 +344,15 @@ pub enum DeltaEdgeOrigin {
     },
     /// This edge represents an exemption from the local config.toml.
     Exemption { exemption_index: usize },
+    /// This edge represents brand new exemption which didn't previously exist
+    /// in the audit graph. Will only ever be produced from
+    /// SearchMode::RegenerateExemptions.
+    FreshExemption { version: VetVersion },
 }
 
 /// An indication of a required imported entry or exemption. Used to compute the
 /// minimal set of possible imports for imports.lock.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum RequiredEntry {
     Audit {
         import_index: usize,
@@ -365,6 +367,11 @@ pub enum RequiredEntry {
     },
     Exemption {
         exemption_index: usize,
+    },
+    // NOTE: This variant must come last, as code in `update_store` depends on
+    // `FreshExemption` entries sorting after all other entries.
+    FreshExemption {
+        version: VetVersion,
     },
 }
 
@@ -383,6 +390,18 @@ struct DeltaEdge<'a> {
     /// Whether or not the edge is a "fresh import", and should be
     /// de-prioritized to avoid unnecessary imports.lock updates.
     is_fresh_import: bool,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum SearchMode {
+    /// Prefer exemptions over fresh imports when searching.
+    PreferExemptions,
+    /// Prefer fresh imports over exemptions when searching for paths.
+    PreferFreshImports,
+    /// Prefer fresh imports over exemptions, and allow introducing new
+    /// exemptions or expanding their criteria beyond the written criteria
+    /// (unless they are suggest=false).
+    RegenerateExemptions,
 }
 
 const NUM_BUILTINS: usize = 2;
@@ -1289,7 +1308,9 @@ fn resolve_audits<'a>(
             // the resolver results might need that information. We might want
             // to look into simplifying this in the future.
             let search_results: Vec<_> = (0..criteria_mapper.len())
-                .map(|criteria_idx| audit_graph.search(criteria_idx, &package.version))
+                .map(|criteria_idx| {
+                    audit_graph.search(criteria_idx, &package.version, SearchMode::PreferExemptions)
+                })
                 .collect();
 
             let mut needed_exemptions = false;
@@ -1308,48 +1329,9 @@ fn resolve_audits<'a>(
                 }
             }
 
-            let required_entries = if criteria_failures.is_empty() {
-                // Only collect required edges from minimal_indices as those
-                // edges will be sufficient for a full audit.
-                let mut required_entries = SortedSet::new();
-                for &origin in criteria_mapper
-                    .minimal_indices(required_criteria)
-                    .flat_map(|criteria_idx| search_results[criteria_idx].as_ref().unwrap())
-                {
-                    match origin {
-                        DeltaEdgeOrigin::Exemption { exemption_index } => {
-                            required_entries.insert(RequiredEntry::Exemption { exemption_index });
-                        }
-                        DeltaEdgeOrigin::ImportedAudit {
-                            import_index,
-                            audit_index,
-                        } => {
-                            required_entries.insert(RequiredEntry::Audit {
-                                import_index,
-                                audit_index,
-                            });
-                        }
-                        DeltaEdgeOrigin::WildcardAudit {
-                            import_index,
-                            audit_index,
-                            publisher_index,
-                        } => {
-                            if let Some(import_index) = import_index {
-                                required_entries.insert(RequiredEntry::WildcardAudit {
-                                    import_index,
-                                    audit_index,
-                                });
-                            }
-                            required_entries.insert(RequiredEntry::Publisher { publisher_index });
-                        }
-                        DeltaEdgeOrigin::StoredLocalAudit { .. } => {}
-                    }
-                }
-                Some(required_entries)
-            } else {
+            if !criteria_failures.is_empty() {
                 failures.push((pkgidx, AuditFailure { criteria_failures }));
-                None
-            };
+            }
 
             // XXX: Callers using these fields in success should perhaps be
             // changed to instead walk the results?
@@ -1364,7 +1346,6 @@ fn resolve_audits<'a>(
             Some(ResolveResult {
                 audit_graph,
                 search_results,
-                required_entries,
             })
         })
         .collect();
@@ -1491,7 +1472,7 @@ impl<'a> AuditGraph<'a> {
             forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: Some(to_ver),
                 criteria: criteria.clone(),
-                origin,
+                origin: origin.clone(),
                 is_fresh_import: entry.is_fresh_import,
             });
             backward_audits
@@ -1528,7 +1509,7 @@ impl<'a> AuditGraph<'a> {
                     forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                         version: to_ver,
                         criteria: criteria.clone(),
-                        origin,
+                        origin: origin.clone(),
                         is_fresh_import,
                     });
                     backward_audits.entry(to_ver).or_default().push(DeltaEdge {
@@ -1553,7 +1534,7 @@ impl<'a> AuditGraph<'a> {
                 forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                     version: to_ver,
                     criteria: criteria.clone(),
-                    origin,
+                    origin: origin.clone(),
                     is_fresh_import: false,
                 });
                 backward_audits.entry(to_ver).or_default().push(DeltaEdge {
@@ -1676,26 +1657,42 @@ impl<'a> AuditGraph<'a> {
         &self,
         criteria_idx: usize,
         version: &VetVersion,
+        mode: SearchMode,
     ) -> Result<Vec<DeltaEdgeOrigin>, SearchFailure> {
         // First, search backwards, starting from the target, as that's more
         // likely to have a limited graph to traverse.
         // This also interacts well with the search ordering from
         // search_for_path, which prefers edges closer to `None` when
         // traversing.
-        search_for_path(&self.backward_audits, criteria_idx, Some(version), None).map_err(
-            |reachable_from_target| {
-                // The search failed, perform the search in the other direction
-                // in order to also get the set of nodes reachable from the
-                // root. We can `unwrap_err()` here, as we'll definitely fail.
-                let reachable_from_root =
-                    search_for_path(&self.forward_audits, criteria_idx, None, Some(version))
-                        .unwrap_err();
-                SearchFailure {
-                    reachable_from_root,
-                    reachable_from_target,
-                }
-            },
+        search_for_path(
+            &self.backward_audits,
+            criteria_idx,
+            Some(version),
+            None,
+            mode,
         )
+        .map_err(|reachable_from_target| {
+            assert!(
+                mode != SearchMode::RegenerateExemptions,
+                "RegenerateExemptions search mode cannot fail"
+            );
+
+            // The search failed, perform the search in the other direction
+            // in order to also get the set of nodes reachable from the
+            // root. We can `unwrap_err()` here, as we'll definitely fail.
+            let reachable_from_root = search_for_path(
+                &self.forward_audits,
+                criteria_idx,
+                None,
+                Some(version),
+                mode,
+            )
+            .unwrap_err();
+            SearchFailure {
+                reachable_from_root,
+                reachable_from_target,
+            }
+        })
     }
 }
 
@@ -1707,7 +1704,13 @@ fn search_for_path(
     criteria_idx: usize,
     from_version: Option<&VetVersion>,
     to_version: Option<&VetVersion>,
+    mode: SearchMode,
 ) -> Result<Vec<DeltaEdgeOrigin>, SortedSet<Option<VetVersion>>> {
+    assert!(
+        mode != SearchMode::RegenerateExemptions || to_version.is_none(),
+        "RegenerateExemptions requires searching towards root"
+    );
+
     // Search for any path through the graph with edges that satisfy criteria.
     // Finding any path validates that we satisfy that criteria.
     //
@@ -1721,32 +1724,63 @@ fn search_for_path(
     // sorted by the caveats which apply to each node. This means that if we
     // find a patch without using a node with caveats, it's unambiguous proof we
     // don't need edges with caveats.
-    //
-    // These caveats extend from exemptions (the least-important caveat) to
-    // fresh imports (the most-important caveat).
+    #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+    enum CaveatLevel {
+        None,
+        PreferredExemption,
+        FreshImport,
+        Exemption,
+        FreshExemption,
+    }
+
+    #[derive(Debug)]
     struct Node<'a> {
         version: Option<&'a VetVersion>,
+        origin_version: Option<&'a VetVersion>,
         path: Vec<DeltaEdgeOrigin>,
-        needed_fresh_imports: bool,
-        needed_exemptions: bool,
+        caveat_level: CaveatLevel,
     }
 
     impl Node<'_> {
         fn key(&self) -> impl Ord + '_ {
-            // Nodes are compared whether they require fresh imports or
-            // exemptions, in that order. Fewer caveats makes the node sort
-            // higher, as it will be stored in a max heap.
-            // Once we've sorted by all caveats, we sort by the length of the
-            // path (preferring short paths), the version (preferring lower
-            // versions), and then the most recently added DeltaEdgeOrigin
+            // Nodes are compared by caveat level. A lower caveat level makes
+            // the node sort higher, as it will be stored in a max heap.
+            //
+            // Once we've sorted by all caveats, we sort by the version
+            // (preferring lower versions), exemption origin version (preferring
+            // smaller exemptions), the length of the path (preferring short
+            // paths), and then the most recently added DeltaEdgeOrigin
             // (preferring more-local audits).
+            //
+            // NOTE: This ordering logic priorities assume `to_version == None`,
+            // as we will only be searched in the other direction if the search
+            // is guaranteed to fail, in which case ordering doesn't matter (as
+            // we're going to visit every node).
             Reverse((
-                self.needed_fresh_imports,
-                self.needed_exemptions,
+                self.caveat_level,
                 self.version,
+                self.exemption_origin_version(),
                 self.path.len(),
                 self.path.last(),
             ))
+        }
+
+        // To make better decisions when selecting exemptions, exemption edges
+        // with lower origin versions are preferred over those with higher
+        // origin versions. This is checked before path length, as a longer path
+        // which uses a smaller exemption is generally preferred to a short one
+        // which uses a full-exemption. This is ignored for other edge types.
+        fn exemption_origin_version(&self) -> Option<&VetVersion> {
+            if matches!(
+                self.caveat_level,
+                CaveatLevel::PreferredExemption
+                    | CaveatLevel::Exemption
+                    | CaveatLevel::FreshExemption
+            ) {
+                self.origin_version
+            } else {
+                None
+            }
         }
     }
     impl<'a> PartialEq for Node<'a> {
@@ -1769,17 +1803,17 @@ fn search_for_path(
     let mut queue = BinaryHeap::new();
     queue.push(Node {
         version: from_version,
+        origin_version: from_version,
         path: Vec::new(),
-        needed_fresh_imports: false,
-        needed_exemptions: false,
+        caveat_level: CaveatLevel::None,
     });
 
     let mut visited = SortedSet::new();
     while let Some(Node {
         version,
+        origin_version: _,
         path,
-        needed_fresh_imports,
-        needed_exemptions,
+        caveat_level,
     }) = queue.pop()
     {
         // If We've been to a version before, We're not going to get a better
@@ -1798,7 +1832,10 @@ fn search_for_path(
         // to our queue.
         let edges = audit_graph.get(&version).map(|v| &v[..]).unwrap_or(&[]);
         for edge in edges {
-            if !edge.criteria.has_criteria(criteria_idx) {
+            // We'll allow any criteria if we're regenerating exemption edges.
+            let allow_any_criteria = mode == SearchMode::RegenerateExemptions
+                && matches!(edge.origin, DeltaEdgeOrigin::Exemption { .. });
+            if !allow_any_criteria && !edge.criteria.has_criteria(criteria_idx) {
                 // This edge never would have been useful to us.
                 continue;
             }
@@ -1807,13 +1844,42 @@ fn search_for_path(
                 continue;
             }
 
+            // Compute the level of caveats which are being added by the current edge
+            let edge_caveat_level = match &edge.origin {
+                DeltaEdgeOrigin::Exemption { .. } if mode == SearchMode::PreferExemptions => {
+                    CaveatLevel::PreferredExemption
+                }
+                DeltaEdgeOrigin::Exemption { .. } => CaveatLevel::Exemption,
+                DeltaEdgeOrigin::FreshExemption { .. } => unreachable!(),
+                _ if edge.is_fresh_import => CaveatLevel::FreshImport,
+                _ => CaveatLevel::None,
+            };
+
             queue.push(Node {
                 version: edge.version,
-                path: path.iter().cloned().chain([edge.origin]).collect(),
-                needed_fresh_imports: needed_fresh_imports || edge.is_fresh_import,
-                needed_exemptions: needed_exemptions
-                    || matches!(edge.origin, DeltaEdgeOrigin::Exemption { .. }),
+                origin_version: version,
+                path: path.iter().cloned().chain([edge.origin.clone()]).collect(),
+                caveat_level: caveat_level.max(edge_caveat_level),
             });
+        }
+
+        // If we're regenerating exemptions, add a fresh exemption edge which
+        // directly leads to the root version.
+        if mode == SearchMode::RegenerateExemptions {
+            queue.push(Node {
+                version: None,
+                origin_version: version,
+                path: path
+                    .iter()
+                    .cloned()
+                    .chain([DeltaEdgeOrigin::FreshExemption {
+                        version: version
+                            .expect("RegenerateExemptions requires searching towards None")
+                            .clone(),
+                    }])
+                    .collect(),
+                caveat_level: caveat_level.max(CaveatLevel::FreshExemption),
+            })
         }
     }
 
@@ -1830,12 +1896,6 @@ impl<'a> ResolveReport<'a> {
 
     pub fn _has_warnings(&self) -> bool {
         false
-    }
-
-    pub fn collect_required_entries(
-        &self,
-    ) -> SortedMap<PackageStr<'a>, Option<SortedSet<RequiredEntry>>> {
-        collect_required_entries(&self.graph, &self.results)
     }
 
     pub fn compute_suggest(
@@ -2495,50 +2555,132 @@ impl FailForViolationConflict {
     }
 }
 
-fn collect_required_entries<'a>(
-    graph: &DepGraph<'a>,
-    results: &[Option<ResolveResult<'_>>],
-) -> SortedMap<PackageStr<'a>, Option<SortedSet<RequiredEntry>>> {
-    let mut required_entries = SortedMap::new();
-    for (package, result) in graph.nodes.iter().zip(results.iter()) {
-        // We never need entries for non-third-party crates.
-        if !package.is_third_party {
-            continue;
-        }
+/// Resolve which entries in the store and imports.lock are required to
+/// successfully audit this package. May return `None` if the package cannot
+/// successfully vet given the restrictions placed upon it.
+///
+/// NOTE: A package which does not exist in the dependency will return the empty
+/// set, as it does not have any audit requirements.
+///
+/// [`SearchMode`] controls how edges are selected when searching for paths.
+#[tracing::instrument(skip(graph, criteria_mapper, requirements, store))]
+fn resolve_package_required_entries(
+    graph: &DepGraph<'_>,
+    criteria_mapper: &CriteriaMapper,
+    requirements: &[CriteriaSet],
+    store: &Store,
+    package_name: PackageStr<'_>,
+    search_mode: SearchMode,
+) -> Option<SortedMap<RequiredEntry, CriteriaSet>> {
+    assert_eq!(graph.nodes.len(), requirements.len());
 
-        // If any package with the name failed to vet, assume every package
-        // failed to vet, otherwise combine all sets together.
-        if let Some(ResolveResult {
-            required_entries: Some(req),
-            ..
-        }) = result
-        {
-            match required_entries
-                .entry(package.name)
-                .or_insert(Some(SortedSet::new()))
-            {
-                Some(entries) => entries.extend(req.iter().cloned()),
-                None => {}
-            }
-        } else {
-            required_entries.insert(package.name, None);
-        }
+    // Collect the list of third-party packages with the given name, along with
+    // their requirements.
+    let packages: Vec<_> = graph
+        .nodes
+        .iter()
+        .zip(requirements)
+        .filter(|(package, _)| package.name == package_name && package.is_third_party)
+        .collect();
+
+    // If there are no third-party packages with the name, we definitely don't
+    // need any entries.
+    if packages.is_empty() {
+        return Some(SortedMap::new());
     }
-    required_entries
+
+    let Ok(audit_graph) = AuditGraph::build(store, criteria_mapper, package_name) else {
+        // There were violations when building the audit graph, return `None` to
+        // indicate that this package is failing.
+        return None;
+    };
+
+    let mut required_entries = SortedMap::new();
+    for &(package, reqs) in &packages {
+        // Do the minimal set of searches to validate that the required criteria
+        // are matched.
+        for criteria_idx in criteria_mapper.minimal_indices(reqs) {
+            let Ok(path) = audit_graph.search(criteria_idx, &package.version, search_mode) else {
+                // This package failed to vet, return `None`.
+                return None;
+            };
+
+            let mut add_entry = |entry: RequiredEntry| {
+                required_entries
+                    .entry(entry)
+                    .or_insert_with(|| criteria_mapper.no_criteria())
+                    .set_criteria(criteria_idx);
+            };
+
+            for origin in path {
+                match origin {
+                    DeltaEdgeOrigin::Exemption { exemption_index } => {
+                        add_entry(RequiredEntry::Exemption { exemption_index });
+                    }
+                    DeltaEdgeOrigin::FreshExemption { version } => {
+                        add_entry(RequiredEntry::FreshExemption { version });
+                    }
+                    DeltaEdgeOrigin::ImportedAudit {
+                        import_index,
+                        audit_index,
+                    } => {
+                        add_entry(RequiredEntry::Audit {
+                            import_index,
+                            audit_index,
+                        });
+                    }
+                    DeltaEdgeOrigin::WildcardAudit {
+                        import_index,
+                        audit_index,
+                        publisher_index,
+                    } => {
+                        if let Some(import_index) = import_index {
+                            add_entry(RequiredEntry::WildcardAudit {
+                                import_index,
+                                audit_index,
+                            })
+                        }
+                        add_entry(RequiredEntry::Publisher { publisher_index })
+                    }
+                    DeltaEdgeOrigin::StoredLocalAudit { .. } => {}
+                }
+            }
+        }
+        continue;
+    }
+
+    Some(required_entries)
 }
 
-/// Ensure that vet will pass on the store by adding new exemptions, as well as
-/// removing existing ones which are no longer necessary. Regenerating
-/// exemptions generally tries to avoid unnecessary changes, and to continue to
-/// pin exemptions in the past when delta-audits from exemptions are in-use.
-pub fn regenerate_exemptions(
+/// Per-package options to control store pruning.
+pub struct UpdateMode {
+    pub search_mode: SearchMode,
+    pub prune_exemptions: bool,
+    pub prune_imports: bool,
+}
+
+/// Refresh the state of the store, importing required audits, and optionally
+/// pruning unnecessary exemptions and/or imports.
+pub fn update_store(
     cfg: &Config,
     store: &mut Store,
-    allow_new_exemptions: bool,
-) -> Result<(), RegenerateExemptionsError> {
-    // While minimizing exemptions, a number of different calls to the resolver
-    // will be made using the same DepGraph, CriteriaMapper and requirements,
-    // which will be generated up-front.
+    mode: impl FnMut(PackageStr<'_>) -> UpdateMode,
+) {
+    let (new_imports, new_exemptions) = get_store_updates(cfg, store, mode);
+
+    // Update the store to reflect the new imports and exemptions files.
+    store.imports = new_imports;
+    store.config.exemptions = new_exemptions;
+}
+
+/// The non-mutating core of `update_store` for use in non-mutating situations.
+pub(crate) fn get_store_updates(
+    cfg: &Config,
+    store: &Store,
+    mut mode: impl FnMut(PackageStr<'_>) -> UpdateMode,
+) -> (ImportsFile, SortedMap<PackageName, Vec<ExemptedDependency>>) {
+    // Compute the set of required entries from the store for all packages in
+    // the dependency graph.
     let graph = DepGraph::new(
         &cfg.metadata,
         cfg.cli.filter_graph.as_ref(),
@@ -2551,304 +2693,261 @@ pub fn regenerate_exemptions(
     );
     let requirements = resolve_requirements(&graph, &store.config.policy, &criteria_mapper);
 
-    // If we're not allowing new exemptions, we must already be passing `vet`.
-    // If we aren't, we can't do anything, so just update imports and return
-    // immediately. We'll also do this if automatic exemption minimization is
-    // disabled through the CLI.
-    if !allow_new_exemptions {
-        let (results, conclusion) = resolve_audits(&graph, store, &criteria_mapper, &requirements);
-        if !matches!(conclusion, Conclusion::Success(_)) || cfg.cli.no_minimize_exemptions {
-            store.imports =
-                store.get_updated_imports_file(&collect_required_entries(&graph, &results));
-            return Ok(());
-        }
-    }
-
-    // Clear out the existing exemptions, starting with a clean slate. We'll
-    // re-add exemptions as-needed.
-    let old_exemptions = mem::take(&mut store.config.exemptions);
-
-    // Build a list of all relevant versions of each crate used in this crate
-    // graph by-name. We sort this in ascending order, meaning that we try to
-    // add exemptions for earlier (in-use) versions first when needed.
-    let mut pkg_versions_by_name: SortedMap<PackageStr<'_>, Vec<&VetVersion>> = SortedMap::new();
+    let mut required_entries = SortedMap::new();
     for package in &graph.nodes {
-        pkg_versions_by_name
-            .entry(package.name)
-            .or_default()
-            .push(&package.version);
-    }
-    for versions in pkg_versions_by_name.values_mut() {
-        versions.sort();
-    }
-
-    /// A single exemption which we may or may not end up mapping into the final
-    /// exemptions file. There is one of these for each existing exemption, as
-    /// well as for each used version, such that some combination of these
-    /// exemptions can satisfy any criteria.
-    struct PotentialExemption<'a> {
-        version: &'a VetVersion,
-        max_criteria: CriteriaSet,
-        useful_criteria: CriteriaSet,
-        suggest: bool,
-        notes: &'a Option<String>,
+        required_entries.entry(package.name).or_insert_with(|| {
+            resolve_package_required_entries(
+                &graph,
+                &criteria_mapper,
+                &requirements,
+                store,
+                package.name,
+                mode(package.name).search_mode,
+            )
+        });
     }
 
-    impl<'a> PotentialExemption<'a> {
-        /// Check if the exemption is "special" (i.e. if it is `suggest = false`
-        /// or has `dependency_criteria`). We avoid removing special exemptions
-        /// if they could be applicable.
-        fn is_special(&self) -> bool {
-            !self.suggest
+    // Dummy value to use if a package isn't found in `required_entries` - no
+    // edges will be required.
+    let no_required_entries = Some(SortedMap::new());
+
+    let mut new_imports = ImportsFile {
+        publisher: SortedMap::new(),
+        audits: SortedMap::new(),
+    };
+
+    // Determine which live imports to keep in the imports.lock file.
+    for (import_index, (import_name, live_audits_file)) in
+        store.imported_audits().iter().enumerate()
+    {
+        let new_audits_file = AuditsFile {
+            criteria: live_audits_file.criteria.clone(),
+
+            wildcard_audits: live_audits_file
+                .wildcard_audits
+                .iter()
+                .map(|(pkgname, wildcard_audits)| {
+                    let prune_imports = mode(&pkgname[..]).prune_imports;
+                    let required_entries = required_entries
+                        .get(&pkgname[..])
+                        .unwrap_or(&no_required_entries);
+                    (
+                        pkgname,
+                        wildcard_audits
+                            .iter()
+                            .enumerate()
+                            .filter(|&(audit_index, entry)| {
+                                // Keep existing if we're not pruning imports.
+                                if !prune_imports && !entry.is_fresh_import {
+                                    return true;
+                                }
+
+                                if let Some(required_entries) = required_entries {
+                                    required_entries.contains_key(&RequiredEntry::WildcardAudit {
+                                        import_index,
+                                        audit_index,
+                                    })
+                                } else {
+                                    !entry.is_fresh_import
+                                }
+                            })
+                            .map(|(_, entry)| WildcardEntry {
+                                is_fresh_import: false,
+                                ..entry.clone()
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .filter(|(_, l)| !l.is_empty())
+                .map(|(n, mut l)| {
+                    l.sort();
+                    (n.clone(), l)
+                })
+                .collect(),
+
+            audits: live_audits_file
+                .audits
+                .iter()
+                .map(|(pkgname, audits)| {
+                    let prune_imports = mode(&pkgname[..]).prune_imports;
+                    let required_entries = required_entries
+                        .get(&pkgname[..])
+                        .unwrap_or(&no_required_entries);
+                    (
+                        pkgname,
+                        audits
+                            .iter()
+                            .enumerate()
+                            .filter(|&(audit_index, entry)| {
+                                // Always keep any violations.
+                                if matches!(entry.kind, AuditKind::Violation { .. }) {
+                                    return true;
+                                }
+
+                                // Keep existing if we're not pruning imports.
+                                if !prune_imports && !entry.is_fresh_import {
+                                    return true;
+                                }
+
+                                if let Some(required_entries) = required_entries {
+                                    required_entries.contains_key(&RequiredEntry::Audit {
+                                        import_index,
+                                        audit_index,
+                                    })
+                                } else {
+                                    !entry.is_fresh_import
+                                }
+                            })
+                            .map(|(_, entry)| AuditEntry {
+                                is_fresh_import: false,
+                                ..entry.clone()
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .filter(|(_, l)| !l.is_empty())
+                .map(|(n, mut l)| {
+                    l.sort();
+                    (n.clone(), l)
+                })
+                .collect(),
+        };
+        new_imports
+            .audits
+            .insert(import_name.clone(), new_audits_file);
+    }
+
+    // Determine which live publisher information to keep in the imports.lock file.
+    for (pkgname, publishers) in store.publishers() {
+        let prune_imports = mode(&pkgname[..]).prune_imports;
+        let required_entries = required_entries
+            .get(&pkgname[..])
+            .unwrap_or(&no_required_entries);
+        let mut publishers: Vec<_> = publishers
+            .iter()
+            .enumerate()
+            .filter(|&(publisher_index, entry)| {
+                // Keep existing if we're not pruning imports.
+                if !prune_imports && !entry.is_fresh_import {
+                    return true;
+                }
+
+                if let Some(required_entries) = required_entries {
+                    required_entries.contains_key(&RequiredEntry::Publisher { publisher_index })
+                } else {
+                    !entry.is_fresh_import
+                }
+            })
+            .map(|(_, entry)| CratesPublisher {
+                is_fresh_import: false,
+                ..entry.clone()
+            })
+            .collect();
+        publishers.sort();
+        if !publishers.is_empty() {
+            new_imports.publisher.insert(pkgname.clone(), publishers);
         }
     }
 
-    let mut potential_exemptions = SortedMap::<PackageStr<'_>, Vec<PotentialExemption<'_>>>::new();
+    let mut all_new_exemptions = SortedMap::new();
 
-    loop {
-        // Try to vet.
-        let (results, conclusion) = resolve_audits(&graph, store, &criteria_mapper, &requirements);
+    // Enumerate existing exemptions to check for criteria changes.
+    for (pkgname, exemptions) in &store.config.exemptions {
+        let prune_exemptions = mode(pkgname).prune_exemptions;
+        let required_entries = required_entries
+            .get(&pkgname[..])
+            .unwrap_or(&no_required_entries);
 
-        // We only need to do more work here if we have any failures which we
-        // can work with.
-        let fail = match &conclusion {
-            Conclusion::FailForVet(fail) => fail,
-            Conclusion::FailForViolationConflict(..) => {
-                // Also force an update even if we're seeing a violation
-                // conflict (to save the potentially-newly-imported violation),
-                // although our caller is unlikely to commit these changes.
-                store.imports =
-                    store.get_updated_imports_file(&collect_required_entries(&graph, &results));
-                return Err(RegenerateExemptionsError::ViolationConflict);
-            }
-            Conclusion::Success(..) => {
-                // We succeeded! Whatever exemptions we've recorded so-far are
-                // suficient, so we're done. Record any imports which ended up
-                // being required for the vet to pass.
-                store.imports =
-                    store.get_updated_imports_file(&collect_required_entries(&graph, &results));
-                return Ok(());
-            }
-        };
+        let mut new_exemptions = Vec::with_capacity(exemptions.len());
+        for (exemption_index, entry) in exemptions.iter().enumerate() {
+            let original_criteria = criteria_mapper.criteria_from_list(&entry.criteria);
 
-        let mut made_progress = false;
-        let mut update_useful_criteria =
-            |potential: &mut PotentialExemption<'_>, new_criteria: &CriteriaSet| {
-                if potential.useful_criteria.contains(new_criteria) {
-                    return;
-                }
-                made_progress = true;
-                potential.useful_criteria.unioned_with(new_criteria);
+            // Determine the set of useful criteria from required_entries,
+            // falling back to `original_criteria` if it failed to audit.
+            let mut useful_criteria = if let Some(required_entries) = required_entries {
+                required_entries
+                    .get(&RequiredEntry::Exemption { exemption_index })
+                    .cloned()
+                    .unwrap_or_else(|| criteria_mapper.no_criteria())
+            } else {
+                original_criteria.clone()
             };
 
-        for (failure_idx, failure) in &fail.failures {
-            let package = &graph.nodes[*failure_idx];
-            let result = results[*failure_idx]
-                .as_ref()
-                .expect("failed package without ResolveResult?");
-
-            trace!("minimizing exemptions for {}", package.name);
-
-            let potential_exemptions =
-                potential_exemptions.entry(package.name).or_insert_with(|| {
-                    let existing_exemptions = old_exemptions
-                        .get(package.name)
-                        .map(|v| &v[..])
-                        .unwrap_or(&[]);
-                    // First, we will consider all existing exemptions in the
-                    // order they appear in the exemption list to satisfy our
-                    // criteria.
-                    let mut potentials: Vec<_> = existing_exemptions
-                        .iter()
-                        .map(|exemption| {
-                            let mut potential = PotentialExemption {
-                                version: &exemption.version,
-                                max_criteria: criteria_mapper.all_criteria(),
-                                useful_criteria: criteria_mapper.no_criteria(),
-                                suggest: exemption.suggest,
-                                notes: &exemption.notes,
-                            };
-                            // We don't allow special exemptions (criteria with
-                            // `suggest = false`) to expand the allowed
-                            // criteria, so record the existing criteria as our
-                            // maximum.  We also don't allow expanding criteria
-                            // if we aren't allowing new exemptions.
-                            if potential.is_special() || !allow_new_exemptions {
-                                potential.max_criteria = criteria_mapper
-                                    .criteria_from_namespaced_list(
-                                        &CriteriaNamespace::Local,
-                                        &exemption.criteria,
-                                    );
-                            }
-                            potential
-                        })
-                        .collect();
-                    // The existing exemptions are the only potential exemptions
-                    // unless we're allowing adding new exemptions.
-                    if allow_new_exemptions {
-                        // Next, for criteria with `suggest = false`, we'll
-                        // consider adding a suggestable expanded exemption at
-                        // the same version without criteria limitations, to try
-                        // to pin exemptions at specific past versions.
-                        for exemption in existing_exemptions {
-                            if !exemption.suggest {
-                                potentials.push(PotentialExemption {
-                                    version: &exemption.version,
-                                    max_criteria: criteria_mapper.all_criteria(),
-                                    useful_criteria: criteria_mapper.no_criteria(),
-                                    suggest: true,
-                                    notes: &exemption.notes,
-                                })
-                            }
-                        }
-                        // Then, if none of those apply, we'll consider adding a new
-                        // exemption for each version in the DepGraph.
-                        potentials.extend(
-                            pkg_versions_by_name
-                                .get(package.name)
-                                .expect("no versions of failed package?")
-                                .iter()
-                                .map(|version| PotentialExemption {
-                                    version,
-                                    max_criteria: criteria_mapper.all_criteria(),
-                                    useful_criteria: criteria_mapper.no_criteria(),
-                                    suggest: true,
-                                    notes: &None,
-                                }),
-                        );
-                    }
-                    potentials
-                });
-
-            // We only want to add exemptions which we're certain of the
-            // requirements for. We'll loop around again to add more audits
-            // until we successfully vet.
-            'min_criteria: for criteria_idx in
-                criteria_mapper.minimal_indices(&failure.criteria_failures)
-            {
-                let implied = &criteria_mapper.implied_criteria[criteria_idx];
-
-                // In the first pass, try to satisfy as many implied criteria as
-                // possible using "special" potential exemptions (i.e. those
-                // with `suggest = false`).
-                //
-                // We always want to prioritize marking all "special" exemptions
-                // which may be applicable as "used", as they may have different
-                // conditions which will be relevant to keep the number of
-                // suggested exemptions down.
-                let mut missed_criteria = false;
-                for implied_idx in implied.indices() {
-                    // Check if this implied criteria actually failed, if it
-                    // didn't, we don't need to add any new exemptions for it.
-                    let reachable_from_target = match &result.search_results[implied_idx] {
-                        Err(SearchFailure {
-                            reachable_from_target,
-                            ..
-                        }) => reachable_from_target,
-                        _ => continue,
-                    };
-                    let mut found = false;
-                    for potential in &mut potential_exemptions[..] {
-                        if potential.is_special()
-                            && potential.max_criteria.has_criteria(implied_idx)
-                            && reachable_from_target.contains(&Some(potential.version.clone()))
-                        {
-                            // We found a "special" exemption which matches!
-                            // Record the criteria we're using and that we found
-                            // something, but continue to see if we find any
-                            // other "special" exemptions.
-                            found = true;
-                            update_useful_criteria(
-                                potential,
-                                &criteria_mapper.implied_criteria[implied_idx],
-                            );
-                        }
-                    }
-                    if !found {
-                        missed_criteria = true;
-                    }
-                }
-                // If we were able to satisfy all criteria with only "special"
-                // exemptions, we're done!
-                if !missed_criteria {
-                    continue;
-                }
-
-                let reachable_from_target = match &result.search_results[criteria_idx] {
-                    Err(SearchFailure {
-                        reachable_from_target,
-                        ..
-                    }) => reachable_from_target,
-                    _ => unreachable!("minimal criteria didn't actually fail?"),
-                };
-
-                // In the second pass, we'll take the first applicable exemption
-                // which we're able to find, and ensure that its criteria
-                // satisfies what we're looking for.
-                for potential in &mut potential_exemptions[..] {
-                    if potential.max_criteria.has_criteria(criteria_idx)
-                        && reachable_from_target.contains(&Some(potential.version.clone()))
-                    {
-                        update_useful_criteria(
-                            potential,
-                            &criteria_mapper.implied_criteria[criteria_idx],
-                        );
-                        continue 'min_criteria;
-                    }
-                }
-
-                if allow_new_exemptions {
-                    // We should always find an exemption which satisfies the
-                    // criteria due to us adding a potential exemption for each
-                    // failed version which can satisfy any criteria.
-                    unreachable!("couldn't find an exemption which satisfies the criteria?");
-                }
-
-                // If we're not allowing new exemptions, we at least know that
-                // the vet _can_ pass with the existing set of exemptions.
-                // Conservatively enable every criteria for every existing
-                // exemption for this crate.
-                for potential in &mut potential_exemptions[..] {
-                    let new_criteria = potential.max_criteria.clone();
-                    update_useful_criteria(potential, &new_criteria);
-                }
-                break;
+            // If we're not pruning exemptions, maintain all existing criteria.
+            if !prune_exemptions {
+                useful_criteria.unioned_with(&original_criteria);
             }
-        }
+            if useful_criteria.is_empty() {
+                continue; // Skip this exemption
+            }
 
-        if made_progress {
-            // Update `store.config.exemptions` to reflect changed exemptions and
-            // loop back around.
-            store.config.exemptions = potential_exemptions
-                .iter()
-                .filter_map(|(&package_name, potential)| {
-                    let mut exemptions: Vec<_> = potential
-                        .iter()
-                        .filter(|potential| !potential.useful_criteria.is_empty())
-                        .map(|potential| ExemptedDependency {
-                            version: potential.version.clone(),
-                            criteria: criteria_mapper
-                                .criteria_names(&potential.useful_criteria)
-                                .map(|criteria| criteria.to_owned().into())
-                                .collect(),
-                            suggest: potential.suggest,
-                            notes: potential.notes.clone(),
-                        })
-                        .collect();
-                    exemptions.sort();
-                    if exemptions.is_empty() {
-                        None
-                    } else {
-                        Some((package_name.to_owned(), exemptions))
-                    }
-                })
-                .collect();
-        } else {
-            assert!(
-                !allow_new_exemptions,
-                "failed to make progress while allowing new exemptions?"
-            );
-            store.config.exemptions = old_exemptions.clone();
+            // If we're expanding the criteria set and are `suggest = false`, we
+            // can't update the existing entry, so try adding a new one, and
+            // reset the existing node to the original criteria.
+            // XXX: The behaviour around suggest here is a bit jank, we might
+            // want to change it.
+            if !entry.suggest && !original_criteria.contains(&useful_criteria) {
+                let mut extra_criteria = useful_criteria.clone();
+                extra_criteria.clear_criteria(&original_criteria);
+                new_exemptions.push(ExemptedDependency {
+                    version: entry.version.clone(),
+                    criteria: criteria_mapper
+                        .criteria_names(&extra_criteria)
+                        .map(|n| n.to_owned().into())
+                        .collect(),
+                    suggest: true,
+                    notes: None,
+                });
+                useful_criteria = original_criteria;
+            }
+
+            // Add the exemption with the determined minimal useful criteria.
+            new_exemptions.push(ExemptedDependency {
+                version: entry.version.clone(),
+                criteria: criteria_mapper
+                    .criteria_names(&useful_criteria)
+                    .map(|n| n.to_owned().into())
+                    .collect(),
+                suggest: entry.suggest,
+                notes: entry.notes.clone(),
+            });
+        }
+        if !new_exemptions.is_empty() {
+            all_new_exemptions.insert(pkgname.clone(), new_exemptions);
         }
     }
+
+    // Check if we have any FreshExemption entries which should be converted
+    // into new exemptions.
+    for (&pkgname, required_entries) in &required_entries {
+        let Some(required_entries) = required_entries else { continue };
+
+        for (entry, criteria) in required_entries.iter().rev() {
+            let RequiredEntry::FreshExemption { version } = entry else {
+                // FreshExemption entries always sort last in the BTreeMap, so
+                // we can rely on there being no more FreshExemption entries
+                // after we've seen one.
+                break;
+            };
+
+            all_new_exemptions
+                .entry(pkgname.to_owned())
+                .or_default()
+                .push(ExemptedDependency {
+                    version: version.clone(),
+                    criteria: criteria_mapper
+                        .criteria_names(criteria)
+                        .map(|n| n.to_owned().into())
+                        .collect(),
+                    suggest: true,
+                    notes: None,
+                });
+        }
+    }
+
+    for exemptions in all_new_exemptions.values_mut() {
+        exemptions.sort();
+    }
+
+    (new_imports, all_new_exemptions)
 }

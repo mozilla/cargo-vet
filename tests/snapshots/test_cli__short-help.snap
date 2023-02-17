@@ -68,7 +68,7 @@ SUBCOMMANDS:
     add-exemption       Mark a package as exempted from review
     record-violation    Declare that some versions of a package violate certain audit criteria
     fmt                 Reformat all of vet's files (in case you hand-edited them)
-    fetch-imports       Explicitly fetch the imports (foreign audit files)
+    prune               Prune unnecessary imports and exemptions
     aggregate           Fetch and merge audits from multiple sources into a single `audits.toml`
                             file
     dump-graph          Print the cargo build graph as understood by `cargo vet`

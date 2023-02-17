@@ -290,19 +290,6 @@ pub enum InitError {
     StoreCommit(#[source] StoreCommitError),
 }
 
-//////////////////////////////////////////////////////////
-// RegenerateExemptionsError
-//////////////////////////////////////////////////////////
-
-#[derive(Debug, Error, Diagnostic)]
-#[non_exhaustive]
-pub enum RegenerateExemptionsError {
-    #[error(
-        "Regenerating exemptions failed due to violation conflicts. Run 'cargo vet' for details"
-    )]
-    ViolationConflict,
-}
-
 ///////////////////////////////////////////////////////////
 // StoreErrors
 ///////////////////////////////////////////////////////////

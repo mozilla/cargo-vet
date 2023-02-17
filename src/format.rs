@@ -208,7 +208,7 @@ pub type WildcardAudits = SortedMap<PackageName, Vec<WildcardEntry>>;
 pub type AuditedDependencies = SortedMap<PackageName, Vec<AuditEntry>>;
 
 /// audits.toml
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AuditsFile {
     /// A map of criteria_name to details on that criteria.
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
@@ -237,7 +237,7 @@ pub struct ForeignAuditsFile {
 }
 
 /// Information on a Criteria
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct CriteriaEntry {
     /// Summary of how you evaluate something by this criteria.
@@ -371,7 +371,7 @@ impl Serialize for Delta {
 /// publication time and user-id.
 ///
 /// These audits will be reified in the imports.lock file when unlocked.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WildcardEntry {
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -751,7 +751,7 @@ fn is_default_exemptions_suggest(val: &bool) -> bool {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ImportsFile {
     #[serde(default)]
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
@@ -763,7 +763,7 @@ pub struct ImportsFile {
 
 /// Information about who published a specific version of a crate to be cached
 /// in imports.lock.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CratesPublisher {
     // NOTE: This will only ever be a `semver::Version`, however the resolver
     // code works on borrowed `VetVersion` instances, so we use one here so it

@@ -139,7 +139,7 @@ graph
 * [add-exemption](#cargo-vet-add-exemption): Mark a package as exempted from review
 * [record-violation](#cargo-vet-record-violation): Declare that some versions of a package violate certain audit criteria
 * [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
-* [fetch-imports](#cargo-vet-fetch-imports): Explicitly fetch the imports (foreign audit files)
+* [prune](#cargo-vet-prune): Prune unnecessary imports and exemptions
 * [aggregate](#cargo-vet-aggregate): Fetch and merge audits from multiple sources into a single `audits.toml` file
 * [dump-graph](#cargo-vet-dump-graph): Print the cargo build graph as understood by `cargo vet`
 * [gc](#cargo-vet-gc): Clean up old packages from the vet cache
@@ -626,18 +626,24 @@ Print help information
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
-## cargo vet fetch-imports
-Explicitly fetch the imports (foreign audit files)
+## cargo vet prune
+Prune unnecessary imports and exemptions
 
-`cargo vet check` will implicitly do this, so this mostly exists as "plumbing" for building tools on
-top of vet.
+This will fetch the updated state of imports, and attempt to remove any now-unnecessary imports or
+exemptions from the supply-chain.
 
 ### USAGE
 ```
-cargo vet fetch-imports [OPTIONS]
+cargo vet prune [OPTIONS]
 ```
 
 ### OPTIONS
+#### `--no-imports`
+Don't prune unused imports
+
+#### `--no-exemptions`
+Don't prune unused exemptions
+
 #### `-h, --help`
 Print help information
 

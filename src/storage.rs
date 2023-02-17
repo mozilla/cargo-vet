@@ -33,12 +33,11 @@ use crate::{
         CratesAPICrate, CratesPublisher, CriteriaEntry, CriteriaName, Delta, DiffCache, DiffStat,
         FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName, ImportsFile, MetaConfig,
         PackageName, PackageStr, PublisherCache, PublisherCacheEntry, PublisherCacheUser,
-        PublisherCacheVersion, SortedMap, SortedSet, VetVersion, WildcardAudits, WildcardEntry,
+        PublisherCacheVersion, SortedMap, VetVersion, WildcardAudits, WildcardEntry,
         SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
-    resolver::{self, RequiredEntry},
     serialization::{parse_from_value, spanned::Spanned, to_formatted_toml},
     Config, PackageExt, PartialConfig, CARGO_ENV,
 };
@@ -651,141 +650,6 @@ impl Store {
         false
     }
 
-    /// Return an updated version of the `imports.lock` file taking into account
-    /// the result of running the resolver, to pick which audits need to be
-    /// vendored.
-    #[must_use]
-    pub fn get_updated_imports_file(
-        &self,
-        required_entries: &SortedMap<PackageStr<'_>, Option<SortedSet<RequiredEntry>>>,
-    ) -> ImportsFile {
-        let Some(live_imports) = &self.live_imports else {
-            // We're locked, so can't update anything.
-            return self.imports.clone();
-        };
-
-        let mut new_imports = ImportsFile {
-            publisher: SortedMap::new(),
-            audits: SortedMap::new(),
-        };
-        for (import_index, (import_name, live_audits_file)) in
-            live_imports.audits.iter().enumerate()
-        {
-            let mut new_audits_file = AuditsFile {
-                criteria: live_audits_file.criteria.clone(),
-                wildcard_audits: SortedMap::new(),
-                audits: SortedMap::new(),
-            };
-            for (&pkgname, required_entries) in required_entries {
-                // Filter the set of audits from the live audits file to
-                // only required audits.
-                let audits = live_audits_file
-                    .audits
-                    .get(pkgname)
-                    .map(|v| &v[..])
-                    .unwrap_or(&[])
-                    .iter()
-                    .enumerate()
-                    .filter(|&(audit_index, audit)| {
-                        // Always keep any violations.
-                        if matches!(audit.kind, AuditKind::Violation { .. }) {
-                            return true;
-                        }
-
-                        // If vetting succeeded for this package, keep only the
-                        // required entries, otherwise just keep all existing
-                        // imports for now.
-                        if let Some(required_entries) = required_entries {
-                            required_entries.contains(&resolver::RequiredEntry::Audit {
-                                import_index,
-                                audit_index,
-                            })
-                        } else {
-                            !audit.is_fresh_import
-                        }
-                    })
-                    .map(|(_, audit)| {
-                        let mut audit = audit.clone();
-                        audit.is_fresh_import = false;
-                        audit
-                    })
-                    .collect::<Vec<_>>();
-
-                let wildcard_audits = live_audits_file
-                    .wildcard_audits
-                    .get(pkgname)
-                    .map(|v| &v[..])
-                    .unwrap_or(&[])
-                    .iter()
-                    .enumerate()
-                    .filter(|&(audit_index, audit)| {
-                        // If vetting succeeded for this package, keep only the
-                        // required entries, otherwise just keep all existing
-                        // imports for now.
-                        if let Some(required_entries) = required_entries {
-                            required_entries.contains(&resolver::RequiredEntry::WildcardAudit {
-                                import_index,
-                                audit_index,
-                            })
-                        } else {
-                            !audit.is_fresh_import
-                        }
-                    })
-                    .map(|(_, audit)| {
-                        let mut audit = audit.clone();
-                        audit.is_fresh_import = false;
-                        audit
-                    })
-                    .collect::<Vec<_>>();
-
-                // Record audits in the new audits file, if there are any.
-                if !audits.is_empty() {
-                    new_audits_file.audits.insert(pkgname.to_owned(), audits);
-                }
-                if !wildcard_audits.is_empty() {
-                    new_audits_file
-                        .wildcard_audits
-                        .insert(pkgname.to_owned(), wildcard_audits);
-                }
-            }
-            new_imports
-                .audits
-                .insert(import_name.to_owned(), new_audits_file);
-        }
-
-        for (&pkgname, required_entries) in required_entries {
-            let publishers = live_imports
-                .publisher
-                .get(pkgname)
-                .map(|v| &v[..])
-                .unwrap_or(&[])
-                .iter()
-                .enumerate()
-                .filter(|&(publisher_index, publisher)| {
-                    // If vetting succeeded for this package, keep only the
-                    // required entries, otherwise just keep all existing
-                    // imports for now.
-                    if let Some(required_entries) = required_entries {
-                        required_entries
-                            .contains(&resolver::RequiredEntry::Publisher { publisher_index })
-                    } else {
-                        !publisher.is_fresh_import
-                    }
-                })
-                .map(|(_, publisher)| {
-                    let mut publisher = publisher.clone();
-                    publisher.is_fresh_import = false;
-                    publisher
-                })
-                .collect::<Vec<_>>();
-            if !publishers.is_empty() {
-                new_imports.publisher.insert(pkgname.to_owned(), publishers);
-            }
-        }
-
-        new_imports
-    }
-
     /// Called to ensure that there is publisher information in the store's live
     /// imports for the given crate. This is used when adding new wildcard
     /// audits from `certify`.
@@ -1191,7 +1055,7 @@ fn wildcard_audits_packages(
 ) -> FastSet<PackageName> {
     // Determine which versions are relevant for the purposes of wildcard audit
     // checks. We'll only care about crates which have associated wildcard
-    // audits.
+    // audits or existing cached publisher info.
     audits_file
         .wildcard_audits
         .keys()
@@ -1201,6 +1065,7 @@ fn wildcard_audits_packages(
                 .values()
                 .flat_map(|audits_file| audits_file.wildcard_audits.keys()),
         )
+        .chain(imports_file.publisher.keys())
         .cloned()
         .collect()
 }
@@ -1251,6 +1116,13 @@ fn import_publisher_versions(
         if let Some(exemptions) = config_file.exemptions.get(pkg_name) {
             for exemption in exemptions {
                 versions.insert(&exemption.version.semver);
+            }
+        }
+
+        // If we have previously cached publisher information, it's relevant.
+        if let Some(publishers) = imports_lock.publisher.get(pkg_name) {
+            for publisher in publishers {
+                versions.insert(&publisher.version.semver);
             }
         }
 
