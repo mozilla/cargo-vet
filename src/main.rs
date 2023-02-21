@@ -32,10 +32,7 @@ use thiserror::Error;
 use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
-use crate::errors::{
-    CommandError, DownloadError, FetchAndDiffError, FetchError, RegenerateExemptionsError,
-    SourceFile,
-};
+use crate::errors::{CommandError, DownloadError, FetchAndDiffError, FetchError, SourceFile};
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesUserId, CriteriaEntry, ExemptedDependency,
     FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo,
@@ -469,7 +466,7 @@ fn real_main() -> Result<(), miette::Report> {
         Some(RecordViolation(sub_args)) => cmd_record_violation(&out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(&out, &cfg, sub_args),
         Some(Fmt(sub_args)) => cmd_fmt(&out, &cfg, sub_args),
-        Some(FetchImports(sub_args)) => cmd_fetch_imports(&out, &cfg, sub_args),
+        Some(Prune(sub_args)) => cmd_prune(&out, &cfg, sub_args),
         Some(DumpGraph(sub_args)) => cmd_dump_graph(&out, &cfg, sub_args),
         Some(Inspect(sub_args)) => cmd_inspect(&out, &cfg, sub_args),
         Some(Diff(sub_args)) => cmd_diff(&out, &cfg, sub_args),
@@ -680,14 +677,6 @@ fn cmd_certify(
         last_fetch,
         today,
     )?;
-
-    // Minimize exemptions after adding the new `certify`. This will be used to
-    // potentially update imports, and remove now-unnecessary exemptions.
-    // Explicitly disallow new exemptions so that exemptions are only updated
-    // once we start passing vet.
-    match resolver::regenerate_exemptions(cfg, &mut store, false) {
-        Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
-    }
 
     store.commit()?;
     Ok(())
@@ -1071,6 +1060,20 @@ fn do_cmd_certify(
         .validate(today, false)
         .expect("the new audit entry made the store invalid?");
 
+    // Minimize exemptions after adding the new audit. This will be used to
+    // potentially update imports, and remove now-unnecessary exemptions for the
+    // target package. We only prefer fresh imports and prune exemptions for the
+    // package we certified, to avoid unrelated changes.
+    resolver::update_store(cfg, store, |name| resolver::UpdateMode {
+        search_mode: if name == &package[..] {
+            resolver::SearchMode::PreferFreshImports
+        } else {
+            resolver::SearchMode::PreferExemptions
+        },
+        prune_exemptions: name == &package[..],
+        prune_imports: false,
+    });
+
     Ok(())
 }
 
@@ -1377,11 +1380,13 @@ fn cmd_regenerate_imports(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), true)?;
 
-    // NOTE: Explicitly ignore the `ViolationConflict` error, as we still want
-    // to update imports in that case.
-    match resolver::regenerate_exemptions(cfg, &mut store, false) {
-        Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
-    }
+    // Update the store state, pruning unnecessary exemptions, and cleaning out
+    // unnecessary old imports.
+    resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
+        search_mode: resolver::SearchMode::PreferFreshImports,
+        prune_exemptions: true,
+        prune_imports: true,
+    });
 
     store.commit()?;
     Ok(())
@@ -1474,7 +1479,12 @@ fn cmd_regenerate_exemptions(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
-    resolver::regenerate_exemptions(cfg, &mut store, true)?;
+    // Update the store using a full RegenerateExemptions search.
+    resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
+        search_mode: resolver::SearchMode::RegenerateExemptions,
+        prune_exemptions: true,
+        prune_imports: true,
+    });
 
     // We were successful, commit the store
     store.commit()?;
@@ -1642,12 +1652,31 @@ fn cmd_check(
         panic_any(ExitPanic(-1));
     } else {
         if !cfg.cli.locked {
-            #[allow(clippy::single_match)]
-            match resolver::regenerate_exemptions(cfg, &mut store, false) {
-                Err(RegenerateExemptionsError::ViolationConflict) => {
-                    unreachable!("unexpeced violation conflict regenerating exemptions?")
-                }
-                Ok(()) => {}
+            // Simulate a full `fetch-imports` run, and record the potential
+            // pruned imports and exemptions.
+            let (pruned_imports, pruned_exemptions) =
+                resolver::get_store_updates(cfg, &store, |_| resolver::UpdateMode {
+                    search_mode: resolver::SearchMode::PreferFreshImports,
+                    prune_exemptions: true,
+                    prune_imports: true,
+                });
+
+            // Perform a minimal store update to pull in necessary imports,
+            // while avoiding any other changes to exemptions or imports.
+            resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
+                search_mode: resolver::SearchMode::PreferExemptions,
+                prune_exemptions: false,
+                prune_imports: false,
+            });
+
+            // XXX: Consider trying to be more precise here? Would require some
+            // more clever comparisons.
+            if store.config.exemptions != pruned_exemptions {
+                warn!("Your supply-chain has unnecessary exemptions which could be relaxed or pruned.");
+                warn!("Consider running `cargo vet prune` to prune unnecessary exemptions and imports.");
+            } else if store.imports != pruned_imports {
+                warn!("Your supply-chain has unnecessary imports which could be pruned.");
+                warn!("Consider running `cargo vet prune` to prune unnecessary imports.");
             }
         }
         store.commit()?;
@@ -1656,33 +1685,27 @@ fn cmd_check(
     Ok(())
 }
 
-fn cmd_fetch_imports(
-    out: &Arc<dyn Out>,
+fn cmd_prune(
+    _out: &Arc<dyn Out>,
     cfg: &Config,
-    _sub_args: &FetchImportsArgs,
+    sub_args: &PruneArgs,
 ) -> Result<(), miette::Report> {
-    trace!("fetching imports...");
-
-    if cfg.cli.locked {
-        // ERRORS: just a warning that you're holding it wrong, unclear if immediate or buffered,
-        // or if this should be a hard error, or if we should ignore the --locked flag and
-        // just do it anyway
-        writeln!(
-            out,
-            "warning: ran fetch-imports with --locked, this won't do anything!"
-        );
-
-        return Ok(());
-    }
-
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
-    // NOTE: Explicitly ignore the `ViolationConflict` error, as we still want
-    // to update imports in that case.
-    match resolver::regenerate_exemptions(cfg, &mut store, false) {
-        Ok(()) | Err(RegenerateExemptionsError::ViolationConflict) => {}
-    }
+    let _spinner = indeterminate_spinner("Pruning", "unnecessary imports and exemptions");
+
+    // Update the store with the live state, pruning unnecessary exemptions and
+    // imports.
+    resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
+        search_mode: if sub_args.no_exemptions {
+            resolver::SearchMode::PreferExemptions
+        } else {
+            resolver::SearchMode::PreferFreshImports
+        },
+        prune_exemptions: !sub_args.no_exemptions,
+        prune_imports: !sub_args.no_imports,
+    });
 
     store.commit()?;
 

@@ -4,11 +4,13 @@ use super::*;
 
 // Helper function for imports tests. Performs a vet and updates imports based
 // on it, returning a diff of the two.
-fn get_imports_file_changes(metadata: &Metadata, store: &Store) -> String {
-    // Run the resolver before calling `get_imports_file` to compute the new
-    // imports file.
-    let report = crate::resolver::resolve(metadata, None, store);
-    let new_imports = store.get_updated_imports_file(&report.collect_required_entries());
+fn get_imports_file_changes(
+    metadata: &Metadata,
+    store: &Store,
+    mode: impl FnMut(PackageStr<'_>) -> crate::resolver::UpdateMode,
+) -> String {
+    let (new_imports, _new_exemptions) =
+        crate::resolver::get_store_updates(&mock_cfg(metadata), store, mode);
 
     // Format the old and new files as TOML, and write out a diff using `similar`.
     let old_imports = crate::serialization::to_formatted_toml(&store.imports)
@@ -19,6 +21,22 @@ fn get_imports_file_changes(metadata: &Metadata, store: &Store) -> String {
         .to_string();
 
     generate_diff(&old_imports, &new_imports)
+}
+
+fn get_imports_file_changes_prune(metadata: &Metadata, store: &Store) -> String {
+    get_imports_file_changes(metadata, store, |_| crate::resolver::UpdateMode {
+        search_mode: crate::resolver::SearchMode::PreferExemptions,
+        prune_exemptions: false,
+        prune_imports: true,
+    })
+}
+
+fn get_imports_file_changes_noprune(metadata: &Metadata, store: &Store) -> String {
+    get_imports_file_changes(metadata, store, |_| crate::resolver::UpdateMode {
+        search_mode: crate::resolver::SearchMode::PreferExemptions,
+        prune_exemptions: false,
+        prune_imports: false,
+    })
 }
 
 // Test cases:
@@ -96,7 +114,7 @@ fn new_peer_import() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -153,14 +171,14 @@ fn existing_peer_skip_import() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
 #[test]
 fn existing_peer_remove_unused() {
-    // (Pass) We'll remove unused audits when unlocked, even if our peer hasn't
-    // changed.
+    // (Pass) When pruning, we'll remove unused audits when unlocked, even if
+    // our peer hasn't changed. These audits will be preserved when not pruning.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -178,9 +196,9 @@ fn existing_peer_remove_unused() {
                 "third-party2".to_owned(),
                 vec![
                     full_audit(ver(5), SAFE_TO_DEPLOY),
+                    full_audit(ver(10), SAFE_TO_RUN),
                     delta_audit(ver(5), ver(DEFAULT_VER), SAFE_TO_DEPLOY),
                     delta_audit(ver(100), ver(200), SAFE_TO_DEPLOY),
-                    full_audit(ver(10), SAFE_TO_RUN),
                 ],
             ),
             (
@@ -213,14 +231,17 @@ fn existing_peer_remove_unused() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
-    insta::assert_snapshot!(output);
+    let output = get_imports_file_changes_prune(&metadata, &store);
+    insta::assert_snapshot!("existing_peer_remove_unused", output);
+
+    let output = get_imports_file_changes_noprune(&metadata, &store);
+    insta::assert_snapshot!("existing_peer_remove_unused_noprune", output);
 }
 
 #[test]
 fn existing_peer_import_delta_audit() {
-    // (Pass) If a new delta audit from a peer is useful, we'll import it and
-    // all other audits for that crate, including from other peers.
+    // (Pass) If a new delta audit from a peer is useful, we'll import only that
+    // audit.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -316,15 +337,15 @@ fn existing_peer_import_delta_audit() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
 #[test]
 fn existing_peer_import_custom_criteria() {
     // (Pass) We'll immediately import criteria changes when unlocked, even if
-    // our peer hasn't changed or we aren't mapping them locally. This doesn't
-    // force an import of other crates.
+    // our peer hasn't changed or we aren't mapping them locally. Only the
+    // criteria will be updated.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -380,7 +401,7 @@ fn existing_peer_import_custom_criteria() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
 
     insta::assert_snapshot!(output);
 }
@@ -437,7 +458,7 @@ fn new_audit_for_unused_criteria_basic() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
 
     insta::assert_snapshot!(output);
 }
@@ -498,7 +519,7 @@ fn new_audit_for_unused_criteria_transitive() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
 
     insta::assert_snapshot!(output);
 }
@@ -552,8 +573,11 @@ fn existing_peer_revoked_audit() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
-    insta::assert_snapshot!(output);
+    let output = get_imports_file_changes_prune(&metadata, &store);
+    insta::assert_snapshot!("existing_peer_revoked_audit", output);
+
+    let output = get_imports_file_changes_noprune(&metadata, &store);
+    insta::assert_snapshot!("existing_peer_revoked_audit_noprune", output);
 }
 
 #[test]
@@ -615,7 +639,7 @@ fn existing_peer_add_violation() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -666,7 +690,7 @@ fn peer_audits_exemption_no_minimize() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -679,21 +703,50 @@ fn peer_audits_exemption_minimize() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, audits, mut imports) = builtin_files_inited(&metadata);
+    let (mut config, mut audits, mut imports) = builtin_files_inited(&metadata);
+
+    audits.audits.insert(
+        "transitive-third-party1".to_owned(),
+        vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+    );
 
     let old_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
-        audits: SortedMap::new(),
+        audits: [
+            (
+                "unused-crate".to_owned(),
+                vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+            ),
+            (
+                "third-party1".to_owned(),
+                vec![delta_audit(ver(DEFAULT_VER), ver(100), SAFE_TO_DEPLOY)],
+            ),
+        ]
+        .into_iter()
+        .collect(),
     };
 
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
-        audits: [(
-            "third-party2".to_owned(),
-            vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
-        )]
+        audits: [
+            (
+                "unused-crate".to_owned(),
+                vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+            ),
+            (
+                "third-party1".to_owned(),
+                vec![
+                    full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY),
+                    delta_audit(ver(DEFAULT_VER), ver(100), SAFE_TO_DEPLOY),
+                ],
+            ),
+            (
+                "third-party2".to_owned(),
+                vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+            ),
+        ]
         .into_iter()
         .collect(),
     };
@@ -715,18 +768,57 @@ fn peer_audits_exemption_minimize() {
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
-    let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+    #[allow(clippy::type_complexity)]
+    let configs: [(&str, fn(&str) -> crate::resolver::UpdateMode); 3] = [
+        ("prune", |_| crate::resolver::UpdateMode {
+            search_mode: crate::resolver::SearchMode::PreferFreshImports,
+            prune_exemptions: true,
+            prune_imports: true,
+        }),
+        ("certify", |name| {
+            if name == "third-party2" {
+                crate::resolver::UpdateMode {
+                    search_mode: crate::resolver::SearchMode::PreferFreshImports,
+                    prune_exemptions: true,
+                    prune_imports: false,
+                }
+            } else {
+                crate::resolver::UpdateMode {
+                    search_mode: crate::resolver::SearchMode::PreferExemptions,
+                    prune_exemptions: false,
+                    prune_imports: false,
+                }
+            }
+        }),
+        ("vet", |_| crate::resolver::UpdateMode {
+            search_mode: crate::resolver::SearchMode::PreferExemptions,
+            prune_exemptions: false,
+            prune_imports: false,
+        }),
+    ];
 
-    // Capture the old imports before minimizing exemptions
-    let old = store.mock_commit();
+    for (name, mode) in configs {
+        let mut store = Store::mock_online(
+            &cfg,
+            config.clone(),
+            audits.clone(),
+            imports.clone(),
+            &network,
+            true,
+        )
+        .unwrap();
 
-    crate::resolver::regenerate_exemptions(&mock_cfg(&metadata), &mut store, true).unwrap();
+        // Capture the old imports before minimizing exemptions
+        let old = store.mock_commit();
 
-    // Capture after minimizing exemptions, and generate a diff.
-    let new = store.mock_commit();
+        crate::resolver::update_store(&mock_cfg(&metadata), &mut store, mode);
 
-    let output = diff_store_commits(&old, &new);
-    insta::assert_snapshot!(output);
+        // Capture after minimizing exemptions, and generate a diff.
+        let new = store.mock_commit();
+
+        let output = diff_store_commits(&old, &new);
+        insta::assert_snapshot!(format!("peer_audits_exemption_minimize_{name}"), output);
+    }
 }
 
 #[test]
@@ -804,7 +896,7 @@ fn peer_audits_import_exclusion() {
         "The `transitive-third-party1` crate should still be present in `imported_audits`"
     );
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_noprune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -936,7 +1028,7 @@ fn fresh_import_preferred_audits() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -1007,7 +1099,7 @@ fn old_import_preferred_audits() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -1056,7 +1148,7 @@ fn equal_length_preferred_audits() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -1103,7 +1195,7 @@ fn import_multiple_versions() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
 
@@ -1402,6 +1494,6 @@ fn import_wildcard_audit_publisher() {
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
-    let output = get_imports_file_changes(&metadata, &store);
+    let output = get_imports_file_changes_prune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
