@@ -1956,12 +1956,12 @@ impl Cache {
         // time, and we don't want to do multiple crates.io API calls at
         // the same time, so we'll do the network fetch sync for now.
         let response = tokio::runtime::Handle::current().block_on(network.download(url))?;
-        let result = load_json::<CratesAPICrate>(&response[..])?.versions;
+        let CratesAPICrate { versions } = load_json(&response[..])?;
 
         // Update the users cache and individual crates caches, and return our
         // set of versions.
         let mut guard = self.state.lock().unwrap();
-        let versions: Vec<_> = result
+        let versions: Vec<_> = versions
             .into_iter()
             .map(|api_version| PublisherCacheVersion {
                 num: api_version.num,

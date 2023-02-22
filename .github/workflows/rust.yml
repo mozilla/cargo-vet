@@ -50,6 +50,18 @@ jobs:
         run: |
           cargo test --workspace --all-targets
 
+  msrv-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.61.0
+          override: true
+      - name: Run cargo check
+        run: |
+          cargo check
+
   vet:
     runs-on: ubuntu-latest
     steps:

@@ -2589,21 +2589,16 @@ fn resolve_package_required_entries(
         return Some(SortedMap::new());
     }
 
-    let Ok(audit_graph) = AuditGraph::build(store, criteria_mapper, package_name) else {
-        // There were violations when building the audit graph, return `None` to
-        // indicate that this package is failing.
-        return None;
-    };
+    let audit_graph = AuditGraph::build(store, criteria_mapper, package_name).ok()?;
 
     let mut required_entries = SortedMap::new();
     for &(package, reqs) in &packages {
         // Do the minimal set of searches to validate that the required criteria
         // are matched.
         for criteria_idx in criteria_mapper.minimal_indices(reqs) {
-            let Ok(path) = audit_graph.search(criteria_idx, &package.version, search_mode) else {
-                // This package failed to vet, return `None`.
-                return None;
-            };
+            let path = audit_graph
+                .search(criteria_idx, &package.version, search_mode)
+                .ok()?;
 
             let mut add_entry = |entry: RequiredEntry| {
                 required_entries
@@ -2920,28 +2915,28 @@ pub(crate) fn get_store_updates(
     // Check if we have any FreshExemption entries which should be converted
     // into new exemptions.
     for (&pkgname, required_entries) in &required_entries {
-        let Some(required_entries) = required_entries else { continue };
-
-        for (entry, criteria) in required_entries.iter().rev() {
-            let RequiredEntry::FreshExemption { version } = entry else {
-                // FreshExemption entries always sort last in the BTreeMap, so
-                // we can rely on there being no more FreshExemption entries
-                // after we've seen one.
-                break;
-            };
-
-            all_new_exemptions
-                .entry(pkgname.to_owned())
-                .or_default()
-                .push(ExemptedDependency {
-                    version: version.clone(),
-                    criteria: criteria_mapper
-                        .criteria_names(criteria)
-                        .map(|n| n.to_owned().into())
-                        .collect(),
-                    suggest: true,
-                    notes: None,
-                });
+        if let Some(required_entries) = required_entries {
+            for (entry, criteria) in required_entries.iter().rev() {
+                if let RequiredEntry::FreshExemption { version } = entry {
+                    all_new_exemptions
+                        .entry(pkgname.to_owned())
+                        .or_default()
+                        .push(ExemptedDependency {
+                            version: version.clone(),
+                            criteria: criteria_mapper
+                                .criteria_names(criteria)
+                                .map(|n| n.to_owned().into())
+                                .collect(),
+                            suggest: true,
+                            notes: None,
+                        });
+                } else {
+                    // FreshExemption entries always sort last in the BTreeMap, so
+                    // we can rely on there being no more FreshExemption entries
+                    // after we've seen one.
+                    break;
+                }
+            }
         }
     }
 

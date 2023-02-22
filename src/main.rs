@@ -1439,7 +1439,11 @@ fn fix_audit_as(cfg: &Config, store: &mut Store) -> Result<(), CacheAcquireError
                         };
                         let policy_entry = store.config.policy.get_mut_or_default(
                             err.package.clone(),
-                            is_third_party.then_some(err.version.as_ref()).flatten(),
+                            if is_third_party {
+                                err.version.as_ref()
+                            } else {
+                                None
+                            },
                             all_versions,
                         );
 
@@ -2314,7 +2318,13 @@ fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyEr
         .config
         .policy
         .iter()
-        .filter_map(|(name, _, entry)| (!entry.dependency_criteria.is_empty()).then_some(name))
+        .filter_map(|(name, _, entry)| {
+            if entry.dependency_criteria.is_empty() {
+                None
+            } else {
+                Some(name)
+            }
+        })
         .collect::<SortedSet<_>>();
 
     let mut needs_policy_version_errors = Vec::new();
