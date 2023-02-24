@@ -919,12 +919,16 @@ fn do_cmd_certify(
         .criteria_names(&criteria_set)
         .collect::<Vec<_>>();
 
-    let what_version = match &kind {
+    let statement = match &kind {
         CertifyKind::Full { version } => {
-            format!("version {version}")
+            format!(
+                    "I, {username}, certify that I have audited version {version} of {package} in accordance with the above criteria.",
+                )
         }
         CertifyKind::Delta { from, to } => {
-            format!("the changes from version {from} to {to}")
+            format!(
+                    "I, {username}, certify that I have audited the changes from version {from} to {to} of {package} in accordance with the above criteria.",
+                )
         }
         CertifyKind::Wildcard {
             user_login,
@@ -932,12 +936,11 @@ fn do_cmd_certify(
             end,
             ..
         } => {
-            format!("all versions published by user '{user_login}' between {start} and {end}")
+            format!(
+                    "I, {username}, certify that any version of {package} published by '{user_login}' between {start} and {end} will satisfy the above criteria.",
+                )
         }
     };
-    let statement = format!(
-        "I, {username}, certify that I have audited {what_version} of {package} in accordance with the above criteria.",
-    );
 
     let mut notes = sub_args.notes.clone();
     if !sub_args.accept_all {

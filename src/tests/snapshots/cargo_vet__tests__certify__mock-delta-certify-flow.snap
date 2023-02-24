@@ -3,20 +3,6 @@ source: src/tests/certify.rs
 expression: result
 ---
 OUTPUT:
-<<<CLEAR SCREEN>>>
-choose criteria to certify for third-party1:*
-  0. <clear selections>
-  1. safe-to-run
-  2. safe-to-deploy
-  3. fuzzed
-  4. reviewed
-  5. strong-reviewed
-  6. weak-reviewed
-
-current selection: ["safe-to-deploy"]
-(press ENTER to accept the current criteria)
-> 
-
 <<<EDITING VET_CERTIFY>>>
 # Please read the following criteria and then follow the instructions below:
 
@@ -45,13 +31,13 @@ current selection: ["safe-to-deploy"]
 #
 # Uncomment the following statement:
 
-# I, testing, certify that any version of third-party1 published by 'testuser' between 2022-12-12 and 2024-01-01 will satisfy the above criteria.
+# I, testing, certify that I have audited the changes from version 10.0.0 to 10.0.1 of third-party1 in accordance with the above criteria.
 
 # Add any notes about your audit below this line:
 
 
 <<<EDIT OK>>>
-I, testing, certify that any version of third-party1 published by 'testuser' between 2022-12-12 and 2024-01-01 will satisfy the above criteria.
+I, testing, certify that I have audited the changes from version 10.0.0 to 10.0.1 of third-party1 in accordance with the above criteria.
 
 These are testing notes. They contain some
 newlines. Trailing whitespace        
@@ -76,17 +62,13 @@ implies = "reviewed"
 [criteria.weak-reviewed]
 description = "weakly reviewed"
 
-[[wildcard-audits.third-party1]]
+[[audits.third-party1]]
 who = "testing"
 criteria = "safe-to-deploy"
-user-id = 2
-start = "2022-12-12"
-end = "2024-01-01"
+delta = "10.0.0 -> 10.0.1"
 notes = """
 These are testing notes. They contain some
 newlines. Trailing whitespace
     and leading whitespace
 """
-
-[audits]
 
