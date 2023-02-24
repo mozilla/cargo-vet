@@ -1015,9 +1015,37 @@ fn do_cmd_certify(
         .iter()
         .map(|s| s.to_string().into())
         .collect();
-    let audit_kind = match kind {
-        CertifyKind::Full { version } => AuditKind::Full { version },
-        CertifyKind::Delta { from, to } => AuditKind::Delta { from, to },
+    match kind {
+        CertifyKind::Full { version } => {
+            store
+                .audits
+                .audits
+                .entry(package.clone())
+                .or_default()
+                .push(AuditEntry {
+                    kind: AuditKind::Full { version },
+                    criteria,
+                    who,
+                    notes,
+                    aggregated_from: vec![],
+                    is_fresh_import: false,
+                });
+        }
+        CertifyKind::Delta { from, to } => {
+            store
+                .audits
+                .audits
+                .entry(package.clone())
+                .or_default()
+                .push(AuditEntry {
+                    kind: AuditKind::Delta { from, to },
+                    criteria,
+                    who,
+                    notes,
+                    aggregated_from: vec![],
+                    is_fresh_import: false,
+                });
+        }
         CertifyKind::Wildcard {
             user_id,
             start,
@@ -1039,25 +1067,8 @@ fn do_cmd_certify(
                     aggregated_from: vec![],
                     is_fresh_import: false,
                 });
-            return Ok(());
         }
     };
-
-    let new_entry = AuditEntry {
-        kind: audit_kind,
-        criteria,
-        who,
-        notes,
-        aggregated_from: vec![],
-        is_fresh_import: false,
-    };
-
-    store
-        .audits
-        .audits
-        .entry(package.clone())
-        .or_default()
-        .push(new_entry);
 
     store
         .validate(today, false)
