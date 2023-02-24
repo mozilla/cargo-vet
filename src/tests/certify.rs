@@ -227,7 +227,7 @@ fn mock_wildcard_certify_flow() {
         |_| Ok("\n".to_owned()),
         |_| {
             Ok("\
-            I, testing, certify that I have audited all versions published by user 'testuser' between 2022-12-12 and 2024-01-01 of third-party1 in accordance with the above criteria.\n\
+            I, testing, certify that any version of third-party1 published by 'testuser' between 2022-12-12 and 2024-01-01 will satisfy the above criteria.\n\
             \n\
             These are testing notes. They contain some\n\
             newlines. Trailing whitespace        \n    \

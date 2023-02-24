@@ -45,13 +45,13 @@ current selection: ["safe-to-deploy"]
 #
 # Uncomment the following statement:
 
-# I, testing, certify that I have audited all versions published by user 'testuser' between 2022-12-12 and 2024-01-01 of third-party1 in accordance with the above criteria.
+# I, testing, certify that any version of third-party1 published by 'testuser' between 2022-12-12 and 2024-01-01 will satisfy the above criteria.
 
 # Add any notes about your audit below this line:
 
 
 <<<EDIT OK>>>
-I, testing, certify that I have audited all versions published by user 'testuser' between 2022-12-12 and 2024-01-01 of third-party1 in accordance with the above criteria.
+I, testing, certify that any version of third-party1 published by 'testuser' between 2022-12-12 and 2024-01-01 will satisfy the above criteria.
 
 These are testing notes. They contain some
 newlines. Trailing whitespace        
