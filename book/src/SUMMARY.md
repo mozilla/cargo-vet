@@ -17,6 +17,7 @@
 - [Reference](./reference.md)
   - [Configuration](./config.md)
   - [Audit Entries](./audit-entries.md)
+  - [Wildcard Audit Entries](./wildcard-audit-entries.md)
   - [Built-In Criteria](./built-in-criteria.md)
   - [First-Party Code](./first-party-code.md)
   - [FAQ](./faq.md)
