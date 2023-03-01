@@ -1,15 +1,32 @@
 # Wildcard Audit Entries
 
-This section defines the semantics of the various keys that may be specified in
-wildcard audit table entries (`[[wildcard-audits.$CRATE]]`).
+Wildcard audits are a special type of audit intended as a convenience mechanism
+for organizations that
+[self-certify](curating-your-audit-set.md#self-certification) their own crates.
+Using this feature, an organization can publish an audit which applies to all
+versions published by a given account, avoiding the need to add a new entry to
+`audits.toml` for each new version of the package.
 
-Wildcard audits are an additional type of audit intended for organizations to
-publish self-audits for their crates. Using a wildcard audit, the organization
-can publish an audit which applies to all versions published by a trusted
-publisher, avoiding the need to add a new audit to audits.toml for each
-published version of the package.
+Wildcard audits live at the top of `audits.toml` and look like this:
 
-These audits can be added with `cargo vet certify` using the `--wildcard`
+```
+[[wildcard-audits.foo]]
+who = ...
+criteria = ...
+user-id = ...
+start = ...
+end = ...
+notes = ...
+```
+
+Whereas a regular audit certifies that the individual has verified that the
+crate contents meet the criteria, a wildcard audit certifies that _any_ version
+of the crate published by the given account will meet the criteria. In effect,
+the author is vouching for the integrity of the entire release process, i.e.
+that releases are always cut from a branch for which every change has been
+approved by a trusted individual who will enforce the criteria.
+
+Wildcard audits can be added with `cargo vet certify` using the `--wildcard`
 option.
 
 ## `user-id`
