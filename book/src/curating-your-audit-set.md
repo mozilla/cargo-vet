@@ -56,3 +56,8 @@ This "second set of eyes" principle is important, it's just not one that
 cargo-vet can mechanically enforce in this context. In the future, cargo-vet may
 add support for requiring that crates have been audited by N organizations,
 which would provide stronger guarantees about independent review.
+
+For crates with frequent updates, self-certifying each individual release can be
+a chore. The [wildcard audit](./wildcard-audit-entries.md) feature is designed
+to address this by allowing organizations to self-certify any release of a crate
+published by a given account within a specified time interval.
