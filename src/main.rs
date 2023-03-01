@@ -1528,7 +1528,7 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
             && version2.git_rev.is_none()
         {
             let url = format!(
-                "https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}"
+                "https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}?visible=1000000"
             );
             tokio::runtime::Handle::current()
                 .block_on(prompt_criteria_eulas(
