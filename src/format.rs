@@ -708,9 +708,8 @@ pub struct RemoteImport {
 pub struct CriteriaMapping {
     /// This local criteria is implied...
     pub ours: CriteriaName,
-    /// If all of these foreign criteria apply
-    #[serde(with = "serialization::string_or_vec")]
-    pub theirs: Vec<Spanned<ForeignCriteriaName>>,
+    /// If this foreign criteria applies
+    pub theirs: Spanned<ForeignCriteriaName>,
 }
 
 /// Semantically identical to a 'full audit' entry, but private to our project

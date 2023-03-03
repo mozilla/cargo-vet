@@ -393,6 +393,9 @@ pub enum StoreValidateError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     BadWildcardEndDate(BadWildcardEndDateError),
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    BadBuiltInCriteriaMapping(BadBuiltInCriteriaMappingError),
     #[error("imports.lock is out-of-date with respect to configuration")]
     #[diagnostic(help("run `cargo vet` without --locked to update imports"))]
     ImportsLockOutdated,
@@ -427,6 +430,17 @@ pub struct BadWildcardEndDateError {
     pub span: SourceSpan,
     pub date: chrono::NaiveDate,
     pub max: chrono::NaiveDate,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("Built-in criteria '{criteria_name}' cannot be re-mapped when importing")]
+#[diagnostic(help("built-in criteria are always imported unmodified (see issue #425)"))]
+pub struct BadBuiltInCriteriaMappingError {
+    #[source_code]
+    pub source_code: SourceFile,
+    #[label]
+    pub span: SourceSpan,
+    pub criteria_name: CriteriaName,
 }
 
 //////////////////////////////////////////////////////////

@@ -510,12 +510,8 @@ impl CriteriaMapper {
             let local = CriteriaNamespace::Local;
             for mapping in mappings {
                 // Add a bidirectional edge between these two criteria (they are now completely equivalent)
-                assert!(
-                    mapping.theirs.len() == 1,
-                    "criteria_map doesn't yet support multi-mapping, must be 1:1"
-                );
                 let our_idx = index[&local][&mapping.ours];
-                let their_idx = index[&foreign][&*mapping.theirs[0]];
+                let their_idx = index[&foreign][&*mapping.theirs];
                 direct_implies
                     .get_mut(&our_idx)
                     .unwrap()

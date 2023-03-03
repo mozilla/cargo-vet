@@ -2478,7 +2478,7 @@ fn mock_simple_foreign_audited_pun_mapped() {
             url: FOREIGN_URL.to_owned(),
             criteria_map: vec![CriteriaMapping {
                 ours: DEFAULT_CRIT.to_owned(),
-                theirs: vec![DEFAULT_CRIT.to_owned().into()],
+                theirs: DEFAULT_CRIT.to_owned().into(),
             }],
             ..Default::default()
         },
@@ -2512,7 +2512,7 @@ fn mock_simple_foreign_audited_pun_wrong_mapped() {
             url: OTHER_FOREIGN_URL.to_owned(),
             criteria_map: vec![CriteriaMapping {
                 ours: DEFAULT_CRIT.to_owned(),
-                theirs: vec![DEFAULT_CRIT.to_owned().into()],
+                theirs: DEFAULT_CRIT.to_owned().into(),
             }],
             ..Default::default()
         },
