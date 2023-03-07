@@ -32,8 +32,9 @@ use crate::{
 /// Unlike a normal `assert_snapshot!` the snapshot name isn't inferred by this
 /// macro, as multiple snapshots with different names need to be generated.
 macro_rules! assert_report_snapshot {
-    ($name:expr, $metadata:expr, $report:expr) => {{
-        let (human, json) = $crate::tests::get_reports(&$metadata, $report);
+    ($name:expr, $metadata:expr, $store:expr) => {{
+        let report = $crate::resolver::resolve(&$metadata, None, &$store);
+        let (human, json) = $crate::tests::get_reports(&$metadata, report);
         insta::assert_snapshot!($name, human);
         insta::assert_snapshot!(concat!($name, ".json"), json);
     }};
