@@ -137,7 +137,18 @@ fn existing_peer_skip_import() {
 
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
-        wildcard_audits: SortedMap::new(),
+        wildcard_audits: [
+            (
+                "third-party2".to_owned(),
+                vec![wildcard_audit(1, SAFE_TO_DEPLOY)],
+            ),
+            (
+                "unused-package".to_owned(),
+                vec![wildcard_audit(1, SAFE_TO_DEPLOY)],
+            ),
+        ]
+        .into_iter()
+        .collect(),
         audits: [
             (
                 "third-party2".to_owned(),
@@ -168,11 +179,32 @@ fn existing_peer_skip_import() {
 
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/third-party2",
+        &serde_json::json!({
+            "versions": [
+                {
+                    "crate": "third-party2",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 1,
+                        "login": "user1",
+                        "name": "User One",
+                        "url": "https://github.com/user1"
+                    }
+                }
+            ]
+        }),
+    );
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
     let output = get_imports_file_changes_prune(&metadata, &store);
-    insta::assert_snapshot!(output);
+    insta::assert_snapshot!("existing_peer_skip_import", output);
+
+    let output = get_imports_file_changes_noprune(&metadata, &store);
+    insta::assert_snapshot!("existing_peer_skip_import_noprune", output);
 }
 
 #[test]
