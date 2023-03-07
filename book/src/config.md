@@ -91,22 +91,25 @@ field is required.
 
 An inline table or array of inline tables specifying one or more mappings
 between the audit criteria of the imported and local sets. Each imported audit
-is matched against each mapping. If the imported audit certifies all of the
-criteria listed in the `theirs` key, it is associated with the local criteria
-specified in the `ours` key.
-
-This will generally be a 1:1 mapping:
+is matched against each mapping. If the imported audit certifies the criteria
+listed in the `theirs` key, it will certify the local criteria specified in the
+`ours` key.
 
 ```
-criteria-map = { theirs: "a", ours: "x" }
+[[imports.peer.criteria-map]]
+ours = "x"
+theirs = "a"
+
+[[imports.peer.criteria-map]]
+ours = "safe-to-deploy"
+theirs = "super-audited"
 ```
 
-But can also be more complex:
-
-```
-criteria-map = [ { theirs: "b", ours: ["y", "z"] },
-                 { theirs: ["c", "d"], ours: "z" } ]
-```
+Note that while you can map a remote criteria to the built-in criteria, you
+cannot remap a peer's built-in criteria to some other criteria. The
+`safe-to-run` and `safe-to-deploy` criteria will always be mapped directly.
+Please let us know in [#425](https://github.com/mozilla/cargo-vet/issues/425) if
+this limitation causes issues.
 
 #### `exclude`
 

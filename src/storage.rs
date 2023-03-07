@@ -20,12 +20,12 @@ use tracing::{error, info, log::warn, trace};
 
 use crate::{
     errors::{
-        BadFormatError, BadWildcardEndDateError, CacheAcquireError, CacheCommitError, CertifyError,
-        CommandError, CriteriaChangeError, CriteriaChangeErrors, DiffError, DownloadError,
-        FetchAndDiffError, FetchAuditError, FetchError, FlockError, InvalidCriteriaError,
-        JsonParseError, LoadJsonError, LoadTomlError, SourceFile, StoreAcquireError,
-        StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError, StoreValidateError,
-        StoreValidateErrors, TomlParseError, UnpackCheckoutError, UnpackError,
+        BadBuiltInCriteriaMappingError, BadFormatError, BadWildcardEndDateError, CacheAcquireError,
+        CacheCommitError, CertifyError, CommandError, CriteriaChangeError, CriteriaChangeErrors,
+        DiffError, DownloadError, FetchAndDiffError, FetchAuditError, FetchError, FlockError,
+        InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError, SourceFile,
+        StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError,
+        StoreValidateError, StoreValidateErrors, TomlParseError, UnpackCheckoutError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
@@ -567,6 +567,20 @@ impl Store {
                             max: max_end_date,
                         },
                     ))
+                }
+            }
+        }
+
+        for (_name, import) in &self.config.imports {
+            for mapping in &import.criteria_map {
+                if &mapping.theirs[..] == SAFE_TO_DEPLOY || &mapping.theirs[..] == SAFE_TO_RUN {
+                    errors.push(StoreValidateError::BadBuiltInCriteriaMapping(
+                        BadBuiltInCriteriaMappingError {
+                            source_code: self.config_src.clone(),
+                            span: Spanned::span(&mapping.theirs),
+                            criteria_name: mapping.theirs[..].to_owned(),
+                        },
+                    ));
                 }
             }
         }

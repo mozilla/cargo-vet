@@ -386,3 +386,33 @@ version = "10.0.0"
     let acquire_errors = get_valid_store(config, audits, imports);
     insta::assert_snapshot!(acquire_errors);
 }
+
+#[test]
+fn test_invalid_criteria_map() {
+    let config = r##"
+# cargo-vet config file
+
+[imports.peer1]
+url = "https://peer1.com"
+
+[[imports.peer1.criteria-map]]
+ours = "safe-to-run"
+theirs = "fuzzed"
+
+[[imports.peer1.criteria-map]]
+ours = "safe-to-run"
+theirs = "safe-to-deploy"
+"##;
+
+    let imports = r##"
+# cargo-vet imports lock
+
+[audits.peer1.criteria.fuzzed]
+description = "fuzzed"
+
+[audits.peer1.audits]
+"##;
+
+    let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
+    insta::assert_snapshot!(acquire_errors);
+}
