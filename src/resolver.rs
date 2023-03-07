@@ -78,7 +78,7 @@ pub struct ResolveReport<'a> {
     /// Low-level results for each package's individual criteria resolving
     /// analysis, indexed by [`PackageIdx`][]. Will be `None` for first-party
     /// crates or crates with violation conflicts.
-    pub results: Vec<Option<ResolveResult<'a>>>,
+    pub results: Vec<Option<ResolveResult>>,
 
     /// The final conclusion of our analysis.
     pub conclusion: Conclusion,
@@ -271,9 +271,7 @@ pub struct DepGraph<'a> {
 
 /// Results and notes from running vet on a particular package.
 #[derive(Debug, Clone)]
-pub struct ResolveResult<'a> {
-    /// Graph used to compute audits for this package.
-    pub audit_graph: AuditGraph<'a>,
+pub struct ResolveResult {
     /// Cache of search results for each criteria.
     pub search_results: Vec<Result<Vec<DeltaEdgeOrigin>, SearchFailure>>,
 }
@@ -1181,7 +1179,7 @@ impl<'a> DepGraph<'a> {
 pub fn resolve<'a>(
     metadata: &'a Metadata,
     filter_graph: Option<&Vec<GraphFilter>>,
-    store: &'a Store,
+    store: &Store,
 ) -> ResolveReport<'a> {
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
@@ -1274,12 +1272,12 @@ fn resolve_requirements(
     requirements
 }
 
-fn resolve_audits<'a>(
+fn resolve_audits(
     graph: &DepGraph<'_>,
-    store: &'a Store,
+    store: &Store,
     criteria_mapper: &CriteriaMapper,
     requirements: &[CriteriaSet],
-) -> (Vec<Option<ResolveResult<'a>>>, Conclusion) {
+) -> (Vec<Option<ResolveResult>>, Conclusion) {
     let _resolve_audits = trace_span!("resolve_audits").entered();
     let mut violations = Vec::new();
     let mut failures = Vec::new();
@@ -1339,10 +1337,7 @@ fn resolve_audits<'a>(
                 vetted_partially.push(pkgidx);
             }
 
-            Some(ResolveResult {
-                audit_graph,
-                search_results,
-            })
+            Some(ResolveResult { search_results })
         })
         .collect();
 
