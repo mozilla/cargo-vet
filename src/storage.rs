@@ -726,6 +726,13 @@ fn process_imported_audits(
         for audit_entry in audits_file.audits.values_mut().flat_map(|v| v.iter_mut()) {
             audit_entry.is_fresh_import = true;
         }
+        for audit_entry in audits_file
+            .wildcard_audits
+            .values_mut()
+            .flat_map(|v| v.iter_mut())
+        {
+            audit_entry.is_fresh_import = true;
+        }
 
         // If we have an existing audits file for these imports, compare against it.
         if let Some(existing_audits_file) = imports_lock.audits.get(&import_name) {
