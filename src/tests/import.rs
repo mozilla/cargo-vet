@@ -1,5 +1,3 @@
-use crate::network::Network;
-
 use super::*;
 
 // Helper function for imports tests. Performs a vet and updates imports based
@@ -375,9 +373,9 @@ fn existing_peer_import_delta_audit() {
 
 #[test]
 fn existing_peer_import_custom_criteria() {
-    // (Pass) We'll immediately import criteria changes when unlocked, even if
-    // our peer hasn't changed or we aren't mapping them locally. Only the
-    // criteria will be updated.
+    // (Pass) We'll immediately import criteria changes for mapped criteria when
+    // unlocked, even if our peer hasn't changed or we aren't mapping them
+    // locally. Only the criteria will be updated.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -399,9 +397,15 @@ fn existing_peer_import_custom_criteria() {
     };
 
     let new_foreign_audits = AuditsFile {
-        criteria: [("fuzzed".to_string(), criteria("fuzzed"))]
-            .into_iter()
-            .collect(),
+        criteria: [
+            ("fuzzed".to_string(), criteria("fuzzed")),
+            (
+                "super-fuzzed".to_string(),
+                criteria_implies("super-fuzzed", ["fuzzed"]),
+            ),
+        ]
+        .into_iter()
+        .collect(),
         wildcard_audits: SortedMap::new(),
         audits: [(
             "third-party2".to_owned(),
@@ -422,6 +426,12 @@ fn existing_peer_import_custom_criteria() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
+            criteria_map: [(
+                "fuzzed".to_string().into(),
+                vec![SAFE_TO_RUN.to_string().into()],
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         },
     );
@@ -441,7 +451,7 @@ fn existing_peer_import_custom_criteria() {
 #[test]
 fn new_audit_for_unused_criteria_basic() {
     // (Pass) If a peer adds an audit for an unused criteria, we shouldn't
-    // vendor in the changes unnecessarily.
+    // vendor in the changes unnecessarily, even if the criteria is mapped.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -479,6 +489,12 @@ fn new_audit_for_unused_criteria_basic() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
+            criteria_map: [(
+                "fuzzed".to_string().into(),
+                vec![SAFE_TO_RUN.to_string().into()],
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         },
     );
@@ -540,6 +556,12 @@ fn new_audit_for_unused_criteria_transitive() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
+            criteria_map: [(
+                "fuzzed".to_string().into(),
+                vec![SAFE_TO_RUN.to_string().into()],
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         },
     );
@@ -983,6 +1005,12 @@ fn existing_peer_updated_description() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
+            criteria_map: [(
+                "example".to_string().into(),
+                vec![SAFE_TO_DEPLOY.to_string().into()],
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         },
     );
@@ -1522,6 +1550,131 @@ fn import_wildcard_audit_publisher() {
             ]
         }),
     );
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+
+    let output = get_imports_file_changes_prune(&metadata, &store);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn import_criteria_map() {
+    // (Pass)
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, audits, imports) = files_no_exemptions(&metadata);
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: FOREIGN_URL.to_owned(),
+            criteria_map: [
+                (
+                    "foreign-reviewed".to_owned().into(),
+                    vec!["reviewed".to_owned().into()],
+                ),
+                (
+                    "safe-to-deploy".to_owned().into(),
+                    vec!["strong-reviewed".to_owned().into()],
+                ),
+                (
+                    "safe-to-run".to_owned().into(),
+                    vec!["weak-reviewed".to_owned().into()],
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        },
+    );
+
+    config.policy.package.insert(
+        "first-party".to_owned(),
+        PackagePolicyEntry::Unversioned(PolicyEntry {
+            dependency_criteria: [
+                (
+                    "third-party1".to_owned().into(),
+                    vec!["reviewed".to_owned().into()],
+                ),
+                (
+                    "third-party2".to_owned().into(),
+                    vec!["weak-reviewed".to_owned().into()],
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        }),
+    );
+    config.policy.package.insert(
+        "third-party1".to_owned(),
+        PackagePolicyEntry::Versioned {
+            version: [(
+                ver(DEFAULT_VER),
+                PolicyEntry {
+                    dependency_criteria: [
+                        (
+                            "third-party1".to_owned().into(),
+                            vec!["strong-reviewed".to_owned().into()],
+                        ),
+                        (
+                            "third-party2".to_owned().into(),
+                            vec!["weak-reviewed".to_owned().into()],
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+        },
+    );
+
+    let new_foreign_audits = AuditsFile {
+        criteria: [
+            (
+                "foreign-strong-reviewed".to_string(),
+                criteria_implies("foreign strongly reviewed", ["foreign-reviewed"]),
+            ),
+            (
+                "foreign-reviewed".to_string(),
+                criteria_implies("foreign reviewed", ["foreign-weak-reviewed"]),
+            ),
+            (
+                "foreign-weak-reviewed".to_string(),
+                criteria("foreign weakly reviewed"),
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        audits: [
+            (
+                "third-party1".to_owned(),
+                vec![full_audit(ver(DEFAULT_VER), "foreign-strong-reviewed")],
+            ),
+            (
+                "transitive-third-party1".to_owned(),
+                vec![full_audit(ver(DEFAULT_VER), "safe-to-deploy")],
+            ),
+            (
+                "third-party2".to_owned(),
+                vec![full_audit(ver(DEFAULT_VER), "safe-to-run")],
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        wildcard_audits: SortedMap::new(),
+    };
+
+    let cfg = mock_cfg(&metadata);
+
+    let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();

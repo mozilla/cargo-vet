@@ -8,7 +8,7 @@ expression: json
     "third-party1:10.0.0": [
       {
         "UnauditedConflict": {
-          "violation_source": "Local",
+          "violation_source": null,
           "violation": {
             "criteria": "weak-reviewed",
             "version": null,

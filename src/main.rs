@@ -32,6 +32,7 @@ use thiserror::Error;
 use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
+use crate::criteria::CriteriaMapper;
 use crate::errors::{CommandError, DownloadError, FetchAndDiffError, FetchError, SourceFile};
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesUserId, CriteriaEntry, ExemptedDependency,
@@ -40,10 +41,11 @@ use crate::format::{
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
-use crate::resolver::{CriteriaMapper, CriteriaNamespace, DepGraph};
+use crate::resolver::DepGraph;
 use crate::storage::{Cache, Store};
 
 mod cli;
+mod criteria;
 pub mod errors;
 mod flock;
 pub mod format;
@@ -796,11 +798,7 @@ fn do_cmd_certify(
         )
     };
 
-    let criteria_mapper = CriteriaMapper::new(
-        &store.audits.criteria,
-        store.imported_audits(),
-        &store.config.imports,
-    );
+    let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
 
     let criteria_names = if sub_args.criteria.is_empty() {
         // If we don't have explicit cli criteria, guess the criteria
@@ -835,38 +833,23 @@ fn do_cmd_certify(
             );
             writeln!(out, "  0. <clear selections>");
             let implied_criteria = criteria_mapper.criteria_from_list(&chosen_criteria);
-            // Iterate over all the local criteria. Note that it's fine for us to do the enumerate
-            // first, because local criteria are added to the list before foreign criteria, so they
-            // should be contiguous from 0..N.
-            let local_criteria = criteria_mapper
-                .list
-                .iter()
-                .enumerate()
-                .filter(|(_, info)| matches!(info.namespace, CriteriaNamespace::Local));
-            for (criteria_idx, criteria_info) in local_criteria {
-                if chosen_criteria.contains(&criteria_info.namespaced_name) {
+            for (criteria_idx, criteria_name) in criteria_mapper.all_criteria_names().enumerate() {
+                if chosen_criteria.iter().any(|s| s == criteria_name) {
                     writeln!(
                         out,
                         "  {}. {}",
                         criteria_idx + 1,
-                        out.style().green().apply_to(&criteria_info.namespaced_name)
+                        out.style().green().apply_to(criteria_name)
                     );
                 } else if implied_criteria.has_criteria(criteria_idx) {
                     writeln!(
                         out,
                         "  {}. {}",
                         criteria_idx + 1,
-                        out.style()
-                            .yellow()
-                            .apply_to(&criteria_info.namespaced_name)
+                        out.style().yellow().apply_to(criteria_name)
                     );
                 } else {
-                    writeln!(
-                        out,
-                        "  {}. {}",
-                        criteria_idx + 1,
-                        &criteria_info.namespaced_name
-                    );
+                    writeln!(out, "  {}. {}", criteria_idx + 1, criteria_name);
                 }
             }
 
@@ -901,12 +884,12 @@ fn do_cmd_certify(
                 chosen_criteria.clear();
                 continue;
             }
-            if answer > criteria_mapper.list.len() {
+            if answer > criteria_mapper.len() {
                 // ERRORS: immediate error print to output for feedback, non-fatal
                 writeln!(out, "error: not a valid criteria");
                 continue;
             }
-            chosen_criteria.push(criteria_mapper.list[answer - 1].namespaced_name.clone());
+            chosen_criteria.push(criteria_mapper.criteria_name(answer - 1).to_owned());
         }
         chosen_criteria
     } else {

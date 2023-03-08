@@ -1,5 +1,3 @@
-use crate::format::CriteriaMapping;
-
 use super::*;
 
 #[test]
@@ -2316,8 +2314,11 @@ fn mock_simple_foreign_audited_pun_no_mapping() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, mut imports) = files_full_audited(&metadata);
-    imports.audits.insert(FOREIGN.to_owned(), audits.clone());
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
+
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &audits);
+
     config.imports.insert(
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
@@ -2327,7 +2328,15 @@ fn mock_simple_foreign_audited_pun_no_mapping() {
     );
     audits.audits.clear();
 
-    let store = Store::mock(config, audits, imports);
+    let store = Store::mock_online(
+        &mock_cfg(&metadata),
+        config,
+        audits,
+        imports,
+        &network,
+        true,
+    )
+    .unwrap();
 
     assert_report_snapshot!(
         "mock_simple_foreign_audited_pun_no_mapping",
@@ -2344,22 +2353,35 @@ fn mock_simple_foreign_audited_pun_mapped() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, mut imports) = files_full_audited(&metadata);
-    imports.audits.insert(FOREIGN.to_owned(), audits.clone());
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
+
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &audits);
+
     config.imports.insert(
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
-            criteria_map: vec![CriteriaMapping {
-                ours: DEFAULT_CRIT.to_owned(),
-                theirs: DEFAULT_CRIT.to_owned().into(),
-            }],
+            criteria_map: [(
+                DEFAULT_CRIT.to_owned().into(),
+                vec![DEFAULT_CRIT.to_owned().into()],
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         },
     );
     audits.audits.clear();
 
-    let store = Store::mock(config, audits, imports);
+    let store = Store::mock_online(
+        &mock_cfg(&metadata),
+        config,
+        audits,
+        imports,
+        &network,
+        true,
+    )
+    .unwrap();
 
     assert_report_snapshot!("mock_simple_foreign_audited_pun_mapped", metadata, store);
 }
@@ -2372,21 +2394,24 @@ fn mock_simple_foreign_audited_pun_wrong_mapped() {
     let mock = MockMetadata::simple();
 
     let metadata = mock.metadata();
-    let (mut config, mut audits, mut imports) = files_full_audited(&metadata);
+    let (mut config, mut audits, imports) = files_full_audited(&metadata);
+
     // FOREIGN has the audits, but OTHER_FOREIGN has the mapping
-    imports.audits.insert(FOREIGN.to_owned(), audits.clone());
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &audits);
     audits.audits.clear();
-    imports
-        .audits
-        .insert(OTHER_FOREIGN.to_owned(), audits.clone());
+    network.mock_serve_toml(OTHER_FOREIGN_URL, &audits);
+
     config.imports.insert(
         OTHER_FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: OTHER_FOREIGN_URL.to_owned(),
-            criteria_map: vec![CriteriaMapping {
-                ours: DEFAULT_CRIT.to_owned(),
-                theirs: DEFAULT_CRIT.to_owned().into(),
-            }],
+            criteria_map: [(
+                DEFAULT_CRIT.to_owned().into(),
+                vec![DEFAULT_CRIT.to_owned().into()],
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         },
     );
@@ -2398,7 +2423,15 @@ fn mock_simple_foreign_audited_pun_wrong_mapped() {
         },
     );
 
-    let store = Store::mock(config, audits, imports);
+    let store = Store::mock_online(
+        &mock_cfg(&metadata),
+        config,
+        audits,
+        imports,
+        &network,
+        true,
+    )
+    .unwrap();
 
     assert_report_snapshot!(
         "mock_simple_foreign_audited_pun_wrong_mapped",

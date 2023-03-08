@@ -115,6 +115,9 @@ fn imported_wildcard_audit() {
 
     let metadata = mock.metadata();
     let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+    audits
+        .criteria
+        .insert("example".to_string(), criteria("example criteria"));
     audits.audits.remove("third-party1");
     audits.audits.insert(
         "transitive-third-party1".to_owned(),
@@ -149,6 +152,12 @@ fn imported_wildcard_audit() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
+            criteria_map: [(
+                "example".to_owned().into(),
+                vec!["example".to_owned().into()],
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         },
     );
