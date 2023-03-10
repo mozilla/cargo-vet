@@ -33,9 +33,12 @@ use crate::{
 /// Unlike a normal `assert_snapshot!` the snapshot name isn't inferred by this
 /// macro, as multiple snapshots with different names need to be generated.
 macro_rules! assert_report_snapshot {
-    ($name:expr, $metadata:expr, $store:expr) => {{
+    ($name:expr, $metadata:expr, $store:expr) => {
+        assert_report_snapshot!($name, $metadata, $store, None);
+    };
+    ($name:expr, $metadata:expr, $store:expr, $network:expr) => {{
         let report = $crate::resolver::resolve(&$metadata, None, &$store);
-        let (human, json) = $crate::tests::get_reports(&$metadata, report);
+        let (human, json) = $crate::tests::get_reports(&$metadata, report, &$store, $network);
         insta::assert_snapshot!($name, human);
         insta::assert_snapshot!(concat!($name, ".json"), json);
     }};
@@ -1087,13 +1090,18 @@ where
     }
 }
 
-fn get_reports(metadata: &Metadata, report: ResolveReport) -> (String, String) {
+fn get_reports(
+    metadata: &Metadata,
+    report: ResolveReport,
+    store: &Store,
+    network: Option<&Network>,
+) -> (String, String) {
     // FIXME: Figure out how to handle disabling output colours better in tests.
     console::set_colors_enabled(false);
     console::set_colors_enabled_stderr(false);
 
     let cfg = mock_cfg(metadata);
-    let suggest = report.compute_suggest(&cfg, None, true).unwrap();
+    let suggest = report.compute_suggest(&cfg, store, network).unwrap();
 
     let human_output = BasicTestOutput::new();
     report

@@ -757,6 +757,9 @@ pub enum SuggestError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     CacheAcquire(#[from] CacheAcquireError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    FetchAudit(#[from] FetchAuditError),
 }
 
 //////////////////////////////////////////////////////////

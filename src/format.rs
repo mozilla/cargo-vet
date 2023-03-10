@@ -961,6 +961,26 @@ pub struct CratesAPICrate {
 //                                                                                //
 //                                                                                //
 //                                                                                //
+//                               registry.toml                                    //
+//                                                                                //
+//                                                                                //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RegistryFile {
+    pub registry: SortedMap<ImportName, RegistryEntry>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RegistryEntry {
+    pub url: String,
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+//                                                                                //
+//                                                                                //
+//                                                                                //
 //                             <json report output>                               //
 //                                                                                //
 //                                                                                //

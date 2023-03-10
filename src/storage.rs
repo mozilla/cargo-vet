@@ -10,7 +10,7 @@ use std::{
 
 use cargo_metadata::semver;
 use flate2::read::GzDecoder;
-use futures_util::future::try_join_all;
+use futures_util::future::{join_all, try_join_all};
 use miette::SourceOffset;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -31,11 +31,11 @@ use crate::{
     flock::{FileLock, Filesystem},
     format::{
         self, AuditEntry, AuditKind, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
-        CratesAPICrate, CratesPublisher, CriteriaEntry, CriteriaName, Delta, DiffCache, DiffStat,
-        FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName, ImportsFile, MetaConfig,
-        PackageName, PackageStr, PublisherCache, PublisherCacheEntry, PublisherCacheUser,
-        PublisherCacheVersion, SortedMap, VetVersion, WildcardAudits, WildcardEntry,
-        SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        CratesAPICrate, CratesPublisher, CriteriaEntry, CriteriaName, CriteriaStr, Delta,
+        DiffCache, DiffStat, FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName,
+        ImportsFile, MetaConfig, PackageName, PackageStr, PublisherCache, PublisherCacheEntry,
+        PublisherCacheUser, PublisherCacheVersion, RegistryEntry, RegistryFile, RemoteImport,
+        SortedMap, VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
@@ -93,6 +93,10 @@ const MAX_CONCURRENT_DIFFS: usize = 40;
 
 // Re-check if a relevant version was not published every day.
 const NONINDEX_VERSION_PUBLISHER_REFRESH_DAYS: i64 = 1;
+
+// Url of the registry.
+pub const REGISTRY_URL: &str =
+    "https://raw.githubusercontent.com/mozilla/cargo-vet/main/registry.toml";
 
 struct StoreLock {
     config: FileLock,
@@ -193,18 +197,6 @@ impl Store {
     }
 
     pub fn acquire_offline(cfg: &Config) -> Result<Self, StoreAcquireError> {
-        Self::acquire(cfg, None, false)
-    }
-
-    /// Acquire an existing store
-    ///
-    /// If `network` is passed and `!cfg.cli.locked`, this will fetch remote
-    /// imports to use for comparison purposes.
-    pub fn acquire(
-        cfg: &Config,
-        network: Option<&Network>,
-        allow_criteria_changes: bool,
-    ) -> Result<Self, StoreAcquireError> {
         let root = cfg.metacfg.store_path();
 
         // Before we do anything else, acquire an exclusive lock on the
@@ -218,43 +210,12 @@ impl Store {
         let (imports_src, imports): (_, ImportsFile) =
             load_toml(IMPORTS_LOCK, lock.read_imports()?)?;
 
-        // If this command isn't locked, and the network is available, fetch the
-        // live state of imported audits.
-        let live_imports = if let (false, Some(network)) = (cfg.cli.locked, network) {
-            let fetched_audits = tokio::runtime::Handle::current()
-                .block_on(fetch_imported_audits(network, &config))?;
-            let mut live_imports = process_imported_audits(
-                fetched_audits,
-                &audits,
-                &config,
-                &imports,
-                allow_criteria_changes,
-            )?;
-            // XXX: Allow callers to hold on to this cache so we don't need to
-            // re-acquire it after `Store::acquire`.
-            let cache = Cache::acquire(cfg).map_err(Box::new)?;
-            import_publisher_versions(
-                &cfg.metadata,
-                network,
-                &cache,
-                &wildcard_audits_packages(&audits, &live_imports),
-                &config,
-                &audits,
-                &imports,
-                &mut live_imports,
-            )
-            .map_err(Box::new)?;
-            Some(live_imports)
-        } else {
-            None
-        };
-
         let store = Self {
             lock: Some(lock),
             config,
             audits,
             imports,
-            live_imports,
+            live_imports: None,
             config_src,
             audits_src,
             imports_src,
@@ -267,6 +228,69 @@ impl Store {
         store.validate(today, cfg.cli.locked)?;
 
         Ok(store)
+    }
+
+    /// Acquire an existing store
+    ///
+    /// If `network` is passed and `!cfg.cli.locked`, this will fetch remote
+    /// imports to use for comparison purposes.
+    pub fn acquire(
+        cfg: &Config,
+        network: Option<&Network>,
+        allow_criteria_changes: bool,
+    ) -> Result<Self, StoreAcquireError> {
+        let mut this = Self::acquire_offline(cfg)?;
+        if let Some(network) = network {
+            let cache = Cache::acquire(cfg).map_err(Box::new)?;
+            tokio::runtime::Handle::current().block_on(this.go_online(
+                cfg,
+                network,
+                &cache,
+                allow_criteria_changes,
+            ))?;
+
+            // re-validate
+            let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
+            this.validate(today, cfg.cli.locked)?;
+        }
+        Ok(this)
+    }
+
+    pub async fn go_online(
+        &mut self,
+        cfg: &Config,
+        network: &Network,
+        cache: &Cache,
+        allow_criteria_changes: bool,
+    ) -> Result<(), StoreAcquireError> {
+        if cfg.cli.locked {
+            return Ok(());
+        }
+
+        // If this command isn't locked, and the network is available, fetch the
+        // live state of imported audits.
+        let fetched_audits = fetch_imported_audits(network, &self.config).await?;
+        let mut live_imports = process_imported_audits(
+            fetched_audits,
+            &self.audits,
+            &self.config,
+            &self.imports,
+            allow_criteria_changes,
+        )?;
+        import_publisher_versions(
+            &cfg.metadata,
+            network,
+            cache,
+            &wildcard_audits_packages(&self.audits, &live_imports),
+            &self.config,
+            &self.audits,
+            &self.imports,
+            &mut live_imports,
+        )
+        .await
+        .map_err(Box::new)?;
+        self.live_imports = Some(live_imports);
+        Ok(())
     }
 
     /// Create a mock store
@@ -308,17 +332,18 @@ impl Store {
             allow_criteria_changes,
         )?;
         let cache = Cache::acquire(cfg).map_err(Box::new)?;
-        import_publisher_versions(
-            &cfg.metadata,
-            network,
-            &cache,
-            &wildcard_audits_packages(&audits, &live_imports),
-            &config,
-            &audits,
-            &imports,
-            &mut live_imports,
-        )
-        .map_err(Box::new)?;
+        tokio::runtime::Handle::current()
+            .block_on(import_publisher_versions(
+                &cfg.metadata,
+                network,
+                &cache,
+                &wildcard_audits_packages(&audits, &live_imports),
+                &config,
+                &audits,
+                &imports,
+                &mut live_imports,
+            ))
+            .map_err(Box::new)?;
 
         let store = Self {
             lock: None,
@@ -368,14 +393,15 @@ impl Store {
 
     /// Create a clone of the store for use to resolve `suggest`.
     ///
-    /// This cloned store will not contain `exemptions` entries from the config,
-    /// unless they're marked as `suggest = false`, such that the resolver will
-    /// identify these missing audits when generating a report.
+    /// If `clear_exemptions` is passed, this cloned store will not contain
+    /// `exemptions` entries from the config, unless they're marked as `suggest
+    /// = false`, such that the resolver will identify these missing audits when
+    /// generating a report.
     ///
     /// Unlike the primary store created with `Store::acquire` or
     /// `Store::create`, this store will not hold the store lock, and cannot be
     /// committed to disk by calling `commit()`.
-    pub fn clone_for_suggest(&self) -> Self {
+    pub fn clone_for_suggest(&self, clear_exemptions: bool) -> Self {
         let mut clone = Self {
             lock: None,
             config: self.config.clone(),
@@ -386,9 +412,11 @@ impl Store {
             audits_src: self.audits_src.clone(),
             imports_src: self.imports_src.clone(),
         };
-        // Delete all exemptions entries except those that are suggest=false
-        for versions in &mut clone.config.exemptions.values_mut() {
-            versions.retain(|e| !e.suggest);
+        if clear_exemptions {
+            // Delete all exemptions entries except those that are suggest=false
+            for versions in &mut clone.config.exemptions.values_mut() {
+                versions.retain(|e| !e.suggest);
+            }
         }
         clone
     }
@@ -672,7 +700,7 @@ impl Store {
     ) -> Result<&[CratesPublisher], CertifyError> {
         if let (Some(network), Some(live_imports)) = (network, self.live_imports.as_mut()) {
             let cache = Cache::acquire(cfg)?;
-            import_publisher_versions(
+            tokio::runtime::Handle::current().block_on(import_publisher_versions(
                 &cfg.metadata,
                 network,
                 &cache,
@@ -681,7 +709,7 @@ impl Store {
                 &self.audits,
                 &self.imports,
                 live_imports,
-            )?;
+            ))?;
 
             Ok(live_imports
                 .publisher
@@ -691,6 +719,96 @@ impl Store {
         } else {
             Ok(&[])
         }
+    }
+
+    /// Called when suggesting in order to fetch all audits from potential peers
+    /// in the registry, in case a registry import could solve an encountered
+    /// problem.
+    pub async fn fetch_registry_audits(
+        &mut self,
+        cfg: &Config,
+        network: &Network,
+        cache: &Cache,
+    ) -> Result<Vec<(ImportName, RegistryEntry, AuditsFile)>, FetchAuditError> {
+        let mut registry_file = fetch_registry(network).await?;
+
+        // Filter out registry entries which are already imported or would
+        // conflict with an existing import (i.e. an import exists with the same
+        // name or url).
+        registry_file.registry.retain(|name, entry| {
+            !self.config.imports.contains_key(name)
+                && !self
+                    .config
+                    .imports
+                    .values()
+                    .any(|import| import.url == entry.url)
+        });
+
+        let registry_entries = {
+            let progress_bar = progress_bar(
+                "Fetching",
+                "registry audits",
+                registry_file.registry.len() as u64,
+            );
+            let local_criteria_mapper = CriteriaMapper::new(&self.audits.criteria);
+            join_all(
+                registry_file
+                    .registry
+                    .iter()
+                    .map(|(name, entry)| (name.clone(), entry.clone()))
+                    .map(|(name, entry)| async {
+                        let _guard = IncProgressOnDrop(&progress_bar, 1);
+                        match fetch_imported_audit(network, &name, &entry.url).await {
+                            Ok(audit_file) => {
+                                let audit_file = process_imported_audit(
+                                    audit_file,
+                                    &local_criteria_mapper,
+                                    &RemoteImport {
+                                        url: entry.url.clone(),
+                                        ..Default::default()
+                                    },
+                                    None,
+                                    |_, _, _| (),
+                                );
+                                Some((name, entry, audit_file))
+                            }
+                            Err(error) => {
+                                error!("Error fetching registry audits for '{name}': {error:?}");
+                                None
+                            }
+                        }
+                    }),
+            )
+            .await
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+        };
+
+        // Re-run import_publisher_versions to ensure that we have all publisher
+        // information for any potential wildcard audit imports.
+        // Note: This is the only reason we need mutable access to the store.
+        // XXX: Consider limiting further to only packages which are currently
+        // failing to vet?
+        // XXX: Consider making this fetch async?
+        let wildcard_packages = registry_entries
+            .iter()
+            .flat_map(|(_, _, audits_file)| audits_file.wildcard_audits.keys())
+            .cloned()
+            .collect::<FastSet<_>>();
+        import_publisher_versions(
+            &cfg.metadata,
+            network,
+            cache,
+            &wildcard_packages,
+            &self.config,
+            &self.audits,
+            &self.imports,
+            self.live_imports.as_mut().unwrap(),
+        )
+        .await?;
+
+        Ok(registry_entries)
     }
 }
 
@@ -710,142 +828,31 @@ fn process_imported_audits(
     let mut changed_criteria = Vec::new();
 
     let local_criteria_mapper = CriteriaMapper::new(&local_audits_file.criteria);
-    for (import_name, mut audits_file) in fetched_audits {
+    for (import_name, audits_file) in fetched_audits {
         let config = config_file
             .imports
             .get(&import_name)
             .expect("fetched audit without config?");
+        let existing_audits_file = imports_lock.audits.get(&import_name);
 
-        // Remove any excluded audits from the live copy. We'll effectively
-        // pretend they don't exist upstream.
-        for excluded in &config.exclude {
-            audits_file.audits.remove(excluded);
-        }
-
-        // Construct a mapping from the foreign criteria namespace into the
-        // local criteria namespace based on the criteria map from the config.
-        let foreign_criteria_mapper = CriteriaMapper::new(&audits_file.criteria);
-        let foreign_to_local_mapping: Vec<_> = foreign_criteria_mapper
-            .all_criteria_names()
-            .map(|foreign_name| {
-                // NOTE: We try the map before we check for built-in criteria to
-                // allow overriding the default behaviour.
-                if let Some(mapped) = config.criteria_map.get(foreign_name) {
-                    local_criteria_mapper.criteria_from_list(mapped)
-                } else if foreign_name == SAFE_TO_DEPLOY {
-                    local_criteria_mapper.criteria_from_list([SAFE_TO_DEPLOY])
-                } else if foreign_name == SAFE_TO_RUN {
-                    local_criteria_mapper.criteria_from_list([SAFE_TO_RUN])
-                } else {
-                    local_criteria_mapper.no_criteria()
+        let audits_file = process_imported_audit(
+            audits_file,
+            &local_criteria_mapper,
+            config,
+            existing_audits_file,
+            |criteria_name, old_desc, new_desc| {
+                if !allow_criteria_changes {
+                    // Compare the new criteria descriptions with existing criteria
+                    // descriptions. If the description already exists, record a
+                    // CriteriaChangeError.
+                    changed_criteria.push(CriteriaChangeError {
+                        import_name: import_name.clone(),
+                        criteria_name: criteria_name.to_owned(),
+                        unified_diff: unified_diff(Algorithm::Myers, old_desc, new_desc, 5, None),
+                    });
                 }
-            })
-            .collect();
-
-        // Helper to re-write foreign criteria into the local criteria
-        // namespace.
-        let make_criteria_local = |criteria: &mut Vec<Spanned<CriteriaName>>| {
-            let foreign_set = foreign_criteria_mapper.criteria_from_list(&*criteria);
-            let mut local_set = local_criteria_mapper.no_criteria();
-            for foreign_criteria_idx in foreign_set.indices() {
-                local_set.unioned_with(&foreign_to_local_mapping[foreign_criteria_idx]);
-            }
-            *criteria = local_criteria_mapper
-                .criteria_names(&local_set)
-                .map(|name| name.to_owned().into())
-                .collect();
-        };
-
-        // By default all audits read from the network are fresh.
-        //
-        // Note: This may leave behind useless audits which imply no criteria,
-        // but that's OK - we'll never choose to import them. In the future we
-        // might want to trim them.
-        for audit_entry in audits_file.audits.values_mut().flat_map(|v| v.iter_mut()) {
-            audit_entry.is_fresh_import = true;
-            make_criteria_local(&mut audit_entry.criteria);
-        }
-        for audit_entry in audits_file
-            .wildcard_audits
-            .values_mut()
-            .flat_map(|v| v.iter_mut())
-        {
-            audit_entry.is_fresh_import = true;
-            make_criteria_local(&mut audit_entry.criteria);
-        }
-
-        // Now that we're done with foreign criteria, trim the set to only
-        // contain mapped criteria, as we don't care about other criteria, so
-        // shouldn't bother importing them.
-        //
-        // We also clear out description_url and implies, as those fields will
-        // not be used locally.
-        audits_file.criteria.retain(|name, entry| {
-            entry.description_url = None;
-            entry.implies = Vec::new();
-            config.criteria_map.contains_key(name)
-        });
-
-        // If we have an existing audits file for these imports, compare against it.
-        if let Some(existing_audits_file) = imports_lock.audits.get(&import_name) {
-            if !allow_criteria_changes {
-                // Compare the new criteria descriptions with existing criteria
-                // descriptions. If the description already exists, record a
-                // CriteriaChangeError.
-                for (criteria_name, old_entry) in &existing_audits_file.criteria {
-                    if let Some(new_entry) = audits_file.criteria.get(criteria_name) {
-                        let old_desc = old_entry.description.as_ref().unwrap();
-                        let new_desc = new_entry.description.as_ref().unwrap();
-                        if old_desc != new_desc {
-                            changed_criteria.push(CriteriaChangeError {
-                                import_name: import_name.clone(),
-                                criteria_name: criteria_name.to_owned(),
-                                unified_diff: unified_diff(
-                                    Algorithm::Myers,
-                                    old_desc,
-                                    new_desc,
-                                    5,
-                                    None,
-                                ),
-                            });
-                        }
-                    }
-                }
-            }
-
-            // Compare the new audits with existing audits. If an audit already
-            // existed in the existing audits file, mark it as non-fresh.
-            for (package, existing_audits) in &existing_audits_file.audits {
-                let new_audits = audits_file
-                    .audits
-                    .get_mut(package)
-                    .map(|v| &mut v[..])
-                    .unwrap_or(&mut []);
-                for existing_audit in existing_audits {
-                    for new_audit in &mut *new_audits {
-                        if new_audit.is_fresh_import && new_audit.same_audit_as(existing_audit) {
-                            new_audit.is_fresh_import = false;
-                            break;
-                        }
-                    }
-                }
-            }
-            for (package, existing_audits) in &existing_audits_file.wildcard_audits {
-                let new_audits = audits_file
-                    .wildcard_audits
-                    .get_mut(package)
-                    .map(|v| &mut v[..])
-                    .unwrap_or(&mut []);
-                for existing_audit in existing_audits {
-                    for new_audit in &mut *new_audits {
-                        if new_audit.is_fresh_import && new_audit.same_audit_as(existing_audit) {
-                            new_audit.is_fresh_import = false;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+            },
+        );
 
         // Now add the new import
         new_imports.audits.insert(import_name, audits_file);
@@ -861,6 +868,134 @@ fn process_imported_audits(
     // before returning?
 
     Ok(new_imports)
+}
+
+fn process_imported_audit(
+    mut audits_file: AuditsFile,
+    local_criteria_mapper: &CriteriaMapper,
+    config: &RemoteImport,
+    existing_audits_file: Option<&AuditsFile>,
+    mut on_changed_criteria_description: impl FnMut(CriteriaStr<'_>, &str, &str),
+) -> AuditsFile {
+    // Remove any excluded audits from the live copy. We'll effectively
+    // pretend they don't exist upstream.
+    for excluded in &config.exclude {
+        audits_file.audits.remove(excluded);
+    }
+
+    // Construct a mapping from the foreign criteria namespace into the
+    // local criteria namespace based on the criteria map from the config.
+    let foreign_criteria_mapper = CriteriaMapper::new(&audits_file.criteria);
+    let foreign_to_local_mapping: Vec<_> = foreign_criteria_mapper
+        .all_criteria_names()
+        .map(|foreign_name| {
+            // NOTE: We try the map before we check for built-in criteria to
+            // allow overriding the default behaviour.
+            if let Some(mapped) = config.criteria_map.get(foreign_name) {
+                local_criteria_mapper.criteria_from_list(mapped)
+            } else if foreign_name == SAFE_TO_DEPLOY {
+                local_criteria_mapper.criteria_from_list([SAFE_TO_DEPLOY])
+            } else if foreign_name == SAFE_TO_RUN {
+                local_criteria_mapper.criteria_from_list([SAFE_TO_RUN])
+            } else {
+                local_criteria_mapper.no_criteria()
+            }
+        })
+        .collect();
+
+    // Helper to re-write foreign criteria into the local criteria
+    // namespace.
+    let make_criteria_local = |criteria: &mut Vec<Spanned<CriteriaName>>| {
+        let foreign_set = foreign_criteria_mapper.criteria_from_list(&*criteria);
+        let mut local_set = local_criteria_mapper.no_criteria();
+        for foreign_criteria_idx in foreign_set.indices() {
+            local_set.unioned_with(&foreign_to_local_mapping[foreign_criteria_idx]);
+        }
+        *criteria = local_criteria_mapper
+            .criteria_names(&local_set)
+            .map(|name| name.to_owned().into())
+            .collect();
+    };
+
+    // By default all audits read from the network are fresh.
+    //
+    // Note: This may leave behind useless audits which imply no criteria,
+    // but that's OK - we'll never choose to import them. In the future we
+    // might want to trim them.
+    for audit_entry in audits_file.audits.values_mut().flat_map(|v| v.iter_mut()) {
+        audit_entry.is_fresh_import = true;
+        make_criteria_local(&mut audit_entry.criteria);
+    }
+    for audit_entry in audits_file
+        .wildcard_audits
+        .values_mut()
+        .flat_map(|v| v.iter_mut())
+    {
+        audit_entry.is_fresh_import = true;
+        make_criteria_local(&mut audit_entry.criteria);
+    }
+
+    // Now that we're done with foreign criteria, trim the set to only
+    // contain mapped criteria, as we don't care about other criteria, so
+    // shouldn't bother importing them.
+    //
+    // We also clear out description_url and implies, as those fields will
+    // not be used locally.
+    audits_file.criteria.retain(|name, entry| {
+        entry.description_url = None;
+        entry.implies = Vec::new();
+        config.criteria_map.contains_key(name)
+    });
+
+    // If we have an existing audits file for these imports, compare against it.
+    if let Some(existing_audits_file) = existing_audits_file {
+        // Compare the new criteria descriptions with existing criteria
+        // descriptions. If the description already exists, notify our caller.
+        for (criteria_name, old_entry) in &existing_audits_file.criteria {
+            if let Some(new_entry) = audits_file.criteria.get(criteria_name) {
+                let old_desc = old_entry.description.as_ref().unwrap();
+                let new_desc = new_entry.description.as_ref().unwrap();
+                if old_desc != new_desc {
+                    on_changed_criteria_description(criteria_name, old_desc, new_desc);
+                }
+            }
+        }
+
+        // Compare the new audits with existing audits. If an audit already
+        // existed in the existing audits file, mark it as non-fresh.
+        for (package, existing_audits) in &existing_audits_file.audits {
+            let new_audits = audits_file
+                .audits
+                .get_mut(package)
+                .map(|v| &mut v[..])
+                .unwrap_or(&mut []);
+            for existing_audit in existing_audits {
+                for new_audit in &mut *new_audits {
+                    if new_audit.is_fresh_import && new_audit.same_audit_as(existing_audit) {
+                        new_audit.is_fresh_import = false;
+                        break;
+                    }
+                }
+            }
+        }
+        for (package, existing_audits) in &existing_audits_file.wildcard_audits {
+            let new_audits = audits_file
+                .wildcard_audits
+                .get_mut(package)
+                .map(|v| &mut v[..])
+                .unwrap_or(&mut []);
+            for existing_audit in existing_audits {
+                for new_audit in &mut *new_audits {
+                    if new_audit.is_fresh_import && new_audit.same_audit_as(existing_audit) {
+                        new_audit.is_fresh_import = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    audits_file
 }
 
 /// Fetch all declared imports from the network, filling in any criteria
@@ -1144,7 +1279,7 @@ fn wildcard_audits_packages(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn import_publisher_versions(
+async fn import_publisher_versions(
     metadata: &cargo_metadata::Metadata,
     network: &Network,
     cache: &Cache,
@@ -1202,7 +1337,7 @@ fn import_publisher_versions(
         // Access the set of publishers. We provide the set of relevant versions
         // to help decide whether or not to fetch new publisher information from
         // crates.io, to reduce API activity.
-        let publishers = cache.get_publishers(network, pkg_name, versions)?;
+        let publishers = cache.get_publishers(network, pkg_name, versions).await?;
         relevant_publishers.push((pkg_name, publishers));
     }
 
@@ -1244,6 +1379,24 @@ fn import_publisher_versions(
     }
 
     Ok(())
+}
+
+pub async fn fetch_registry(network: &Network) -> Result<RegistryFile, FetchAuditError> {
+    let registry_url = Url::parse(REGISTRY_URL).unwrap();
+    let registry_bytes = network.download(registry_url).await?;
+    let registry_string = String::from_utf8(registry_bytes).map_err(LoadTomlError::from)?;
+    let registry_source = SourceFile::new("cargo-vet registry", registry_string.clone());
+    let registry_file: RegistryFile = toml::de::from_str(&registry_string)
+        .map_err(|error| {
+            let (line, col) = error.line_col().unwrap_or((0, 0));
+            TomlParseError {
+                source_code: registry_source,
+                span: SourceOffset::from_location(&registry_string, line + 1, col + 1),
+                error,
+            }
+        })
+        .map_err(LoadTomlError::from)?;
+    Ok(registry_file)
 }
 
 /// A Registry in CARGO_HOME (usually the crates.io one)
@@ -1956,7 +2109,7 @@ impl Cache {
     /// crates. Versions for each crate are also specified in order to avoid
     /// hitting the network in the case where the cache already has the relevant
     /// information.
-    fn get_publishers(
+    async fn get_publishers(
         &self,
         network: &Network,
         name: PackageStr<'_>,
@@ -2025,10 +2178,7 @@ impl Cache {
         let url = Url::parse(&format!("https://crates.io/api/v1/crates/{name}"))
             .expect("invalid crate name");
 
-        // NOTE: Our caller isn't able to do anything else at the same
-        // time, and we don't want to do multiple crates.io API calls at
-        // the same time, so we'll do the network fetch sync for now.
-        let response = tokio::runtime::Handle::current().block_on(network.download(url))?;
+        let response = network.download(url).await?;
         let result = load_json::<CratesAPICrate>(&response[..])?.versions;
 
         // Update the users cache and individual crates caches, and return our

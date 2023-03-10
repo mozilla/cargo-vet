@@ -40,6 +40,11 @@ insertions = 1368
 deletions = 0
 files_changed = 10
 
+[diffs.fastrand."1.9.0 -> 1.7.0"]
+insertions = 24
+deletions = 107
+files_changed = 6
+
 [diffs.fnv."1.0.7"]
 insertions = 730
 deletions = 0
@@ -59,6 +64,11 @@ files_changed = 5
 insertions = 689
 deletions = 0
 files_changed = 5
+
+[diffs.form_urlencoded."1.1.0 -> 1.0.1"]
+insertions = 19
+deletions = 13
+files_changed = 3
 
 [diffs.futures-channel."0.3.21"]
 insertions = 3992
@@ -94,6 +104,11 @@ files_changed = 63
 insertions = 14603
 deletions = 0
 files_changed = 31
+
+[diffs.hashbrown."0.12.3 -> 0.11.2"]
+insertions = 894
+deletions = 5219
+files_changed = 23
 
 [diffs.hermit-abi."0.1.19"]
 insertions = 932
@@ -135,6 +150,11 @@ insertions = 32532
 deletions = 0
 files_changed = 17
 
+[diffs.idna."0.3.0 -> 0.2.3"]
+insertions = 62
+deletions = 79
+files_changed = 8
+
 [diffs.indexmap."1.8.1"]
 insertions = 9445
 deletions = 0
@@ -174,6 +194,11 @@ files_changed = 215
 insertions = 5625
 deletions = 0
 files_changed = 19
+
+[diffs.log."0.4.17 -> 0.4.16"]
+insertions = 19
+deletions = 82
+files_changed = 6
 
 [diffs.matches."0.1.9"]
 insertions = 210
@@ -240,6 +265,11 @@ insertions = 702
 deletions = 0
 files_changed = 5
 
+[diffs.percent-encoding."2.2.0 -> 2.1.0"]
+insertions = 40
+deletions = 69
+files_changed = 4
+
 [diffs.pin-project-lite."0.2.8"]
 insertions = 6100
 deletions = 0
@@ -264,6 +294,16 @@ files_changed = 20
 insertions = 5691
 deletions = 0
 files_changed = 19
+
+[diffs.proc-macro2."1.0.39 -> 1.0.37"]
+insertions = 16
+deletions = 71
+files_changed = 14
+
+[diffs.proc-macro2."1.0.39 -> 1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9"]
+insertions = 7
+deletions = 6
+files_changed = 12
 
 [diffs.quote."1.0.18"]
 insertions = 3838
@@ -355,6 +395,11 @@ insertions = 16751
 deletions = 0
 files_changed = 25
 
+[diffs.tinyvec."1.6.0 -> 1.5.1"]
+insertions = 12
+deletions = 304
+files_changed = 6
+
 [diffs.tinyvec_macros."0.1.0"]
 insertions = 81
 deletions = 0
@@ -410,6 +455,16 @@ insertions = 3217
 deletions = 0
 files_changed = 20
 
+[diffs.unicode-bidi."0.3.8 -> 0.2.0"]
+insertions = 595493
+deletions = 3137
+files_changed = 23
+
+[diffs.unicode-bidi."0.3.8 -> 0.3.7"]
+insertions = 526
+deletions = 849
+files_changed = 14
+
 [diffs.unicode-normalization."0.1.19"]
 insertions = 28622
 deletions = 0
@@ -424,6 +479,11 @@ files_changed = 12
 insertions = 16344
 deletions = 0
 files_changed = 15
+
+[diffs.url."2.3.1 -> 2.2.2"]
+insertions = 1509
+deletions = 2748
+files_changed = 13
 
 [diffs.vcpkg."0.2.15"]
 insertions = 42642
@@ -469,6 +529,11 @@ files_changed = 6
 insertions = 515
 deletions = 0
 files_changed = 7
+
+[diffs.wasm-bindgen-shared."0.2.83 -> 0.2.80"]
+insertions = 7
+deletions = 10
+files_changed = 4
 
 [diffs.web-sys."0.3.57"]
 insertions = 197013

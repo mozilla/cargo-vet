@@ -1,3 +1,5 @@
+use crate::format::{RegistryEntry, RegistryFile};
+
 use super::*;
 
 #[test]
@@ -2536,4 +2538,94 @@ fn builtin_simple_mega_foreign_tag_team() {
     let store = Store::mock(config, audits, imports);
 
     assert_report_snapshot!("builtin_simple_mega_foreign_tag_team", metadata, store);
+}
+
+#[test]
+fn builtin_simple_registry_suggestions() {
+    // (Pass) After a failing audit, registry suggestions may be proposed if run
+    // with network access.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, audits, imports) = builtin_files_no_exemptions(&metadata);
+
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(
+        crate::storage::REGISTRY_URL,
+        &RegistryFile {
+            registry: [
+                (
+                    FOREIGN.to_owned(),
+                    RegistryEntry {
+                        url: FOREIGN_URL.to_owned(),
+                    },
+                ),
+                (
+                    OTHER_FOREIGN.to_owned(),
+                    RegistryEntry {
+                        url: OTHER_FOREIGN_URL.to_owned(),
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        },
+    );
+    network.mock_serve_toml(
+        FOREIGN_URL,
+        &AuditsFile {
+            criteria: SortedMap::new(),
+            wildcard_audits: SortedMap::new(),
+            audits: [
+                (
+                    "third-party1".to_owned(),
+                    vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+                ),
+                (
+                    "third-party2".to_owned(),
+                    vec![delta_audit(ver(1), ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        },
+    );
+    network.mock_serve_toml(
+        OTHER_FOREIGN_URL,
+        &AuditsFile {
+            criteria: SortedMap::new(),
+            wildcard_audits: SortedMap::new(),
+            audits: [
+                (
+                    "transitive-third-party1".to_owned(),
+                    vec![full_audit(ver(8), SAFE_TO_DEPLOY)],
+                ),
+                (
+                    "third-party2".to_owned(),
+                    vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        },
+    );
+
+    let store = Store::mock_online(
+        &mock_cfg(&metadata),
+        config,
+        audits,
+        imports,
+        &network,
+        true,
+    )
+    .unwrap();
+
+    assert_report_snapshot!(
+        "builtin_simple_registry_suggestions",
+        metadata,
+        store,
+        Some(&network)
+    );
 }

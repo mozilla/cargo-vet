@@ -47,9 +47,9 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::sync::Arc;
-use tracing::{error, trace, trace_span};
+use tracing::{error, trace, trace_span, warn};
 
-use crate::cli::{DumpGraphArgs, GraphFilter, GraphFilterProperty, GraphFilterQuery};
+use crate::cli::{DumpGraphArgs, GraphFilter, GraphFilterProperty, GraphFilterQuery, OutputFormat};
 use crate::criteria::{CriteriaMapper, CriteriaSet};
 use crate::errors::SuggestError;
 use crate::format::{
@@ -143,6 +143,7 @@ pub struct SuggestItem {
     pub suggested_criteria: CriteriaSet,
     pub suggested_diff: DiffRecommendation,
     pub notable_parents: String,
+    pub registry_suggestion: Vec<RegistrySuggestion>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -150,6 +151,13 @@ pub struct DiffRecommendation {
     pub from: Option<VetVersion>,
     pub to: VetVersion,
     pub diffstat: DiffStat,
+}
+
+#[derive(Debug, Clone)]
+pub struct RegistrySuggestion {
+    pub name: ImportName,
+    pub url: String,
+    pub diff: DiffRecommendation,
 }
 
 /// An "interned" cargo PackageId which is used to uniquely identify packages throughout
@@ -910,7 +918,7 @@ fn resolve_audits(
                 return None; // first-party crates don't need audits
             }
 
-            let audit_graph = AuditGraph::build(store, criteria_mapper, package.name)
+            let audit_graph = AuditGraph::build(store, criteria_mapper, package.name, None)
                 .map_err(|v| violations.push((pkgidx, v)))
                 .ok()?;
 
@@ -984,6 +992,7 @@ impl<'a> AuditGraph<'a> {
         store: &'a Store,
         criteria_mapper: &CriteriaMapper,
         package: PackageStr<'_>,
+        extra_audits_file: Option<&'a AuditsFile>,
     ) -> Result<Self, Vec<ViolationConflict>> {
         // Pre-build the namespaces for each audit so that we can take a reference
         // to each one as-needed rather than cloning the name each time.
@@ -1005,7 +1014,14 @@ impl<'a> AuditGraph<'a> {
                     audits_file,
                 )
             })
-            .chain([(None, &None, &store.audits)]);
+            .chain([(None, &None, &store.audits)])
+            .chain(
+                // Consider extra audits as local for now - we don't care about
+                // how the audits from it are prioritized.
+                extra_audits_file
+                    .iter()
+                    .map(|&audits_file| (None, &None, audits_file)),
+            );
 
         // Iterator over every normal audit.
         let all_audits =
@@ -1507,8 +1523,8 @@ impl<'a> ResolveReport<'a> {
     pub fn compute_suggest(
         &self,
         cfg: &Config,
+        store: &Store,
         network: Option<&Network>,
-        allow_deltas: bool,
     ) -> Result<Option<Suggest>, SuggestError> {
         let _suggest_span = trace_span!("suggest").entered();
         let fail = if let Conclusion::FailForVet(fail) = &self.conclusion {
@@ -1519,6 +1535,20 @@ impl<'a> ResolveReport<'a> {
         };
 
         let cache = Cache::acquire(cfg)?;
+
+        let mut store = store.clone_for_suggest(false);
+        let registry = if let (false, OutputFormat::Human, Some(network)) = (
+            cfg.cli.no_registry_suggestions,
+            cfg.cli.output_format,
+            network,
+        ) {
+            Some(
+                tokio::runtime::Handle::current()
+                    .block_on(store.fetch_registry_audits(cfg, network, &cache))?,
+            )
+        } else {
+            None
+        };
 
         let suggest_progress =
             progress_bar("Suggesting", "relevant audits", fail.failures.len() as u64);
@@ -1562,130 +1592,78 @@ impl<'a> ResolveReport<'a> {
                         reverse_deps.join(", ")
                     };
 
-                    // Collect up the details of how we failed
-                    let mut from_root = None::<SortedSet<&Option<VetVersion>>>;
-                    let mut from_target = None::<SortedSet<&Option<VetVersion>>>;
-                    for criteria_idx in audit_failure.criteria_failures.indices() {
-                        let search_result = &result.search_results[criteria_idx];
-                        if let Err(SearchFailure {
-                            reachable_from_root,
-                            reachable_from_target,
-                        }) = search_result
-                        {
-                            if let (Some(from_root), Some(from_target)) =
-                                (from_root.as_mut(), from_target.as_mut())
-                            {
-                                // FIXME: this is horrible but I'm tired and this avoids false-positives
-                                // and duplicates. This does the right thing in the common cases, by
-                                // restricting ourselves to the reachable nodes that are common to all
-                                // failures, so that we can suggest just one change that will fix
-                                // everything.
-                                from_root.retain(|ver| reachable_from_root.contains(ver));
-                                from_target.retain(|ver| reachable_from_target.contains(ver));
-                            } else {
-                                // We only have sources available for the
-                                // package itself, and any non-git versions.
-                                let version_has_sources = |ver: &&Option<VetVersion>| -> bool {
-                                    ver.as_ref() == Some(&package.version)
-                                        || !matches!(
-                                            ver,
-                                            Some(VetVersion {
-                                                git_rev: Some(_),
-                                                ..
-                                            })
-                                        )
-                                };
-                                from_root = Some(
-                                    reachable_from_root
-                                        .iter()
-                                        .filter(version_has_sources)
-                                        .collect(),
-                                );
-                                from_target = Some(
-                                    reachable_from_target
-                                        .iter()
-                                        .filter(version_has_sources)
-                                        .collect(),
-                                );
-                            }
-                        } else {
-                            unreachable!("messed up suggest...");
-                        }
-                    }
-
-                    // Now suggest solutions of those failures
-                    let mut candidates = SortedSet::new();
-                    if allow_deltas {
-                        // If we're allowed deltas than try to find a bridge from src and dest
-                        for &dest in from_target.as_ref().unwrap() {
-                            let mut closest_above = None;
-                            let mut closest_below = None;
-                            for &src in from_root.as_ref().unwrap() {
-                                if src < dest {
-                                    if let Some(closest) = closest_below {
-                                        if src > closest {
-                                            closest_below = Some(src);
-                                        }
-                                    } else {
-                                        closest_below = Some(src);
-                                    }
-                                } else if let Some(closest) = closest_above {
-                                    if src < closest {
-                                        closest_above = Some(src);
-                                    }
-                                } else {
-                                    closest_above = Some(src);
-                                }
-                            }
-
-                            for closest in closest_below.into_iter().chain(closest_above) {
-                                candidates.insert(Delta {
-                                    from: closest.clone(),
-                                    to: dest.clone().unwrap(),
-                                });
-                            }
-                        }
-                    } else {
-                        // If we're not allowing deltas, just try everything reachable from the target
-                        for &dest in from_target.as_ref().unwrap() {
-                            candidates.insert(Delta {
-                                from: None,
-                                to: dest.clone().unwrap(),
-                            });
-                        }
-                    }
-
-                    let diffstats = join_all(candidates.iter().map(|delta| async {
-                        match cache
-                            .fetch_and_diffstat_package(&cfg.metadata, network, package.name, delta)
-                            .await
-                        {
-                            Ok(diffstat) => Some(DiffRecommendation {
-                                diffstat,
-                                from: delta.from.clone(),
-                                to: delta.to.clone(),
+                    let suggested_diff = suggest_delta(
+                        &cfg.metadata,
+                        network,
+                        &cache,
+                        package,
+                        audit_failure
+                            .criteria_failures
+                            .indices()
+                            .map(|criteria_idx| {
+                                result.search_results[criteria_idx].as_ref().unwrap_err()
                             }),
-                            Err(err) => {
-                                // We don't want to actually error out completely here,
-                                // as other packages might still successfully diff!
-                                error!(
-                                    "error diffing {}:{}: {:?}",
-                                    package.name, package.version, err
-                                );
+                    )
+                    .await?;
+
+                    let mut registry_suggestion: Vec<_> = join_all(registry.iter().flatten().map(
+                        |(name, entry, audits)| async {
+                            let audit_graph = AuditGraph::build(
+                                &store,
+                                &self.criteria_mapper,
+                                package.name,
+                                Some(audits),
+                            )
+                            .ok()?;
+
+                            let failures: Vec<_> = audit_failure
+                                .criteria_failures
+                                .indices()
+                                .filter_map(|criteria_idx| {
+                                    audit_graph
+                                        .search(
+                                            criteria_idx,
+                                            &package.version,
+                                            SearchMode::PreferExemptions,
+                                        )
+                                        .err()
+                                })
+                                .collect();
+
+                            let registry_suggested_diff = suggest_delta(
+                                &cfg.metadata,
+                                network,
+                                &cache,
+                                package,
+                                failures.iter(),
+                            )
+                            .await?;
+
+                            if registry_suggested_diff.diffstat.count()
+                                < suggested_diff.diffstat.count()
+                            {
+                                Some(RegistrySuggestion {
+                                    name: name.clone(),
+                                    url: entry.url.clone(),
+                                    diff: registry_suggested_diff,
+                                })
+                            } else {
                                 None
                             }
-                        }
-                    }))
-                    .await;
+                        },
+                    ))
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                    registry_suggestion.sort_by_key(|suggestion| suggestion.diff.diffstat.count());
 
                     Some(SuggestItem {
                         package: failure_idx,
-                        suggested_diff: diffstats
-                            .into_iter()
-                            .flatten()
-                            .min_by_key(|diff| diff.diffstat.count())?,
+                        suggested_diff,
                         suggested_criteria: audit_failure.criteria_failures.clone(),
                         notable_parents,
+                        registry_suggestion,
                     })
                 },
             )))
@@ -1996,7 +1974,7 @@ impl Suggest {
                         Some(_) => format!("({})", item.suggested_diff.diffstat),
                         None => format!("({} lines)", item.suggested_diff.diffstat.count()),
                     };
-                    (cmd, parents, diffstat)
+                    (cmd, parents, diffstat, item)
                 })
                 .collect::<Vec<_>>();
 
@@ -2007,7 +1985,7 @@ impl Suggest {
                 max1 = max1.max(console::measure_text_width(s1));
             }
 
-            for (s0, s1, s2) in strings {
+            for (s0, s1, s2, item) in strings {
                 write!(
                     out,
                     "{}",
@@ -2017,6 +1995,24 @@ impl Suggest {
                         .apply_to(format_args!("    {s0:max0$}"))
                 );
                 writeln!(out, "  {s1:max1$}  {s2}");
+
+                let dim = out.style().dim();
+                for suggestion in &item.registry_suggestion {
+                    writeln!(
+                        out,
+                        "      {} {} {}",
+                        dim.clone().apply_to("NOTE:"),
+                        dim.clone()
+                            .cyan()
+                            .bold()
+                            .apply_to(format_args!("cargo vet import {}", suggestion.name)),
+                        dim.clone()
+                            .apply_to(match suggestion.diff.diffstat.count() {
+                                0 => "would eliminate this".to_owned(),
+                                n => format!("would reduce this to a {n}-line diff"),
+                            }),
+                    );
+                }
             }
 
             writeln!(out);
@@ -2161,6 +2157,114 @@ impl FailForViolationConflict {
     }
 }
 
+async fn suggest_delta(
+    metadata: &cargo_metadata::Metadata,
+    network: Option<&Network>,
+    cache: &Cache,
+    package: &PackageNode<'_>,
+    failures: impl Iterator<Item = &SearchFailure>,
+) -> Option<DiffRecommendation> {
+    // Collect up the details of how we failed
+    struct Reachable<'a> {
+        from_root: SortedSet<&'a Option<VetVersion>>,
+        from_target: SortedSet<&'a Option<VetVersion>>,
+    }
+    let mut reachable = None::<Reachable<'_>>;
+    for SearchFailure {
+        reachable_from_root,
+        reachable_from_target,
+    } in failures
+    {
+        if let Some(Reachable {
+            from_root,
+            from_target,
+        }) = reachable.as_mut()
+        {
+            // This does the right thing in the common cases, by restricting
+            // ourselves to the reachable nodes that are common to all failures,
+            // so that we can suggest just one change that will fix everything.
+            from_root.retain(|ver| reachable_from_root.contains(ver));
+            from_target.retain(|ver| reachable_from_target.contains(ver));
+        } else {
+            // We only have sources available for the package itself, and any
+            // non-git versions.
+            let version_has_sources = |ver: &&Option<VetVersion>| -> bool {
+                ver.as_ref() == Some(&package.version)
+                    || !matches!(
+                        ver,
+                        Some(VetVersion {
+                            git_rev: Some(_),
+                            ..
+                        })
+                    )
+            };
+            reachable = Some(Reachable {
+                from_root: reachable_from_root
+                    .iter()
+                    .filter(version_has_sources)
+                    .collect(),
+                from_target: reachable_from_target
+                    .iter()
+                    .filter(version_has_sources)
+                    .collect(),
+            });
+        }
+    }
+
+    let Some(Reachable { from_root, from_target }) = &reachable else {
+        // Nothing failed, return a dummy suggestion for an empty diff.
+        return Some(DiffRecommendation {
+            from: Some(package.version.clone()),
+            to: package.version.clone(),
+            diffstat: DiffStat { insertions: 0, deletions: 0, files_changed: 0 },
+        });
+    };
+
+    // Now suggest solutions of those failures
+    let mut candidates = SortedSet::new();
+    for &dest in from_target {
+        let closest_above = from_root.range::<&Option<VetVersion>, _>(dest..).next();
+        let closest_below = from_root
+            .range::<&Option<VetVersion>, _>(..dest)
+            .next_back();
+
+        for &closest in closest_below.into_iter().chain(closest_above) {
+            candidates.insert(Delta {
+                from: closest.clone(),
+                to: dest.clone().unwrap(),
+            });
+        }
+    }
+
+    let diffstats = join_all(candidates.iter().map(|delta| async {
+        match cache
+            .fetch_and_diffstat_package(metadata, network, package.name, delta)
+            .await
+        {
+            Ok(diffstat) => Some(DiffRecommendation {
+                diffstat,
+                from: delta.from.clone(),
+                to: delta.to.clone(),
+            }),
+            Err(err) => {
+                // We don't want to actually error out completely here,
+                // as other packages might still successfully diff!
+                error!(
+                    "error diffing {}:{}: {:?}",
+                    package.name, package.version, err
+                );
+                None
+            }
+        }
+    }))
+    .await;
+
+    diffstats
+        .into_iter()
+        .flatten()
+        .min_by_key(|diff| diff.diffstat.count())
+}
+
 /// Resolve which entries in the store and imports.lock are required to
 /// successfully audit this package. May return `None` if the package cannot
 /// successfully vet given the restrictions placed upon it.
@@ -2195,7 +2299,7 @@ fn resolve_package_required_entries(
         return Some(SortedMap::new());
     }
 
-    let Ok(audit_graph) = AuditGraph::build(store, criteria_mapper, package_name) else {
+    let Ok(audit_graph) = AuditGraph::build(store, criteria_mapper, package_name, None) else {
         // There were violations when building the audit graph, return `None` to
         // indicate that this package is failing.
         return None;
