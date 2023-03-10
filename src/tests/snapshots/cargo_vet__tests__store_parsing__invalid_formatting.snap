@@ -10,7 +10,7 @@ Error:
   │ 
   │ --- old/config.toml
   │ +++ new/config.toml
-  │ @@ -8,14 +8,14 @@
+  │ @@ -11,14 +11,14 @@
   │  [imports.peer2]
   │  url = "https://peer1.com"
   │ 

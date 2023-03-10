@@ -1,6 +1,6 @@
 //! Details of the file formats used by cargo vet
 
-use crate::errors::VersionParseError;
+use crate::errors::{StoreVersionParseError, VersionParseError};
 use crate::resolver::{DiffRecommendation, ViolationConflict};
 use crate::serialization::spanned::Spanned;
 use crate::{flock::Filesystem, serialization};
@@ -420,6 +420,10 @@ impl WildcardEntry {
 /// config.toml
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ConfigFile {
+    #[serde(rename = "cargo-vet")]
+    #[serde(default = "CargoVetConfig::missing")]
+    pub cargo_vet: CargoVetConfig,
+
     /// This top-level key specifies the default criteria that cargo vet certify will use
     /// when recording audits. If unspecified, this defaults to "safe-to-deploy".
     #[serde(rename = "default-criteria")]
@@ -745,6 +749,109 @@ pub fn get_default_exemptions_suggest() -> bool {
 }
 fn is_default_exemptions_suggest(val: &bool) -> bool {
     val == &DEFAULT_EXEMPTIONS_SUGGEST
+}
+
+/// Special version type used for store versions. Only contains two components
+/// (major/minor) to avoid patch version changes from causing changes to the
+/// store.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct StoreVersion {
+    pub major: u64,
+    pub minor: u64,
+}
+
+impl StoreVersion {
+    #[cfg(not(test))]
+    pub fn current() -> Self {
+        StoreVersion {
+            major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
+            minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
+        }
+    }
+
+    // To keep output from tests stable, when running unit tests we always
+    // pretend we're version 1.0
+    #[cfg(test)]
+    pub fn current() -> Self {
+        StoreVersion { major: 1, minor: 0 }
+    }
+}
+
+impl FromStr for StoreVersion {
+    type Err = StoreVersionParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.split_once('.') {
+            Some((major, minor)) => Ok(StoreVersion {
+                major: major.parse()?,
+                minor: minor.parse()?,
+            }),
+            None => Err(StoreVersionParseError::MissingSeparator),
+        }
+    }
+}
+
+impl fmt::Display for StoreVersion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
+impl Serialize for StoreVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.to_string().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for StoreVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct VersionVisitor;
+
+        impl<'de> Visitor<'de> for VersionVisitor {
+            type Value = StoreVersion;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("store version")
+            }
+            fn visit_str<E>(self, string: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                StoreVersion::from_str(string).map_err(de::Error::custom)
+            }
+        }
+
+        deserializer.deserialize_str(VersionVisitor)
+    }
+}
+
+/// Cargo vet config metadata field for the store's config file.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CargoVetConfig {
+    pub version: StoreVersion,
+}
+
+impl CargoVetConfig {
+    /// Pretend that any store which was created without a version specified is
+    /// from version 0.4.
+    fn missing() -> Self {
+        Self {
+            version: StoreVersion { major: 0, minor: 4 },
+        }
+    }
+}
+
+impl Default for CargoVetConfig {
+    fn default() -> Self {
+        Self {
+            version: StoreVersion::current(),
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

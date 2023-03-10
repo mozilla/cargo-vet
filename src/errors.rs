@@ -1,6 +1,7 @@
 use std::{
     ffi::OsString,
     fmt::{Debug, Display},
+    num::ParseIntError,
     path::{PathBuf, StripPrefixError},
     string::FromUtf8Error,
     sync::Arc,
@@ -10,7 +11,9 @@ use cargo_metadata::semver;
 use miette::{Diagnostic, MietteSpanContents, SourceCode, SourceOffset, SourceSpan};
 use thiserror::Error;
 
-use crate::format::{CriteriaName, ForeignCriteriaName, ImportName, PackageName, VetVersion};
+use crate::format::{
+    CriteriaName, ForeignCriteriaName, ImportName, PackageName, StoreVersion, VetVersion,
+};
 use crate::network::PayloadEncoding;
 
 #[derive(Eq, PartialEq)]
@@ -87,6 +90,15 @@ pub enum VersionParseError {
     UnknownRevision,
     #[error("unrecognized git hash, expected 40 hex digits")]
     InvalidGitHash,
+}
+
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum StoreVersionParseError {
+    #[error("error parsing version component: {0}")]
+    ParseInt(#[from] ParseIntError),
+    #[error("missing '.' separator")]
+    MissingSeparator,
 }
 
 ///////////////////////////////////////////////////////////
@@ -315,6 +327,12 @@ pub enum StoreAcquireError {
         #[source]
         FlockError,
     ),
+    #[error("The supply-chain store was created with an incompatible version of cargo-vet ({0})")]
+    #[help("Run cargo vet without --locked to update the store to this version")]
+    OutdatedStore(StoreVersion),
+    #[error("The supply-chain store was created with a newer version of cargo-vet ({0})")]
+    #[help("Update to the latest version using `cargo install cargo-vet`")]
+    NewerStore(StoreVersion),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LoadToml(#[from] LoadTomlError),

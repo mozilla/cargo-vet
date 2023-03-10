@@ -756,6 +756,9 @@ mod test {
         );
 
         let formatted = super::to_formatted_toml(ConfigFile {
+            cargo_vet: CargoVetConfig {
+                version: StoreVersion { major: 1, minor: 0 },
+            },
             default_criteria: get_default_criteria(),
             imports: SortedMap::new(),
             policy,

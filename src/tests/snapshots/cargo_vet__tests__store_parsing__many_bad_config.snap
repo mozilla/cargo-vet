@@ -7,47 +7,47 @@ expression: acquire_errors
 
 Error: 
   × 'oops' is not a valid criteria name
-    ╭─[config.toml:18:1]
- 18 │ version = "1.0.0"
- 19 │ criteria = "oops"
+    ╭─[config.toml:21:1]
+ 21 │ version = "1.0.0"
+ 22 │ criteria = "oops"
     ·            ──────
- 20 │ 
+ 23 │ 
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 Error: 
   × 'bad' is not a valid criteria name
-    ╭─[config.toml:12:1]
- 12 │ [policy.serde]
- 13 │ criteria = "bad"
+    ╭─[config.toml:15:1]
+ 15 │ [policy.serde]
+ 16 │ criteria = "bad"
     ·            ─────
- 14 │ dev-criteria = "nope"
+ 17 │ dev-criteria = "nope"
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 Error: 
   × 'nope' is not a valid criteria name
-    ╭─[config.toml:13:1]
- 13 │ criteria = "bad"
- 14 │ dev-criteria = "nope"
+    ╭─[config.toml:16:1]
+ 16 │ criteria = "bad"
+ 17 │ dev-criteria = "nope"
     ·                ──────
- 15 │ dependency-criteria = { clap = ["safe-to-run", "unsafe-for-all", "good"], serde_derive = "nada" }
+ 18 │ dependency-criteria = { clap = ["safe-to-run", "unsafe-for-all", "good"], serde_derive = "nada" }
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 Error: 
   × 'unsafe-for-all' is not a valid criteria name
-    ╭─[config.toml:14:1]
- 14 │ dev-criteria = "nope"
- 15 │ dependency-criteria = { clap = ["safe-to-run", "unsafe-for-all", "good"], serde_derive = "nada" }
+    ╭─[config.toml:17:1]
+ 17 │ dev-criteria = "nope"
+ 18 │ dependency-criteria = { clap = ["safe-to-run", "unsafe-for-all", "good"], serde_derive = "nada" }
     ·                                                ────────────────
- 16 │ 
+ 19 │ 
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 Error: 
   × 'nada' is not a valid criteria name
-    ╭─[config.toml:14:1]
- 14 │ dev-criteria = "nope"
- 15 │ dependency-criteria = { clap = ["safe-to-run", "unsafe-for-all", "good"], serde_derive = "nada" }
+    ╭─[config.toml:17:1]
+ 17 │ dev-criteria = "nope"
+ 18 │ dependency-criteria = { clap = ["safe-to-run", "unsafe-for-all", "good"], serde_derive = "nada" }
     ·                                                                                          ──────
- 16 │ 
+ 19 │ 
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
 

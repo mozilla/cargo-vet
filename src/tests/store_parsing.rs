@@ -1,5 +1,8 @@
 const EMPTY_CONFIG: &str = r##"
 # cargo-vet config file
+
+[cargo-vet]
+version = "1.0"
 "##;
 const EMPTY_AUDITS: &str = r##"
 # cargo-vet audits file
@@ -84,6 +87,9 @@ fn test_many_bad_config() {
     let config = r##"
 # cargo-vet config file
 
+[cargo-vet]
+version = "1.0"
+
 [policy.boring]
 audit-as-crates-io = true
 
@@ -125,6 +131,9 @@ fn test_outdated_imports_lock_extra_peer() {
     let config = r##"
 # cargo-vet config file
 
+[cargo-vet]
+version = "1.0"
+
 [imports.peer1]
 url = "https://peer1.com"
 "##;
@@ -150,6 +159,9 @@ fn test_outdated_imports_lock_missing_peer() {
     let config = r##"
 # cargo-vet config file
 
+[cargo-vet]
+version = "1.0"
+
 [imports.peer1]
 url = "https://peer1.com"
 
@@ -173,6 +185,9 @@ version = "10.0.0"
 fn test_outdated_imports_lock_excluded_crate() {
     let config = r##"
 # cargo-vet config file
+
+[cargo-vet]
+version = "1.0"
 
 [imports.peer1]
 url = "https://peer1.com"
@@ -199,6 +214,9 @@ version = "10.0.0"
 fn test_outdated_imports_lock_ok() {
     let config = r##"
 # cargo-vet config file
+
+[cargo-vet]
+version = "1.0"
 
 [imports.peer1]
 url = "https://peer1.com"
@@ -228,6 +246,9 @@ version = "10.0.0"
 fn test_unknown_field_config() {
     let config = r##"
 # cargo-vet config file
+
+[cargo-vet]
+version = "1.0"
 
 [imports.peer1]
 url = "https://peer1.com"
@@ -334,6 +355,9 @@ fn test_invalid_formatting() {
     let config = r##"
 # cargo-vet config file
 
+[cargo-vet]
+version = "1.0"
+
 [imports.peer1]
 url = "https://peer1.com"
 exclude = ["zzz", "aaa"]
@@ -391,6 +415,9 @@ version = "10.0.0"
 fn parse_criteria_map() {
     let config = r##"
 # cargo-vet config file
+
+[cargo-vet]
+version = "1.0"
 
 [imports.peer1]
 url = "https://peer1.com"

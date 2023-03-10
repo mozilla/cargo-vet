@@ -35,7 +35,8 @@ use crate::{
         DiffCache, DiffStat, FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName,
         ImportsFile, MetaConfig, PackageName, PackageStr, PublisherCache, PublisherCacheEntry,
         PublisherCacheUser, PublisherCacheVersion, RegistryEntry, RegistryFile, RemoteImport,
-        SortedMap, VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        SortedMap, StoreVersion, VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY,
+        SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
@@ -170,6 +171,7 @@ impl Store {
         Ok(Self {
             lock: Some(lock),
             config: ConfigFile {
+                cargo_vet: Default::default(),
                 default_criteria: String::new(),
                 imports: SortedMap::new(),
                 policy: Default::default(),
@@ -205,7 +207,20 @@ impl Store {
         // exclusive one isn't needed.
         let lock = StoreLock::new(&root)?;
 
-        let (config_src, config): (_, ConfigFile) = load_toml(CONFIG_TOML, lock.read_config()?)?;
+        let (config_src, mut config): (_, ConfigFile) =
+            load_toml(CONFIG_TOML, lock.read_config()?)?;
+
+        // Compare the version from the store with the current StoreVersion.
+        // It's always an error to downgrade cargo-vet versions, but only an
+        // error to upgrade versions when --locked.
+        let current_version = StoreVersion::current();
+        if config.cargo_vet.version < current_version && cfg.cli.locked {
+            return Err(StoreAcquireError::OutdatedStore(config.cargo_vet.version));
+        } else if config.cargo_vet.version > current_version {
+            return Err(StoreAcquireError::NewerStore(config.cargo_vet.version));
+        }
+        config.cargo_vet.version = current_version;
+
         let (audits_src, audits): (_, AuditsFile) = load_toml(AUDITS_TOML, lock.read_audits()?)?;
         let (imports_src, imports): (_, ImportsFile) =
             load_toml(IMPORTS_LOCK, lock.read_imports()?)?;

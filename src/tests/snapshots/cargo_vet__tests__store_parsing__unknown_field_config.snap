@@ -10,7 +10,7 @@ Error:
   │ 
   │ --- old/config.toml
   │ +++ new/config.toml
-  │ @@ -4,9 +4,7 @@
+  │ @@ -7,9 +7,7 @@
   │  [imports.peer1]
   │  url = "https://peer1.com"
   │  exclude = ["zzz", "aaa"]
