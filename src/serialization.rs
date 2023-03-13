@@ -1,6 +1,6 @@
 //! Serialization helpers
 
-use crate::format::{DependencyCriteria, SortedMap};
+use crate::format::{CriteriaMap, SortedMap};
 use core::fmt;
 use serde::{
     de::{self, value, SeqAccess, Visitor},
@@ -152,31 +152,31 @@ pub mod string_or_vec_or_none {
     }
 }
 
-/// Allows the `Vec<String>` map value in dependency-criteria to support
-/// `string_or_vec` semantics.
-pub mod dependency_criteria {
-    use crate::format::{CriteriaName, PackageName};
+/// Allows the `Vec<String>` map value in dependency-criteria or criteria-map to
+/// support `string_or_vec` semantics.
+pub mod criteria_map {
+    use crate::format::CriteriaName;
 
     use super::*;
     #[derive(Serialize, Deserialize)]
     struct Wrapper(#[serde(with = "string_or_vec")] Vec<Spanned<CriteriaName>>);
 
-    pub fn serialize<S>(c: &DependencyCriteria, s: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(c: &CriteriaMap, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let m: SortedMap<PackageName, Wrapper> = c
+        let m: SortedMap<Spanned<String>, Wrapper> = c
             .iter()
             .map(|(k, v)| (k.clone(), Wrapper(v.clone())))
             .collect();
         m.serialize(s)
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<DependencyCriteria, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<CriteriaMap, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let m = SortedMap::<PackageName, Wrapper>::deserialize(deserializer)?;
+        let m = SortedMap::<Spanned<String>, Wrapper>::deserialize(deserializer)?;
         Ok(m.into_iter().map(|(k, v)| (k, v.0)).collect())
     }
 }
@@ -597,6 +597,12 @@ pub mod spanned {
         }
     }
 
+    impl<T> Borrow<T> for Spanned<T> {
+        fn borrow(&self) -> &T {
+            self
+        }
+    }
+
     impl<T, U: ?Sized> AsRef<U> for Spanned<T>
     where
         T: AsRef<U>,
@@ -695,14 +701,14 @@ mod test {
     fn toml_formatter_wrapping() {
         let mut dc_long = SortedMap::new();
         dc_long.insert(
-            "example-crate-1".to_owned(),
+            "example-crate-1".to_owned().into(),
             vec![
                 "criteria-one-very-long".to_owned().into(),
                 "criteria-two-very-long".to_owned().into(),
             ],
         );
         dc_long.insert(
-            "example-crate-2".to_owned(),
+            "example-crate-2".to_owned().into(),
             vec![
                 // This array would wrap over multiple lines if byte length was
                 // used rather than utf-8 character length.
@@ -711,7 +717,7 @@ mod test {
             ],
         );
         dc_long.insert(
-            "example-crate-3".to_owned(),
+            "example-crate-3".to_owned().into(),
             vec![
                 "criteria-one-very-long".to_owned().into(),
                 "criteria-two-very-long".to_owned().into(),
@@ -723,7 +729,7 @@ mod test {
 
         let mut dc_short = SortedMap::new();
         dc_short.insert(
-            "example-crate-1".to_owned(),
+            "example-crate-1".to_owned().into(),
             vec!["criteria-one".to_owned().into()],
         );
 

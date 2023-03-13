@@ -19,13 +19,14 @@ use tar::Archive;
 use tracing::{error, info, log::warn, trace};
 
 use crate::{
+    criteria::CriteriaMapper,
     errors::{
-        BadBuiltInCriteriaMappingError, BadFormatError, BadWildcardEndDateError, CacheAcquireError,
-        CacheCommitError, CertifyError, CommandError, CriteriaChangeError, CriteriaChangeErrors,
-        DiffError, DownloadError, FetchAndDiffError, FetchAuditError, FetchError, FlockError,
-        InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError, SourceFile,
-        StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError,
-        StoreValidateError, StoreValidateErrors, TomlParseError, UnpackCheckoutError, UnpackError,
+        BadFormatError, BadWildcardEndDateError, CacheAcquireError, CacheCommitError, CertifyError,
+        CommandError, CriteriaChangeError, CriteriaChangeErrors, DiffError, DownloadError,
+        FetchAndDiffError, FetchAuditError, FetchError, FlockError, InvalidCriteriaError,
+        JsonParseError, LoadJsonError, LoadTomlError, SourceFile, StoreAcquireError,
+        StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError, StoreValidateError,
+        StoreValidateErrors, TomlParseError, UnpackCheckoutError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
@@ -222,8 +223,13 @@ impl Store {
         let live_imports = if let (false, Some(network)) = (cfg.cli.locked, network) {
             let fetched_audits = tokio::runtime::Handle::current()
                 .block_on(fetch_imported_audits(network, &config))?;
-            let mut live_imports =
-                process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
+            let mut live_imports = process_imported_audits(
+                fetched_audits,
+                &audits,
+                &config,
+                &imports,
+                allow_criteria_changes,
+            )?;
             // XXX: Allow callers to hold on to this cache so we don't need to
             // re-acquire it after `Store::acquire`.
             let cache = Cache::acquire(cfg).map_err(Box::new)?;
@@ -294,8 +300,13 @@ impl Store {
     ) -> Result<Self, StoreAcquireError> {
         let fetched_audits =
             tokio::runtime::Handle::current().block_on(fetch_imported_audits(network, &config))?;
-        let mut live_imports =
-            process_imported_audits(fetched_audits, &config, &imports, allow_criteria_changes)?;
+        let mut live_imports = process_imported_audits(
+            fetched_audits,
+            &audits,
+            &config,
+            &imports,
+            allow_criteria_changes,
+        )?;
         let cache = Cache::acquire(cfg).map_err(Box::new)?;
         import_publisher_versions(
             &cfg.metadata,
@@ -571,20 +582,6 @@ impl Store {
             }
         }
 
-        for (_name, import) in &self.config.imports {
-            for mapping in &import.criteria_map {
-                if &mapping.theirs[..] == SAFE_TO_DEPLOY || &mapping.theirs[..] == SAFE_TO_RUN {
-                    errors.push(StoreValidateError::BadBuiltInCriteriaMapping(
-                        BadBuiltInCriteriaMappingError {
-                            source_code: self.config_src.clone(),
-                            span: Spanned::span(&mapping.theirs),
-                            criteria_name: mapping.theirs[..].to_owned(),
-                        },
-                    ));
-                }
-            }
-        }
-
         // If requested, verify that files in the store are correctly formatted
         // and have no unrecognized fields. We don't want to be reformatting
         // them or dropping unused fields while in CI, as those changes will be
@@ -701,6 +698,7 @@ impl Store {
 /// description of the live state of imported audits.
 fn process_imported_audits(
     fetched_audits: Vec<(ImportName, AuditsFile)>,
+    local_audits_file: &AuditsFile,
     config_file: &ConfigFile,
     imports_lock: &ImportsFile,
     allow_criteria_changes: bool,
@@ -710,6 +708,8 @@ fn process_imported_audits(
         audits: SortedMap::new(),
     };
     let mut changed_criteria = Vec::new();
+
+    let local_criteria_mapper = CriteriaMapper::new(&local_audits_file.criteria);
     for (import_name, mut audits_file) in fetched_audits {
         let config = config_file
             .imports
@@ -722,9 +722,48 @@ fn process_imported_audits(
             audits_file.audits.remove(excluded);
         }
 
+        // Construct a mapping from the foreign criteria namespace into the
+        // local criteria namespace based on the criteria map from the config.
+        let foreign_criteria_mapper = CriteriaMapper::new(&audits_file.criteria);
+        let foreign_to_local_mapping: Vec<_> = foreign_criteria_mapper
+            .all_criteria_names()
+            .map(|foreign_name| {
+                // NOTE: We try the map before we check for built-in criteria to
+                // allow overriding the default behaviour.
+                if let Some(mapped) = config.criteria_map.get(foreign_name) {
+                    local_criteria_mapper.criteria_from_list(mapped)
+                } else if foreign_name == SAFE_TO_DEPLOY {
+                    local_criteria_mapper.criteria_from_list([SAFE_TO_DEPLOY])
+                } else if foreign_name == SAFE_TO_RUN {
+                    local_criteria_mapper.criteria_from_list([SAFE_TO_RUN])
+                } else {
+                    local_criteria_mapper.no_criteria()
+                }
+            })
+            .collect();
+
+        // Helper to re-write foreign criteria into the local criteria
+        // namespace.
+        let make_criteria_local = |criteria: &mut Vec<Spanned<CriteriaName>>| {
+            let foreign_set = foreign_criteria_mapper.criteria_from_list(&*criteria);
+            let mut local_set = local_criteria_mapper.no_criteria();
+            for foreign_criteria_idx in foreign_set.indices() {
+                local_set.unioned_with(&foreign_to_local_mapping[foreign_criteria_idx]);
+            }
+            *criteria = local_criteria_mapper
+                .criteria_names(&local_set)
+                .map(|name| name.to_owned().into())
+                .collect();
+        };
+
         // By default all audits read from the network are fresh.
+        //
+        // Note: This may leave behind useless audits which imply no criteria,
+        // but that's OK - we'll never choose to import them. In the future we
+        // might want to trim them.
         for audit_entry in audits_file.audits.values_mut().flat_map(|v| v.iter_mut()) {
             audit_entry.is_fresh_import = true;
+            make_criteria_local(&mut audit_entry.criteria);
         }
         for audit_entry in audits_file
             .wildcard_audits
@@ -732,7 +771,20 @@ fn process_imported_audits(
             .flat_map(|v| v.iter_mut())
         {
             audit_entry.is_fresh_import = true;
+            make_criteria_local(&mut audit_entry.criteria);
         }
+
+        // Now that we're done with foreign criteria, trim the set to only
+        // contain mapped criteria, as we don't care about other criteria, so
+        // shouldn't bother importing them.
+        //
+        // We also clear out description_url and implies, as those fields will
+        // not be used locally.
+        audits_file.criteria.retain(|name, entry| {
+            entry.description_url = None;
+            entry.implies = Vec::new();
+            config.criteria_map.contains_key(name)
+        });
 
         // If we have an existing audits file for these imports, compare against it.
         if let Some(existing_audits_file) = imports_lock.audits.get(&import_name) {

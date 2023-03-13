@@ -46,19 +46,18 @@ use miette::IntoDiagnostic;
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
-use std::fmt;
 use std::sync::Arc;
 use tracing::{error, trace, trace_span};
 
 use crate::cli::{DumpGraphArgs, GraphFilter, GraphFilterProperty, GraphFilterQuery};
+use crate::criteria::{CriteriaMapper, CriteriaSet};
 use crate::errors::SuggestError;
 use crate::format::{
-    self, AuditEntry, AuditKind, AuditsFile, CratesPublisher, CriteriaEntry, CriteriaName,
-    CriteriaStr, Delta, DiffStat, ExemptedDependency, FastMap, FastSet, ImportName, ImportsFile,
-    JsonPackage, JsonReport, JsonReportConclusion, JsonReportFailForVet,
-    JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest, JsonSuggestItem,
-    JsonVetFailure, PackageName, PackageStr, Policy, RemoteImport, VetVersion, WildcardEntry,
-    SAFE_TO_DEPLOY, SAFE_TO_RUN,
+    self, AuditEntry, AuditKind, AuditsFile, CratesPublisher, CriteriaName, Delta, DiffStat,
+    ExemptedDependency, FastMap, FastSet, ImportName, ImportsFile, JsonPackage, JsonReport,
+    JsonReportConclusion, JsonReportFailForVet, JsonReportFailForViolationConflict,
+    JsonReportSuccess, JsonSuggest, JsonSuggestItem, JsonVetFailure, PackageName, PackageStr,
+    Policy, VetVersion, WildcardEntry,
 };
 use crate::format::{SortedMap, SortedSet};
 use crate::network::Network;
@@ -78,7 +77,7 @@ pub struct ResolveReport<'a> {
     /// Low-level results for each package's individual criteria resolving
     /// analysis, indexed by [`PackageIdx`][]. Will be `None` for first-party
     /// crates or crates with violation conflicts.
-    pub results: Vec<Option<ResolveResult<'a>>>,
+    pub results: Vec<Option<ResolveResult>>,
 
     /// The final conclusion of our analysis.
     pub conclusion: Conclusion,
@@ -113,18 +112,20 @@ pub struct FailForVet {
     pub suggest: Option<Suggest>,
 }
 
+// FIXME: This format is pretty janky and unstable, so we probably should come
+// up with an actually-useful format for this.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ViolationConflict {
     UnauditedConflict {
-        violation_source: CriteriaNamespace,
+        violation_source: Option<ImportName>,
         violation: AuditEntry,
         exemptions: ExemptedDependency,
     },
     AuditConflict {
-        violation_source: CriteriaNamespace,
+        violation_source: Option<ImportName>,
         violation: AuditEntry,
-        audit_source: CriteriaNamespace,
+        audit_source: Option<ImportName>,
         audit: AuditEntry,
     },
 }
@@ -149,73 +150,6 @@ pub struct DiffRecommendation {
     pub from: Option<VetVersion>,
     pub to: VetVersion,
     pub diffstat: DiffStat,
-}
-
-/// Set of booleans, 64 should be Enough For Anyone (but abstracting in case not).
-///
-/// Note that this intentionally doesn't implement Default to allow the implementation
-/// to require the CriteriaMapper to provide the count of items at construction time.
-/// Which will be useful if we ever decide to give it ~infinite capacity and wrap
-/// a BitSet.
-#[derive(Clone)]
-pub struct CriteriaSet(u64);
-const MAX_CRITERIA: usize = u64::BITS as usize; // funnier this way
-
-/// Set of criteria which failed for a given package. `confident` contains only
-/// criteria which we're confident about, whereas `all` contains all criteria.
-#[derive(Debug, Clone)]
-pub struct CriteriaFailureSet {
-    pub confident: CriteriaSet,
-    pub all: CriteriaSet,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum CriteriaNamespace {
-    Local,
-    Foreign(ImportName),
-}
-
-/// Misc info about a Criteria that CriteriaMapper wants for some tasks.
-#[derive(Debug, Clone)]
-pub struct CriteriaInfo {
-    /// The namespace this criteria is natively part of.
-    ///
-    /// Note that builtins are in [`CriteriaNamespace::Local`] but still resolve
-    /// in foreign namespaces. This is effectively done by having a copy of those
-    /// criteria in every namespace that is auto-mapped into local. Because mapping
-    /// is bijective, the foreign copies are pointless and everyone just uses the
-    /// same local instance happily.
-    ///
-    /// The automapping is resolved by [`CriteriaMapper::index`].
-    pub namespace: CriteriaNamespace,
-    /// The name of the criteria with namespacing modifiers applied.
-    ///
-    /// e.g. a local criteria will show up as `some-criteria` but a foreign
-    /// one will appear as `foreign::some-criteria`. This string is intended
-    /// for user-facing messages to avoid ambiguities (and make it easier to
-    /// tell if we mess up and leak a foreign criteria where it shouldn't be).
-    pub namespaced_name: String,
-
-    /// The raw name of the criteria, as it would appear if it was local.
-    ///
-    /// FIXME: arguably we don't need to hold onto this, but it's annoying
-    /// to factor out and the overhead is completely trivial.
-    raw_name: CriteriaName,
-    /// FIXME: we don't actually need/want to store this but it's annoying
-    /// to factor out and honestly the overhead is completely trivial.
-    implies: Vec<CriteriaName>,
-}
-
-/// A processed version of config.toml's criteria definitions, for mapping
-/// lists of criteria names to CriteriaSets.
-#[derive(Debug, Clone)]
-pub struct CriteriaMapper {
-    /// All the criteria in their raw form
-    pub list: Vec<CriteriaInfo>,
-    /// name -> index in all lists
-    pub index: FastMap<CriteriaNamespace, FastMap<CriteriaName, usize>>,
-    /// The transitive closure of all criteria implied by each criteria (including self)
-    pub implied_criteria: Vec<CriteriaSet>,
 }
 
 /// An "interned" cargo PackageId which is used to uniquely identify packages throughout
@@ -271,9 +205,7 @@ pub struct DepGraph<'a> {
 
 /// Results and notes from running vet on a particular package.
 #[derive(Debug, Clone)]
-pub struct ResolveResult<'a> {
-    /// Graph used to compute audits for this package.
-    pub audit_graph: AuditGraph<'a>,
+pub struct ResolveResult {
     /// Cache of search results for each criteria.
     pub search_results: Vec<Result<Vec<DeltaEdgeOrigin>, SearchFailure>>,
 }
@@ -402,319 +334,6 @@ pub enum SearchMode {
     /// exemptions or expanding their criteria beyond the written criteria
     /// (unless they are suggest=false).
     RegenerateExemptions,
-}
-
-const NUM_BUILTINS: usize = 2;
-fn builtin_criteria() -> [CriteriaInfo; NUM_BUILTINS] {
-    [
-        CriteriaInfo {
-            namespace: CriteriaNamespace::Local,
-            raw_name: SAFE_TO_RUN.to_string(),
-            namespaced_name: SAFE_TO_RUN.to_string(),
-            implies: vec![],
-        },
-        CriteriaInfo {
-            namespace: CriteriaNamespace::Local,
-            raw_name: SAFE_TO_DEPLOY.to_string(),
-            namespaced_name: SAFE_TO_DEPLOY.to_string(),
-            implies: vec!["safe-to-run".to_string()],
-        },
-    ]
-}
-
-impl CriteriaMapper {
-    pub fn new(
-        criteria: &SortedMap<CriteriaName, CriteriaEntry>,
-        imports: &SortedMap<ImportName, AuditsFile>,
-        mappings: &SortedMap<ImportName, RemoteImport>,
-    ) -> CriteriaMapper {
-        // First, build a list of all our criteria
-        let locals = criteria.iter().map(|(k, v)| CriteriaInfo {
-            namespace: CriteriaNamespace::Local,
-            raw_name: k.clone(),
-            namespaced_name: k.clone(),
-            implies: v.implies.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-        });
-        let builtins = builtin_criteria();
-        let foreigns = imports.iter().flat_map(|(import, audit_file)| {
-            audit_file.criteria.iter().map(move |(k, v)| CriteriaInfo {
-                namespace: CriteriaNamespace::Foreign(import.clone()),
-                raw_name: k.clone(),
-                namespaced_name: format!("{import}::{k}"),
-                implies: v.implies.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-            })
-        });
-        let list = builtins
-            .into_iter()
-            .chain(locals)
-            .chain(foreigns)
-            .collect::<Vec<_>>();
-        let num_criteria = list.len();
-
-        // Now construct an index over this list, that lets us map
-        // (CriteriaNamespace, CriteriaName) => CriteriaIdx
-        let mut index = FastMap::<CriteriaNamespace, FastMap<CriteriaName, usize>>::new();
-        let all_import_names = mappings.iter().map(|(import_name, _)| import_name);
-
-        // Add all the natural entries
-        for (idx, info) in list.iter().enumerate() {
-            let prev = index
-                .entry(info.namespace.clone())
-                .or_default()
-                .insert(info.raw_name.clone(), idx);
-            assert!(prev.is_none(), "criteria name was multiply defined???");
-        }
-
-        // Hack the builtins into every foreign namespace. Because they all use
-        // the same CriteriaIdx, we can now forget that builtins are special and
-        // just naturally look them up in any namespace without issue.
-        for import_name in all_import_names {
-            for (idx, info) in list[0..NUM_BUILTINS].iter().enumerate() {
-                index
-                    .entry(CriteriaNamespace::Foreign(import_name.clone()))
-                    .or_default()
-                    .insert(info.raw_name.clone(), idx);
-            }
-        }
-
-        // Compute the graph of "implies" relationships. We will then run DFS from each
-        // node to compute the transitive closure of each criteria's implications, which
-        // will becomes `implies[idx]`, the value used whenever the criteria is named.
-        let mut direct_implies = FastMap::<usize, CriteriaSet>::with_capacity(num_criteria);
-        // Add all the edges for implies entries (and ensure there's a node for every idx)
-        for (idx, info) in list.iter().enumerate() {
-            let mut edges = CriteriaSet::none(num_criteria);
-            for implied in &info.implies {
-                let their_idx = index[&info.namespace][&**implied];
-                edges.set_criteria(their_idx);
-            }
-            direct_implies.insert(idx, edges);
-        }
-
-        // Add all the edges for foreign mappings
-        //
-        // FIXME: in principle these foreign criteria can be completely eliminated
-        // because they're 100% redundant with the local criteria they're getting
-        // mapped to. However this results in us discarding some information that
-        // conceivably could be useful for some diagnostics or other analysis.
-        //
-        // For now let's leave them in with an eye towards eliminating them.
-        // We currently handle eliminating their redundant nature in a more "late-bound"
-        // way in `CriteriaMapper::minimal_indices` and the various APIs that are
-        // built on top of it (all the *_criteria_names APIs, which govern ~all output).
-        for (import_name, mappings) in mappings
-            .iter()
-            .map(|(name, entry)| (name, &entry.criteria_map))
-        {
-            let foreign = CriteriaNamespace::Foreign(import_name.clone());
-            let local = CriteriaNamespace::Local;
-            for mapping in mappings {
-                // Add a bidirectional edge between these two criteria (they are now completely equivalent)
-                let our_idx = index[&local][&mapping.ours];
-                let their_idx = index[&foreign][&*mapping.theirs];
-                direct_implies
-                    .get_mut(&our_idx)
-                    .unwrap()
-                    .set_criteria(their_idx);
-                direct_implies
-                    .get_mut(&their_idx)
-                    .unwrap()
-                    .set_criteria(our_idx);
-            }
-        }
-
-        // Now do DFS over the direct_implies graph to compute the true transitive implies closure
-        let mut implied_criteria = Vec::with_capacity(num_criteria);
-        for idx in 0..num_criteria {
-            let mut implied = CriteriaSet::none(num_criteria);
-            implied.set_criteria(idx);
-            recursive_implies(&mut implied, &direct_implies, idx);
-            implied_criteria.push(implied);
-
-            fn recursive_implies(
-                result: &mut CriteriaSet,
-                direct_implies: &FastMap<usize, CriteriaSet>,
-                cur_idx: usize,
-            ) {
-                for implied_idx in direct_implies[&cur_idx].indices() {
-                    if result.has_criteria(implied_idx) {
-                        // If we've already visited this criteria, don't do it again.
-                        // This resolves all cycles (such as foreign mappings).
-                        continue;
-                    }
-                    result.set_criteria(implied_idx);
-
-                    // FIXME: we should detect infinite implies loops?
-                    recursive_implies(result, direct_implies, implied_idx);
-                }
-            }
-        }
-
-        Self {
-            list,
-            index,
-            implied_criteria,
-        }
-    }
-    pub fn criteria_from_entry(&self, entry: &AuditEntry) -> CriteriaSet {
-        self.criteria_from_namespaced_entry(&CriteriaNamespace::Local, entry)
-    }
-    pub fn criteria_from_namespaced_entry(
-        &self,
-        namespace: &CriteriaNamespace,
-        entry: &AuditEntry,
-    ) -> CriteriaSet {
-        self.criteria_from_namespaced_list(namespace, &entry.criteria)
-    }
-    pub fn criteria_from_list<'b, S: AsRef<str> + 'b + ?Sized>(
-        &self,
-        list: impl IntoIterator<Item = &'b S>,
-    ) -> CriteriaSet {
-        self.criteria_from_namespaced_list(&CriteriaNamespace::Local, list)
-    }
-    pub fn criteria_from_namespaced_list<'b, S: AsRef<str> + 'b + ?Sized>(
-        &self,
-        namespace: &CriteriaNamespace,
-        list: impl IntoIterator<Item = &'b S>,
-    ) -> CriteriaSet {
-        let mut result = self.no_criteria();
-        for criteria in list {
-            let idx = self.index[namespace][criteria.as_ref()];
-            result.unioned_with(&self.implied_criteria[idx]);
-        }
-        result
-    }
-    pub fn set_criteria(&self, set: &mut CriteriaSet, criteria: CriteriaStr) {
-        self.set_namespaced_criteria(set, &CriteriaNamespace::Local, criteria);
-    }
-    pub fn set_namespaced_criteria(
-        &self,
-        set: &mut CriteriaSet,
-        namespace: &CriteriaNamespace,
-        criteria: CriteriaStr,
-    ) {
-        set.unioned_with(&self.implied_criteria[self.index[namespace][criteria]])
-    }
-    /// An iterator over every criteria in order, with 'implies' fully applied.
-    ///
-    /// This includes any foreign criteria that has been eliminated as redundant.
-    pub fn all_criteria_iter(&self) -> impl Iterator<Item = &CriteriaSet> {
-        self.implied_criteria.iter()
-    }
-    /// An iterator over every **local** criteria in order, with 'implies' fully applied.
-    pub fn all_local_criteria_iter(&self) -> impl Iterator<Item = &CriteriaSet> {
-        // Just filter out the non-local criteria
-        self.implied_criteria
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| matches!(self.list[*idx].namespace, CriteriaNamespace::Local))
-            .map(|(_, set)| set)
-    }
-    pub fn len(&self) -> usize {
-        self.list.len()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.list.is_empty()
-    }
-    pub fn no_criteria(&self) -> CriteriaSet {
-        CriteriaSet::none(self.len())
-    }
-    pub fn all_criteria(&self) -> CriteriaSet {
-        CriteriaSet::_all(self.len())
-    }
-
-    /// Like [`CriteriaSet::indices`] but uses knowledge of things like
-    /// `implies` relationships to remove redundant information. For
-    /// instance, if safe-to-deploy is set, we don't also yield safe-to-run.
-    pub fn minimal_indices<'a>(
-        &'a self,
-        criteria: &'a CriteriaSet,
-    ) -> impl Iterator<Item = usize> + 'a {
-        criteria.indices().filter(|&cur_idx| {
-            criteria.indices().all(|other_idx| {
-                // Ignore our own index
-                let is_identity = cur_idx == other_idx;
-                // Discard this criteria if it's implied by another
-                let isnt_implied = !self.implied_criteria[other_idx].has_criteria(cur_idx);
-                // Unless we're local and they're foreign, then we win
-                let cur_is_local = self.list[cur_idx].namespace == CriteriaNamespace::Local;
-                let other_is_foreign = self.list[other_idx].namespace != CriteriaNamespace::Local;
-                let is_mapping = cur_is_local && other_is_foreign;
-                is_identity || isnt_implied || is_mapping
-            })
-        })
-    }
-
-    /// Yields all the names of the set criteria with implied members filtered out.
-    pub fn criteria_names<'a>(
-        &'a self,
-        criteria: &'a CriteriaSet,
-    ) -> impl Iterator<Item = CriteriaStr<'a>> + 'a {
-        self.minimal_indices(criteria)
-            .map(|idx| &*self.list[idx].namespaced_name)
-    }
-}
-
-impl CriteriaSet {
-    pub fn none(count: usize) -> Self {
-        assert!(
-            count <= MAX_CRITERIA,
-            "{MAX_CRITERIA} was not Enough For Everyone ({count} criteria)"
-        );
-        CriteriaSet(0)
-    }
-    pub fn _all(count: usize) -> Self {
-        assert!(
-            count <= MAX_CRITERIA,
-            "{MAX_CRITERIA} was not Enough For Everyone ({count} criteria)"
-        );
-        if count == MAX_CRITERIA {
-            CriteriaSet(!0)
-        } else {
-            // Bit Magic to get 'count' 1's
-            CriteriaSet((1 << count) - 1)
-        }
-    }
-    pub fn set_criteria(&mut self, idx: usize) {
-        self.0 |= 1 << idx;
-    }
-    pub fn clear_criteria(&mut self, other: &CriteriaSet) {
-        self.0 &= !other.0;
-    }
-    pub fn has_criteria(&self, idx: usize) -> bool {
-        (self.0 & (1 << idx)) != 0
-    }
-    pub fn _intersected_with(&mut self, other: &CriteriaSet) {
-        self.0 &= other.0;
-    }
-    pub fn unioned_with(&mut self, other: &CriteriaSet) {
-        self.0 |= other.0;
-    }
-    pub fn contains(&self, other: &CriteriaSet) -> bool {
-        (self.0 & other.0) == other.0
-    }
-    pub fn is_empty(&self) -> bool {
-        self.0 == 0
-    }
-    pub fn indices(&self) -> impl Iterator<Item = usize> + '_ {
-        // Yield all the offsets that are set by repeatedly getting the lowest 1 and clearing it
-        let mut raw = self.0;
-        std::iter::from_fn(move || {
-            if raw == 0 {
-                None
-            } else {
-                let next = raw.trailing_zeros() as usize;
-                raw &= !(1 << next);
-                Some(next)
-            }
-        })
-    }
-}
-
-impl fmt::Debug for CriteriaSet {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{:08b}", self.0)
-    }
 }
 
 impl<'a> DepGraph<'a> {
@@ -1181,7 +800,7 @@ impl<'a> DepGraph<'a> {
 pub fn resolve<'a>(
     metadata: &'a Metadata,
     filter_graph: Option<&Vec<GraphFilter>>,
-    store: &'a Store,
+    store: &Store,
 ) -> ResolveReport<'a> {
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
@@ -1189,11 +808,7 @@ pub fn resolve<'a>(
     // trace!("built DepGraph: {:#?}", graph);
     trace!("built DepGraph!");
 
-    let criteria_mapper = CriteriaMapper::new(
-        &store.audits.criteria,
-        store.imported_audits(),
-        &store.config.imports,
-    );
+    let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
     trace!("built CriteriaMapper!");
 
     let requirements = resolve_requirements(&graph, &store.config.policy, &criteria_mapper);
@@ -1274,12 +889,12 @@ fn resolve_requirements(
     requirements
 }
 
-fn resolve_audits<'a>(
+fn resolve_audits(
     graph: &DepGraph<'_>,
-    store: &'a Store,
+    store: &Store,
     criteria_mapper: &CriteriaMapper,
     requirements: &[CriteriaSet],
-) -> (Vec<Option<ResolveResult<'a>>>, Conclusion) {
+) -> (Vec<Option<ResolveResult>>, Conclusion) {
     let _resolve_audits = trace_span!("resolve_audits").entered();
     let mut violations = Vec::new();
     let mut failures = Vec::new();
@@ -1339,10 +954,7 @@ fn resolve_audits<'a>(
                 vetted_partially.push(pkgidx);
             }
 
-            Some(ResolveResult {
-                audit_graph,
-                search_results,
-            })
+            Some(ResolveResult { search_results })
         })
         .collect();
 
@@ -1375,10 +987,10 @@ impl<'a> AuditGraph<'a> {
     ) -> Result<Self, Vec<ViolationConflict>> {
         // Pre-build the namespaces for each audit so that we can take a reference
         // to each one as-needed rather than cloning the name each time.
-        let foreign_namespaces: Vec<CriteriaNamespace> = store
+        let foreign_namespaces: Vec<Option<ImportName>> = store
             .imported_audits()
             .keys()
-            .map(|import_name| CriteriaNamespace::Foreign(import_name.clone()))
+            .map(|import_name| Some(import_name.clone()))
             .collect();
 
         // Iterator over every audits file, including imported audits.
@@ -1393,7 +1005,7 @@ impl<'a> AuditGraph<'a> {
                     audits_file,
                 )
             })
-            .chain([(None, &CriteriaNamespace::Local, &store.audits)]);
+            .chain([(None, &None, &store.audits)]);
 
         // Iterator over every normal audit.
         let all_audits =
@@ -1463,7 +1075,7 @@ impl<'a> AuditGraph<'a> {
                 }
             };
 
-            let criteria = criteria_mapper.criteria_from_namespaced_entry(namespace, entry);
+            let criteria = criteria_mapper.criteria_from_list(&entry.criteria);
 
             forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: Some(to_ver),
@@ -1486,15 +1098,14 @@ impl<'a> AuditGraph<'a> {
         // wildcard audits apply and add full-audits to those versions if they
         // do.
         for (publisher_index, publisher) in publishers.iter().enumerate() {
-            for (namespace, import_index, audit_index, entry) in all_wildcard_audits.clone() {
+            for (_, import_index, audit_index, entry) in all_wildcard_audits.clone() {
                 if entry.user_id == publisher.user_id
                     && *entry.start <= publisher.when
                     && publisher.when < *entry.end
                 {
                     let from_ver = None;
                     let to_ver = Some(&publisher.version);
-                    let criteria =
-                        criteria_mapper.criteria_from_namespaced_list(namespace, &entry.criteria);
+                    let criteria = criteria_mapper.criteria_from_list(&entry.criteria);
                     let origin = DeltaEdgeOrigin::WildcardAudit {
                         import_index,
                         audit_index,
@@ -1567,7 +1178,7 @@ impl<'a> AuditGraph<'a> {
             let violation_criterias = violation_entry
                 .criteria
                 .iter()
-                .map(|c| criteria_mapper.criteria_from_namespaced_list(violation_source, [&c]))
+                .map(|c| criteria_mapper.criteria_from_list([&c]))
                 .collect::<Vec<_>>();
             let violation_range = if let AuditKind::Violation { violation } = &violation_entry.kind
             {
@@ -1598,8 +1209,7 @@ impl<'a> AuditGraph<'a> {
 
             // Note if this entry conflicts with any audits
             for (namespace, _origin, audit) in all_audits.clone() {
-                let audit_criteria =
-                    criteria_mapper.criteria_from_namespaced_entry(namespace, audit);
+                let audit_criteria = criteria_mapper.criteria_from_list(&audit.criteria);
                 let has_violation = violation_criterias
                     .iter()
                     .any(|v| audit_criteria.contains(v));
@@ -2512,12 +2122,12 @@ impl FailForViolationConflict {
 
         fn print_entry(
             out: &Arc<dyn Out>,
-            source: &CriteriaNamespace,
+            source: &Option<ImportName>,
             entry: &AuditEntry,
         ) -> Result<(), std::io::Error> {
             match source {
-                CriteriaNamespace::Local => write!(out, "own "),
-                CriteriaNamespace::Foreign(name) => write!(out, "foreign ({name}) "),
+                None => write!(out, "own "),
+                Some(name) => write!(out, "foreign ({name}) "),
             }
             match &entry.kind {
                 AuditKind::Full { version, .. } => {
@@ -2682,11 +2292,7 @@ pub(crate) fn get_store_updates(
         cfg.cli.filter_graph.as_ref(),
         Some(&store.config.policy),
     );
-    let criteria_mapper = CriteriaMapper::new(
-        &store.audits.criteria,
-        store.imported_audits(),
-        &store.config.imports,
-    );
+    let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
     let requirements = resolve_requirements(&graph, &store.config.policy, &criteria_mapper);
 
     let mut required_entries = SortedMap::new();

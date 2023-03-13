@@ -8,7 +8,7 @@ expression: json
     "third-party1:10.0.0": [
       {
         "AuditConflict": {
-          "violation_source": "Local",
+          "violation_source": null,
           "violation": {
             "criteria": [
               "safe-to-run",
@@ -19,7 +19,7 @@ expression: json
             "violation": "*",
             "notes": null
           },
-          "audit_source": "Local",
+          "audit_source": null,
           "audit": {
             "criteria": "safe-to-run",
             "version": "10.0.0",

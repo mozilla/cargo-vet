@@ -1,0 +1,20 @@
+---
+source: src/tests/import.rs
+expression: output
+---
++
++[audits.peer-company.criteria.foreign-reviewed]
++description = "foreign reviewed"
++
++[[audits.peer-company.audits.third-party1]]
++criteria = "reviewed"
++version = "10.0.0"
++
++[[audits.peer-company.audits.third-party2]]
++criteria = "weak-reviewed"
++version = "10.0.0"
++
++[[audits.peer-company.audits.transitive-third-party1]]
++criteria = "strong-reviewed"
++version = "10.0.0"
+

@@ -665,24 +665,30 @@ pub struct PolicyEntry {
     ///
     /// Any dependency edge that isn't explicitly specified defaults to `criteria`.
     #[serde(rename = "dependency-criteria")]
-    #[serde(skip_serializing_if = "DependencyCriteria::is_empty")]
-    #[serde(with = "serialization::dependency_criteria")]
+    #[serde(skip_serializing_if = "CriteriaMap::is_empty")]
+    #[serde(with = "serialization::criteria_map")]
     #[serde(default)]
-    pub dependency_criteria: DependencyCriteria,
+    pub dependency_criteria: CriteriaMap,
 
     /// Freeform notes
     pub notes: Option<String>,
 }
 
-/// A list of criteria that transitive dependencies must satisfy for this
-/// policy to be satisfied.
+/// Helper type for managing a mapping from a string to a set of criteria. This
+/// is used for dependency-criteria to specify the criteria that transitive
+/// dependencies must satisfy, as well as for criteria-maps when specifying the
+/// criteria implied by foreign criteria.
 ///
 /// Example:
 ///
 /// ```toml
 /// dependency_criteria = { hmac = ['secure', 'crypto_reviewed'] }
 /// ```
-pub type DependencyCriteria = SortedMap<PackageName, Vec<Spanned<CriteriaName>>>;
+///
+/// ```toml
+/// criteria-map = { fuzzed = 'safe-to-deploy' }
+/// ```
+pub type CriteriaMap = SortedMap<Spanned<String>, Vec<Spanned<CriteriaName>>>;
 
 pub static DEFAULT_POLICY_CRITERIA: CriteriaStr = SAFE_TO_DEPLOY;
 pub static DEFAULT_POLICY_DEV_CRITERIA: CriteriaStr = SAFE_TO_RUN;
@@ -698,9 +704,10 @@ pub struct RemoteImport {
     pub exclude: Vec<PackageName>,
     /// A list of criteria that are implied by foreign criteria
     #[serde(rename = "criteria-map")]
+    #[serde(skip_serializing_if = "CriteriaMap::is_empty")]
+    #[serde(with = "serialization::criteria_map")]
     #[serde(default)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub criteria_map: Vec<CriteriaMapping>,
+    pub criteria_map: CriteriaMap,
 }
 
 /// Translations of foreign criteria to local criteria.

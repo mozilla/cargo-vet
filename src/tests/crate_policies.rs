@@ -53,7 +53,7 @@ fn simple_crate_policies_third_party_crates_dont_need_versions() {
 
 fn dep_criteria_policy_entry() -> PolicyEntry {
     PolicyEntry {
-        dependency_criteria: [("foo".to_owned(), vec!["bar".to_owned().into()])].into(),
+        dependency_criteria: [("foo".to_owned().into(), vec!["bar".to_owned().into()])].into(),
         ..Default::default()
     }
 }

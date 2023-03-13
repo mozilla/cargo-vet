@@ -388,20 +388,16 @@ version = "10.0.0"
 }
 
 #[test]
-fn test_invalid_criteria_map() {
+fn parse_criteria_map() {
     let config = r##"
 # cargo-vet config file
 
 [imports.peer1]
 url = "https://peer1.com"
 
-[[imports.peer1.criteria-map]]
-ours = "safe-to-run"
-theirs = "fuzzed"
-
-[[imports.peer1.criteria-map]]
-ours = "safe-to-run"
-theirs = "safe-to-deploy"
+[imports.peer1.criteria-map]
+fuzzed = "safe-to-run"
+safe-to-deploy = "safe-to-run"
 "##;
 
     let imports = r##"

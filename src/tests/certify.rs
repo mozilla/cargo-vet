@@ -1,5 +1,3 @@
-use crate::network::Network;
-
 use super::*;
 use std::fmt::Write;
 

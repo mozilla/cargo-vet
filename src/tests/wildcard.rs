@@ -21,9 +21,8 @@ fn wildcard_full_audit_locked() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store);
 
-    assert_report_snapshot!("wildcard_full_audit_locked", &metadata, report);
+    assert_report_snapshot!("wildcard_full_audit_locked", metadata, store);
 }
 
 #[test]
@@ -47,13 +46,8 @@ fn wildcard_full_audit_wrong_user_id_locked() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store);
 
-    assert_report_snapshot!(
-        "wildcard_full_audit_wrong_user_id_locked",
-        &metadata,
-        report
-    );
+    assert_report_snapshot!("wildcard_full_audit_wrong_user_id_locked", metadata, store);
 }
 
 #[test]
@@ -80,9 +74,8 @@ fn wildcard_delta_audit_locked() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store);
 
-    assert_report_snapshot!("wildcard_delta_audit_locked", &metadata, report);
+    assert_report_snapshot!("wildcard_delta_audit_locked", metadata, store);
 }
 
 #[test]
@@ -109,13 +102,8 @@ fn wildcard_delta_audit_wrong_user_id_locked() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store);
 
-    assert_report_snapshot!(
-        "wildcard_delta_audit_wrong_user_id_locked",
-        &metadata,
-        report
-    );
+    assert_report_snapshot!("wildcard_delta_audit_wrong_user_id_locked", metadata, store);
 }
 
 #[test]
@@ -127,6 +115,9 @@ fn imported_wildcard_audit() {
 
     let metadata = mock.metadata();
     let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+    audits
+        .criteria
+        .insert("example".to_string(), criteria("example criteria"));
     audits.audits.remove("third-party1");
     audits.audits.insert(
         "transitive-third-party1".to_owned(),
@@ -161,6 +152,12 @@ fn imported_wildcard_audit() {
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
             url: FOREIGN_URL.to_owned(),
+            criteria_map: [(
+                "example".to_owned().into(),
+                vec!["example".to_owned().into()],
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         },
     );
@@ -181,7 +178,6 @@ fn imported_wildcard_audit() {
     );
 
     let store = Store::mock(config, audits, imports);
-    let report = crate::resolver::resolve(&metadata, None, &store);
 
-    assert_report_snapshot!("imported_wildcard_audit", &metadata, report);
+    assert_report_snapshot!("imported_wildcard_audit", metadata, store);
 }

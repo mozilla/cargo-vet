@@ -12,12 +12,13 @@ use serde_json::{json, Value};
 
 use crate::{
     format::{
-        AuditKind, CratesPublisher, CriteriaName, CriteriaStr, DependencyCriteria, FastMap,
-        MetaConfig, PackageName, PackagePolicyEntry, PackageStr, PolicyEntry, SortedSet,
-        VersionReq, VetVersion, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        AuditKind, CratesPublisher, CriteriaMap, CriteriaName, CriteriaStr, FastMap, MetaConfig,
+        PackageName, PackagePolicyEntry, PackageStr, PolicyEntry, SortedSet, VersionReq,
+        VetVersion, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     git_tool::Editor,
     init_files,
+    network::Network,
     out::Out,
     resolver::ResolveReport,
     AuditEntry, AuditsFile, Config, ConfigFile, CriteriaEntry, ExemptedDependency, ImportsFile,
@@ -32,8 +33,9 @@ use crate::{
 /// Unlike a normal `assert_snapshot!` the snapshot name isn't inferred by this
 /// macro, as multiple snapshots with different names need to be generated.
 macro_rules! assert_report_snapshot {
-    ($name:expr, $metadata:expr, $report:expr) => {{
-        let (human, json) = $crate::tests::get_reports(&$metadata, $report);
+    ($name:expr, $metadata:expr, $store:expr) => {{
+        let report = $crate::resolver::resolve(&$metadata, None, &$store);
+        let (human, json) = $crate::tests::get_reports(&$metadata, report);
         insta::assert_snapshot!($name, human);
         insta::assert_snapshot!(concat!($name, ".json"), json);
     }};
@@ -464,7 +466,7 @@ fn dep_policy(
             .into_iter()
             .map(|(k, v)| {
                 (
-                    k.into(),
+                    k.into().into(),
                     v.into_iter().map(|s| s.into().into()).collect::<Vec<_>>(),
                 )
             })
@@ -972,7 +974,7 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
                         audit_as_crates_io: None,
                         criteria: Some(vec![DEFAULT_CRIT.to_string().into()]),
                         dev_criteria: Some(vec![DEFAULT_CRIT.to_string().into()]),
-                        dependency_criteria: DependencyCriteria::new(),
+                        dependency_criteria: CriteriaMap::new(),
                         notes: None,
                     }),
                 );

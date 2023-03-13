@@ -8,7 +8,7 @@ expression: json
     "third-party1:10.0.0": [
       {
         "AuditConflict": {
-          "violation_source": "Local",
+          "violation_source": null,
           "violation": {
             "criteria": "safe-to-run",
             "version": null,
@@ -16,7 +16,7 @@ expression: json
             "violation": "=5.0.0",
             "notes": null
           },
-          "audit_source": "Local",
+          "audit_source": null,
           "audit": {
             "criteria": "safe-to-deploy",
             "version": null,
@@ -28,7 +28,7 @@ expression: json
       },
       {
         "AuditConflict": {
-          "violation_source": "Local",
+          "violation_source": null,
           "violation": {
             "criteria": "safe-to-run",
             "version": null,
@@ -36,7 +36,7 @@ expression: json
             "violation": "=5.0.0",
             "notes": null
           },
-          "audit_source": "Local",
+          "audit_source": null,
           "audit": {
             "criteria": "safe-to-deploy",
             "version": null,
