@@ -282,6 +282,7 @@ impl Store {
             network,
             cache,
             &wildcard_audits_packages(&self.audits, &live_imports),
+            false,
             &self.config,
             &self.audits,
             &self.imports,
@@ -338,6 +339,7 @@ impl Store {
                 network,
                 &cache,
                 &wildcard_audits_packages(&audits, &live_imports),
+                false,
                 &config,
                 &audits,
                 &imports,
@@ -705,6 +707,7 @@ impl Store {
                 network,
                 &cache,
                 &[package.to_owned()].into_iter().collect(),
+                true,
                 &self.config,
                 &self.audits,
                 &self.imports,
@@ -801,6 +804,7 @@ impl Store {
             network,
             cache,
             &wildcard_packages,
+            false,
             &self.config,
             &self.audits,
             &self.imports,
@@ -1284,6 +1288,7 @@ async fn import_publisher_versions(
     network: &Network,
     cache: &Cache,
     relevant_packages: &FastSet<PackageName>,
+    force: bool,
     config_file: &ConfigFile,
     audits_file: &AuditsFile,
     imports_lock: &ImportsFile,
@@ -1293,11 +1298,21 @@ async fn import_publisher_versions(
     // actually used in-tree.
     let mut relevant_versions: FastMap<PackageStr<'_>, FastSet<&semver::Version>> = FastMap::new();
     for pkg in &metadata.packages {
-        if relevant_packages.contains(&pkg.name) && pkg.is_third_party(&config_file.policy) {
+        if relevant_packages.contains(&pkg.name)
+            && (force || pkg.is_third_party(&config_file.policy))
+        {
             relevant_versions
                 .entry(&pkg.name)
                 .or_default()
                 .insert(&pkg.version);
+        }
+    }
+
+    // If we're forcing fetching for this package, ensure an entry exists even
+    // if it isn't in the dependency graph.
+    if force {
+        for package in relevant_packages {
+            relevant_versions.entry(&package[..]).or_default();
         }
     }
 
