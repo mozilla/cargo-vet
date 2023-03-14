@@ -28,6 +28,7 @@ use out::{progress_bar, IncProgressOnDrop};
 use reqwest::Url;
 use serde::de::Deserialize;
 use serialization::spanned::Spanned;
+use storage::fetch_registry;
 use thiserror::Error;
 use tracing::{error, info, trace, warn};
 
@@ -36,8 +37,8 @@ use crate::criteria::CriteriaMapper;
 use crate::errors::{CommandError, DownloadError, FetchAndDiffError, FetchError, SourceFile};
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesUserId, CriteriaEntry, ExemptedDependency,
-    FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo,
-    WildcardEntry,
+    FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, RemoteImport, SortedMap,
+    StoreInfo, WildcardEntry,
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
@@ -464,6 +465,7 @@ fn real_main() -> Result<(), miette::Report> {
         Some(Check(sub_args)) => cmd_check(&out, &cfg, sub_args),
         Some(Init(sub_args)) => cmd_init(&out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(&out, &cfg, sub_args),
+        Some(Import(sub_args)) => cmd_import(&out, &cfg, sub_args),
         Some(AddExemption(sub_args)) => cmd_add_exemption(&out, &cfg, sub_args),
         Some(RecordViolation(sub_args)) => cmd_record_violation(&out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(&out, &cfg, sub_args),
@@ -1105,7 +1107,7 @@ fn guess_audit_criteria(
     resolver::resolve(
         &cfg.metadata,
         cfg.cli.filter_graph.as_ref(),
-        &store.clone_for_suggest(),
+        &store.clone_for_suggest(true),
     )
     .compute_suggested_criteria(package, from, to)
 }
@@ -1195,6 +1197,67 @@ async fn prompt_criteria_eulas(
 
     let out_ = out.clone();
     tokio::task::spawn_blocking(move || out_.read_line_with_prompt(final_prompt)).await??;
+    Ok(())
+}
+
+fn cmd_import(
+    _out: &Arc<dyn Out>,
+    cfg: &Config,
+    sub_args: &ImportArgs,
+) -> Result<(), miette::Report> {
+    let Some(network) = Network::acquire(cfg) else {
+        return Err(miette!("`cargo vet import` cannot be run while frozen"));
+    };
+
+    // Determine the URL for the import, potentially fetching the registry to
+    // find it.
+    let registry_file;
+    let import_url = match &sub_args.url {
+        Some(url) => url,
+        None => {
+            registry_file = tokio::runtime::Handle::current().block_on(fetch_registry(&network))?;
+            registry_file
+                .registry
+                .get(&sub_args.name)
+                .ok_or_else(|| miette!("no peer named {} found in the registry", &sub_args.name))
+                .map(|entry| &entry.url)?
+        }
+    };
+
+    let mut store = Store::acquire_offline(cfg)?;
+
+    // Insert a new entry for the new import.
+    use std::collections::btree_map::Entry;
+    match store.config.imports.entry(sub_args.name.clone()) {
+        Entry::Occupied(_) => {
+            return Err(miette!(
+                "a peer named '{}', has already been imported",
+                &sub_args.name
+            ))
+        }
+        Entry::Vacant(vacant) => {
+            vacant.insert(RemoteImport {
+                url: import_url.clone(),
+                exclude: Vec::new(),
+                criteria_map: SortedMap::new(),
+            });
+        }
+    }
+
+    // After adding the new entry, go online, this will fetch the new import.
+    let cache = Cache::acquire(cfg)?;
+    tokio::runtime::Handle::current().block_on(store.go_online(cfg, &network, &cache, false))?;
+
+    // Update the store state, pruning unnecessary exemptions, and cleaning out
+    // unnecessary old imports.
+    resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
+        search_mode: resolver::SearchMode::PreferFreshImports,
+        prune_exemptions: true,
+        prune_imports: true,
+    });
+
+    store.commit()?;
+
     Ok(())
 }
 
@@ -1341,11 +1404,11 @@ fn cmd_suggest(
     // Run the checker to validate that the current set of deps is covered by the current cargo vet store
     trace!("suggesting...");
     let network = Network::acquire(cfg);
-    let suggest_store = Store::acquire(cfg, network.as_ref(), false)?.clone_for_suggest();
+    let suggest_store = Store::acquire(cfg, network.as_ref(), false)?.clone_for_suggest(true);
 
     // DO THE THING!!!!
     let report = resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &suggest_store);
-    let suggest = report.compute_suggest(cfg, network.as_ref(), true)?;
+    let suggest = report.compute_suggest(cfg, &suggest_store, network.as_ref())?;
     match cfg.cli.output_format {
         OutputFormat::Human => report
             .print_suggest_human(out, cfg, suggest.as_ref())
@@ -1630,7 +1693,7 @@ fn cmd_check(
 
     // Bare `cargo vet` shouldn't suggest in CI
     let suggest = if !cfg.cli.locked {
-        report.compute_suggest(cfg, network.as_ref(), true)?
+        report.compute_suggest(cfg, &store, network.as_ref())?
     } else {
         None
     };

@@ -47,6 +47,9 @@ GLOBAL OPTIONS:
             Prevent commands such as `check` and `certify` from automatically cleaning up unused
             exemptions
 
+        --no-registry-suggestions
+            Prevent commands such as `check` and `suggest` from suggesting registry imports
+
         --verbose <VERBOSE>
             How verbose logging should be (log level)
             
@@ -132,6 +135,8 @@ SUBCOMMANDS:
             Yield a diff against the last reviewed version
     certify
             Mark a package as audited
+    import
+            Import a new peer's imports
     regenerate
             Explicitly regenerate various pieces of information
     add-exemption

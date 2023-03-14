@@ -3,7 +3,7 @@ use std::{path::PathBuf, str::FromStr};
 use clap::{Parser, Subcommand, ValueEnum};
 use tracing::level_filters::LevelFilter;
 
-use crate::format::{CriteriaName, PackageName, VersionReq, VetVersion};
+use crate::format::{CriteriaName, ImportName, PackageName, VersionReq, VetVersion};
 
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
@@ -68,6 +68,12 @@ pub struct Cli {
     #[clap(long, action)]
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub no_minimize_exemptions: bool,
+
+    /// Prevent commands such as `check` and `suggest` from suggesting registry
+    /// imports.
+    #[clap(long, action)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    pub no_registry_suggestions: bool,
 
     /// How verbose logging should be (log level)
     #[clap(long, action)]
@@ -255,6 +261,13 @@ pub enum Commands {
     /// If this removes the need for an `exemption` will we automatically remove it.
     #[clap(disable_version_flag = true)]
     Certify(CertifyArgs),
+
+    /// Import a new peer's imports
+    ///
+    /// If invoked without a URL parameter, it will look up the named peer in
+    /// the cargo-vet registry, and import that peer.
+    #[clap(disable_version_flag = true)]
+    Import(ImportArgs),
 
     /// Explicitly regenerate various pieces of information
     ///
@@ -490,6 +503,20 @@ pub struct CertifyArgs {
     /// talk about is part of your current build, but this flag disables that.
     #[clap(long, action)]
     pub force: bool,
+}
+
+/// Import a new peer
+#[derive(clap::Args)]
+pub struct ImportArgs {
+    /// The name of the peer to import
+    #[clap(action)]
+    pub name: ImportName,
+    /// The URL of the peer's audits.toml file.
+    ///
+    /// If a URL is not provided, a peer with the given name will be looked up
+    /// in the cargo-vet registry to determine the import URL.
+    #[clap(action)]
+    pub url: Option<String>,
 }
 
 /// Forbids the given version

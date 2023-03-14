@@ -56,6 +56,9 @@ dependencies are vendored. Requires --locked
 Prevent commands such as `check` and `certify` from automatically cleaning up unused
 exemptions
 
+#### `--no-registry-suggestions`
+Prevent commands such as `check` and `suggest` from suggesting registry imports
+
 #### `--verbose <VERBOSE>`
 How verbose logging should be (log level)
 
@@ -135,6 +138,7 @@ graph
 * [inspect](#cargo-vet-inspect): Fetch the source of a package
 * [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
 * [certify](#cargo-vet-certify): Mark a package as audited
+* [import](#cargo-vet-import): Import a new peer's imports
 * [regenerate](#cargo-vet-regenerate): Explicitly regenerate various pieces of information
 * [add-exemption](#cargo-vet-add-exemption): Mark a package as exempted from review
 * [record-violation](#cargo-vet-record-violation): Declare that some versions of a package violate certain audit criteria
@@ -381,6 +385,35 @@ Force the command to ignore whether the package/version makes sense
 To catch typos/mistakes, we check if the thing you're trying to talk about is part of
 your current build, but this flag disables that.
 
+#### `-h, --help`
+Print help information
+
+### GLOBAL OPTIONS
+This subcommand accepts all the [global options](#global-options)
+
+<br><br><br>
+## cargo vet import
+Import a new peer's imports
+
+If invoked without a URL parameter, it will look up the named peer in the cargo-vet registry, and
+import that peer.
+
+### USAGE
+```
+cargo vet import [OPTIONS] <NAME> [URL]
+```
+
+### ARGS
+#### `<NAME>`
+The name of the peer to import
+
+#### `<URL>`
+The URL of the peer's audits.toml file.
+
+If a URL is not provided, a peer with the given name will be looked up in the cargo-vet
+registry to determine the import URL.
+
+### OPTIONS
 #### `-h, --help`
 Print help information
 
