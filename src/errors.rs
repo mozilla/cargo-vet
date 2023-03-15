@@ -90,6 +90,36 @@ pub enum VersionParseError {
 }
 
 ///////////////////////////////////////////////////////////
+// MetadataAcquireError
+///////////////////////////////////////////////////////////
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum MetadataAcquireError {
+    #[error("`cargo metadata` exited with an error:\n{stderr}")]
+    #[diagnostic(help("You may need to run `cargo generate-lockfile` to create a Cargo.lock"))]
+    MetadataError {
+        /// Stderr returned by the `cargo metadata` command
+        stderr: String,
+    },
+    #[error(transparent)]
+    Other(cargo_metadata::Error),
+}
+
+impl From<cargo_metadata::Error> for MetadataAcquireError {
+    fn from(value: cargo_metadata::Error) -> Self {
+        match value {
+            // Wrap normal errors to provide extra help information.
+            cargo_metadata::Error::CargoMetadata { stderr } => {
+                MetadataAcquireError::MetadataError { stderr }
+            }
+            // Other errors couldn't be caused by that problem, so are
+            // unchanged.
+            other => MetadataAcquireError::Other(other),
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////
 // AuditAsErrors
 ///////////////////////////////////////////////////////////
 

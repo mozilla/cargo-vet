@@ -34,7 +34,9 @@ use tracing::{error, info, trace, warn};
 
 use crate::cli::*;
 use crate::criteria::CriteriaMapper;
-use crate::errors::{CommandError, DownloadError, FetchAndDiffError, FetchError, SourceFile};
+use crate::errors::{
+    CommandError, DownloadError, FetchAndDiffError, FetchError, MetadataAcquireError, SourceFile,
+};
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesUserId, CriteriaEntry, ExemptedDependency,
     FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, RemoteImport, SortedMap,
@@ -359,6 +361,12 @@ fn real_main() -> Result<(), miette::Report> {
     } else {
         other_options.push("--locked".to_string());
     }
+    if !using_log_file
+        && cli.output_format == OutputFormat::Human
+        && console::colors_enabled_stderr()
+    {
+        other_options.push("--color=always".to_string());
+    }
     cmd.other_options(other_options);
 
     info!("Running: {:#?}", cmd.cargo_command());
@@ -366,9 +374,7 @@ fn real_main() -> Result<(), miette::Report> {
     // ERRORS: immediate fatal diagnostic
     let metadata = {
         let _spinner = indeterminate_spinner("Running", "`cargo metadata`");
-        cmd.exec()
-            .into_diagnostic()
-            .wrap_err("'cargo metadata' exited unsuccessfully")?
+        cmd.exec().map_err(MetadataAcquireError::from)?
     };
 
     // trace!("Got Metadata! {:#?}", metadata);
