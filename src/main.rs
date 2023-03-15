@@ -552,6 +552,7 @@ pub fn init_files(
                 .push(item);
         }
         ConfigFile {
+            cargo_vet: Default::default(),
             default_criteria: format::get_default_criteria(),
             imports: SortedMap::new(),
             exemptions: dependencies,

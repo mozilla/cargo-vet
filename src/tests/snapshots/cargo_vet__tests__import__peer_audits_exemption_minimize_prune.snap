@@ -7,6 +7,9 @@ config.toml:
  
  # cargo-vet config file
  
+ [cargo-vet]
+ version = "1.0"
+ 
  [imports.peer-company]
  url = "https://peercompany.co.uk"
 -

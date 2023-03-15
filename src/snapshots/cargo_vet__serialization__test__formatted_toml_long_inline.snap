@@ -3,6 +3,9 @@ source: src/serialization.rs
 expression: formatted
 ---
 
+[cargo-vet]
+version = "1.0"
+
 [policy.long-criteria]
 criteria = "long-criteria"
 notes = "notes go here!"
