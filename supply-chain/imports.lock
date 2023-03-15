@@ -1,6 +1,20 @@
 
 # cargo-vet imports lock
 
+[[publisher.bumpalo]]
+version = "3.10.0"
+when = "2022-06-01"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
+
+[[audits.bytecodealliance.wildcard-audits.bumpalo]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696
+start = "2019-03-16"
+end = "2024-03-10"
+
 [[audits.bytecodealliance.audits.atty]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
