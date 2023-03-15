@@ -284,7 +284,7 @@ dev-policy checks (and so by default only need to be safe-to-run).
 
 The CriteriaMapper handles the process of converting between criteria names and
 CriteriaIndices. It's basically an interner, but made more complicated by the existence
-of builtins, namespaces (from imported audits.toml files), and "implies" relationships.
+of builtins, imports, and "implies" relationships.
 
 The resolver primarily operates on CriteriaSets, which are sets of CriteriaIndices.
 The purpose of this is to try to handle all the subtleties of criteria in one place
@@ -298,21 +298,21 @@ your imports to make CriteriaSets efficient (they're just a u64 internally).
 The code is designed to allow this limit to be easily raised if anyone ever hits
 it (either with a u128 or a proper BitSet).
 
-The biggest complexity of this process is handling "implies" (and the mapping of
-imported criteria onto local criteria, which is basically another form of "implies"
-where both criteria imply eachother).
+Imported criteria are pre-mapped onto local criteria while acquiring the store,
+by using a CriteriaMapper in the imported namespace to determine implied
+criteria, and then applying the mappings specified in the `criteria-map` to
+determine the corresponding local criteria. This avoids worrying about imported
+namespaces when running the actual resolver, and helps avoid potential issues
+with large numbers of criteria.
 
-This makes a criteria like safe-to-deploy *actually* safe-to-deploy AND safe-to-run
-in most situations. The CriteriaMapper will precompute the [transitive closure][] of
-implies relationships for each criteria as a CriteriaSet. When mapping the name of
-a criteria to CriteriaIndices, this CriteriaSet is the thing returned.
+The biggest complexity of this process is handling "implies".  This makes a
+criteria like safe-to-deploy *actually* safe-to-deploy AND safe-to-run in most
+situations. The CriteriaMapper will precompute the [transitive closure][] of
+implies relationships for each criteria as a CriteriaSet. When mapping the name
+of a criteria to CriteriaIndices, this CriteriaSet is the thing returned.
 
-When mapping a criteria set to a list of criteria names, we will add `import_name::`
-in front of any imported criteria. So if you import a "fuzzed" criteria from "google",
-we will print `google::fuzzed`. We will also elide implied criteria
+When mapping a criteria set to a list of criteria names, we will elide implied criteria
 (so a `["safe-to-deploy", "safe-to-run"]` will just be `["safe-to-deploy"]`).
-If an imported criteria is mapped onto a local criteria, we will only show the local
-criteria (so `["fuzzed", "google::fuzzed"]` will just be `["fuzzed"]`).
 
 
 
@@ -392,14 +392,17 @@ a Target Version to the graph (if it doesn't exist already).
 Full audits are desugarred to delta audits from the Root Version (so an audit for `0.2.0` would
 be lowered to a delta audit from `Root -> 0.2.0`).
 
-Exemptions are desugared to full audits (and therefore deltas) with a flag indicating their origin.
-This flag is used to deprioritize the edges so that we can more easily detect exemptions that
-aren't needed anymore.
+Exemptions are desugared to full audits (and therefore deltas) with a special
+DeltaEdgeOrigin indicating their origin.  This is used to deprioritize the edges
+so that we can more easily detect exemptions that aren't needed anymore.
 
-Imported audits are lowered in the exact same way as local criteria, except their criteria names are
-treated as namespaced when feeding them into the CriteriaMapper. In the future, another flag may be
-set indicating their origin. This flag would similarly lets us deprioritize imported audits, to
-help determine if they're needed.
+Imported audits are lowered in the exact same way as local criteria, but with
+special DeltaEdgeOrigin to indicate their origin, to allow us to deprioritize
+imported audits, and determine exactly which audits are needed.
+
+A special DeltaEdgeOrigin is also used for imported wildcard criteria,
+indicating both which wildcard audit is responsible, as well as which publisher
+information is being used.
 
 With all of this established. the problem of determining whether a package is audited for a given
 criteria can be reduced to determining if there *exists* a path from the Root Version to the

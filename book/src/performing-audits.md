@@ -136,10 +136,12 @@ performing the entire audit themselves:
 ```
 $ cargo vet suggest
   recommended audits for safe-to-deploy:
-      cargo vet inspect baz 1.3  (2033 lines)
-        Note: "firefox" contains an audit for baz 1.2, consider importing it.
+      cargo vet inspect baz 1.3   (used by mycrate)  (2033 lines)
+        NOTE: cargo vet import mozilla would reduce this to a 17-line diff
+      cargo vet inspect quxx 2.0  (used by baz)      (1000 lines)
+        NOTE: cargo vet import mozilla would eliminate this
 
-  estimated audit backlog: 2033 lines
+  estimated audit backlog: 3033 lines
 
   Use |cargo vet certify| to record the audits.
 ```
