@@ -76,6 +76,12 @@ file cannot be imported by other projects.
 This top-level key specifies the default criteria that `cargo vet certify` will
 use when recording audits. If unspecified, this defaults to `safe-to-deploy`.
 
+### The `cargo-vet` Table
+
+This table contains metadata used to track the version of cargo-vet used to
+create the store, and may be used in the future to allow other global
+configuration details to be specified.
+
 ### The `imports` Table
 
 This table enumerates the external audit sets that are imported into this
@@ -89,27 +95,29 @@ field is required.
 
 #### `criteria-map`
 
-An inline table or array of inline tables specifying one or more mappings
-between the audit criteria of the imported and local sets. Each imported audit
-is matched against each mapping. If the imported audit certifies the criteria
-listed in the `theirs` key, it will certify the local criteria specified in the
-`ours` key.
+A table specifying mappings from the imported audit set to local criteria. Each
+imported audit's criteria is mapped through these import maps, considering the
+peer's `implies` relationships, and transformed into a set of local criteria
+when importing.
 
 ```
-[[imports.peer.criteria-map]]
-ours = "x"
-theirs = "a"
-
-[[imports.peer.criteria-map]]
-ours = "safe-to-deploy"
-theirs = "super-audited"
+[imports.peer.criteria-map]
+peer-criteria = "local-criteria"
+their-super-audited = ["safe-to-deploy", "audited"]
 ```
 
-Note that while you can map a remote criteria to the built-in criteria, you
-cannot remap a peer's built-in criteria to some other criteria. The
-`safe-to-run` and `safe-to-deploy` criteria will always be mapped directly.
-Please let us know in [#425](https://github.com/mozilla/cargo-vet/issues/425) if
-this limitation causes issues.
+Unless otherwise specified, the peer's `safe-to-run` and `safe-to-deploy`
+criteria will be implicitly mapped to the local `safe-to-run` and
+`safe-to-deploy` criteria. This can be overridden by specifying the mapping for
+`safe-to-run` or `safe-to-deploy` in the criteria map.
+
+```
+[imports.peer.criteria-map]
+safe-to-run = []
+safe-to-deploy = "safe-to-run"
+```
+
+Other unmapped criteria will be discarded when importing.
 
 #### `exclude`
 
