@@ -21,7 +21,7 @@ To ensure the right thing happens, cargo-vet detects these ambiguous situations
 and requires the user to specify the intended behavior. Specifically, if there
 exists a public crate with the same name and version as a given first-party
 crate, cargo-vet will require a policy entry for that crate specifying
-`audit-as-crates-io` as either true or false. If it's set to true, cargo-vet
+`audit-as-crates-io` as either true or false[^1]. If it's set to true, cargo-vet
 will perform audit enforcement.
 
 When enabled for a git dependency, this enforcement is precise. It requires an
@@ -41,3 +41,13 @@ original crates.io version. This is what `inspect` and `certify` will display,
 and this is what you should review before certifying, since others in the
 ecosystem may rely on your audits when using the original crate without your
 particular modifications.
+
+## Footnotes
+
+[^1]: To enable an easy setup experience, `cargo vet init` will attempt to guess the
+value of `audit-as-crates-io` for pre-existing packages during initialization, and
+generate exemptions for the packages for which the generated value is `true`. At
+present it will guess `true` if either the `description` or `repository` fields in
+`Cargo.toml` are non-empty and match the current values on crates.io. This behavior
+can also be triggered for newly-added dependencies with `cargo vet regenerate
+audit-as-crates-io`, but you should verify the results.
