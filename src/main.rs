@@ -39,12 +39,11 @@ use crate::errors::{
 };
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesUserId, CriteriaEntry, ExemptedDependency,
-    FetchCommand, ImportsFile, MetaConfig, MetaConfigInstance, PackageStr, RemoteImport, SortedMap,
-    StoreInfo, WildcardEntry,
+    FetchCommand, MetaConfig, MetaConfigInstance, PackageStr, RemoteImport, SortedMap, StoreInfo,
+    WildcardEntry,
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
-use crate::resolver::DepGraph;
 use crate::storage::{Cache, Store};
 
 mod cli;
@@ -493,74 +492,23 @@ fn cmd_init(_out: &Arc<dyn Out>, cfg: &Config, _sub_args: &InitArgs) -> Result<(
     // Initialize vet
     trace!("initializing...");
 
+    let network = Network::acquire(cfg);
     let mut store = Store::create(cfg)?;
 
-    let (config, audits, imports) = init_files(&cfg.metadata, cfg.cli.filter_graph.as_ref());
-    store.config = config;
-    store.audits = audits;
-    store.imports = imports;
-
     check_crate_policies(cfg, &store)?;
-    fix_audit_as(cfg, &mut store)?;
+    tokio::runtime::Handle::current().block_on(fix_audit_as(cfg, network.as_ref(), &mut store))?;
+
+    // Run the resolver to regenerate exemptions, this will fill in exemptions
+    // such that the vet now passes.
+    resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
+        search_mode: resolver::SearchMode::RegenerateExemptions,
+        prune_exemptions: true,
+        prune_imports: true,
+    });
 
     store.commit()?;
 
     Ok(())
-}
-
-pub fn init_files(
-    metadata: &Metadata,
-    filter_graph: Option<&Vec<GraphFilter>>,
-) -> (ConfigFile, AuditsFile, ImportsFile) {
-    // Default audits file is empty
-    let audits = AuditsFile {
-        criteria: SortedMap::new(),
-        wildcard_audits: SortedMap::new(),
-        audits: SortedMap::new(),
-    };
-
-    // Default imports file is empty
-    let imports = ImportsFile {
-        publisher: SortedMap::new(),
-        audits: SortedMap::new(),
-    };
-
-    // This is the hard one
-    let config = {
-        let mut dependencies = SortedMap::<PackageName, Vec<ExemptedDependency>>::new();
-        let graph = DepGraph::new(metadata, filter_graph, None);
-        for package in &graph.nodes {
-            if !package.is_third_party {
-                // Only care about third-party packages
-                continue;
-            }
-            let criteria = if package.is_dev_only {
-                vec![format::DEFAULT_POLICY_DEV_CRITERIA.to_string().into()]
-            } else {
-                vec![format::DEFAULT_POLICY_CRITERIA.to_string().into()]
-            };
-            // NOTE: May have multiple copies of a package!
-            let item = ExemptedDependency {
-                version: package.version.clone(),
-                criteria,
-                notes: None,
-                suggest: true,
-            };
-            dependencies
-                .entry(package.name.to_string())
-                .or_default()
-                .push(item);
-        }
-        ConfigFile {
-            cargo_vet: Default::default(),
-            default_criteria: format::get_default_criteria(),
-            imports: SortedMap::new(),
-            exemptions: dependencies,
-            policy: Default::default(),
-        }
-    };
-
-    (config, audits, imports)
 }
 
 fn cmd_inspect(
@@ -1465,9 +1413,10 @@ fn cmd_regenerate_audit_as(
     _sub_args: &RegenerateAuditAsCratesIoArgs,
 ) -> Result<(), miette::Report> {
     trace!("regenerating audit-as-crates-io...");
+    let network = Network::acquire(cfg);
     let mut store = Store::acquire_offline(cfg)?;
 
-    fix_audit_as(cfg, &mut store)?;
+    tokio::runtime::Handle::current().block_on(fix_audit_as(cfg, network.as_ref(), &mut store))?;
 
     // We were successful, commit the store
     store.commit()?;
@@ -1479,10 +1428,13 @@ fn cmd_regenerate_audit_as(
 ///
 /// Every reported issue will be resolved by just setting `audit-as-crates-io = Some(false)`,
 /// because that always works, no matter what the problem is.
-fn fix_audit_as(cfg: &Config, store: &mut Store) -> Result<(), CacheAcquireError> {
-    // NOTE: In the future this might require Network, but for now `cargo metadata` is a precondition
-    // and guarantees a fully populated and up to date index, so we can just rely on that and know
-    // this is Networkless.
+async fn fix_audit_as(
+    cfg: &Config,
+    network: Option<&Network>,
+    store: &mut Store,
+) -> Result<(), CacheAcquireError> {
+    let _spinner = indeterminate_spinner("Fetching", "crate metadata");
+
     let mut cache = Cache::acquire(cfg)?;
 
     let third_party_packages = foreign_packages_strict(&cfg.metadata, &store.config)
@@ -1491,31 +1443,95 @@ fn fix_audit_as(cfg: &Config, store: &mut Store) -> Result<(), CacheAcquireError
 
     let issues = check_audit_as_crates_io(cfg, store, &mut cache);
     if let Err(AuditAsErrors { errors }) = issues {
+        fn get_policy_entry<'a>(
+            store: &'a mut Store,
+            cfg: &Config,
+            third_party_packages: &SortedSet<&String>,
+            error: &PackageError,
+        ) -> &'a mut PolicyEntry {
+            let is_third_party = third_party_packages.contains(&error.package);
+            let all_versions = || {
+                cfg.metadata
+                    .packages
+                    .iter()
+                    .filter_map(|p| (p.name == error.package).then(|| p.vet_version()))
+                    .collect()
+            };
+            // This can only fail if there's a logical error in `check_audit_as_crates_io`.
+            store
+                .config
+                .policy
+                .get_mut_or_default(
+                    error.package.clone(),
+                    is_third_party.then_some(error.version.as_ref()).flatten(),
+                    all_versions,
+                )
+                .expect("unexpected crate policy state")
+        }
+
         for error in errors {
             match error {
-                AuditAsError::NeedsAuditAs(NeedsAuditAsErrors { errors })
-                | AuditAsError::ShouldntBeAuditAs(ShouldntBeAuditAsErrors { errors }) => {
+                AuditAsError::NeedsAuditAs(NeedsAuditAsErrors { errors }) => {
                     for err in errors {
-                        let is_third_party = third_party_packages.contains(&err.package);
-                        let all_versions = || {
-                            cfg.metadata
-                                .packages
-                                .iter()
-                                .filter_map(|p| (p.name == err.package).then(|| p.vet_version()))
-                                .collect()
-                        };
-                        let policy_entry = store.config.policy.get_mut_or_default(
-                            err.package.clone(),
-                            is_third_party.then_some(err.version.as_ref()).flatten(),
-                            all_versions,
-                        );
+                        // We'll default audit-as-crates-io to true if not only
+                        // a package with matching version exists on crates.io,
+                        // but the crate's description or repository matches as
+                        // well.
+                        //
+                        // XXX: This is just indended to reduce the chance of
+                        // false positives, but is certainly a bit of a loose
+                        // comparison. If it turns out to be an issue we can
+                        // improve it in the future.
+                        let default_audit_as = if let Some(network) = network {
+                            let url = Url::parse(&format!(
+                                "https://crates.io/api/v1/crates/{}",
+                                err.package
+                            ))
+                            .expect("invalid crate name");
 
-                        // policy_entry will only be None if there is a logical error in check_crate_policies
-                        if let Some(entry) = policy_entry {
-                            entry.audit_as_crates_io = Some(false);
+                            // NOTE: Handle all errors silently here, as we can
+                            // always recover by setting `audit-as-crates-io =
+                            // false`.
+                            let crates_api_metadata = network
+                                .download(url)
+                                .await
+                                .ok()
+                                .and_then(|response| {
+                                    serde_json::from_slice::<format::CratesAPICrate>(&response).ok()
+                                })
+                                .map(|result| result.crate_data);
+
+                            let crates_api_description = crates_api_metadata
+                                .as_ref()
+                                .and_then(|crate_data| crate_data.description.as_ref());
+                            let crates_api_repository = crates_api_metadata
+                                .as_ref()
+                                .and_then(|crate_data| crate_data.repository.as_ref());
+
+                            cfg.metadata.packages.iter().any(|p| {
+                                p.name == err.package
+                                    && err
+                                        .version
+                                        .as_ref()
+                                        .map(|v| v == &p.vet_version())
+                                        .unwrap_or(true)
+                                    && ((crates_api_description.is_some()
+                                        && p.description.as_ref() == crates_api_description)
+                                        || (crates_api_repository.is_some()
+                                            && p.repository.as_ref() == crates_api_repository))
+                            })
                         } else {
-                            warn!("unexpected crate policy state");
-                        }
+                            false
+                        };
+
+                        get_policy_entry(store, cfg, &third_party_packages, &err)
+                            .audit_as_crates_io = Some(default_audit_as);
+                    }
+                }
+                AuditAsError::ShouldntBeAuditAs(ShouldntBeAuditAsErrors { errors }) => {
+                    for err in errors {
+                        get_policy_entry(store, cfg, &third_party_packages, &err)
+                            .audit_as_crates_io = Some(false);
                     }
                 }
                 AuditAsError::UnusedAuditAs(unuseds) => {

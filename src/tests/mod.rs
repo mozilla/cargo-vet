@@ -12,17 +12,17 @@ use serde_json::{json, Value};
 
 use crate::{
     format::{
-        AuditKind, CratesPublisher, CriteriaMap, CriteriaName, CriteriaStr, FastMap, MetaConfig,
-        PackageName, PackagePolicyEntry, PackageStr, PolicyEntry, SortedSet, VersionReq,
+        AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesPublisher, CriteriaEntry, CriteriaMap,
+        CriteriaName, CriteriaStr, ExemptedDependency, FastMap, ImportsFile, MetaConfig,
+        PackageName, PackagePolicyEntry, PackageStr, PolicyEntry, SortedMap, SortedSet, VersionReq,
         VetVersion, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     git_tool::Editor,
-    init_files,
     network::Network,
     out::Out,
     resolver::ResolveReport,
-    AuditEntry, AuditsFile, Config, ConfigFile, CriteriaEntry, ExemptedDependency, ImportsFile,
-    PackageExt, PartialConfig, SortedMap, Store,
+    storage::Store,
+    Config, PackageExt, PartialConfig,
 };
 
 /// Helper for performing an `assert_snapshot!` for the report output of a
@@ -941,9 +941,64 @@ impl MockMetadata {
     }
 }
 
-fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
-    let (mut config, mut audits, imports) = init_files(metadata, None);
+fn init_files(
+    metadata: &Metadata,
+    criteria: impl IntoIterator<Item = (CriteriaName, CriteriaEntry)>,
+    default_criteria: &str,
+) -> (ConfigFile, AuditsFile, ImportsFile) {
+    let mut config = ConfigFile {
+        cargo_vet: Default::default(),
+        default_criteria: default_criteria.to_owned(),
+        imports: Default::default(),
+        policy: Default::default(),
+        exemptions: Default::default(),
+    };
+    let audits = AuditsFile {
+        criteria: criteria.into_iter().collect(),
+        wildcard_audits: SortedMap::new(),
+        audits: SortedMap::new(),
+    };
+    let imports = ImportsFile {
+        publisher: SortedMap::new(),
+        audits: SortedMap::new(),
+    };
 
+    // Make the root packages use our custom criteria instead of the builtins
+    if default_criteria != SAFE_TO_DEPLOY {
+        for pkgid in &metadata.workspace_members {
+            for package in &metadata.packages {
+                if package.id == *pkgid {
+                    config.policy.insert(
+                        package.name.clone(),
+                        PackagePolicyEntry::Unversioned(PolicyEntry {
+                            audit_as_crates_io: None,
+                            criteria: Some(vec![default_criteria.to_string().into()]),
+                            dev_criteria: Some(vec![default_criteria.to_string().into()]),
+                            dependency_criteria: CriteriaMap::new(),
+                            notes: None,
+                        }),
+                    );
+                }
+            }
+        }
+    }
+
+    // Use `update_store` to generate exemptions which would allow the tree to
+    // be mocked, then deconstruct the store again. Callers may want to
+    // initialize the store differently during their tests.
+    let mut store = Store::mock(config, audits, imports);
+    crate::resolver::update_store(&mock_cfg(metadata), &mut store, |_| {
+        crate::resolver::UpdateMode {
+            search_mode: crate::resolver::SearchMode::RegenerateExemptions,
+            prune_exemptions: true,
+            prune_imports: true,
+        }
+    });
+
+    (store.config, store.audits, store.imports)
+}
+
+fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     // Criteria hierarchy:
     //
     // * strong-reviewed
@@ -954,47 +1009,22 @@ fn files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
     // This lets use mess around with "strong reqs", "weaker reqs", and "unrelated reqs"
     // with "reviewed" as the implicit default everything cares about.
 
-    audits.criteria = SortedMap::from_iter(vec![
-        (
-            "strong-reviewed".to_string(),
-            criteria_implies("strongly reviewed", ["reviewed"]),
-        ),
-        (
-            "reviewed".to_string(),
-            criteria_implies("reviewed", ["weak-reviewed"]),
-        ),
-        ("weak-reviewed".to_string(), criteria("weakly reviewed")),
-        ("fuzzed".to_string(), criteria("fuzzed")),
-    ]);
-
-    // Make the root packages use our custom criteria instead of the builtins
-    for pkgid in &metadata.workspace_members {
-        for package in &metadata.packages {
-            if package.id == *pkgid {
-                config.policy.insert(
-                    package.name.clone(),
-                    PackagePolicyEntry::Unversioned(PolicyEntry {
-                        audit_as_crates_io: None,
-                        criteria: Some(vec![DEFAULT_CRIT.to_string().into()]),
-                        dev_criteria: Some(vec![DEFAULT_CRIT.to_string().into()]),
-                        dependency_criteria: CriteriaMap::new(),
-                        notes: None,
-                    }),
-                );
-            }
-        }
-    }
-    config.default_criteria = DEFAULT_CRIT.to_string();
-
-    // Rewrite the default used by init
-    for exemption in &mut config.exemptions {
-        for entry in exemption.1 {
-            assert_eq!(&*entry.criteria, &["safe-to-deploy".to_string()]);
-            entry.criteria = vec![DEFAULT_CRIT.to_string().into()];
-        }
-    }
-
-    (config, audits, imports)
+    init_files(
+        metadata,
+        [
+            (
+                "strong-reviewed".to_string(),
+                criteria_implies("strongly reviewed", ["reviewed"]),
+            ),
+            (
+                "reviewed".to_string(),
+                criteria_implies("reviewed", ["weak-reviewed"]),
+            ),
+            ("weak-reviewed".to_string(), criteria("weakly reviewed")),
+            ("fuzzed".to_string(), criteria("fuzzed")),
+        ],
+        DEFAULT_CRIT,
+    )
 }
 
 fn files_no_exemptions(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
@@ -1024,7 +1054,7 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
 }
 
 fn builtin_files_inited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {
-    init_files(metadata, None)
+    init_files(metadata, [], SAFE_TO_DEPLOY)
 }
 
 fn builtin_files_no_exemptions(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFile) {

@@ -1060,7 +1060,16 @@ pub struct CratesAPIVersion {
 
 // NOTE: This is a subset of the format returned from the crates.io v1 API.
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CratesAPICrateMetadata {
+    pub description: Option<String>,
+    pub repository: Option<String>,
+}
+
+// NOTE: This is a subset of the format returned from the crates.io v1 API.
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CratesAPICrate {
+    #[serde(rename = "crate")]
+    pub crate_data: CratesAPICrateMetadata,
     pub versions: Vec<CratesAPIVersion>,
 }
 

@@ -180,6 +180,7 @@ fn existing_peer_skip_import() {
     network.mock_serve_json(
         "https://crates.io/api/v1/crates/third-party2",
         &serde_json::json!({
+            "crate": { "description": "description" },
             "versions": [
                 {
                     "crate": "third-party2",
@@ -1495,6 +1496,7 @@ fn import_wildcard_audit_publisher() {
     network.mock_serve_json(
         "https://crates.io/api/v1/crates/third-party1",
         &serde_json::json!({
+            "crate": { "description": "description" },
             "versions": [
                 {
                     "crate": "third-party1",
@@ -1524,6 +1526,7 @@ fn import_wildcard_audit_publisher() {
     network.mock_serve_json(
         "https://crates.io/api/v1/crates/third-party2",
         &serde_json::json!({
+            "crate": { "description": "description" },
             "versions": [
                 {
                     "crate": "third-party2",
