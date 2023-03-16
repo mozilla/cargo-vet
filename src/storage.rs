@@ -172,7 +172,7 @@ impl Store {
             lock: Some(lock),
             config: ConfigFile {
                 cargo_vet: Default::default(),
-                default_criteria: String::new(),
+                default_criteria: format::get_default_criteria(),
                 imports: SortedMap::new(),
                 policy: Default::default(),
                 exemptions: SortedMap::new(),

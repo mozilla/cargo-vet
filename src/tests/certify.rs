@@ -257,6 +257,7 @@ fn mock_wildcard_certify_flow() {
     network.mock_serve_json(
         "https://crates.io/api/v1/crates/third-party1",
         &serde_json::json!({
+            "crate": { "description": "description" },
             "versions": [
                 {
                     "crate": "third-party1",
