@@ -39,8 +39,7 @@ use crate::errors::{
 };
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesUserId, CriteriaEntry, ExemptedDependency,
-    FetchCommand, MetaConfig, MetaConfigInstance, PackageStr, RemoteImport, SortedMap, StoreInfo,
-    WildcardEntry,
+    FetchCommand, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo, WildcardEntry,
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
@@ -1180,23 +1179,14 @@ fn cmd_import(
 
     let mut store = Store::acquire_offline(cfg)?;
 
-    // Insert a new entry for the new import.
-    use std::collections::btree_map::Entry;
-    match store.config.imports.entry(sub_args.name.clone()) {
-        Entry::Occupied(_) => {
-            return Err(miette!(
-                "a peer named '{}', has already been imported",
-                &sub_args.name
-            ))
-        }
-        Entry::Vacant(vacant) => {
-            vacant.insert(RemoteImport {
-                url: import_urls,
-                exclude: Vec::new(),
-                criteria_map: SortedMap::new(),
-            });
-        }
-    }
+    // Insert a new entry for the new import, or update an existing entry to use
+    // the newly specified URLs.
+    store
+        .config
+        .imports
+        .entry(sub_args.name.clone())
+        .or_default()
+        .url = import_urls;
 
     // After adding the new entry, go online, this will fetch the new import.
     let cache = Cache::acquire(cfg)?;
