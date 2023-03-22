@@ -2296,7 +2296,7 @@ fn builtin_simple_foreign_audited() {
     config.imports.insert(
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
-            url: FOREIGN_URL.to_owned(),
+            url: vec![FOREIGN_URL.to_owned()],
             ..Default::default()
         },
     );
@@ -2324,7 +2324,7 @@ fn mock_simple_foreign_audited_pun_no_mapping() {
     config.imports.insert(
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
-            url: FOREIGN_URL.to_owned(),
+            url: vec![FOREIGN_URL.to_owned()],
             ..Default::default()
         },
     );
@@ -2363,7 +2363,7 @@ fn mock_simple_foreign_audited_pun_mapped() {
     config.imports.insert(
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
-            url: FOREIGN_URL.to_owned(),
+            url: vec![FOREIGN_URL.to_owned()],
             criteria_map: [(
                 DEFAULT_CRIT.to_owned().into(),
                 vec![DEFAULT_CRIT.to_owned().into()],
@@ -2407,7 +2407,7 @@ fn mock_simple_foreign_audited_pun_wrong_mapped() {
     config.imports.insert(
         OTHER_FOREIGN.to_owned(),
         crate::format::RemoteImport {
-            url: OTHER_FOREIGN_URL.to_owned(),
+            url: vec![OTHER_FOREIGN_URL.to_owned()],
             criteria_map: [(
                 DEFAULT_CRIT.to_owned().into(),
                 vec![DEFAULT_CRIT.to_owned().into()],
@@ -2420,7 +2420,7 @@ fn mock_simple_foreign_audited_pun_wrong_mapped() {
     config.imports.insert(
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
-            url: FOREIGN_URL.to_owned(),
+            url: vec![FOREIGN_URL.to_owned()],
             ..Default::default()
         },
     );
@@ -2471,7 +2471,7 @@ fn builtin_simple_foreign_tag_team() {
     config.imports.insert(
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
-            url: FOREIGN_URL.to_owned(),
+            url: vec![FOREIGN_URL.to_owned()],
             ..Default::default()
         },
     );
@@ -2510,7 +2510,7 @@ fn builtin_simple_mega_foreign_tag_team() {
     config.imports.insert(
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
-            url: FOREIGN_URL.to_owned(),
+            url: vec![FOREIGN_URL.to_owned()],
             ..Default::default()
         },
     );
@@ -2530,7 +2530,7 @@ fn builtin_simple_mega_foreign_tag_team() {
     config.imports.insert(
         OTHER_FOREIGN.to_owned(),
         crate::format::RemoteImport {
-            url: OTHER_FOREIGN_URL.to_owned(),
+            url: vec![OTHER_FOREIGN_URL.to_owned()],
             ..Default::default()
         },
     );
@@ -2559,13 +2559,13 @@ fn builtin_simple_registry_suggestions() {
                 (
                     FOREIGN.to_owned(),
                     RegistryEntry {
-                        url: FOREIGN_URL.to_owned(),
+                        url: vec![FOREIGN_URL.to_owned()],
                     },
                 ),
                 (
                     OTHER_FOREIGN.to_owned(),
                     RegistryEntry {
-                        url: OTHER_FOREIGN_URL.to_owned(),
+                        url: vec![OTHER_FOREIGN_URL.to_owned()],
                     },
                 ),
             ]

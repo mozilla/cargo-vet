@@ -151,7 +151,7 @@ fn imported_wildcard_audit() {
     config.imports.insert(
         FOREIGN.to_owned(),
         crate::format::RemoteImport {
-            url: FOREIGN_URL.to_owned(),
+            url: vec![FOREIGN_URL.to_owned()],
             criteria_map: [(
                 "example".to_owned().into(),
                 vec!["example".to_owned().into()],

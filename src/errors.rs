@@ -738,6 +738,12 @@ pub enum FetchAuditError {
         #[source]
         error: url::ParseError,
     },
+    #[error("error when aggregating multiple sources for {import_name}")]
+    Aggregate {
+        import_name: ImportName,
+        #[related]
+        errors: Vec<AggregateError>,
+    },
     #[diagnostic(transparent)]
     #[error(transparent)]
     Download(#[from] DownloadError),

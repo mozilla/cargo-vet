@@ -953,9 +953,44 @@ async fn fetch_imported_audits(
     .await
 }
 
+async fn fetch_imported_audit(
+    network: &Network,
+    local_criteria_mapper: &CriteriaMapper,
+    name: &str,
+    urls: &[String],
+    exclude: &[PackageName],
+    criteria_map: &CriteriaMap,
+) -> Result<AuditsFile, FetchAuditError> {
+    // Fetch all imported URLs, and then aggregate them.
+    let sources = try_join_all(urls.iter().map(|url| async {
+        fetch_single_imported_audit(
+            network,
+            local_criteria_mapper,
+            name,
+            url,
+            exclude,
+            criteria_map,
+        )
+        .await
+        .map(|audits_file| (url.clone(), audits_file))
+    }))
+    .await?;
+
+    // If we only have a single source, don't aggregate so that we don't add
+    // unnecessary `aggregated-from` members.
+    if sources.len() == 1 {
+        Ok(sources.into_iter().next().unwrap().1)
+    } else {
+        crate::do_aggregate_audits(sources).map_err(|error| FetchAuditError::Aggregate {
+            import_name: name.to_owned(),
+            errors: error.errors,
+        })
+    }
+}
+
 /// Fetch a single AuditsFile from the network, filling in any criteria
 /// descriptions.
-async fn fetch_imported_audit(
+async fn fetch_single_imported_audit(
     network: &Network,
     local_criteria_mapper: &CriteriaMapper,
     name: &str,

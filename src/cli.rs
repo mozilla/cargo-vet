@@ -511,12 +511,12 @@ pub struct ImportArgs {
     /// The name of the peer to import
     #[clap(action)]
     pub name: ImportName,
-    /// The URL of the peer's audits.toml file.
+    /// The URL(s) of the peer's audits.toml file(s).
     ///
     /// If a URL is not provided, a peer with the given name will be looked up
-    /// in the cargo-vet registry to determine the import URL.
+    /// in the cargo-vet registry to determine the import URL(s).
     #[clap(action)]
-    pub url: Option<String>,
+    pub url: Vec<String>,
 }
 
 /// Forbids the given version

@@ -1167,16 +1167,15 @@ fn cmd_import(
     // Determine the URL for the import, potentially fetching the registry to
     // find it.
     let registry_file;
-    let import_url = match &sub_args.url {
-        Some(url) => url,
-        None => {
-            registry_file = tokio::runtime::Handle::current().block_on(fetch_registry(&network))?;
-            registry_file
-                .registry
-                .get(&sub_args.name)
-                .ok_or_else(|| miette!("no peer named {} found in the registry", &sub_args.name))
-                .map(|entry| &entry.url)?
-        }
+    let import_urls = if sub_args.url.is_empty() {
+        registry_file = tokio::runtime::Handle::current().block_on(fetch_registry(&network))?;
+        registry_file
+            .registry
+            .get(&sub_args.name)
+            .ok_or_else(|| miette!("no peer named {} found in the registry", &sub_args.name))
+            .map(|entry| entry.url.clone())?
+    } else {
+        sub_args.url.clone()
     };
 
     let mut store = Store::acquire_offline(cfg)?;
@@ -1192,7 +1191,7 @@ fn cmd_import(
         }
         Entry::Vacant(vacant) => {
             vacant.insert(RemoteImport {
-                url: import_url.clone(),
+                url: import_urls,
                 exclude: Vec::new(),
                 criteria_map: SortedMap::new(),
             });

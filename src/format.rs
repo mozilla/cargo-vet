@@ -701,7 +701,8 @@ pub static DEFAULT_POLICY_DEV_CRITERIA: CriteriaStr = SAFE_TO_RUN;
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct RemoteImport {
     /// URL of the foreign audits.toml
-    pub url: String,
+    #[serde(with = "serialization::string_or_vec")]
+    pub url: Vec<String>,
     /// A list of crates for which no audits or violations should be imported.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
@@ -1090,7 +1091,8 @@ pub struct RegistryFile {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RegistryEntry {
-    pub url: String,
+    #[serde(with = "serialization::string_or_vec")]
+    pub url: Vec<String>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

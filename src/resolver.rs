@@ -158,7 +158,7 @@ pub struct DiffRecommendation {
 #[derive(Debug, Clone)]
 pub struct RegistrySuggestion {
     pub name: ImportName,
-    pub url: String,
+    pub url: Vec<String>,
     pub diff: DiffRecommendation,
 }
 
