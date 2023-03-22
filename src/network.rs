@@ -11,6 +11,7 @@ use std::{
     ffi::{OsStr, OsString},
     io::Write,
     path::{Path, PathBuf},
+    sync::Mutex,
     time::Duration,
 };
 
@@ -19,7 +20,10 @@ use bytes::Bytes;
 use reqwest::{Client, Url};
 use tokio::io::AsyncWriteExt;
 
-use crate::{errors::DownloadError, PartialConfig};
+use crate::{
+    errors::{DownloadError, SourceFile},
+    PartialConfig,
+};
 
 /// Wrapper for the pair of a `reqwest::Response` and the `SemaphorePermit` used
 /// to limit concurrent connections, with a test-only variant for mocking.
@@ -61,6 +65,8 @@ pub struct Network {
     client: Client,
     /// Semaphore preventing exceeding the maximum number of connections.
     connection_semaphore: tokio::sync::Semaphore,
+    /// Cache of source files downloaded by Url
+    source_file_cache: Mutex<std::collections::HashMap<Url, SourceFile>>,
     /// Test-only override for download requests.
     #[cfg(test)]
     mock_network: Option<std::collections::HashMap<Url, Bytes>>,
@@ -136,6 +142,7 @@ impl Network {
             Some(Self {
                 client,
                 connection_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS),
+                source_file_cache: Default::default(),
                 #[cfg(test)]
                 mock_network: None,
             })
@@ -209,6 +216,29 @@ impl Network {
         Ok(output)
     }
 
+    /// Download a file into memory as a SourceFile, with in-memory caching
+    pub async fn download_source_file_cached(&self, url: Url) -> Result<SourceFile, DownloadError> {
+        if let Some(source_file) = self.source_file_cache.lock().unwrap().get(&url) {
+            return Ok(source_file.clone());
+        }
+
+        let bytes = self.download(url.clone()).await?;
+        match String::from_utf8(bytes) {
+            Ok(string) => {
+                let source_file = SourceFile::new(url.as_str(), string);
+                self.source_file_cache
+                    .lock()
+                    .unwrap()
+                    .insert(url, source_file.clone());
+                Ok(source_file)
+            }
+            Err(error) => Err(DownloadError::InvalidText {
+                url: Box::new(url),
+                error,
+            }),
+        }
+    }
+
     /// Internal core implementation of network fetching which is shared between
     /// `download` and `download_and_persist`.
     async fn fetch_core(&self, url: Url) -> Result<Response, DownloadError> {
@@ -256,6 +286,7 @@ impl Network {
         Network {
             client: Client::new(),
             connection_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS),
+            source_file_cache: Default::default(),
             #[cfg(test)]
             mock_network: Some(Default::default()),
         }

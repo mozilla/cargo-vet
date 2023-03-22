@@ -744,19 +744,7 @@ impl Store {
         network: &Network,
         cache: &Cache,
     ) -> Result<Vec<(ImportName, RegistryEntry, AuditsFile)>, FetchRegistryError> {
-        let mut registry_file = fetch_registry(network).await?;
-
-        // Filter out registry entries which are already imported or would
-        // conflict with an existing import (i.e. an import exists with the same
-        // name or url).
-        registry_file.registry.retain(|name, entry| {
-            !self.config.imports.contains_key(name)
-                && !self
-                    .config
-                    .imports
-                    .values()
-                    .any(|import| import.url == entry.url)
-        });
+        let registry_file = fetch_registry(network).await?;
 
         let registry_entries = {
             let progress_bar = progress_bar(
@@ -772,13 +760,16 @@ impl Store {
                     .map(|(name, entry)| (name.clone(), entry.clone()))
                     .map(|(name, entry)| async {
                         let _guard = IncProgressOnDrop(&progress_bar, 1);
+                        let existing_entry = self.config.imports.get(&name);
                         fetch_imported_audit(
                             network,
                             &local_criteria_mapper,
                             &name,
                             &entry.url,
-                            &[],
-                            &SortedMap::new(),
+                            existing_entry.map(|e| &e.exclude[..]).unwrap_or(&[]),
+                            existing_entry
+                                .map(|e| &e.criteria_map)
+                                .unwrap_or(&SortedMap::new()),
                         )
                         .await
                         .map_err(|error| {
@@ -1003,21 +994,19 @@ async fn fetch_single_imported_audit(
         import_name: name.to_owned(),
         error,
     })?;
-    let audit_bytes = network.download(parsed_url).await?;
-    let audit_string = String::from_utf8(audit_bytes).map_err(LoadTomlError::from)?;
-    let audit_source = SourceFile::new(name, audit_string.clone());
+    let audit_source = network.download_source_file_cached(parsed_url).await?;
 
     // Attempt to parse each criteria and audit independently, to allow
     // recovering from parsing or validation errors on a per-entry basis when
     // importing audits. This reduces the risk of an upstream vendor adopting a
     // new cargo-vet feature breaking projects still using an older version of
     // cargo-vet.
-    let foreign_audit_file: ForeignAuditsFile = toml::de::from_str(&audit_string)
+    let foreign_audit_file: ForeignAuditsFile = toml::de::from_str(audit_source.source())
         .map_err(|error| {
             let (line, col) = error.line_col().unwrap_or((0, 0));
             TomlParseError {
+                span: SourceOffset::from_location(audit_source.source(), line + 1, col + 1),
                 source_code: audit_source,
-                span: SourceOffset::from_location(&audit_string, line + 1, col + 1),
                 error,
             }
         })
@@ -1442,15 +1431,13 @@ async fn import_publisher_versions(
 
 pub async fn fetch_registry(network: &Network) -> Result<RegistryFile, FetchRegistryError> {
     let registry_url = Url::parse(REGISTRY_URL).unwrap();
-    let registry_bytes = network.download(registry_url).await?;
-    let registry_string = String::from_utf8(registry_bytes).map_err(LoadTomlError::from)?;
-    let registry_source = SourceFile::new("cargo-vet registry", registry_string.clone());
-    let registry_file: RegistryFile = toml::de::from_str(&registry_string)
+    let registry_source = network.download_source_file_cached(registry_url).await?;
+    let registry_file: RegistryFile = toml::de::from_str(registry_source.source())
         .map_err(|error| {
             let (line, col) = error.line_col().unwrap_or((0, 0));
             TomlParseError {
+                span: SourceOffset::from_location(registry_source.source(), line + 1, col + 1),
                 source_code: registry_source,
-                span: SourceOffset::from_location(&registry_string, line + 1, col + 1),
                 error,
             }
         })
