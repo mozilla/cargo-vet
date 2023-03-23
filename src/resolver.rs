@@ -44,10 +44,11 @@ use cargo_metadata::{DependencyKind, Metadata, Node, PackageId};
 use futures_util::future::join_all;
 use miette::IntoDiagnostic;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::sync::Arc;
-use tracing::{error, trace, trace_span, warn};
+use tracing::{trace, trace_span, warn};
 
 use crate::cli::{DumpGraphArgs, GraphFilter, GraphFilterProperty, GraphFilterQuery, OutputFormat};
 use crate::criteria::{CriteriaMapper, CriteriaSet};
@@ -83,7 +84,7 @@ pub struct ResolveReport<'a> {
     pub conclusion: Conclusion,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Conclusion {
     Success(Success),
     FailForViolationConflict(FailForViolationConflict),
@@ -105,7 +106,7 @@ pub struct FailForViolationConflict {
     pub violations: Vec<(PackageIdx, Vec<ViolationConflict>)>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FailForVet {
     /// These packages are to blame and need to be fixed
     pub failures: Vec<(PackageIdx, AuditFailure)>,
@@ -130,11 +131,12 @@ pub enum ViolationConflict {
     },
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct Suggest {
     pub suggestions: Vec<SuggestItem>,
     pub suggestions_by_criteria: SortedMap<CriteriaName, Vec<SuggestItem>>,
     pub total_lines: u64,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1536,16 +1538,18 @@ impl<'a> ResolveReport<'a> {
 
         let cache = Cache::acquire(cfg)?;
 
+        let warnings = RefCell::new(Vec::new());
+
         let mut store = store.clone_for_suggest(false);
         let registry = if let (false, OutputFormat::Human, Some(network)) = (
             cfg.cli.no_registry_suggestions,
             cfg.cli.output_format,
             network,
         ) {
-            Some(
-                tokio::runtime::Handle::current()
-                    .block_on(store.fetch_registry_audits(cfg, network, &cache))?,
-            )
+            tokio::runtime::Handle::current()
+                .block_on(store.fetch_registry_audits(cfg, network, &cache))
+                .map_err(|error| warnings.borrow_mut().push(error.to_string()))
+                .ok()
         } else {
             None
         };
@@ -1603,6 +1607,7 @@ impl<'a> ResolveReport<'a> {
                             .map(|criteria_idx| {
                                 result.search_results[criteria_idx].as_ref().unwrap_err()
                             }),
+                        &warnings,
                     )
                     .await?;
 
@@ -1636,6 +1641,7 @@ impl<'a> ResolveReport<'a> {
                                 &cache,
                                 package,
                                 failures.iter(),
+                                &warnings,
                             )
                             .await?;
 
@@ -1698,6 +1704,7 @@ impl<'a> ResolveReport<'a> {
             suggestions,
             suggestions_by_criteria,
             total_lines,
+            warnings: warnings.into_inner(),
         }))
     }
 
@@ -2019,6 +2026,18 @@ impl Suggest {
         }
 
         writeln!(out, "estimated audit backlog: {} lines", self.total_lines);
+
+        if !self.warnings.is_empty() {
+            writeln!(out);
+            for warning in &self.warnings {
+                writeln!(
+                    out,
+                    "{}: {warning}",
+                    out.style().yellow().apply_to("WARNING"),
+                );
+            }
+        }
+
         writeln!(out);
         writeln!(out, "Use |cargo vet certify| to record the audits.");
 
@@ -2163,6 +2182,7 @@ async fn suggest_delta(
     cache: &Cache,
     package: &PackageNode<'_>,
     failures: impl Iterator<Item = &SearchFailure>,
+    warnings: &RefCell<Vec<String>>,
 ) -> Option<DiffRecommendation> {
     // Collect up the details of how we failed
     struct Reachable<'a> {
@@ -2249,10 +2269,10 @@ async fn suggest_delta(
             Err(err) => {
                 // We don't want to actually error out completely here,
                 // as other packages might still successfully diff!
-                error!(
-                    "error diffing {}:{}: {:?}",
+                warnings.borrow_mut().push(format!(
+                    "error diffing {}:{}: {}",
                     package.name, package.version, err
-                );
+                ));
                 None
             }
         }

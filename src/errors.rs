@@ -302,6 +302,8 @@ pub enum CertifyError {
     #[error(transparent)]
     FetchAuditError(#[from] FetchAuditError),
     #[error(transparent)]
+    GetPublishersError(#[from] GetPublishersError),
+    #[error(transparent)]
     CacheAcquire(#[from] CacheAcquireError),
 }
 
@@ -378,6 +380,9 @@ pub enum StoreAcquireError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     FetchAuditError(#[from] Box<FetchAuditError>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GetPublishersError(#[from] Box<GetPublishersError>),
     #[diagnostic(transparent)]
     #[error(transparent)]
     CriteriaChange(#[from] CriteriaChangeErrors),
@@ -742,6 +747,36 @@ pub enum FetchAuditError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     Json(#[from] LoadJsonError),
+}
+
+//////////////////////////////////////////////////////////
+// GetPublishersError
+//////////////////////////////////////////////////////////
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum GetPublishersError {
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    Download(#[from] DownloadError),
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    Json(#[from] LoadJsonError),
+}
+
+//////////////////////////////////////////////////////////
+// FetchRegistryError
+//////////////////////////////////////////////////////////
+
+#[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
+pub enum FetchRegistryError {
+    #[error("Encountered an error fetching the cargo-vet registry.")]
+    Download(#[from] DownloadError),
+    #[error("Import suggestions are disabled due to an incompatible registry. Consider upgrading to the most recent release of cargo-vet.")]
+    Toml(#[from] LoadTomlError),
+    #[error("Error when fetching publisher information. Registry suggestions may be incomplete.")]
+    GetPublishers(#[from] GetPublishersError),
 }
 
 //////////////////////////////////////////////////////////
