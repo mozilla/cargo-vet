@@ -23,10 +23,11 @@ use crate::{
     errors::{
         BadFormatError, BadWildcardEndDateError, CacheAcquireError, CacheCommitError, CertifyError,
         CommandError, CriteriaChangeError, CriteriaChangeErrors, DiffError, DownloadError,
-        FetchAndDiffError, FetchAuditError, FetchError, FlockError, InvalidCriteriaError,
-        JsonParseError, LoadJsonError, LoadTomlError, SourceFile, StoreAcquireError,
-        StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError, StoreValidateError,
-        StoreValidateErrors, TomlParseError, UnpackCheckoutError, UnpackError,
+        FetchAndDiffError, FetchAuditError, FetchError, FetchRegistryError, FlockError,
+        GetPublishersError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError,
+        SourceFile, StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError,
+        StoreTomlError, StoreValidateError, StoreValidateErrors, TomlParseError,
+        UnpackCheckoutError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
@@ -747,7 +748,7 @@ impl Store {
         cfg: &Config,
         network: &Network,
         cache: &Cache,
-    ) -> Result<Vec<(ImportName, RegistryEntry, AuditsFile)>, FetchAuditError> {
+    ) -> Result<Vec<(ImportName, RegistryEntry, AuditsFile)>, FetchRegistryError> {
         let mut registry_file = fetch_registry(network).await?;
 
         // Filter out registry entries which are already imported or would
@@ -1308,7 +1309,7 @@ async fn import_publisher_versions(
     audits_file: &AuditsFile,
     imports_lock: &ImportsFile,
     live_imports: &mut ImportsFile,
-) -> Result<(), FetchAuditError> {
+) -> Result<(), GetPublishersError> {
     // We also only care about versions for third-party packages which are
     // actually used in-tree.
     let mut relevant_versions: FastMap<PackageStr<'_>, FastSet<&semver::Version>> = FastMap::new();
@@ -1411,7 +1412,7 @@ async fn import_publisher_versions(
     Ok(())
 }
 
-pub async fn fetch_registry(network: &Network) -> Result<RegistryFile, FetchAuditError> {
+pub async fn fetch_registry(network: &Network) -> Result<RegistryFile, FetchRegistryError> {
     let registry_url = Url::parse(REGISTRY_URL).unwrap();
     let registry_bytes = network.download(registry_url).await?;
     let registry_string = String::from_utf8(registry_bytes).map_err(LoadTomlError::from)?;
@@ -2144,7 +2145,7 @@ impl Cache {
         network: &Network,
         name: PackageStr<'_>,
         versions: FastSet<&semver::Version>,
-    ) -> Result<Vec<PublisherCacheVersion>, FetchAuditError> {
+    ) -> Result<Vec<PublisherCacheVersion>, GetPublishersError> {
         let now: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
 
         // Load the cached response from our publisher-cache.

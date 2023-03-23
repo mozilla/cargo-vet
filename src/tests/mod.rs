@@ -50,6 +50,7 @@ mod certify;
 mod crate_policies;
 mod import;
 mod regenerate_unaudited;
+mod registry;
 mod store_parsing;
 mod vet;
 mod violations;

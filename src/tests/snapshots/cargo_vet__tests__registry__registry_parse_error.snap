@@ -1,0 +1,22 @@
+---
+source: src/tests/registry.rs
+expression: human_output.to_string()
+---
+Vetting Failed!
+
+3 unvetted dependencies:
+  third-party1:10.0.0 missing ["safe-to-deploy"]
+  third-party2:10.0.0 missing ["safe-to-deploy"]
+  transitive-third-party1:10.0.0 missing ["safe-to-deploy"]
+
+recommended audits for safe-to-deploy:
+    cargo vet inspect third-party1 10.0.0             (used by first-party)   (100 lines)
+    cargo vet inspect third-party2 10.0.0             (used by first-party)   (100 lines)
+    cargo vet inspect transitive-third-party1 10.0.0  (used by third-party1)  (100 lines)
+
+estimated audit backlog: 300 lines
+
+WARNING: Import suggestions are disabled due to an incompatible registry. Consider upgrading to the most recent release of cargo-vet.
+
+Use |cargo vet certify| to record the audits.
+
