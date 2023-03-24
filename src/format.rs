@@ -700,7 +700,7 @@ pub static DEFAULT_POLICY_DEV_CRITERIA: CriteriaStr = SAFE_TO_RUN;
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct RemoteImport {
-    /// URL of the foreign audits.toml
+    /// URL(s) of the foreign audits.toml
     #[serde(with = "serialization::string_or_vec")]
     pub url: Vec<String>,
     /// A list of crates for which no audits or violations should be imported.

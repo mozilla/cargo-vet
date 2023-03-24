@@ -21,13 +21,13 @@ use tracing::{error, info, log::warn, trace};
 use crate::{
     criteria::CriteriaMapper,
     errors::{
-        BadFormatError, BadWildcardEndDateError, CacheAcquireError, CacheCommitError, CertifyError,
-        CommandError, CriteriaChangeError, CriteriaChangeErrors, DiffError, DownloadError,
-        FetchAndDiffError, FetchAuditError, FetchError, FetchRegistryError, FlockError,
-        GetPublishersError, InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError,
-        SourceFile, StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError,
-        StoreTomlError, StoreValidateError, StoreValidateErrors, TomlParseError,
-        UnpackCheckoutError, UnpackError,
+        AggregateError, BadFormatError, BadWildcardEndDateError, CacheAcquireError,
+        CacheCommitError, CertifyError, CommandError, CriteriaChangeError, CriteriaChangeErrors,
+        DiffError, DownloadError, FetchAndDiffError, FetchAuditAggregateError, FetchAuditError,
+        FetchError, FetchRegistryError, FlockError, GetPublishersError, InvalidCriteriaError,
+        JsonParseError, LoadJsonError, LoadTomlError, SourceFile, StoreAcquireError,
+        StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError, StoreValidateError,
+        StoreValidateErrors, TomlParseError, UnpackCheckoutError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
@@ -974,7 +974,26 @@ async fn fetch_imported_audit(
     } else {
         crate::do_aggregate_audits(sources).map_err(|error| FetchAuditError::Aggregate {
             import_name: name.to_owned(),
-            errors: error.errors,
+            errors: error
+                .errors
+                .into_iter()
+                .map(|err| match err {
+                    AggregateError::CriteriaDescriptionMismatch(mismatch) => {
+                        FetchAuditAggregateError {
+                            mapped_to: criteria_map
+                                .get(&mismatch.criteria_name)
+                                .cloned()
+                                .unwrap_or_default(),
+                            criteria_name: mismatch.criteria_name,
+                            first: mismatch.first,
+                            second: mismatch.second,
+                        }
+                    }
+                    AggregateError::ImpliesMismatch(_) => {
+                        unreachable!("implies is stripped by fetch_single_imported_audit")
+                    }
+                })
+                .collect(),
         })
     }
 }
