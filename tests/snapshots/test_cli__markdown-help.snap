@@ -400,18 +400,18 @@ import that peer.
 
 ### USAGE
 ```
-cargo vet import [OPTIONS] <NAME> [URL]
+cargo vet import [OPTIONS] <NAME> [URL]...
 ```
 
 ### ARGS
 #### `<NAME>`
 The name of the peer to import
 
-#### `<URL>`
-The URL of the peer's audits.toml file.
+#### `<URL>...`
+The URL(s) of the peer's audits.toml file(s).
 
 If a URL is not provided, a peer with the given name will be looked up in the cargo-vet
-registry to determine the import URL.
+registry to determine the import URL(s).
 
 ### OPTIONS
 #### `-h, --help`

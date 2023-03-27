@@ -1,0 +1,17 @@
+---
+source: src/tests/import.rs
+expression: output
+---
+
+  × error when aggregating multiple sources for peer-company
+  help: all sources for mapped custom criteria must have identical
+        descriptions
+
+Error: 
+  × criteria description mismatch for foreign-reviewed
+  │ https://peercompany.co.uk:
+  │ foreign reviewed A
+  │ https://rivalcompany.ca:
+  │ foreign reviewed B
+  help: foreign-reviewed is mapped to the local criteria ["reviewed"]
+

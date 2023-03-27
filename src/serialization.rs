@@ -51,20 +51,22 @@ pub mod string_or_vec {
         pub Vec<Spanned<String>>,
     );
 
-    pub fn serialize<S>(v: &Vec<Spanned<String>>, s: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S, T>(v: &Vec<T>, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
+        T: AsRef<str> + Serialize,
     {
         if v.len() == 1 {
-            s.serialize_str(&v[0])
+            s.serialize_str(v[0].as_ref())
         } else {
             v.serialize(s)
         }
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<Spanned<String>>, D::Error>
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
     where
         D: Deserializer<'de>,
+        T: StringOrVecLike,
     {
         // Get a Spanned<StringOrVec> and then use it to fixup a dummy span for len == 1
         let spanned_vec = Spanned::<StringOrVec>::deserialize(deserializer)?;
@@ -74,7 +76,22 @@ pub mod string_or_vec {
         if vec.len() == 1 {
             Spanned::update_span(&mut vec[0], start, end);
         }
-        Ok(vec)
+        Ok(StringOrVecLike::convert(vec))
+    }
+
+    // Helper trait to allow non-spanned deserialization of string_or_vec.
+    pub trait StringOrVecLike {
+        fn convert(from: Vec<Spanned<String>>) -> Self;
+    }
+    impl StringOrVecLike for Vec<Spanned<String>> {
+        fn convert(from: Vec<Spanned<String>>) -> Self {
+            from
+        }
+    }
+    impl StringOrVecLike for Vec<String> {
+        fn convert(from: Vec<Spanned<String>>) -> Self {
+            from.into_iter().map(Spanned::into_inner).collect()
+        }
     }
 }
 

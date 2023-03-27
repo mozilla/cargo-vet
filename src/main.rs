@@ -39,8 +39,7 @@ use crate::errors::{
 };
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesUserId, CriteriaEntry, ExemptedDependency,
-    FetchCommand, MetaConfig, MetaConfigInstance, PackageStr, RemoteImport, SortedMap, StoreInfo,
-    WildcardEntry,
+    FetchCommand, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo, WildcardEntry,
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
@@ -1167,37 +1166,27 @@ fn cmd_import(
     // Determine the URL for the import, potentially fetching the registry to
     // find it.
     let registry_file;
-    let import_url = match &sub_args.url {
-        Some(url) => url,
-        None => {
-            registry_file = tokio::runtime::Handle::current().block_on(fetch_registry(&network))?;
-            registry_file
-                .registry
-                .get(&sub_args.name)
-                .ok_or_else(|| miette!("no peer named {} found in the registry", &sub_args.name))
-                .map(|entry| &entry.url)?
-        }
+    let import_urls = if sub_args.url.is_empty() {
+        registry_file = tokio::runtime::Handle::current().block_on(fetch_registry(&network))?;
+        registry_file
+            .registry
+            .get(&sub_args.name)
+            .ok_or_else(|| miette!("no peer named {} found in the registry", &sub_args.name))
+            .map(|entry| entry.url.clone())?
+    } else {
+        sub_args.url.clone()
     };
 
     let mut store = Store::acquire_offline(cfg)?;
 
-    // Insert a new entry for the new import.
-    use std::collections::btree_map::Entry;
-    match store.config.imports.entry(sub_args.name.clone()) {
-        Entry::Occupied(_) => {
-            return Err(miette!(
-                "a peer named '{}', has already been imported",
-                &sub_args.name
-            ))
-        }
-        Entry::Vacant(vacant) => {
-            vacant.insert(RemoteImport {
-                url: import_url.clone(),
-                exclude: Vec::new(),
-                criteria_map: SortedMap::new(),
-            });
-        }
-    }
+    // Insert a new entry for the new import, or update an existing entry to use
+    // the newly specified URLs.
+    store
+        .config
+        .imports
+        .entry(sub_args.name.clone())
+        .or_default()
+        .url = import_urls;
 
     // After adding the new entry, go online, this will fetch the new import.
     let cache = Cache::acquire(cfg)?;

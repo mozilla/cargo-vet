@@ -11,10 +11,13 @@ use cargo_metadata::semver;
 use miette::{Diagnostic, MietteSpanContents, SourceCode, SourceOffset, SourceSpan};
 use thiserror::Error;
 
-use crate::format::{
-    CriteriaName, ForeignCriteriaName, ImportName, PackageName, StoreVersion, VetVersion,
+use crate::{
+    format::{
+        CriteriaName, ForeignCriteriaName, ImportName, PackageName, StoreVersion, VetVersion,
+    },
+    network::PayloadEncoding,
+    serialization::spanned::Spanned,
 };
-use crate::network::PayloadEncoding;
 
 #[derive(Eq, PartialEq)]
 struct SourceFileInner {
@@ -738,6 +741,13 @@ pub enum FetchAuditError {
         #[source]
         error: url::ParseError,
     },
+    #[error("error when aggregating multiple sources for {import_name}")]
+    #[diagnostic(help("all sources for mapped custom criteria must have identical descriptions"))]
+    Aggregate {
+        import_name: ImportName,
+        #[related]
+        errors: Vec<FetchAuditAggregateError>,
+    },
     #[diagnostic(transparent)]
     #[error(transparent)]
     Download(#[from] DownloadError),
@@ -747,6 +757,16 @@ pub enum FetchAuditError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     Json(#[from] LoadJsonError),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("criteria description mismatch for {criteria_name}\n{first}\n{second}")]
+#[diagnostic(help("{criteria_name} is mapped to the local criteria {mapped_to:?}"))]
+pub struct FetchAuditAggregateError {
+    pub criteria_name: CriteriaName,
+    pub mapped_to: Vec<Spanned<CriteriaName>>,
+    pub first: AggregateCriteriaDescription,
+    pub second: AggregateCriteriaDescription,
 }
 
 //////////////////////////////////////////////////////////

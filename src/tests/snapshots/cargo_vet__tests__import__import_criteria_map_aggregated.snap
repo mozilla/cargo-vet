@@ -1,0 +1,15 @@
+---
+source: src/tests/import.rs
+expression: output
+---
++
++[[audits.peer-company.audits.third-party1]]
++criteria = "safe-to-deploy"
++version = "9.0.0"
++aggregated-from = "https://peercompany.co.uk"
++
++[[audits.peer-company.audits.third-party1]]
++criteria = "safe-to-deploy"
++delta = "9.0.0 -> 10.0.0"
++aggregated-from = "https://rivalcompany.ca"
+
