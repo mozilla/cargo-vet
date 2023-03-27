@@ -3,7 +3,7 @@ source: tests/test-cli.rs
 expression: format_outputs(&output)
 ---
 stdout:
-cargo-vet 0.5.2
+cargo-vet 0.6.0
 Supply-chain security for Rust
 
 When run without a subcommand, `cargo vet` will invoke the `check` subcommand. See `cargo vet help
