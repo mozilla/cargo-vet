@@ -664,7 +664,7 @@ impl Store {
 
         // If we're locked, and therefore not fetching new live imports,
         // validate that our imports.lock is in sync with config.toml.
-        if self.imports_lock_outdated() {
+        if check_file_formatting && self.imports_lock_outdated() {
             errors.push(StoreValidateError::ImportsLockOutdated);
         };
 
