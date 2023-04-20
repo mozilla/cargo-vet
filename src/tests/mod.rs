@@ -958,6 +958,7 @@ fn init_files(
         criteria: criteria.into_iter().collect(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
     let imports = ImportsFile {
         publisher: SortedMap::new(),

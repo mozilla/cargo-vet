@@ -65,12 +65,14 @@ fn new_peer_import() {
         ]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let old_other_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     let new_other_foreign_audits = AuditsFile {
@@ -82,6 +84,7 @@ fn new_peer_import() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     config.imports.insert(
@@ -131,6 +134,7 @@ fn existing_peer_skip_import() {
         criteria: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
@@ -159,6 +163,7 @@ fn existing_peer_skip_import() {
         ]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     imports
@@ -239,6 +244,7 @@ fn existing_peer_remove_unused() {
         ]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = old_foreign_audits.clone();
@@ -291,6 +297,7 @@ fn existing_peer_import_delta_audit() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
@@ -316,12 +323,14 @@ fn existing_peer_import_delta_audit() {
         ]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let old_other_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     let new_other_foreign_audits = AuditsFile {
@@ -334,6 +343,7 @@ fn existing_peer_import_delta_audit() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     imports
@@ -395,6 +405,7 @@ fn existing_peer_import_custom_criteria() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
@@ -417,6 +428,7 @@ fn existing_peer_import_custom_criteria() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     imports
@@ -473,6 +485,7 @@ fn new_audit_for_unused_criteria_basic() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let mut new_foreign_audits = old_foreign_audits.clone();
@@ -536,6 +549,7 @@ fn new_audit_for_unused_criteria_transitive() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let mut new_foreign_audits = old_foreign_audits.clone();
@@ -601,12 +615,14 @@ fn existing_peer_revoked_audit() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
         criteria: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     imports
@@ -658,6 +674,7 @@ fn existing_peer_add_violation() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
@@ -673,6 +690,7 @@ fn existing_peer_add_violation() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     imports
@@ -713,6 +731,7 @@ fn peer_audits_exemption_no_minimize() {
         criteria: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
@@ -724,6 +743,7 @@ fn peer_audits_exemption_no_minimize() {
         )]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     imports
@@ -780,6 +800,7 @@ fn peer_audits_exemption_minimize() {
         ]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
@@ -804,6 +825,7 @@ fn peer_audits_exemption_minimize() {
         ]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     imports
@@ -909,6 +931,7 @@ fn peer_audits_import_exclusion() {
         ]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = old_foreign_audits.clone();
@@ -980,6 +1003,7 @@ fn existing_peer_updated_description() {
         .collect(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = AuditsFile {
@@ -996,6 +1020,7 @@ fn existing_peer_updated_description() {
         .collect(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     imports
@@ -1053,6 +1078,7 @@ fn fresh_import_preferred_audits() {
         .into_iter()
         .collect(),
         wildcard_audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     let new_other_foreign_audits = AuditsFile {
@@ -1064,6 +1090,7 @@ fn fresh_import_preferred_audits() {
         .into_iter()
         .collect(),
         wildcard_audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     config.imports.insert(
@@ -1118,6 +1145,7 @@ fn old_import_preferred_audits() {
         .into_iter()
         .collect(),
         wildcard_audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     let new_foreign_audits = old_foreign_audits.clone();
@@ -1131,6 +1159,7 @@ fn old_import_preferred_audits() {
         .into_iter()
         .collect(),
         wildcard_audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     imports
@@ -1192,6 +1221,7 @@ fn equal_length_preferred_audits() {
         .into_iter()
         .collect(),
         wildcard_audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     config.imports.insert(
@@ -1239,6 +1269,7 @@ fn import_multiple_versions() {
         .into_iter()
         .collect(),
         wildcard_audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     config.imports.insert(
@@ -1419,6 +1450,7 @@ fn foreign_audit_file_to_local() {
         ]
         .into_iter()
         .collect(),
+        trusted: SortedMap::new(),
     };
 
     let mut result = crate::storage::foreign_audit_file_to_local(foreign_audit_file);
@@ -1466,6 +1498,7 @@ fn import_wildcard_audit_publisher() {
         criteria: SortedMap::new(),
         audits: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     let mut new_foreign_audits = old_foreign_audits.clone();
@@ -1673,6 +1706,7 @@ fn import_criteria_map() {
         .into_iter()
         .collect(),
         wildcard_audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
 
     let cfg = mock_cfg(&metadata);
@@ -1721,7 +1755,7 @@ fn import_criteria_map_aggregated() {
         )]
         .into_iter()
         .collect(),
-        wildcard_audits: SortedMap::new(),
+        ..Default::default()
     };
 
     let new_other_foreign_audits = AuditsFile {
@@ -1737,7 +1771,7 @@ fn import_criteria_map_aggregated() {
         )]
         .into_iter()
         .collect(),
-        wildcard_audits: SortedMap::new(),
+        ..Default::default()
     };
 
     let cfg = mock_cfg(&metadata);
@@ -1792,7 +1826,7 @@ fn import_criteria_map_aggregated_error() {
         )]
         .into_iter()
         .collect(),
-        wildcard_audits: SortedMap::new(),
+        ..Default::default()
     };
 
     let new_other_foreign_audits = AuditsFile {
@@ -1808,7 +1842,7 @@ fn import_criteria_map_aggregated_error() {
         )]
         .into_iter()
         .collect(),
-        wildcard_audits: SortedMap::new(),
+        ..Default::default()
     };
 
     let cfg = mock_cfg(&metadata);

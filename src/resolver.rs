@@ -284,6 +284,8 @@ pub enum DeltaEdgeOrigin {
         audit_index: usize,
         publisher_index: usize,
     },
+    /// This edge represents a trusted publisher.
+    Trusted { publisher_index: usize },
     /// This edge represents an exemption from the local config.toml.
     Exemption { exemption_index: usize },
     /// This edge represents brand new exemption which didn't previously exist
@@ -1069,6 +1071,14 @@ impl<'a> AuditGraph<'a> {
                         })
                 });
 
+        // Iterator over every trusted entry.
+        let trusteds = store
+            .audits
+            .trusted
+            .get(package)
+            .map(|v| &v[..])
+            .unwrap_or(&[]);
+
         let publishers = store
             .publishers()
             .get(package)
@@ -1142,6 +1152,31 @@ impl<'a> AuditGraph<'a> {
                         criteria,
                         origin,
                         is_fresh_import,
+                    });
+                }
+            }
+
+            for entry in trusteds {
+                if entry.user_id == publisher.user_id
+                    && *entry.start <= publisher.when
+                    && publisher.when < *entry.end
+                {
+                    let from_ver = None;
+                    let to_ver = Some(&publisher.version);
+                    let criteria = criteria_mapper.criteria_from_list(&entry.criteria);
+                    let origin = DeltaEdgeOrigin::Trusted { publisher_index };
+
+                    forward_audits.entry(from_ver).or_default().push(DeltaEdge {
+                        version: to_ver,
+                        criteria: criteria.clone(),
+                        origin: origin.clone(),
+                        is_fresh_import: publisher.is_fresh_import,
+                    });
+                    backward_audits.entry(to_ver).or_default().push(DeltaEdge {
+                        version: from_ver,
+                        criteria,
+                        origin,
+                        is_fresh_import: publisher.is_fresh_import,
                     });
                 }
             }
@@ -2372,6 +2407,9 @@ fn resolve_package_required_entries(
                         }
                         add_entry(RequiredEntry::Publisher { publisher_index })
                     }
+                    DeltaEdgeOrigin::Trusted { publisher_index } => {
+                        add_entry(RequiredEntry::Publisher { publisher_index })
+                    }
                     DeltaEdgeOrigin::StoredLocalAudit { .. } => {}
                 }
             }
@@ -2537,6 +2575,9 @@ pub(crate) fn get_store_updates(
                     (n.clone(), l)
                 })
                 .collect(),
+
+            // We never import trusted entries in imports.lock.
+            trusted: SortedMap::new(),
         };
         new_imports
             .audits

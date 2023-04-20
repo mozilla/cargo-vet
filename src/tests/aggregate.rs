@@ -32,6 +32,7 @@ fn test_merge_audits_files_basic() {
                 )]
                 .into_iter()
                 .collect(),
+                trusted: [].into_iter().collect(),
             },
         ),
         (
@@ -65,6 +66,7 @@ fn test_merge_audits_files_basic() {
                 ]
                 .into_iter()
                 .collect(),
+                trusted: [].into_iter().collect(),
             },
         ),
     ];
@@ -115,6 +117,7 @@ fn test_merge_audits_files_custom_criteria() {
                 )]
                 .into_iter()
                 .collect(),
+                trusted: [].into_iter().collect(),
             },
         ),
         (
@@ -157,6 +160,7 @@ fn test_merge_audits_files_custom_criteria() {
                 ]
                 .into_iter()
                 .collect(),
+                trusted: [].into_iter().collect(),
             },
         ),
     ];
@@ -206,6 +210,7 @@ fn test_merge_audits_files_custom_criteria_conflict() {
                 .collect(),
                 wildcard_audits: [].into_iter().collect(),
                 audits: [].into_iter().collect(),
+                trusted: [].into_iter().collect(),
             },
         ),
         (
@@ -244,6 +249,7 @@ fn test_merge_audits_files_custom_criteria_conflict() {
                 .collect(),
                 wildcard_audits: [].into_iter().collect(),
                 audits: [].into_iter().collect(),
+                trusted: [].into_iter().collect(),
             },
         ),
     ];

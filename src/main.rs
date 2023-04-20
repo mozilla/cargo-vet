@@ -1850,6 +1850,9 @@ fn do_aggregate_audits(sources: Vec<(String, AuditsFile)>) -> Result<AuditsFile,
         criteria: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        // FIXME: How should we handle aggregating trusted entries? Should we do
+        // any form of de-duplication?
+        trusted: SortedMap::new(),
     };
 
     for (source, audit_file) in sources {

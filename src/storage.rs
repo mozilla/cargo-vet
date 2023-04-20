@@ -36,7 +36,8 @@ use crate::{
         Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName,
         ImportsFile, MetaConfig, PackageName, PackageStr, PublisherCache, PublisherCacheEntry,
         PublisherCacheUser, PublisherCacheVersion, RegistryEntry, RegistryFile, SortedMap,
-        StoreVersion, VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        StoreVersion, TrustEntry, TrustedPackages, VetVersion, WildcardAudits, WildcardEntry,
+        SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
@@ -185,6 +186,7 @@ impl Store {
                 criteria: SortedMap::new(),
                 wildcard_audits: SortedMap::new(),
                 audits: SortedMap::new(),
+                trusted: SortedMap::new(),
             },
             live_imports: None,
             config_src: SourceFile::new_empty(CONFIG_TOML),
@@ -1117,6 +1119,9 @@ async fn fetch_single_imported_audit(
         audit_entry.is_fresh_import = true;
         make_criteria_local(&mut audit_entry.criteria);
     }
+    for trust_entry in audit_file.trusted.values_mut().flat_map(|v| v.iter_mut()) {
+        make_criteria_local(&mut trust_entry.criteria);
+    }
 
     // Now that we're done with foreign criteria, trim the set to only
     // contain mapped criteria, as we don't care about other criteria, so
@@ -1255,11 +1260,25 @@ pub(crate) fn foreign_audit_file_to_local(
         .filter(|(_, audits)| !audits.is_empty())
         .collect();
 
+    let trusted: TrustedPackages = foreign_audit_file
+        .trusted
+        .into_iter()
+        .map(|(package, trusted)| {
+            let parsed: Vec<_> = trusted
+                .into_iter()
+                .filter_map(|value| parse_imported_trust_entry(&valid_criteria, value))
+                .collect();
+            (package, parsed)
+        })
+        .filter(|(_, trusted)| !trusted.is_empty())
+        .collect();
+
     ForeignAuditFileToLocalResult {
         audit_file: AuditsFile {
             criteria,
             wildcard_audits,
             audits,
+            trusted,
         },
         ignored_criteria,
         ignored_audits,
@@ -1313,6 +1332,26 @@ fn parse_imported_wildcard_audit(
     Some(audit)
 }
 
+/// Parse an unparsed wildcard audit entry, validating and returning it.
+fn parse_imported_trust_entry(
+    valid_criteria: &[CriteriaName],
+    value: toml::Value,
+) -> Option<TrustEntry> {
+    let mut audit: TrustEntry = parse_from_value(value)
+        .map_err(|err| info!("imported trust entry audit parsing failed due to {err}"))
+        .ok()?;
+
+    audit
+        .criteria
+        .retain(|criteria_name| is_known_criteria(valid_criteria, criteria_name));
+    if audit.criteria.is_empty() {
+        info!("imported trust entry parsing failed due to no known criteria");
+        return None;
+    }
+
+    Some(audit)
+}
+
 fn wildcard_audits_packages(
     audits_file: &AuditsFile,
     imports_file: &ImportsFile,
@@ -1330,6 +1369,7 @@ fn wildcard_audits_packages(
                 .flat_map(|audits_file| audits_file.wildcard_audits.keys()),
         )
         .chain(imports_file.publisher.keys())
+        .chain(audits_file.trusted.keys())
         .cloned()
         .collect()
 }
