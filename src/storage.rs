@@ -2214,7 +2214,7 @@ impl Cache {
     /// crates. Versions for each crate are also specified in order to avoid
     /// hitting the network in the case where the cache already has the relevant
     /// information.
-    async fn get_publishers(
+    pub async fn get_publishers(
         &self,
         network: &Network,
         name: PackageStr<'_>,
@@ -2320,7 +2320,7 @@ impl Cache {
     }
 
     /// Look up user information for a crates.io user from the publisher cache.
-    fn get_crates_user_info(&self, user_id: u64) -> Option<PublisherCacheUser> {
+    pub fn get_crates_user_info(&self, user_id: u64) -> Option<PublisherCacheUser> {
         let guard = self.state.lock().unwrap();
         guard.publisher_cache.users.get(&user_id).cloned()
     }
