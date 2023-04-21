@@ -2040,7 +2040,7 @@ impl Suggest {
         for (criteria, suggestions) in &self.suggestions_by_criteria {
             writeln!(out, "recommended audits for {criteria}:");
 
-            let strings = suggestions
+            let mut strings = suggestions
                 .iter()
                 .map(|item| {
                     let package = &report.graph.nodes[item.package];
@@ -2054,29 +2054,46 @@ impl Suggest {
                             package.name, item.suggested_diff.to
                         ),
                     };
-                    let publisher = if let Some(publisher_login) = &item.publisher_login {
-                        format!("by: {publisher_login} ")
-                    } else {
-                        String::new()
-                    };
-                    let publisher_parents =
-                        format!("{publisher}(used by {})", item.notable_parents);
+                    let publisher = item
+                        .publisher_login
+                        .clone()
+                        .unwrap_or_else(|| "UNKNOWN".into());
+                    let parents = item.notable_parents.clone();
                     let diffstat = match &item.suggested_diff.from {
-                        Some(_) => format!("({})", item.suggested_diff.diffstat),
-                        None => format!("({} lines)", item.suggested_diff.diffstat.count()),
+                        Some(_) => format!("{}", item.suggested_diff.diffstat),
+                        None => format!("{} lines", item.suggested_diff.diffstat.count()),
                     };
-                    (cmd, publisher_parents, diffstat, item)
+                    (cmd, publisher, parents, diffstat, item)
                 })
                 .collect::<Vec<_>>();
 
             let mut max0 = 0;
             let mut max1 = 0;
-            for (s0, s1, ..) in &strings {
-                max0 = max0.max(console::measure_text_width(s0));
+            let mut max2 = 0;
+            for (s0, s1, s2, ..) in &mut strings {
+                // If the command is too long (happens occasionally, particularly with @git
+                // version specifiers), wrap subsequent columns to the next line.
+                const MAX_COMMAND_CHARS: usize = 52;
+                let command_width = console::measure_text_width(s0);
+                if command_width > MAX_COMMAND_CHARS {
+                    s0.push('\n');
+                    s0.push_str(&" ".repeat(MAX_COMMAND_CHARS + 4));
+                }
+                max0 = max0.max(command_width.min(MAX_COMMAND_CHARS));
                 max1 = max1.max(console::measure_text_width(s1));
+                max2 = max2.max(console::measure_text_width(s2));
             }
 
-            for (s0, s1, s2, item) in strings {
+            let (h0, h1, h2, h3) = ("Command", "Publisher", "Used By", "Audit Size");
+            writeln!(
+                out,
+                "{}",
+                out.style()
+                    .bold()
+                    .dim()
+                    .apply_to(format_args!("    {h0:max0$}  {h1:max1$}  {h2:max2$}  {h3}"))
+            );
+            for (s0, s1, s2, s3, item) in strings {
                 let package = &report.graph.nodes[item.package];
 
                 write!(
@@ -2087,7 +2104,7 @@ impl Suggest {
                         .bold()
                         .apply_to(format_args!("    {s0:max0$}"))
                 );
-                writeln!(out, "  {s1:max1$}  {s2}");
+                writeln!(out, "  {s1:max1$}  {s2:max2$}  {s3}");
 
                 let dim = out.style().dim();
                 for suggestion in &item.registry_suggestion {
