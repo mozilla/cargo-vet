@@ -532,13 +532,6 @@ stdout:
       ]
     },
     {
-      "name": "tracing",
-      "version": "0.1.33",
-      "missing_criteria": [
-        "safe-to-deploy"
-      ]
-    },
-    {
       "name": "tracing-attributes",
       "version": "0.1.20",
       "missing_criteria": [
@@ -1860,22 +1853,6 @@ stdout:
             "insertions": 10099,
             "deletions": 0,
             "files_changed": 17
-          }
-        }
-      },
-      {
-        "name": "tracing",
-        "notable_parents": "h2, hyper, tokio-util",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "0.1.33",
-          "diffstat": {
-            "insertions": 10950,
-            "deletions": 0,
-            "files_changed": 32
           }
         }
       },
@@ -3419,22 +3396,6 @@ stdout:
           }
         },
         {
-          "name": "tracing",
-          "notable_parents": "h2, hyper, tokio-util",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "0.1.33",
-            "diffstat": {
-              "insertions": 10950,
-              "deletions": 0,
-              "files_changed": 32
-            }
-          }
-        },
-        {
           "name": "mio",
           "notable_parents": "tokio",
           "suggested_criteria": [
@@ -3838,7 +3799,7 @@ stdout:
         }
       ]
     },
-    "total_lines": 1723691
+    "total_lines": 1712741
   }
 }
 stderr:

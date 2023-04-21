@@ -137,6 +137,8 @@ SUBCOMMANDS:
             Mark a package as audited
     import
             Import a new peer's imports
+    trust
+            Trust a given crate and publisher
     regenerate
             Explicitly regenerate various pieces of information
     add-exemption
