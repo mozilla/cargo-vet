@@ -76,7 +76,6 @@ recommended audits for safe-to-deploy:
     cargo vet inspect indexmap 1.8.1                                                   (used by h2, clap)                                          (9445 lines)
     cargo vet inspect openssl-sys 0.9.72                                               (used by openssl, native-tls)                               (9477 lines)
     cargo vet inspect bumpalo 3.9.1                                                    (used by wasm-bindgen-backend)                              (10099 lines)
-    cargo vet inspect tracing 0.1.33                                                   (used by h2, hyper, tokio-util)                             (10950 lines)
     cargo vet inspect mio 0.8.2                                                        (used by tokio)                                             (11719 lines)
     cargo vet inspect js-sys 0.3.57                                                    (used by reqwest, web-sys, wasm-bindgen-futures)            (12874 lines)
     cargo vet inspect tokio-util 0.7.1                                                 (used by h2)                                                (13870 lines)
@@ -105,7 +104,7 @@ recommended audits for safe-to-deploy:
 recommended audits for safe-to-run:
     cargo vet inspect hermit-abi 0.1.19  (used by atty)  (932 lines)
 
-estimated audit backlog: 1723691 lines
+estimated audit backlog: 1712741 lines
 
 Use |cargo vet certify| to record the audits.
 

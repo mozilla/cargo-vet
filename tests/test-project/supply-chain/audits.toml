@@ -90,3 +90,9 @@ notes = "test for partial delta criteria"
 criteria = "safe-to-deploy"
 delta = "0.2.0 -> 0.3.7"
 notes = "test for delta to unaudited"
+
+[[trusted.tracing]]
+criteria = "safe-to-deploy"
+user-id = 1249
+start = "2022-01-01"
+end = "2022-07-01"
