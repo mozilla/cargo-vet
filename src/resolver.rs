@@ -145,6 +145,8 @@ pub struct SuggestItem {
     pub suggested_criteria: CriteriaSet,
     pub suggested_diff: DiffRecommendation,
     pub notable_parents: String,
+    pub publisher_login: Option<String>,
+    pub publisher_trusted_by: Option<String>,
     pub registry_suggestion: Vec<RegistrySuggestion>,
 }
 
@@ -1589,6 +1591,16 @@ impl<'a> ResolveReport<'a> {
             None
         };
 
+        let mut trusted_publishers: FastMap<u64, SortedSet<ImportName>> = FastMap::new();
+        for (import_name, audits_file) in store.imported_audits() {
+            for trusted_entry in audits_file.trusted.values().flatten() {
+                trusted_publishers
+                    .entry(trusted_entry.user_id)
+                    .or_default()
+                    .insert(import_name.clone());
+            }
+        }
+
         let suggest_progress =
             progress_bar("Suggesting", "relevant audits", fail.failures.len() as u64);
 
@@ -1603,33 +1615,35 @@ impl<'a> ResolveReport<'a> {
                         .as_ref()
                         .expect("failed package without ResolveResults?");
 
-                    // Precompute some "notable" parents
-                    let notable_parents = {
-                        let mut reverse_deps = self.graph.nodes[failure_idx]
-                            .reverse_deps
-                            .iter()
-                            .map(|&parent| self.graph.nodes[parent].name.to_string())
-                            .collect::<Vec<_>>();
-
+                    fn format_short_list(mut items: Vec<String>) -> String {
                         // To keep the display compact, sort by name length and truncate long lists.
                         // We first sort by name because rust defaults to a stable sort and this will
                         // have by-name as the tie breaker.
-                        reverse_deps.sort();
-                        reverse_deps.sort_by_key(|item| item.len());
-                        let cutoff_index = reverse_deps
+                        items.sort();
+                        items.sort_by_key(|item| item.len());
+                        let cutoff_index = items
                             .iter()
                             .scan(0, |sum, s| {
                                 *sum += s.len();
                                 Some(*sum)
                             })
                             .position(|count| count > 20);
-                        let remainder = cutoff_index.map(|i| reverse_deps.len() - i).unwrap_or(0);
+                        let remainder = cutoff_index.map(|i| items.len() - i).unwrap_or(0);
                         if remainder > 1 {
-                            reverse_deps.truncate(cutoff_index.unwrap());
-                            reverse_deps.push(format!("and {remainder} others"));
+                            items.truncate(cutoff_index.unwrap());
+                            items.push(format!("and {remainder} others"));
                         }
-                        reverse_deps.join(", ")
-                    };
+                        items.join(", ")
+                    }
+
+                    // Precompute some "notable" parents
+                    let notable_parents = format_short_list(
+                        self.graph.nodes[failure_idx]
+                            .reverse_deps
+                            .iter()
+                            .map(|&parent| self.graph.nodes[parent].name.to_string())
+                            .collect(),
+                    );
 
                     let suggested_diff = suggest_delta(
                         &cfg.metadata,
@@ -1645,6 +1659,33 @@ impl<'a> ResolveReport<'a> {
                         &warnings,
                     )
                     .await?;
+
+                    // Attempt to look up the publisher of the target version
+                    // for the suggested diff.
+                    let publisher_id =
+                        if let (Some(network), None) = (&network, &suggested_diff.to.git_rev) {
+                            cache
+                                .get_publishers(
+                                    network,
+                                    package.name,
+                                    [&suggested_diff.to.semver].into_iter().collect(),
+                                )
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .find(|p| p.num == suggested_diff.to.semver)
+                                .and_then(|p| p.published_by)
+                        } else {
+                            None
+                        };
+
+                    let publisher_trusted_by = publisher_id
+                        .and_then(|user_id| trusted_publishers.get(&user_id))
+                        .map(|publishers| format_short_list(publishers.iter().cloned().collect()));
+
+                    let publisher_login = publisher_id
+                        .and_then(|user_id| cache.get_crates_user_info(user_id))
+                        .map(|pi| pi.login);
 
                     let mut registry_suggestion: Vec<_> = join_all(registry.iter().flatten().map(
                         |(name, entry, audits)| async {
@@ -1704,6 +1745,8 @@ impl<'a> ResolveReport<'a> {
                         suggested_diff,
                         suggested_criteria: audit_failure.criteria_failures.clone(),
                         notable_parents,
+                        publisher_login,
+                        publisher_trusted_by,
                         registry_suggestion,
                     })
                 },
@@ -2011,12 +2054,18 @@ impl Suggest {
                             package.name, item.suggested_diff.to
                         ),
                     };
-                    let parents = format!("(used by {})", item.notable_parents);
+                    let publisher = if let Some(publisher_login) = &item.publisher_login {
+                        format!("by: {publisher_login} ")
+                    } else {
+                        String::new()
+                    };
+                    let publisher_parents =
+                        format!("{publisher}(used by {})", item.notable_parents);
                     let diffstat = match &item.suggested_diff.from {
                         Some(_) => format!("({})", item.suggested_diff.diffstat),
                         None => format!("({} lines)", item.suggested_diff.diffstat.count()),
                     };
-                    (cmd, parents, diffstat, item)
+                    (cmd, publisher_parents, diffstat, item)
                 })
                 .collect::<Vec<_>>();
 
@@ -2028,6 +2077,8 @@ impl Suggest {
             }
 
             for (s0, s1, s2, item) in strings {
+                let package = &report.graph.nodes[item.package];
+
                 write!(
                     out,
                     "{}",
@@ -2053,6 +2104,22 @@ impl Suggest {
                                 0 => "would eliminate this".to_owned(),
                                 n => format!("would reduce this to a {n}-line diff"),
                             }),
+                    );
+                }
+                if let (Some(trusted_by), Some(publisher_login)) =
+                    (&item.publisher_trusted_by, &item.publisher_login)
+                {
+                    writeln!(
+                        out,
+                        "      {} {}",
+                        dim.clone().apply_to(format_args!(
+                            "NOTE: {} trust(s) {} - consider",
+                            trusted_by, publisher_login
+                        )),
+                        dim.clone().cyan().apply_to(format_args!(
+                            "cargo vet trust {} {}",
+                            package.name, publisher_login
+                        ))
                     );
                 }
             }
