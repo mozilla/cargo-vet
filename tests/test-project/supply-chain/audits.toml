@@ -11,7 +11,7 @@ description = "fuzzed"
 [[wildcard-audits.serde]]
 who = "Person One <personone@example.com>"
 criteria = "safe-to-deploy"
-user-id = 3618 # dtolnay
+user-id = 3618 # David Tolnay (dtolnay)
 start = "2022-01-01"
 end = "2022-07-01"
 
@@ -93,6 +93,6 @@ notes = "test for delta to unaudited"
 
 [[trusted.tracing]]
 criteria = "safe-to-deploy"
-user-id = 1249 # hawkw
+user-id = 1249 # Eliza Weisman (hawkw)
 start = "2022-01-01"
 end = "2022-07-01"

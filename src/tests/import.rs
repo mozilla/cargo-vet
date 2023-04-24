@@ -13,13 +13,13 @@ fn get_imports_file_changes(
     // Format the old and new files as TOML, and write out a diff using `similar`.
     let old_imports = crate::serialization::to_formatted_toml(
         &store.imports,
-        Some(&crate::storage::user_logins_map(&store.imports)),
+        Some(&crate::storage::user_info_map(&store.imports)),
     )
     .unwrap()
     .to_string();
     let new_imports = crate::serialization::to_formatted_toml(
         &new_imports,
-        Some(&crate::storage::user_logins_map(&new_imports)),
+        Some(&crate::storage::user_info_map(&new_imports)),
     )
     .unwrap()
     .to_string();

@@ -301,7 +301,7 @@ fn mock_wildcard_certify_flow() {
 
     let audits = crate::serialization::to_formatted_toml(
         &store.audits,
-        Some(&crate::storage::user_logins_map(&store.imports)),
+        Some(&crate::storage::user_info_map(&store.imports)),
     )
     .unwrap();
 

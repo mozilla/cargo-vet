@@ -468,10 +468,10 @@ impl Store {
             let mut audits = lock.write_audits()?;
             let mut config = lock.write_config()?;
             let mut imports = lock.write_imports()?;
-            let user_logins = user_logins_map(&self.imports);
-            audits.write_all(store_audits(self.audits, &user_logins)?.as_bytes())?;
+            let user_info = user_info_map(&self.imports);
+            audits.write_all(store_audits(self.audits, &user_info)?.as_bytes())?;
             config.write_all(store_config(self.config)?.as_bytes())?;
-            imports.write_all(store_imports(self.imports, &user_logins)?.as_bytes())?;
+            imports.write_all(store_imports(self.imports, &user_info)?.as_bytes())?;
         }
         Ok(())
     }
@@ -480,11 +480,11 @@ impl Store {
     /// Doesn't take `self` by value so that it can continue to be used.
     #[cfg(test)]
     pub fn mock_commit(&self) -> SortedMap<String, String> {
-        let user_logins = user_logins_map(&self.imports);
+        let user_info = user_info_map(&self.imports);
         [
             (
                 AUDITS_TOML.to_owned(),
-                store_audits(self.audits.clone(), &user_logins).unwrap(),
+                store_audits(self.audits.clone(), &user_info).unwrap(),
             ),
             (
                 CONFIG_TOML.to_owned(),
@@ -492,7 +492,7 @@ impl Store {
             ),
             (
                 IMPORTS_LOCK.to_owned(),
-                store_imports(self.imports.clone(), &user_logins).unwrap(),
+                store_imports(self.imports.clone(), &user_info).unwrap(),
             ),
         ]
         .into_iter()
@@ -632,7 +632,7 @@ impl Store {
         // them or dropping unused fields while in CI, as those changes will be
         // ignored.
         if check_file_formatting {
-            let user_logins = user_logins_map(&self.imports);
+            let user_info = user_info_map(&self.imports);
             for (name, old, new) in [
                 (
                     CONFIG_TOML,
@@ -643,13 +643,13 @@ impl Store {
                 (
                     AUDITS_TOML,
                     self.audits_src.source(),
-                    store_audits(self.audits.clone(), &user_logins)
+                    store_audits(self.audits.clone(), &user_info)
                         .unwrap_or_else(|_| self.audits_src.source().to_owned()),
                 ),
                 (
                     IMPORTS_LOCK,
                     self.imports_src.source(),
-                    store_imports(self.imports.clone(), &user_logins)
+                    store_imports(self.imports.clone(), &user_info)
                         .unwrap_or_else(|_| self.imports_src.source().to_owned()),
                 ),
             ] {
@@ -1507,14 +1507,17 @@ pub async fn fetch_registry(network: &Network) -> Result<RegistryFile, FetchRegi
     Ok(registry_file)
 }
 
-pub fn user_logins_map(imports: &ImportsFile) -> FastMap<CratesUserId, String> {
-    let mut user_logins = FastMap::new();
+pub fn user_info_map(imports: &ImportsFile) -> FastMap<CratesUserId, PublisherCacheUser> {
+    let mut user_info = FastMap::new();
     for publisher in imports.publisher.values().flatten() {
-        user_logins
+        user_info
             .entry(publisher.user_id)
-            .or_insert_with(|| publisher.user_login.clone());
+            .or_insert_with(|| PublisherCacheUser {
+                login: publisher.user_login.clone(),
+                name: publisher.user_name.clone(),
+            });
     }
-    user_logins
+    user_info
 }
 
 /// A Registry in CARGO_HOME (usually the crates.io one)
@@ -2616,12 +2619,12 @@ where
 fn store_toml<T>(
     heading: &str,
     val: T,
-    user_logins: Option<&FastMap<CratesUserId, String>>,
+    user_info: Option<&FastMap<CratesUserId, PublisherCacheUser>>,
 ) -> Result<String, StoreTomlError>
 where
     T: Serialize,
 {
-    let toml_document = to_formatted_toml(val, user_logins)?;
+    let toml_document = to_formatted_toml(val, user_info)?;
     Ok(format!("{heading}{toml_document}"))
 }
 fn load_json<T>(reader: impl Read) -> Result<T, LoadJsonError>
@@ -2644,7 +2647,7 @@ where
 
 fn store_audits(
     mut audits: AuditsFile,
-    user_logins: &FastMap<CratesUserId, String>,
+    user_info: &FastMap<CratesUserId, PublisherCacheUser>,
 ) -> Result<String, StoreTomlError> {
     let heading = r###"
 # cargo-vet audits file
@@ -2654,7 +2657,7 @@ fn store_audits(
         .values_mut()
         .for_each(|entries| entries.sort());
 
-    store_toml(heading, audits, Some(user_logins))
+    store_toml(heading, audits, Some(user_info))
 }
 fn store_config(mut config: ConfigFile) -> Result<String, StoreTomlError> {
     config
@@ -2670,13 +2673,13 @@ fn store_config(mut config: ConfigFile) -> Result<String, StoreTomlError> {
 }
 fn store_imports(
     imports: ImportsFile,
-    user_logins: &FastMap<CratesUserId, String>,
+    user_info: &FastMap<CratesUserId, PublisherCacheUser>,
 ) -> Result<String, StoreTomlError> {
     let heading = r###"
 # cargo-vet imports lock
 "###;
 
-    store_toml(heading, imports, Some(user_logins))
+    store_toml(heading, imports, Some(user_info))
 }
 fn store_diff_cache(diff_cache: DiffCache) -> Result<String, StoreTomlError> {
     let heading = "";
