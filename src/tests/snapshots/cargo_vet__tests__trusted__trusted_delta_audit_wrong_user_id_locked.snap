@@ -8,7 +8,8 @@ Vetting Failed!
   transitive-third-party1:10.0.0 missing ["safe-to-deploy"]
 
 recommended audits for safe-to-deploy:
-    cargo vet inspect transitive-third-party1 5.0.0  (used by third-party1)  (25 lines)
+    Command                                          Publisher  Used By       Audit Size
+    cargo vet inspect transitive-third-party1 5.0.0  UNKNOWN    third-party1  25 lines
 
 estimated audit backlog: 25 lines
 

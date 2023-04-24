@@ -1,6 +1,6 @@
 ---
 source: src/tests/vet.rs
-expression: output
+expression: human
 ---
 Vetting Failed!
 
@@ -8,7 +8,8 @@ Vetting Failed!
   root-package:10.0.0 missing ["safe-to-deploy"]
 
 recommended audits for safe-to-deploy:
-    cargo vet inspect root-package 10.0.0  (used by )  (100 lines)
+    Command                                Publisher  Used By  Audit Size
+    cargo vet inspect root-package 10.0.0  UNKNOWN             100 lines
 
 estimated audit backlog: 100 lines
 

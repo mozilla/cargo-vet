@@ -10,12 +10,13 @@ Vetting Failed!
   transitive-third-party1:10.0.0 missing ["safe-to-deploy"]
 
 recommended audits for safe-to-deploy:
-    cargo vet inspect third-party1 10.0.0             (used by first-party)   (100 lines)
+    Command                                           Publisher  Used By       Audit Size
+    cargo vet inspect third-party1 10.0.0             UNKNOWN    first-party   100 lines
       NOTE: cargo vet import peer-company would eliminate this
-    cargo vet inspect third-party2 10.0.0             (used by first-party)   (100 lines)
+    cargo vet inspect third-party2 10.0.0             UNKNOWN    first-party   100 lines
       NOTE: cargo vet import rival-company would eliminate this
       NOTE: cargo vet import peer-company would reduce this to a 1-line diff
-    cargo vet inspect transitive-third-party1 10.0.0  (used by third-party1)  (100 lines)
+    cargo vet inspect transitive-third-party1 10.0.0  UNKNOWN    third-party1  100 lines
       NOTE: cargo vet import rival-company would reduce this to a 36-line diff
 
 estimated audit backlog: 300 lines

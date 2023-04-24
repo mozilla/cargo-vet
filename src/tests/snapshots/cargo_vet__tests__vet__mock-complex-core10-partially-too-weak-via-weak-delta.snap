@@ -8,7 +8,8 @@ Vetting Failed!
   third-core:10.0.0 missing ["reviewed"]
 
 recommended audits for reviewed:
-    cargo vet diff third-core 5.0.0 10.0.0  (used by firstB, thirdA, thirdAB)  (1 files changed, 75 insertions(+))
+    Command                                 Publisher  Used By                  Audit Size
+    cargo vet diff third-core 5.0.0 10.0.0  UNKNOWN    firstB, thirdA, thirdAB  1 files changed, 75 insertions(+)
 
 estimated audit backlog: 75 lines
 

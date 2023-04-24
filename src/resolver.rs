@@ -2067,9 +2067,10 @@ impl Suggest {
                 })
                 .collect::<Vec<_>>();
 
-            let mut max0 = 0;
-            let mut max1 = 0;
-            let mut max2 = 0;
+            let (h0, h1, h2, h3) = ("Command", "Publisher", "Used By", "Audit Size");
+            let mut max0 = console::measure_text_width(h0);
+            let mut max1 = console::measure_text_width(h1);
+            let mut max2 = console::measure_text_width(h2);
             for (s0, s1, s2, ..) in &mut strings {
                 // If the command is too long (happens occasionally, particularly with @git
                 // version specifiers), wrap subsequent columns to the next line.
@@ -2084,7 +2085,6 @@ impl Suggest {
                 max2 = max2.max(console::measure_text_width(s2));
             }
 
-            let (h0, h1, h2, h3) = ("Command", "Publisher", "Used By", "Audit Size");
             writeln!(
                 out,
                 "{}",

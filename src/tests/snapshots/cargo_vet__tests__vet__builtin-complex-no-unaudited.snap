@@ -1,6 +1,6 @@
 ---
 source: src/tests/vet.rs
-expression: output
+expression: human
 ---
 Vetting Failed!
 
@@ -11,10 +11,11 @@ Vetting Failed!
   thirdAB:10.0.0 missing ["safe-to-deploy"]
 
 recommended audits for safe-to-deploy:
-    cargo vet inspect third-core 5.0.0   (used by firstA)                   (25 lines)
-    cargo vet inspect third-core 10.0.0  (used by firstB, thirdA, thirdAB)  (100 lines)
-    cargo vet inspect thirdA 10.0.0      (used by firstA)                   (100 lines)
-    cargo vet inspect thirdAB 10.0.0     (used by firstAB)                  (100 lines)
+    Command                              Publisher  Used By                  Audit Size
+    cargo vet inspect third-core 5.0.0   UNKNOWN    firstA                   25 lines
+    cargo vet inspect third-core 10.0.0  UNKNOWN    firstB, thirdA, thirdAB  100 lines
+    cargo vet inspect thirdA 10.0.0      UNKNOWN    firstA                   100 lines
+    cargo vet inspect thirdAB 10.0.0     UNKNOWN    firstAB                  100 lines
 
 estimated audit backlog: 325 lines
 

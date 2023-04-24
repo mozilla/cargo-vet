@@ -1,6 +1,6 @@
 ---
 source: src/tests/vet.rs
-expression: output
+expression: human
 ---
 Vetting Failed!
 
@@ -9,10 +9,12 @@ Vetting Failed!
   third-normal:10.0.0 missing ["safe-to-deploy"]
 
 recommended audits for safe-to-deploy:
-    cargo vet inspect third-normal 10.0.0  (used by first)  (100 lines)
+    Command                                Publisher  Used By  Audit Size
+    cargo vet inspect third-normal 10.0.0  UNKNOWN    first    100 lines
 
 recommended audits for safe-to-run:
-    cargo vet inspect third-dev 10.0.0  (used by first)  (100 lines)
+    Command                             Publisher  Used By  Audit Size
+    cargo vet inspect third-dev 10.0.0  UNKNOWN    first    100 lines
 
 estimated audit backlog: 200 lines
 
