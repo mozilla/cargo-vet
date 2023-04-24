@@ -4,7 +4,7 @@ use super::*;
 
 fn mock_aggregate(sources: Vec<(String, AuditsFile)>) -> String {
     match crate::do_aggregate_audits(sources) {
-        Ok(merged) => crate::serialization::to_formatted_toml(merged)
+        Ok(merged) => crate::serialization::to_formatted_toml(merged, None)
             .unwrap()
             .to_string(),
         Err(error) => format!("{:?}", miette::Report::new(error)),

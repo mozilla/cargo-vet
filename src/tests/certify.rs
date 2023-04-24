@@ -142,7 +142,7 @@ fn mock_simple_certify_flow() {
     )
     .expect("do_cmd_certify failed");
 
-    let audits = crate::serialization::to_formatted_toml(&store.audits).unwrap();
+    let audits = crate::serialization::to_formatted_toml(&store.audits, None).unwrap();
 
     let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
 
@@ -205,7 +205,7 @@ fn mock_delta_certify_flow() {
     )
     .expect("do_cmd_certify failed");
 
-    let audits = crate::serialization::to_formatted_toml(&store.audits).unwrap();
+    let audits = crate::serialization::to_formatted_toml(&store.audits, None).unwrap();
 
     let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
 
@@ -299,7 +299,11 @@ fn mock_wildcard_certify_flow() {
     )
     .expect("do_cmd_certify failed");
 
-    let audits = crate::serialization::to_formatted_toml(&store.audits).unwrap();
+    let audits = crate::serialization::to_formatted_toml(
+        &store.audits,
+        Some(&crate::storage::user_logins_map(&store.imports)),
+    )
+    .unwrap();
 
     let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
 

@@ -11,12 +11,18 @@ fn get_imports_file_changes(
         crate::resolver::get_store_updates(&mock_cfg(metadata), store, mode);
 
     // Format the old and new files as TOML, and write out a diff using `similar`.
-    let old_imports = crate::serialization::to_formatted_toml(&store.imports)
-        .unwrap()
-        .to_string();
-    let new_imports = crate::serialization::to_formatted_toml(new_imports)
-        .unwrap()
-        .to_string();
+    let old_imports = crate::serialization::to_formatted_toml(
+        &store.imports,
+        Some(&crate::storage::user_logins_map(&store.imports)),
+    )
+    .unwrap()
+    .to_string();
+    let new_imports = crate::serialization::to_formatted_toml(
+        &new_imports,
+        Some(&crate::storage::user_logins_map(&new_imports)),
+    )
+    .unwrap()
+    .to_string();
 
     generate_diff(&old_imports, &new_imports)
 }
@@ -1468,7 +1474,7 @@ fn foreign_audit_file_to_local() {
 
     insta::assert_snapshot!(
         "foreign_audit_file_to_local",
-        crate::serialization::to_formatted_toml(&result.audit_file)
+        crate::serialization::to_formatted_toml(&result.audit_file, None)
             .unwrap()
             .to_string()
     );

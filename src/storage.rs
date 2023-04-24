@@ -32,12 +32,12 @@ use crate::{
     flock::{FileLock, Filesystem},
     format::{
         self, AuditEntry, AuditKind, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
-        CratesAPICrate, CratesPublisher, CriteriaEntry, CriteriaMap, CriteriaName, CriteriaStr,
-        Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName,
-        ImportsFile, MetaConfig, PackageName, PackageStr, PublisherCache, PublisherCacheEntry,
-        PublisherCacheUser, PublisherCacheVersion, RegistryEntry, RegistryFile, SortedMap,
-        StoreVersion, TrustEntry, TrustedPackages, VetVersion, WildcardAudits, WildcardEntry,
-        SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        CratesAPICrate, CratesPublisher, CratesUserId, CriteriaEntry, CriteriaMap, CriteriaName,
+        CriteriaStr, Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand, ForeignAuditsFile,
+        ImportName, ImportsFile, MetaConfig, PackageName, PackageStr, PublisherCache,
+        PublisherCacheEntry, PublisherCacheUser, PublisherCacheVersion, RegistryEntry,
+        RegistryFile, SortedMap, StoreVersion, TrustEntry, TrustedPackages, VetVersion,
+        WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
@@ -468,9 +468,10 @@ impl Store {
             let mut audits = lock.write_audits()?;
             let mut config = lock.write_config()?;
             let mut imports = lock.write_imports()?;
-            audits.write_all(store_audits(self.audits)?.as_bytes())?;
+            let user_logins = user_logins_map(&self.imports);
+            audits.write_all(store_audits(self.audits, &user_logins)?.as_bytes())?;
             config.write_all(store_config(self.config)?.as_bytes())?;
-            imports.write_all(store_imports(self.imports)?.as_bytes())?;
+            imports.write_all(store_imports(self.imports, &user_logins)?.as_bytes())?;
         }
         Ok(())
     }
@@ -479,10 +480,11 @@ impl Store {
     /// Doesn't take `self` by value so that it can continue to be used.
     #[cfg(test)]
     pub fn mock_commit(&self) -> SortedMap<String, String> {
+        let user_logins = user_logins_map(&self.imports);
         [
             (
                 AUDITS_TOML.to_owned(),
-                store_audits(self.audits.clone()).unwrap(),
+                store_audits(self.audits.clone(), &user_logins).unwrap(),
             ),
             (
                 CONFIG_TOML.to_owned(),
@@ -490,7 +492,7 @@ impl Store {
             ),
             (
                 IMPORTS_LOCK.to_owned(),
-                store_imports(self.imports.clone()).unwrap(),
+                store_imports(self.imports.clone(), &user_logins).unwrap(),
             ),
         ]
         .into_iter()
@@ -630,6 +632,7 @@ impl Store {
         // them or dropping unused fields while in CI, as those changes will be
         // ignored.
         if check_file_formatting {
+            let user_logins = user_logins_map(&self.imports);
             for (name, old, new) in [
                 (
                     CONFIG_TOML,
@@ -640,13 +643,13 @@ impl Store {
                 (
                     AUDITS_TOML,
                     self.audits_src.source(),
-                    store_audits(self.audits.clone())
+                    store_audits(self.audits.clone(), &user_logins)
                         .unwrap_or_else(|_| self.audits_src.source().to_owned()),
                 ),
                 (
                     IMPORTS_LOCK,
                     self.imports_src.source(),
-                    store_imports(self.imports.clone())
+                    store_imports(self.imports.clone(), &user_logins)
                         .unwrap_or_else(|_| self.imports_src.source().to_owned()),
                 ),
             ] {
@@ -1502,6 +1505,16 @@ pub async fn fetch_registry(network: &Network) -> Result<RegistryFile, FetchRegi
         })
         .map_err(LoadTomlError::from)?;
     Ok(registry_file)
+}
+
+pub fn user_logins_map(imports: &ImportsFile) -> FastMap<CratesUserId, String> {
+    let mut user_logins = FastMap::new();
+    for publisher in imports.publisher.values().flatten() {
+        user_logins
+            .entry(publisher.user_id)
+            .or_insert_with(|| publisher.user_login.clone());
+    }
+    user_logins
 }
 
 /// A Registry in CARGO_HOME (usually the crates.io one)
@@ -2600,11 +2613,15 @@ where
         }
     }
 }
-fn store_toml<T>(heading: &str, val: T) -> Result<String, StoreTomlError>
+fn store_toml<T>(
+    heading: &str,
+    val: T,
+    user_logins: Option<&FastMap<CratesUserId, String>>,
+) -> Result<String, StoreTomlError>
 where
     T: Serialize,
 {
-    let toml_document = to_formatted_toml(val)?;
+    let toml_document = to_formatted_toml(val, user_logins)?;
     Ok(format!("{heading}{toml_document}"))
 }
 fn load_json<T>(reader: impl Read) -> Result<T, LoadJsonError>
@@ -2625,7 +2642,10 @@ where
     Ok(json_string)
 }
 
-fn store_audits(mut audits: AuditsFile) -> Result<String, StoreTomlError> {
+fn store_audits(
+    mut audits: AuditsFile,
+    user_logins: &FastMap<CratesUserId, String>,
+) -> Result<String, StoreTomlError> {
     let heading = r###"
 # cargo-vet audits file
 "###;
@@ -2634,7 +2654,7 @@ fn store_audits(mut audits: AuditsFile) -> Result<String, StoreTomlError> {
         .values_mut()
         .for_each(|entries| entries.sort());
 
-    store_toml(heading, audits)
+    store_toml(heading, audits, Some(user_logins))
 }
 fn store_config(mut config: ConfigFile) -> Result<String, StoreTomlError> {
     config
@@ -2646,19 +2666,22 @@ fn store_config(mut config: ConfigFile) -> Result<String, StoreTomlError> {
 # cargo-vet config file
 "###;
 
-    store_toml(heading, config)
+    store_toml(heading, config, None)
 }
-fn store_imports(imports: ImportsFile) -> Result<String, StoreTomlError> {
+fn store_imports(
+    imports: ImportsFile,
+    user_logins: &FastMap<CratesUserId, String>,
+) -> Result<String, StoreTomlError> {
     let heading = r###"
 # cargo-vet imports lock
 "###;
 
-    store_toml(heading, imports)
+    store_toml(heading, imports, Some(user_logins))
 }
 fn store_diff_cache(diff_cache: DiffCache) -> Result<String, StoreTomlError> {
     let heading = "";
 
-    store_toml(heading, diff_cache)
+    store_toml(heading, diff_cache, None)
 }
 fn store_command_history(command_history: CommandHistory) -> Result<String, StoreJsonError> {
     store_json(command_history)

@@ -4,13 +4,13 @@
 [[publisher.serde]]
 version = "1.0.136"
 when = "2022-01-25"
-user-id = 3618
+user-id = 3618 # dtolnay
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.tracing]]
 version = "0.1.33"
 when = "2022-04-09"
-user-id = 1249
+user-id = 1249 # hawkw
 user-login = "hawkw"
 user-name = "Eliza Weisman"

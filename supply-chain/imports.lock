@@ -4,14 +4,14 @@
 [[publisher.bumpalo]]
 version = "3.10.0"
 when = "2022-06-01"
-user-id = 696
+user-id = 696 # fitzgen
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
 
 [[audits.bytecodealliance.wildcard-audits.bumpalo]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 696
+user-id = 696 # fitzgen
 start = "2019-03-16"
 end = "2024-03-10"
 

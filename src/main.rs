@@ -1938,7 +1938,7 @@ fn cmd_aggregate(
         .into_diagnostic()?;
 
     let merged_audits = do_aggregate_audits(sources).into_diagnostic()?;
-    let document = serialization::to_formatted_toml(merged_audits).into_diagnostic()?;
+    let document = serialization::to_formatted_toml(merged_audits, None).into_diagnostic()?;
     write!(out, "{document}");
     Ok(())
 }

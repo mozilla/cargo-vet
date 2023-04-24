@@ -307,7 +307,7 @@ impl Network {
     pub(crate) fn mock_serve_toml(&mut self, url: impl AsRef<str>, data: &impl serde::Serialize) {
         self.mock_serve(
             url,
-            crate::serialization::to_formatted_toml(data)
+            crate::serialization::to_formatted_toml(data, None)
                 .unwrap()
                 .to_string(),
         );
