@@ -983,10 +983,15 @@ fn criteria_picker(
                         out,
                         "  {}. {}",
                         criteria_idx + 1,
-                        out.style().green().apply_to(criteria_name)
+                        out.style().green().bold().apply_to(criteria_name)
                     );
                 } else {
-                    writeln!(out, "  {}. {}", criteria_idx + 1, criteria_name);
+                    writeln!(
+                        out,
+                        "  {}. {}",
+                        criteria_idx + 1,
+                        out.style().bold().dim().apply_to(criteria_name)
+                    );
                 }
             }
 
