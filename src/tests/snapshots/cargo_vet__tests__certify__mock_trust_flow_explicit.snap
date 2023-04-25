@@ -5,7 +5,6 @@ expression: result
 OUTPUT:
 <<<CLEAR SCREEN>>>
 choose trusted criteria for third-party1:* published by testuser
-  0. <clear selections>
   1. safe-to-run
   2. safe-to-deploy
   3. fuzzed

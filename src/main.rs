@@ -977,7 +977,6 @@ fn criteria_picker(
         loop {
             out.clear_screen()?;
             writeln!(out, "{}", prompt.as_ref());
-            writeln!(out, "  0. <clear selections>");
             for (criteria_idx, criteria_name) in criteria_mapper.all_criteria_names().enumerate() {
                 if chosen_criteria.iter().any(|s| s == criteria_name) {
                     writeln!(
@@ -1012,16 +1011,18 @@ fn criteria_picker(
                 writeln!(out, "error: not a valid integer");
                 continue;
             };
-            if answer == 0 {
-                chosen_criteria.clear();
-                continue;
-            }
-            if answer > criteria_mapper.len() {
+            if answer == 0 || answer > criteria_mapper.len() {
                 // ERRORS: immediate error print to output for feedback, non-fatal
                 writeln!(out, "error: not a valid criteria");
                 continue;
             }
-            chosen_criteria.push(criteria_mapper.criteria_name(answer - 1).to_owned());
+
+            let selection = criteria_mapper.criteria_name(answer - 1).to_owned();
+            if chosen_criteria.contains(&selection) {
+                chosen_criteria.retain(|x| x != &selection);
+            } else {
+                chosen_criteria.push(selection);
+            }
         }
     }
 
