@@ -978,7 +978,6 @@ fn criteria_picker(
             out.clear_screen()?;
             writeln!(out, "{}", prompt.as_ref());
             writeln!(out, "  0. <clear selections>");
-            let implied_criteria = criteria_mapper.criteria_from_list(&chosen_criteria);
             for (criteria_idx, criteria_name) in criteria_mapper.all_criteria_names().enumerate() {
                 if chosen_criteria.iter().any(|s| s == criteria_name) {
                     writeln!(
@@ -987,26 +986,13 @@ fn criteria_picker(
                         criteria_idx + 1,
                         out.style().green().apply_to(criteria_name)
                     );
-                } else if implied_criteria.has_criteria(criteria_idx) {
-                    writeln!(
-                        out,
-                        "  {}. {}",
-                        criteria_idx + 1,
-                        out.style().yellow().apply_to(criteria_name)
-                    );
                 } else {
                     writeln!(out, "  {}. {}", criteria_idx + 1, criteria_name);
                 }
             }
 
             writeln!(out);
-            writeln!(
-                out,
-                "current selection: {:?}",
-                criteria_mapper
-                    .criteria_names(&implied_criteria)
-                    .collect::<Vec<_>>()
-            );
+            writeln!(out, "current selection: {:?}", chosen_criteria);
             writeln!(out, "(press ENTER to accept the current criteria)");
             let input = out.read_line_with_prompt("> ")?;
             let input = input.trim();
