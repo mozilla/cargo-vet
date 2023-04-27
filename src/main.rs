@@ -1230,13 +1230,33 @@ fn cmd_trust(out: &Arc<dyn Out>, cfg: &Config, sub_args: &TrustArgs) -> Result<(
     let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
 
     let package = &sub_args.package;
-    let publisher_login = &sub_args.publisher_login;
 
     // Fetch publisher information for relevant versions of `package`.
     let publishers = store.ensure_publisher_versions(cfg, network.as_ref(), package)?;
+
+    let publisher_login = if let Some(login) = &sub_args.publisher_login {
+        login.clone()
+    } else if let Some(first) = publishers.first() {
+        if publishers
+            .iter()
+            .all(|publisher| publisher.user_id == first.user_id)
+        {
+            first.user_login.clone()
+        } else {
+            return Err(miette!(
+                "The package '{package}' has multiple known publishers, \
+                please explicitly specify which publisher to trust"
+            ));
+        }
+    } else {
+        return Err(miette!(
+            "The package '{package}' has no known publishers, so cannot be trusted"
+        ));
+    };
+
     let published_versions = publishers
         .iter()
-        .filter(|publisher| &publisher.user_login == publisher_login);
+        .filter(|publisher| publisher.user_login == publisher_login);
 
     let earliest = published_versions
         .min_by_key(|p| p.when)

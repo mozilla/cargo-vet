@@ -147,6 +147,7 @@ pub struct SuggestItem {
     pub notable_parents: String,
     pub publisher_login: Option<String>,
     pub publisher_trusted_by: Option<String>,
+    pub is_sole_publisher: bool,
     pub registry_suggestion: Vec<RegistrySuggestion>,
 }
 
@@ -1592,6 +1593,12 @@ impl<'a> ResolveReport<'a> {
         };
 
         let mut trusted_publishers: FastMap<u64, SortedSet<ImportName>> = FastMap::new();
+        for trusted_entry in store.audits.trusted.values().flatten() {
+            trusted_publishers
+                .entry(trusted_entry.user_id)
+                .or_default()
+                .insert("this project".to_owned());
+        }
         for (import_name, audits_file) in store.imported_audits() {
             for trusted_entry in audits_file.trusted.values().flatten() {
                 trusted_publishers
@@ -1661,17 +1668,26 @@ impl<'a> ResolveReport<'a> {
                     .await?;
 
                     // Attempt to look up the publisher of the target version
-                    // for the suggested diff.
+                    // for the suggested diff, and also record whether the given
+                    // package has a sole publisher.
+                    let mut is_sole_publisher = false;
                     let publisher_id =
                         if let (Some(network), None) = (&network, &suggested_diff.to.git_rev) {
-                            cache
+                            let publishers = cache
                                 .get_publishers(
                                     network,
                                     package.name,
                                     [&suggested_diff.to.semver].into_iter().collect(),
                                 )
                                 .await
-                                .unwrap_or_default()
+                                .unwrap_or_default();
+                            let publisher_count = publishers
+                                .iter()
+                                .flat_map(|publisher| &publisher.published_by)
+                                .collect::<FastSet<_>>()
+                                .len();
+                            is_sole_publisher = publisher_count == 1;
+                            publishers
                                 .into_iter()
                                 .find(|p| p.num == suggested_diff.to.semver)
                                 .and_then(|p| p.published_by)
@@ -1747,6 +1763,7 @@ impl<'a> ResolveReport<'a> {
                         notable_parents,
                         publisher_login,
                         publisher_trusted_by,
+                        is_sole_publisher,
                         registry_suggestion,
                     })
                 },
@@ -2133,10 +2150,11 @@ impl Suggest {
                             "NOTE: {} trust(s) {} - consider",
                             trusted_by, publisher_login
                         )),
-                        dim.clone().cyan().apply_to(format_args!(
-                            "cargo vet trust {} {}",
-                            package.name, publisher_login
-                        ))
+                        dim.clone().cyan().apply_to(if item.is_sole_publisher {
+                            format!("cargo vet trust {}", package.name)
+                        } else {
+                            format!("cargo vet trust {} {}", package.name, publisher_login)
+                        })
                     );
                 }
             }

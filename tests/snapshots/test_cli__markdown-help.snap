@@ -427,7 +427,7 @@ Trust a given crate and publisher
 
 ### USAGE
 ```
-cargo vet trust [OPTIONS] <PACKAGE> <PUBLISHER_LOGIN>
+cargo vet trust [OPTIONS] <PACKAGE> [PUBLISHER_LOGIN]
 ```
 
 ### ARGS
@@ -436,6 +436,10 @@ The package to trust
 
 #### `<PUBLISHER_LOGIN>`
 The username of the publisher to trust
+
+If not provided, will be inferred to be the sole known publisher of the given crate.
+If there is more than one publisher for the given crate, the login must be provided
+explicitly.
 
 ### OPTIONS
 #### `--criteria <CRITERIA>`

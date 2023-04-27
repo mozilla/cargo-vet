@@ -530,8 +530,12 @@ pub struct TrustArgs {
     #[clap(action)]
     pub package: PackageName,
     /// The username of the publisher to trust
+    ///
+    /// If not provided, will be inferred to be the sole known publisher of the
+    /// given crate. If there is more than one publisher for the given crate,
+    /// the login must be provided explicitly.
     #[clap(action)]
-    pub publisher_login: String,
+    pub publisher_login: Option<String>,
     /// The criteria to certify for this trust entry
     ///
     /// If not provided, we will prompt you for this information.
