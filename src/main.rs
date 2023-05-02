@@ -1229,10 +1229,25 @@ fn cmd_trust(out: &Arc<dyn Out>, cfg: &Config, sub_args: &TrustArgs) -> Result<(
 
     let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
 
+    do_cmd_trust(out, cfg, sub_args, &mut store, network.as_ref(), today)?;
+
+    store.commit()?;
+
+    Ok(())
+}
+
+fn do_cmd_trust(
+    out: &Arc<dyn Out>,
+    cfg: &Config,
+    sub_args: &TrustArgs,
+    store: &mut Store,
+    network: Option<&Network>,
+    today: chrono::NaiveDate,
+) -> Result<(), miette::Report> {
     let package = &sub_args.package;
 
     // Fetch publisher information for relevant versions of `package`.
-    let publishers = store.ensure_publisher_versions(cfg, network.as_ref(), package)?;
+    let publishers = store.ensure_publisher_versions(cfg, network, package)?;
 
     let publisher_login = if let Some(login) = &sub_args.publisher_login {
         login.clone()
@@ -1244,13 +1259,15 @@ fn cmd_trust(out: &Arc<dyn Out>, cfg: &Config, sub_args: &TrustArgs) -> Result<(
             first.user_login.clone()
         } else {
             return Err(miette!(
-                "The package '{package}' has multiple known publishers, \
-                please explicitly specify which publisher to trust"
+                "The package '{}' has multiple known publishers, \
+                please explicitly specify which publisher to trust",
+                package
             ));
         }
     } else {
         return Err(miette!(
-            "The package '{package}' has no known publishers, so cannot be trusted"
+            "The package '{}' has no known publishers, so cannot be trusted",
+            package
         ));
     };
 
@@ -1319,7 +1336,7 @@ fn cmd_trust(out: &Arc<dyn Out>, cfg: &Config, sub_args: &TrustArgs) -> Result<(
     // to potentially update imports, and remove now-unnecessary exemptions for
     // the target package. We only prefer fresh imports and prune exemptions for
     // the package we trusted, to avoid unrelated changes.
-    resolver::update_store(cfg, &mut store, |name| resolver::UpdateMode {
+    resolver::update_store(cfg, store, |name| resolver::UpdateMode {
         search_mode: if name == &package[..] {
             resolver::SearchMode::PreferFreshImports
         } else {
@@ -1328,9 +1345,6 @@ fn cmd_trust(out: &Arc<dyn Out>, cfg: &Config, sub_args: &TrustArgs) -> Result<(
         prune_exemptions: name == &package[..],
         prune_imports: false,
     });
-
-    store.commit()?;
-
     Ok(())
 }
 

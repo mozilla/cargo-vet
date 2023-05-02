@@ -309,3 +309,235 @@ fn mock_wildcard_certify_flow() {
 
     insta::assert_snapshot!(result);
 }
+
+#[test]
+fn mock_trust_flow_simple() {
+    let mock = MockMetadata::simple();
+
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = mock.metadata();
+
+    let (config, audits, imports) = files_inited(&metadata);
+
+    let output = BasicTestOutput::with_callbacks(|_| Ok("\n".to_owned()), |_| unimplemented!());
+
+    let cfg = mock_cfg_args(&metadata, ["cargo", "vet", "trust", "third-party1"]);
+    let sub_args = if let Some(crate::cli::Commands::Trust(sub_args)) = &cfg.cli.command {
+        sub_args
+    } else {
+        unreachable!();
+    };
+
+    let mut network = Network::new_mock();
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/third-party1",
+        &serde_json::json!({
+            "crate": { "description": "description" },
+            "versions": [
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "1.0.0",
+                },
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "9.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+            ]
+        }),
+    );
+
+    let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
+        .expect("store acquisition failed");
+
+    crate::do_cmd_trust(
+        &output.clone().as_dyn(),
+        &cfg,
+        sub_args,
+        &mut store,
+        Some(&network),
+        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+    )
+    .expect("do_cmd_trust failed");
+
+    let audits = crate::serialization::to_formatted_toml(
+        &store.audits,
+        Some(&crate::storage::user_info_map(&store.imports)),
+    )
+    .unwrap();
+
+    let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
+
+    insta::assert_snapshot!(result);
+}
+
+#[test]
+fn mock_trust_flow_ambiguous() {
+    let mock = MockMetadata::simple();
+
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = mock.metadata();
+
+    let (config, audits, imports) = files_inited(&metadata);
+
+    let output = BasicTestOutput::with_callbacks(|_| Ok("\n".to_owned()), |_| unimplemented!());
+
+    let cfg = mock_cfg_args(&metadata, ["cargo", "vet", "trust", "third-party1"]);
+    let sub_args = if let Some(crate::cli::Commands::Trust(sub_args)) = &cfg.cli.command {
+        sub_args
+    } else {
+        unreachable!();
+    };
+
+    let mut network = Network::new_mock();
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/third-party1",
+        &serde_json::json!({
+            "crate": { "description": "description" },
+            "versions": [
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "1.0.0",
+                },
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "9.0.0",
+                    "published_by": {
+                        "id": 5,
+                        "login": "otheruser",
+                        "name": "Other user",
+                        "url": "https://github.com/otheruser"
+                    }
+                },
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+            ]
+        }),
+    );
+
+    let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
+        .expect("store acquisition failed");
+
+    let error = crate::do_cmd_trust(
+        &output.as_dyn(),
+        &cfg,
+        sub_args,
+        &mut store,
+        Some(&network),
+        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+    )
+    .expect_err("do_cmd_trust succeeded");
+
+    insta::assert_snapshot!(format!("{error:?}"));
+}
+
+#[test]
+fn mock_trust_flow_explicit() {
+    let mock = MockMetadata::simple();
+
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = mock.metadata();
+
+    let (config, audits, imports) = files_inited(&metadata);
+
+    let output = BasicTestOutput::with_callbacks(|_| Ok("\n".to_owned()), |_| unimplemented!());
+
+    let cfg = mock_cfg_args(
+        &metadata,
+        ["cargo", "vet", "trust", "third-party1", "testuser"],
+    );
+    let sub_args = if let Some(crate::cli::Commands::Trust(sub_args)) = &cfg.cli.command {
+        sub_args
+    } else {
+        unreachable!();
+    };
+
+    let mut network = Network::new_mock();
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/third-party1",
+        &serde_json::json!({
+            "crate": { "description": "description" },
+            "versions": [
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "1.0.0",
+                },
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "9.0.0",
+                    "published_by": {
+                        "id": 5,
+                        "login": "otheruser",
+                        "name": "Other user",
+                        "url": "https://github.com/otheruser"
+                    }
+                },
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+            ]
+        }),
+    );
+
+    let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
+        .expect("store acquisition failed");
+
+    crate::do_cmd_trust(
+        &output.clone().as_dyn(),
+        &cfg,
+        sub_args,
+        &mut store,
+        Some(&network),
+        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+    )
+    .expect("do_cmd_trust failed");
+
+    let audits = crate::serialization::to_formatted_toml(
+        &store.audits,
+        Some(&crate::storage::user_info_map(&store.imports)),
+    )
+    .unwrap();
+
+    let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
+
+    insta::assert_snapshot!(result);
+}
