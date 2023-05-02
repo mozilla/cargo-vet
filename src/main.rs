@@ -1244,57 +1244,137 @@ fn do_cmd_trust(
     network: Option<&Network>,
     today: chrono::NaiveDate,
 ) -> Result<(), miette::Report> {
-    let package = &sub_args.package;
+    if let Some(package) = &sub_args.package {
+        // Fetch publisher information for relevant versions of `package`.
+        let publishers = store.ensure_publisher_versions(cfg, network, package)?;
 
-    // Fetch publisher information for relevant versions of `package`.
-    let publishers = store.ensure_publisher_versions(cfg, network, package)?;
-
-    let publisher_login = if let Some(login) = &sub_args.publisher_login {
-        login.clone()
-    } else if let Some(first) = publishers.first() {
-        if publishers
-            .iter()
-            .all(|publisher| publisher.user_id == first.user_id)
-        {
-            first.user_login.clone()
+        let publisher_login = if let Some(login) = &sub_args.publisher_login {
+            login.clone()
+        } else if let Some(first) = publishers.first() {
+            if publishers
+                .iter()
+                .all(|publisher| publisher.user_id == first.user_id)
+            {
+                first.user_login.clone()
+            } else {
+                return Err(miette!(
+                    "The package '{}' has multiple known publishers, \
+                please explicitly specify which publisher to trust",
+                    package
+                ));
+            }
         } else {
             return Err(miette!(
-                "The package '{}' has multiple known publishers, \
-                please explicitly specify which publisher to trust",
+                "The package '{}' has no known publishers, so cannot be trusted",
                 package
             ));
+        };
+
+        apply_cmd_trust(
+            out,
+            cfg,
+            store,
+            network,
+            today,
+            package,
+            &publisher_login,
+            sub_args.start_date,
+            sub_args.end_date,
+            &sub_args.criteria,
+            sub_args.notes.as_ref(),
+        )
+    } else if let Some(publisher_login) = &sub_args.all {
+        let criteria_names = criteria_picker(
+            out,
+            &store.audits.criteria,
+            if sub_args.criteria.is_empty() {
+                vec![format::SAFE_TO_DEPLOY.to_owned()]
+            } else {
+                sub_args.criteria.clone()
+            },
+            if sub_args.criteria.is_empty() {
+                Some(format!(
+                    "choose trusted criteria for packages published by {publisher_login}"
+                ))
+            } else {
+                None
+            }
+            .as_ref(),
+        )?;
+
+        let exempted_packages: Vec<_> = store.config.exemptions.keys().cloned().collect();
+        for package in exempted_packages {
+            let publishers = store.ensure_publisher_versions(cfg, network, &package)?;
+
+            if publishers
+                .iter()
+                .any(|publisher| publisher.user_login != publisher_login[..])
+            {
+                continue;
+            }
+
+            apply_cmd_trust(
+                out,
+                cfg,
+                store,
+                network,
+                today,
+                &package,
+                publisher_login,
+                sub_args.start_date,
+                sub_args.end_date,
+                &criteria_names,
+                sub_args.notes.as_ref(),
+            )?;
         }
+
+        Ok(())
     } else {
-        return Err(miette!(
-            "The package '{}' has no known publishers, so cannot be trusted",
-            package
-        ));
-    };
+        Err(miette!("Please specify either a package to trust or --all"))
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_cmd_trust(
+    out: &Arc<dyn Out>,
+    cfg: &Config,
+    store: &mut Store,
+    network: Option<&Network>,
+    today: chrono::NaiveDate,
+    package: &str,
+    publisher_login: &str,
+    start_date: Option<chrono::NaiveDate>,
+    end_date: Option<chrono::NaiveDate>,
+    criteria: &[CriteriaName],
+    notes: Option<&String>,
+) -> Result<(), miette::Report> {
+    // Fetch publisher information for relevant versions of `package`.
+    let publishers = store.ensure_publisher_versions(cfg, network, package)?;
 
     let published_versions = publishers
         .iter()
         .filter(|publisher| publisher.user_login == publisher_login);
 
-    let earliest = published_versions
-        .min_by_key(|p| p.when)
-        .ok_or_else(|| CertifyError::NotAPublisher(publisher_login.clone(), package.clone()))?;
+    let earliest = published_versions.min_by_key(|p| p.when).ok_or_else(|| {
+        CertifyError::NotAPublisher(publisher_login.to_owned(), package.to_owned())
+    })?;
     let user_id = earliest.user_id;
 
     // Get the from and to dates, defaulting to a from date of the earliest
     // published package by the user, and a to date of 12 months from today.
-    let start = sub_args.start_date.unwrap_or(earliest.when);
+    let start = start_date.unwrap_or(earliest.when);
 
-    let end = sub_args.end_date.unwrap_or(today + chrono::Months::new(12));
+    let end = end_date.unwrap_or(today + chrono::Months::new(12));
 
     let criteria_names = criteria_picker(
         out,
         &store.audits.criteria,
-        if sub_args.criteria.is_empty() {
+        if criteria.is_empty() {
             vec![format::SAFE_TO_DEPLOY.to_owned()]
         } else {
-            sub_args.criteria.clone()
+            criteria.to_owned()
         },
-        if sub_args.criteria.is_empty() {
+        if criteria.is_empty() {
             Some(format!(
                 "choose trusted criteria for {package}:* published by {publisher_login}"
             ))
@@ -1307,13 +1387,13 @@ fn do_cmd_trust(
 
     // Check if we have an existing trust entry which could be extended to
     // handle a wider date range, and update that instead if possible.
-    let trust_entries = store.audits.trusted.entry(package.clone()).or_default();
+    let trust_entries = store.audits.trusted.entry(package.to_owned()).or_default();
     if let Some(trust_entry) = trust_entries.iter_mut().find(|trust_entry| {
         trust_entry.criteria == criteria
             && trust_entry.user_id == user_id
             && start <= *trust_entry.start
             && *trust_entry.end <= end
-            && sub_args.notes.is_none()
+            && notes.is_none()
     }) {
         trust_entry.start = start.into();
         trust_entry.end = end.into();
@@ -1323,7 +1403,7 @@ fn do_cmd_trust(
             user_id,
             start: start.into(),
             end: end.into(),
-            notes: sub_args.notes.clone(),
+            notes: notes.cloned(),
             aggregated_from: vec![],
         });
     }
@@ -1337,12 +1417,12 @@ fn do_cmd_trust(
     // the target package. We only prefer fresh imports and prune exemptions for
     // the package we trusted, to avoid unrelated changes.
     resolver::update_store(cfg, store, |name| resolver::UpdateMode {
-        search_mode: if name == &package[..] {
+        search_mode: if name == package {
             resolver::SearchMode::PreferFreshImports
         } else {
             resolver::SearchMode::PreferExemptions
         },
-        prune_exemptions: name == &package[..],
+        prune_exemptions: name == package,
         prune_imports: false,
     });
     Ok(())

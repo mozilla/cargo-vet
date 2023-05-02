@@ -527,8 +527,10 @@ pub struct ImportArgs {
 #[derive(clap::Args)]
 pub struct TrustArgs {
     /// The package to trust
-    #[clap(action)]
-    pub package: PackageName,
+    ///
+    /// Must be specified unless --all has been specified.
+    #[clap(action, required_unless_present("all"))]
+    pub package: Option<PackageName>,
     /// The username of the publisher to trust
     ///
     /// If not provided, will be inferred to be the sole known publisher of the
@@ -557,6 +559,10 @@ pub struct TrustArgs {
     /// If not provided, there will be no notes.
     #[clap(long, action)]
     pub notes: Option<String>,
+    /// If specified, trusts all packages with exemptions which are solely
+    /// published by the given user.
+    #[clap(long, action, conflicts_with("package"))]
+    pub all: Option<String>,
 }
 
 /// Forbids the given version
