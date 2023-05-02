@@ -144,9 +144,9 @@ pub struct SuggestItem {
     pub package: PackageIdx,
     pub suggested_criteria: CriteriaSet,
     pub suggested_diff: DiffRecommendation,
-    pub notable_parents: String,
+    pub notable_parents: Vec<String>,
     pub publisher_login: Option<String>,
-    pub publisher_trusted_by: Option<String>,
+    pub publisher_trusted_by: Option<Vec<String>>,
     pub is_sole_publisher: bool,
     pub registry_suggestion: Vec<RegistrySuggestion>,
 }
@@ -1550,6 +1550,34 @@ fn search_for_path(
     Err(visited.into_iter().map(|v| v.cloned()).collect())
 }
 
+/// Format a short list with commas and an "and" before the last item in a
+/// multi-item list. Also returns whether the list has multiple items.
+fn format_short_list(mut items: Vec<String>) -> String {
+    // To keep the display compact, sort by name length and truncate long lists.
+    // We first sort by name because rust defaults to a stable sort and this will
+    // have by-name as the tie breaker.
+    items.sort();
+    items.sort_by_key(|item| item.len());
+    let cutoff_index = items
+        .iter()
+        .scan(0, |sum, s| {
+            *sum += s.len();
+            Some(*sum)
+        })
+        .position(|count| count > 20);
+    let remainder = cutoff_index.map(|i| items.len() - i).unwrap_or(0);
+    if remainder > 1 {
+        items.truncate(cutoff_index.unwrap());
+        items.push(format!("{remainder} others"));
+    }
+    match &items[..] {
+        [] => String::new(),
+        [a] => a.to_owned(),
+        [a, b] => format!("{a} and {b}"),
+        [items @ .., last] => format!("{}, and {}", items.join(", "), last),
+    }
+}
+
 impl<'a> ResolveReport<'a> {
     pub fn has_errors(&self) -> bool {
         // Just check the conclusion
@@ -1624,35 +1652,12 @@ impl<'a> ResolveReport<'a> {
                         .as_ref()
                         .expect("failed package without ResolveResults?");
 
-                    fn format_short_list(mut items: Vec<String>) -> String {
-                        // To keep the display compact, sort by name length and truncate long lists.
-                        // We first sort by name because rust defaults to a stable sort and this will
-                        // have by-name as the tie breaker.
-                        items.sort();
-                        items.sort_by_key(|item| item.len());
-                        let cutoff_index = items
-                            .iter()
-                            .scan(0, |sum, s| {
-                                *sum += s.len();
-                                Some(*sum)
-                            })
-                            .position(|count| count > 20);
-                        let remainder = cutoff_index.map(|i| items.len() - i).unwrap_or(0);
-                        if remainder > 1 {
-                            items.truncate(cutoff_index.unwrap());
-                            items.push(format!("and {remainder} others"));
-                        }
-                        items.join(", ")
-                    }
-
                     // Precompute some "notable" parents
-                    let notable_parents = format_short_list(
-                        self.graph.nodes[failure_idx]
-                            .reverse_deps
-                            .iter()
-                            .map(|&parent| self.graph.nodes[parent].name.to_string())
-                            .collect(),
-                    );
+                    let notable_parents = self.graph.nodes[failure_idx]
+                        .reverse_deps
+                        .iter()
+                        .map(|&parent| self.graph.nodes[parent].name.to_string())
+                        .collect();
 
                     let suggested_diff = suggest_delta(
                         &cfg.metadata,
@@ -1703,9 +1708,9 @@ impl<'a> ResolveReport<'a> {
                             // If we're already trusted by this project, don't
                             // bother listing anyone else.
                             if publishers.contains(THIS_PROJECT) {
-                                THIS_PROJECT.to_owned()
+                                vec![THIS_PROJECT.to_owned()]
                             } else {
-                                format_short_list(publishers.iter().cloned().collect())
+                                publishers.iter().cloned().collect()
                             }
                         });
 
@@ -1950,7 +1955,7 @@ impl<'a> ResolveReport<'a> {
                         let package = &self.graph.nodes[item.package];
                         JsonSuggestItem {
                             name: package.name.to_owned(),
-                            notable_parents: item.notable_parents.to_owned(),
+                            notable_parents: format_short_list(item.notable_parents.clone()),
                             suggested_criteria: self
                                 .criteria_mapper
                                 .criteria_names(&item.suggested_criteria)
@@ -2085,7 +2090,7 @@ impl Suggest {
                         .publisher_login
                         .clone()
                         .unwrap_or_else(|| "UNKNOWN".into());
-                    let parents = item.notable_parents.clone();
+                    let parents = format_short_list(item.notable_parents.clone());
                     let diffstat = match &item.suggested_diff.from {
                         Some(_) => format!("{}", item.suggested_diff.diffstat),
                         None => format!("{} lines", item.suggested_diff.diffstat.count()),
@@ -2153,12 +2158,17 @@ impl Suggest {
                 if let (Some(trusted_by), Some(publisher_login)) =
                     (&item.publisher_trusted_by, &item.publisher_login)
                 {
+                    let trust = if trusted_by.len() == 1 {
+                        "trusts"
+                    } else {
+                        "trust"
+                    };
+                    let trusted_by = format_short_list(trusted_by.clone());
                     writeln!(
                         out,
                         "      {} {}",
                         dim.clone().apply_to(format_args!(
-                            "NOTE: {} trust(s) {} - consider",
-                            trusted_by, publisher_login
+                            "NOTE: {trusted_by} {trust} {publisher_login} - consider",
                         )),
                         dim.clone().cyan().apply_to(if item.is_sole_publisher {
                             format!("cargo vet trust {}", package.name)

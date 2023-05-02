@@ -706,7 +706,7 @@ stdout:
       },
       {
         "name": "matches",
-        "notable_parents": "url, idna, form_urlencoded",
+        "notable_parents": "url, idna, and form_urlencoded",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -786,7 +786,7 @@ stdout:
       },
       {
         "name": "wasm-bindgen-shared",
-        "notable_parents": "wasm-bindgen-backend, wasm-bindgen-macro-support",
+        "notable_parents": "wasm-bindgen-backend and wasm-bindgen-macro-support",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -818,7 +818,7 @@ stdout:
       },
       {
         "name": "futures-sink",
-        "notable_parents": "h2, tokio-util",
+        "notable_parents": "h2 and tokio-util",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -914,7 +914,7 @@ stdout:
       },
       {
         "name": "form_urlencoded",
-        "notable_parents": "url, serde_urlencoded",
+        "notable_parents": "url and serde_urlencoded",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -946,7 +946,7 @@ stdout:
       },
       {
         "name": "percent-encoding",
-        "notable_parents": "url, reqwest, form_urlencoded",
+        "notable_parents": "url, reqwest, and form_urlencoded",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -962,7 +962,7 @@ stdout:
       },
       {
         "name": "fnv",
-        "notable_parents": "h2, http",
+        "notable_parents": "h2 and http",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -978,7 +978,7 @@ stdout:
       },
       {
         "name": "itoa",
-        "notable_parents": "http, hyper, serde_json, serde_urlencoded",
+        "notable_parents": "http, hyper, serde_json, and serde_urlencoded",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1042,7 +1042,7 @@ stdout:
       },
       {
         "name": "tokio-native-tls",
-        "notable_parents": "reqwest, hyper-tls",
+        "notable_parents": "reqwest and hyper-tls",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1138,7 +1138,7 @@ stdout:
       },
       {
         "name": "http-body",
-        "notable_parents": "hyper, reqwest",
+        "notable_parents": "hyper and reqwest",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1234,7 +1234,7 @@ stdout:
       },
       {
         "name": "core-foundation-sys",
-        "notable_parents": "core-foundation, and 2 others",
+        "notable_parents": "core-foundation and 2 others",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1266,7 +1266,7 @@ stdout:
       },
       {
         "name": "security-framework-sys",
-        "notable_parents": "native-tls, security-framework",
+        "notable_parents": "native-tls and security-framework",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1282,7 +1282,7 @@ stdout:
       },
       {
         "name": "unicode-xid",
-        "notable_parents": "syn, proc-macro2, proc-macro2",
+        "notable_parents": "syn, proc-macro2, and proc-macro2",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1426,7 +1426,7 @@ stdout:
       },
       {
         "name": "native-tls",
-        "notable_parents": "reqwest, hyper-tls, tokio-native-tls",
+        "notable_parents": "reqwest, hyper-tls, and tokio-native-tls",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1458,7 +1458,7 @@ stdout:
       },
       {
         "name": "quote",
-        "notable_parents": "syn, and 4 others",
+        "notable_parents": "syn and 4 others",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1586,7 +1586,7 @@ stdout:
       },
       {
         "name": "ryu",
-        "notable_parents": "serde_json, serde_urlencoded",
+        "notable_parents": "serde_json and serde_urlencoded",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1682,7 +1682,7 @@ stdout:
       },
       {
         "name": "socket2",
-        "notable_parents": "hyper, tokio",
+        "notable_parents": "hyper and tokio",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1762,7 +1762,7 @@ stdout:
       },
       {
         "name": "memchr",
-        "notable_parents": "tokio, os_str_bytes",
+        "notable_parents": "tokio and os_str_bytes",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1810,7 +1810,7 @@ stdout:
       },
       {
         "name": "indexmap",
-        "notable_parents": "h2, clap",
+        "notable_parents": "h2 and clap",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1826,7 +1826,7 @@ stdout:
       },
       {
         "name": "openssl-sys",
-        "notable_parents": "openssl, native-tls",
+        "notable_parents": "openssl and native-tls",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1874,7 +1874,7 @@ stdout:
       },
       {
         "name": "js-sys",
-        "notable_parents": "reqwest, web-sys, wasm-bindgen-futures",
+        "notable_parents": "reqwest, web-sys, and wasm-bindgen-futures",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1954,7 +1954,7 @@ stdout:
       },
       {
         "name": "http",
-        "notable_parents": "h2, hyper, reqwest, http-body",
+        "notable_parents": "h2, hyper, reqwest, and http-body",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1986,7 +1986,7 @@ stdout:
       },
       {
         "name": "wasm-bindgen",
-        "notable_parents": "js-sys, reqwest, web-sys, wasm-bindgen-futures",
+        "notable_parents": "js-sys, reqwest, web-sys, and wasm-bindgen-futures",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2018,7 +2018,7 @@ stdout:
       },
       {
         "name": "serde_json",
-        "notable_parents": "reqwest, test-project",
+        "notable_parents": "reqwest and test-project",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2034,7 +2034,7 @@ stdout:
       },
       {
         "name": "hyper",
-        "notable_parents": "reqwest, hyper-tls",
+        "notable_parents": "reqwest and hyper-tls",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2050,7 +2050,7 @@ stdout:
       },
       {
         "name": "futures-util",
-        "notable_parents": "h2, hyper, reqwest",
+        "notable_parents": "h2, hyper, and reqwest",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2066,7 +2066,7 @@ stdout:
       },
       {
         "name": "h2",
-        "notable_parents": "hyper, reqwest",
+        "notable_parents": "hyper and reqwest",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2098,7 +2098,7 @@ stdout:
       },
       {
         "name": "syn",
-        "notable_parents": "tracing-attributes, and 2 others",
+        "notable_parents": "tracing-attributes and 2 others",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2210,7 +2210,7 @@ stdout:
       },
       {
         "name": "web-sys",
-        "notable_parents": "reqwest, wasm-bindgen-futures",
+        "notable_parents": "reqwest and wasm-bindgen-futures",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2261,7 +2261,7 @@ stdout:
         },
         {
           "name": "matches",
-          "notable_parents": "url, idna, form_urlencoded",
+          "notable_parents": "url, idna, and form_urlencoded",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2341,7 +2341,7 @@ stdout:
         },
         {
           "name": "wasm-bindgen-shared",
-          "notable_parents": "wasm-bindgen-backend, wasm-bindgen-macro-support",
+          "notable_parents": "wasm-bindgen-backend and wasm-bindgen-macro-support",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2373,7 +2373,7 @@ stdout:
         },
         {
           "name": "futures-sink",
-          "notable_parents": "h2, tokio-util",
+          "notable_parents": "h2 and tokio-util",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2469,7 +2469,7 @@ stdout:
         },
         {
           "name": "form_urlencoded",
-          "notable_parents": "url, serde_urlencoded",
+          "notable_parents": "url and serde_urlencoded",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2501,7 +2501,7 @@ stdout:
         },
         {
           "name": "percent-encoding",
-          "notable_parents": "url, reqwest, form_urlencoded",
+          "notable_parents": "url, reqwest, and form_urlencoded",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2517,7 +2517,7 @@ stdout:
         },
         {
           "name": "fnv",
-          "notable_parents": "h2, http",
+          "notable_parents": "h2 and http",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2533,7 +2533,7 @@ stdout:
         },
         {
           "name": "itoa",
-          "notable_parents": "http, hyper, serde_json, serde_urlencoded",
+          "notable_parents": "http, hyper, serde_json, and serde_urlencoded",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2581,7 +2581,7 @@ stdout:
         },
         {
           "name": "tokio-native-tls",
-          "notable_parents": "reqwest, hyper-tls",
+          "notable_parents": "reqwest and hyper-tls",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2677,7 +2677,7 @@ stdout:
         },
         {
           "name": "http-body",
-          "notable_parents": "hyper, reqwest",
+          "notable_parents": "hyper and reqwest",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2773,7 +2773,7 @@ stdout:
         },
         {
           "name": "core-foundation-sys",
-          "notable_parents": "core-foundation, and 2 others",
+          "notable_parents": "core-foundation and 2 others",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2805,7 +2805,7 @@ stdout:
         },
         {
           "name": "security-framework-sys",
-          "notable_parents": "native-tls, security-framework",
+          "notable_parents": "native-tls and security-framework",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2821,7 +2821,7 @@ stdout:
         },
         {
           "name": "unicode-xid",
-          "notable_parents": "syn, proc-macro2, proc-macro2",
+          "notable_parents": "syn, proc-macro2, and proc-macro2",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2965,7 +2965,7 @@ stdout:
         },
         {
           "name": "native-tls",
-          "notable_parents": "reqwest, hyper-tls, tokio-native-tls",
+          "notable_parents": "reqwest, hyper-tls, and tokio-native-tls",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2997,7 +2997,7 @@ stdout:
         },
         {
           "name": "quote",
-          "notable_parents": "syn, and 4 others",
+          "notable_parents": "syn and 4 others",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3125,7 +3125,7 @@ stdout:
         },
         {
           "name": "ryu",
-          "notable_parents": "serde_json, serde_urlencoded",
+          "notable_parents": "serde_json and serde_urlencoded",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3221,7 +3221,7 @@ stdout:
         },
         {
           "name": "socket2",
-          "notable_parents": "hyper, tokio",
+          "notable_parents": "hyper and tokio",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3301,7 +3301,7 @@ stdout:
         },
         {
           "name": "memchr",
-          "notable_parents": "tokio, os_str_bytes",
+          "notable_parents": "tokio and os_str_bytes",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3349,7 +3349,7 @@ stdout:
         },
         {
           "name": "indexmap",
-          "notable_parents": "h2, clap",
+          "notable_parents": "h2 and clap",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3365,7 +3365,7 @@ stdout:
         },
         {
           "name": "openssl-sys",
-          "notable_parents": "openssl, native-tls",
+          "notable_parents": "openssl and native-tls",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3413,7 +3413,7 @@ stdout:
         },
         {
           "name": "js-sys",
-          "notable_parents": "reqwest, web-sys, wasm-bindgen-futures",
+          "notable_parents": "reqwest, web-sys, and wasm-bindgen-futures",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3493,7 +3493,7 @@ stdout:
         },
         {
           "name": "http",
-          "notable_parents": "h2, hyper, reqwest, http-body",
+          "notable_parents": "h2, hyper, reqwest, and http-body",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3525,7 +3525,7 @@ stdout:
         },
         {
           "name": "wasm-bindgen",
-          "notable_parents": "js-sys, reqwest, web-sys, wasm-bindgen-futures",
+          "notable_parents": "js-sys, reqwest, web-sys, and wasm-bindgen-futures",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3557,7 +3557,7 @@ stdout:
         },
         {
           "name": "serde_json",
-          "notable_parents": "reqwest, test-project",
+          "notable_parents": "reqwest and test-project",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3573,7 +3573,7 @@ stdout:
         },
         {
           "name": "hyper",
-          "notable_parents": "reqwest, hyper-tls",
+          "notable_parents": "reqwest and hyper-tls",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3589,7 +3589,7 @@ stdout:
         },
         {
           "name": "futures-util",
-          "notable_parents": "h2, hyper, reqwest",
+          "notable_parents": "h2, hyper, and reqwest",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3605,7 +3605,7 @@ stdout:
         },
         {
           "name": "h2",
-          "notable_parents": "hyper, reqwest",
+          "notable_parents": "hyper and reqwest",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3637,7 +3637,7 @@ stdout:
         },
         {
           "name": "syn",
-          "notable_parents": "tracing-attributes, and 2 others",
+          "notable_parents": "tracing-attributes and 2 others",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3749,7 +3749,7 @@ stdout:
         },
         {
           "name": "web-sys",
-          "notable_parents": "reqwest, wasm-bindgen-futures",
+          "notable_parents": "reqwest and wasm-bindgen-futures",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
