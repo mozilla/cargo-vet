@@ -1592,12 +1592,14 @@ impl<'a> ResolveReport<'a> {
             None
         };
 
+        const THIS_PROJECT: &str = "this project";
+
         let mut trusted_publishers: FastMap<u64, SortedSet<ImportName>> = FastMap::new();
         for trusted_entry in store.audits.trusted.values().flatten() {
             trusted_publishers
                 .entry(trusted_entry.user_id)
                 .or_default()
-                .insert("this project".to_owned());
+                .insert(THIS_PROJECT.to_owned());
         }
         for (import_name, audits_file) in store.imported_audits() {
             for trusted_entry in audits_file.trusted.values().flatten() {
@@ -1697,7 +1699,15 @@ impl<'a> ResolveReport<'a> {
 
                     let publisher_trusted_by = publisher_id
                         .and_then(|user_id| trusted_publishers.get(&user_id))
-                        .map(|publishers| format_short_list(publishers.iter().cloned().collect()));
+                        .map(|publishers| {
+                            // If we're already trusted by this project, don't
+                            // bother listing anyone else.
+                            if publishers.contains(THIS_PROJECT) {
+                                THIS_PROJECT.to_owned()
+                            } else {
+                                format_short_list(publishers.iter().cloned().collect())
+                            }
+                        });
 
                     let publisher_login = publisher_id
                         .and_then(|user_id| cache.get_crates_user_info(user_id))
