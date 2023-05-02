@@ -1286,20 +1286,30 @@ fn cmd_trust(out: &Arc<dyn Out>, cfg: &Config, sub_args: &TrustArgs) -> Result<(
         }
         .as_ref(),
     )?;
+    let criteria = criteria_names.into_iter().map(Spanned::from).collect();
 
-    store
-        .audits
-        .trusted
-        .entry(package.clone())
-        .or_default()
-        .push(TrustEntry {
-            criteria: criteria_names.into_iter().map(|n| n.into()).collect(),
+    // Check if we have an existing trust entry which could be extended to
+    // handle a wider date range, and update that instead if possible.
+    let trust_entries = store.audits.trusted.entry(package.clone()).or_default();
+    if let Some(trust_entry) = trust_entries.iter_mut().find(|trust_entry| {
+        trust_entry.criteria == criteria
+            && trust_entry.user_id == user_id
+            && start <= *trust_entry.start
+            && *trust_entry.end <= end
+            && sub_args.notes.is_none()
+    }) {
+        trust_entry.start = start.into();
+        trust_entry.end = end.into();
+    } else {
+        trust_entries.push(TrustEntry {
+            criteria,
             user_id,
             start: start.into(),
             end: end.into(),
             notes: sub_args.notes.clone(),
             aggregated_from: vec![],
         });
+    }
 
     store
         .validate(today, false)
