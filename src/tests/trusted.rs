@@ -105,3 +105,159 @@ fn trusted_delta_audit_wrong_user_id_locked() {
 
     assert_report_snapshot!("trusted_delta_audit_wrong_user_id_locked", metadata, store);
 }
+
+#[test]
+fn trusted_suggest_local() {
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+    audits.audits.remove("transitive-third-party1");
+    audits.trusted.insert(
+        "other-crate".to_owned(),
+        vec![trusted_entry(1, SAFE_TO_DEPLOY)],
+    );
+
+    let mut network = Network::new_mock();
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/transitive-third-party1",
+        &serde_json::json!({
+            "crate": { "description": "description" },
+            "versions": [
+                {
+                    "crate": "transitive-third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 1,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+            ]
+        }),
+    );
+
+    let cfg = mock_cfg(&metadata);
+
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+
+    assert_report_snapshot!("trusted_suggest_local", metadata, store, Some(&network));
+}
+
+#[test]
+fn trusted_suggest_import() {
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+    audits.audits.remove("transitive-third-party1");
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: vec![FOREIGN_URL.to_owned()],
+            ..Default::default()
+        },
+    );
+
+    let new_foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
+        trusted: [(
+            "other-crate".to_owned(),
+            vec![trusted_entry(1, SAFE_TO_DEPLOY)],
+        )]
+        .into_iter()
+        .collect(),
+    };
+
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/transitive-third-party1",
+        &serde_json::json!({
+            "crate": { "description": "description" },
+            "versions": [
+                {
+                    "crate": "transitive-third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 1,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+            ]
+        }),
+    );
+
+    let cfg = mock_cfg(&metadata);
+
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+
+    assert_report_snapshot!("trusted_suggest_import", metadata, store, Some(&network));
+}
+
+#[test]
+fn trusted_suggest_local_ambiguous() {
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+    audits.audits.remove("transitive-third-party1");
+    audits.trusted.insert(
+        "other-crate".to_owned(),
+        vec![trusted_entry(1, SAFE_TO_DEPLOY)],
+    );
+
+    let mut network = Network::new_mock();
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/transitive-third-party1",
+        &serde_json::json!({
+            "crate": { "description": "description" },
+            "versions": [
+                {
+                    "crate": "transitive-third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "9.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "otheruser",
+                        "name": "Other user",
+                        "url": "https://github.com/otheruser"
+                    }
+                },
+                {
+                    "crate": "transitive-third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 1,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+            ]
+        }),
+    );
+
+    let cfg = mock_cfg(&metadata);
+
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+
+    assert_report_snapshot!(
+        "trusted_suggest_local_ambiguous",
+        metadata,
+        store,
+        Some(&network)
+    );
+}

@@ -283,13 +283,19 @@ impl Network {
 impl Network {
     /// Create a new Network which is serving mocked out resources.
     pub(crate) fn new_mock() -> Self {
-        Network {
+        let mut network = Network {
             client: Client::new(),
             connection_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS),
             source_file_cache: Default::default(),
             #[cfg(test)]
             mock_network: Some(Default::default()),
-        }
+        };
+        // Serve an empty registry by default.
+        network.mock_serve_toml(
+            crate::storage::REGISTRY_URL,
+            &crate::format::RegistryFile::default(),
+        );
+        network
     }
 
     /// Add a new resource to be served by a mocked-out network.

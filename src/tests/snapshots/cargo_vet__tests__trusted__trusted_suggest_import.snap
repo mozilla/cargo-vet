@@ -1,0 +1,18 @@
+---
+source: src/tests/trusted.rs
+expression: human
+---
+Vetting Failed!
+
+1 unvetted dependencies:
+  transitive-third-party1:10.0.0 missing ["safe-to-deploy"]
+
+recommended audits for safe-to-deploy:
+    Command                                           Publisher  Used By       Audit Size
+    cargo vet inspect transitive-third-party1 10.0.0  testuser   third-party1  100 lines
+      NOTE: peer-company trust(s) testuser - consider cargo vet trust transitive-third-party1
+
+estimated audit backlog: 100 lines
+
+Use |cargo vet certify| to record the audits.
+
