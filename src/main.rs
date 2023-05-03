@@ -1294,15 +1294,25 @@ fn do_cmd_trust(
             .as_ref(),
         )?;
 
-        let exempted_packages: Vec<_> = store.config.exemptions.keys().cloned().collect();
-        for package in exempted_packages {
-            let publishers = store.ensure_publisher_versions(cfg, network, &package)?;
+        let exemptions = store.config.exemptions.clone();
+        for package in exemptions.keys() {
+            let publishers = store.ensure_publisher_versions(cfg, network, package)?;
 
-            if publishers.is_empty()
-                || publishers
-                    .iter()
-                    .any(|publisher| publisher.user_login != publisher_login[..])
+            // Skip crates whose exempted versions were not published by this user.
+            if !exemptions[package]
+                .iter()
+                .map(|exemption| publishers.iter().find(|p| p.version == exemption.version))
+                .any(|publisher| publisher.map_or(false, |p| p.user_login == publisher_login[..]))
             {
+                continue;
+            }
+
+            // Skip crates published partially but not exclusively but this user (with a note).
+            if publishers
+                .iter()
+                .any(|publisher| publisher.user_login != publisher_login[..])
+            {
+                warn!("Skipping {} because it has multiple publishers", package);
                 continue;
             }
 
@@ -1312,7 +1322,7 @@ fn do_cmd_trust(
                 store,
                 network,
                 today,
-                &package,
+                package,
                 publisher_login,
                 sub_args.start_date,
                 sub_args.end_date,
