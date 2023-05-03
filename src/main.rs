@@ -1306,9 +1306,10 @@ fn do_cmd_trust(
         for package in exempted_packages {
             let publishers = store.ensure_publisher_versions(cfg, network, &package)?;
 
-            if publishers
-                .iter()
-                .any(|publisher| publisher.user_login != publisher_login[..])
+            if publishers.is_empty()
+                || publishers
+                    .iter()
+                    .any(|publisher| publisher.user_login != publisher_login[..])
             {
                 continue;
             }
