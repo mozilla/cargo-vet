@@ -140,13 +140,20 @@ pub struct Suggest {
 }
 
 #[derive(Debug, Clone)]
+pub struct TrustHint {
+    trusted_by: Vec<String>,
+    publisher: String,
+    exact_version: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct SuggestItem {
     pub package: PackageIdx,
     pub suggested_criteria: CriteriaSet,
     pub suggested_diff: DiffRecommendation,
     pub notable_parents: Vec<String>,
     pub publisher_login: Option<String>,
-    pub publisher_trusted_by: Option<Vec<String>>,
+    pub trust_hint: Option<TrustHint>,
     pub is_sole_publisher: bool,
     pub registry_suggestion: Vec<RegistrySuggestion>,
 }
@@ -1702,17 +1709,52 @@ impl<'a> ResolveReport<'a> {
                             None
                         };
 
-                    let publisher_trusted_by = publisher_id
-                        .and_then(|user_id| trusted_publishers.get(&user_id))
-                        .map(|publishers| {
+                    // Compute the trust hint, which is the information used to generate "consider
+                    // cargo trust FOO" messages. There can be multiple potential hints, but we
+                    // only provide the most relevant one. If the publisher of the in-use version
+                    // of the crate is potentially trustworthy, we suggest that. If not (and we
+                    // don't already have at least one trusted entry for this crate), we iterate
+                    // over the crate releases in reverse order to see if another version was
+                    // published by a potentially-trustworth author. We pick the first one of
+                    // those we find, if any.
+                    let trust_hint = {
+                        let mut exact_version = false;
+                        let id_for_hint = if publisher_id
+                            .map_or(false, |i| trusted_publishers.contains_key(&i))
+                        {
+                            exact_version = true;
+                            publisher_id
+                        } else if store.audits.trusted.get(package.name).is_none() {
+                            cache
+                                .get_cached_publishers(package.name)
+                                .iter()
+                                .rev()
+                                .filter_map(|release| release.published_by)
+                                .find(|i| trusted_publishers.contains_key(i))
+                        } else {
+                            None
+                        };
+
+                        id_for_hint.map(|id| {
+                            let mut trusted_by: Vec<String> = trusted_publishers
+                                .get(&id)
+                                .unwrap()
+                                .iter()
+                                .cloned()
+                                .collect();
                             // If we're already trusted by this project, don't
                             // bother listing anyone else.
-                            if publishers.contains(THIS_PROJECT) {
-                                vec![THIS_PROJECT.to_owned()]
-                            } else {
-                                publishers.iter().cloned().collect()
+                            if trusted_by.iter().any(|s| s == THIS_PROJECT) {
+                                trusted_by.retain(|s| s == THIS_PROJECT);
                             }
-                        });
+                            let publisher = cache.get_crates_user_info(id).unwrap().login;
+                            TrustHint {
+                                trusted_by,
+                                publisher,
+                                exact_version,
+                            }
+                        })
+                    };
 
                     let publisher_login = publisher_id
                         .and_then(|user_id| cache.get_crates_user_info(user_id))
@@ -1777,7 +1819,7 @@ impl<'a> ResolveReport<'a> {
                         suggested_criteria: audit_failure.criteria_failures.clone(),
                         notable_parents,
                         publisher_login,
-                        publisher_trusted_by,
+                        trust_hint,
                         is_sole_publisher,
                         registry_suggestion,
                     })
@@ -2155,20 +2197,24 @@ impl Suggest {
                             }),
                     );
                 }
-                if let (Some(trusted_by), Some(publisher_login)) =
-                    (&item.publisher_trusted_by, &item.publisher_login)
-                {
-                    let trust = if trusted_by.len() == 1 {
+                if let Some(hint) = &item.trust_hint {
+                    let trust = if hint.trusted_by.len() == 1 {
                         "trusts"
                     } else {
                         "trust"
                     };
-                    let trusted_by = format_short_list(trusted_by.clone());
+                    let caveat = if !hint.exact_version {
+                        ", who published another version of this crate"
+                    } else {
+                        ""
+                    };
+                    let publisher_login = hint.publisher.clone();
+                    let trusted_by = format_short_list(hint.trusted_by.clone());
                     writeln!(
                         out,
                         "      {} {}",
                         dim.clone().apply_to(format_args!(
-                            "NOTE: {trusted_by} {trust} {publisher_login} - consider",
+                            "NOTE: {trusted_by} {trust} {publisher_login}{caveat} - consider",
                         )),
                         if item.is_sole_publisher {
                             let this_cmd = format!("cargo vet trust {}", package.name);

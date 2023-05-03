@@ -2226,6 +2226,17 @@ impl Cache {
         guard.command_history.last_fetch = Some(last_fetch);
     }
 
+    /// Synchronous routine to get whatever publisher information is cached
+    /// without hitting the network.
+    pub fn get_cached_publishers(&self, name: PackageStr<'_>) -> Vec<PublisherCacheVersion> {
+        let guard = self.state.lock().unwrap();
+        guard
+            .publisher_cache
+            .crates
+            .get(name)
+            .map_or_else(Vec::new, |c| c.versions.clone())
+    }
+
     /// Look up information about who published each version of the specified
     /// crates. Versions for each crate are also specified in order to avoid
     /// hitting the network in the case where the cache already has the relevant
