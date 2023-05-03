@@ -10,7 +10,7 @@ Vetting Failed!
 recommended audits for safe-to-deploy:
     Command                                           Publisher  Used By       Audit Size
     cargo vet inspect transitive-third-party1 10.0.0  testuser   third-party1  100 lines
-      NOTE: this project trusts testuser - consider cargo vet trust transitive-third-party1
+      NOTE: this project trusts testuser - consider cargo vet trust transitive-third-party1 or cargo vet trust --all testuser
 
 estimated audit backlog: 100 lines
 

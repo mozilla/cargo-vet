@@ -2170,11 +2170,20 @@ impl Suggest {
                         dim.clone().apply_to(format_args!(
                             "NOTE: {trusted_by} {trust} {publisher_login} - consider",
                         )),
-                        dim.clone().cyan().apply_to(if item.is_sole_publisher {
-                            format!("cargo vet trust {}", package.name)
+                        if item.is_sole_publisher {
+                            let this_cmd = format!("cargo vet trust {}", package.name);
+                            let all_cmd = format!("cargo vet trust --all {}", publisher_login);
+                            format!(
+                                "{} {} {}",
+                                dim.clone().cyan().apply_to(this_cmd),
+                                dim.clone().apply_to("or"),
+                                dim.clone().cyan().apply_to(all_cmd),
+                            )
                         } else {
-                            format!("cargo vet trust {} {}", package.name, publisher_login)
-                        })
+                            let cmd =
+                                format!("cargo vet trust {} {}", package.name, publisher_login);
+                            dim.clone().cyan().apply_to(cmd).to_string()
+                        }
                     );
                 }
             }
