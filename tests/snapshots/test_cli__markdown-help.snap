@@ -139,6 +139,7 @@ graph
 * [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
 * [certify](#cargo-vet-certify): Mark a package as audited
 * [import](#cargo-vet-import): Import a new peer's imports
+* [trust](#cargo-vet-trust): Trust a given crate and publisher
 * [regenerate](#cargo-vet-regenerate): Explicitly regenerate various pieces of information
 * [add-exemption](#cargo-vet-add-exemption): Mark a package as exempted from review
 * [record-violation](#cargo-vet-record-violation): Declare that some versions of a package violate certain audit criteria
@@ -414,6 +415,60 @@ If a URL is not provided, a peer with the given name will be looked up in the ca
 registry to determine the import URL(s).
 
 ### OPTIONS
+#### `-h, --help`
+Print help information
+
+### GLOBAL OPTIONS
+This subcommand accepts all the [global options](#global-options)
+
+<br><br><br>
+## cargo vet trust
+Trust a given crate and publisher
+
+### USAGE
+```
+cargo vet trust [OPTIONS] [ARGS]
+```
+
+### ARGS
+#### `<PACKAGE>`
+The package to trust
+
+Must be specified unless --all has been specified.
+
+#### `<PUBLISHER_LOGIN>`
+The username of the publisher to trust
+
+If not provided, will be inferred to be the sole known publisher of the given crate.
+If there is more than one publisher for the given crate, the login must be provided
+explicitly.
+
+### OPTIONS
+#### `--criteria <CRITERIA>`
+The criteria to certify for this trust entry
+
+If not provided, we will prompt you for this information.
+
+#### `--start-date <START_DATE>`
+Start date to create the trust entry from.
+
+If not provided, will be the publication date of the first version published by the
+given user.
+
+#### `--end-date <END_DATE>`
+End date to create the trust entry from. May be at most 1 year in the future.
+
+If not provided, will be 1 year from the current date.
+
+#### `--notes <NOTES>`
+A free-form string to include with the new audit entry
+
+If not provided, there will be no notes.
+
+#### `--all <ALL>`
+If specified, trusts all packages with exemptions which are solely published by the
+given user
+
 #### `-h, --help`
 Print help information
 

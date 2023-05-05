@@ -19,7 +19,7 @@ expression: output
 +
 +[[audits.peer-company.wildcard-audits.third-party1]]
 +criteria = "safe-to-deploy"
-+user-id = 2
++user-id = 2 # User Two (user2)
 +start = "2022-12-01"
 +end = "2023-01-01"
 +

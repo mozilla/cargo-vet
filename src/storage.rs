@@ -32,11 +32,12 @@ use crate::{
     flock::{FileLock, Filesystem},
     format::{
         self, AuditEntry, AuditKind, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
-        CratesAPICrate, CratesPublisher, CriteriaEntry, CriteriaMap, CriteriaName, CriteriaStr,
-        Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName,
-        ImportsFile, MetaConfig, PackageName, PackageStr, PublisherCache, PublisherCacheEntry,
-        PublisherCacheUser, PublisherCacheVersion, RegistryEntry, RegistryFile, SortedMap,
-        StoreVersion, VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        CratesAPICrate, CratesPublisher, CratesUserId, CriteriaEntry, CriteriaMap, CriteriaName,
+        CriteriaStr, Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand, ForeignAuditsFile,
+        ImportName, ImportsFile, MetaConfig, PackageName, PackageStr, PublisherCache,
+        PublisherCacheEntry, PublisherCacheUser, PublisherCacheVersion, RegistryEntry,
+        RegistryFile, SortedMap, StoreVersion, TrustEntry, TrustedPackages, VetVersion,
+        WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
@@ -185,6 +186,7 @@ impl Store {
                 criteria: SortedMap::new(),
                 wildcard_audits: SortedMap::new(),
                 audits: SortedMap::new(),
+                trusted: SortedMap::new(),
             },
             live_imports: None,
             config_src: SourceFile::new_empty(CONFIG_TOML),
@@ -466,9 +468,10 @@ impl Store {
             let mut audits = lock.write_audits()?;
             let mut config = lock.write_config()?;
             let mut imports = lock.write_imports()?;
-            audits.write_all(store_audits(self.audits)?.as_bytes())?;
+            let user_info = user_info_map(&self.imports);
+            audits.write_all(store_audits(self.audits, &user_info)?.as_bytes())?;
             config.write_all(store_config(self.config)?.as_bytes())?;
-            imports.write_all(store_imports(self.imports)?.as_bytes())?;
+            imports.write_all(store_imports(self.imports, &user_info)?.as_bytes())?;
         }
         Ok(())
     }
@@ -477,10 +480,11 @@ impl Store {
     /// Doesn't take `self` by value so that it can continue to be used.
     #[cfg(test)]
     pub fn mock_commit(&self) -> SortedMap<String, String> {
+        let user_info = user_info_map(&self.imports);
         [
             (
                 AUDITS_TOML.to_owned(),
-                store_audits(self.audits.clone()).unwrap(),
+                store_audits(self.audits.clone(), &user_info).unwrap(),
             ),
             (
                 CONFIG_TOML.to_owned(),
@@ -488,7 +492,7 @@ impl Store {
             ),
             (
                 IMPORTS_LOCK.to_owned(),
-                store_imports(self.imports.clone()).unwrap(),
+                store_imports(self.imports.clone(), &user_info).unwrap(),
             ),
         ]
         .into_iter()
@@ -628,6 +632,7 @@ impl Store {
         // them or dropping unused fields while in CI, as those changes will be
         // ignored.
         if check_file_formatting {
+            let user_info = user_info_map(&self.imports);
             for (name, old, new) in [
                 (
                     CONFIG_TOML,
@@ -638,13 +643,13 @@ impl Store {
                 (
                     AUDITS_TOML,
                     self.audits_src.source(),
-                    store_audits(self.audits.clone())
+                    store_audits(self.audits.clone(), &user_info)
                         .unwrap_or_else(|_| self.audits_src.source().to_owned()),
                 ),
                 (
                     IMPORTS_LOCK,
                     self.imports_src.source(),
-                    store_imports(self.imports.clone())
+                    store_imports(self.imports.clone(), &user_info)
                         .unwrap_or_else(|_| self.imports_src.source().to_owned()),
                 ),
             ] {
@@ -1117,6 +1122,9 @@ async fn fetch_single_imported_audit(
         audit_entry.is_fresh_import = true;
         make_criteria_local(&mut audit_entry.criteria);
     }
+    for trust_entry in audit_file.trusted.values_mut().flat_map(|v| v.iter_mut()) {
+        make_criteria_local(&mut trust_entry.criteria);
+    }
 
     // Now that we're done with foreign criteria, trim the set to only
     // contain mapped criteria, as we don't care about other criteria, so
@@ -1255,11 +1263,25 @@ pub(crate) fn foreign_audit_file_to_local(
         .filter(|(_, audits)| !audits.is_empty())
         .collect();
 
+    let trusted: TrustedPackages = foreign_audit_file
+        .trusted
+        .into_iter()
+        .map(|(package, trusted)| {
+            let parsed: Vec<_> = trusted
+                .into_iter()
+                .filter_map(|value| parse_imported_trust_entry(&valid_criteria, value))
+                .collect();
+            (package, parsed)
+        })
+        .filter(|(_, trusted)| !trusted.is_empty())
+        .collect();
+
     ForeignAuditFileToLocalResult {
         audit_file: AuditsFile {
             criteria,
             wildcard_audits,
             audits,
+            trusted,
         },
         ignored_criteria,
         ignored_audits,
@@ -1313,6 +1335,26 @@ fn parse_imported_wildcard_audit(
     Some(audit)
 }
 
+/// Parse an unparsed wildcard audit entry, validating and returning it.
+fn parse_imported_trust_entry(
+    valid_criteria: &[CriteriaName],
+    value: toml::Value,
+) -> Option<TrustEntry> {
+    let mut audit: TrustEntry = parse_from_value(value)
+        .map_err(|err| info!("imported trust entry audit parsing failed due to {err}"))
+        .ok()?;
+
+    audit
+        .criteria
+        .retain(|criteria_name| is_known_criteria(valid_criteria, criteria_name));
+    if audit.criteria.is_empty() {
+        info!("imported trust entry parsing failed due to no known criteria");
+        return None;
+    }
+
+    Some(audit)
+}
+
 fn wildcard_audits_packages(
     audits_file: &AuditsFile,
     imports_file: &ImportsFile,
@@ -1330,6 +1372,7 @@ fn wildcard_audits_packages(
                 .flat_map(|audits_file| audits_file.wildcard_audits.keys()),
         )
         .chain(imports_file.publisher.keys())
+        .chain(audits_file.trusted.keys())
         .cloned()
         .collect()
 }
@@ -1462,6 +1505,19 @@ pub async fn fetch_registry(network: &Network) -> Result<RegistryFile, FetchRegi
         })
         .map_err(LoadTomlError::from)?;
     Ok(registry_file)
+}
+
+pub fn user_info_map(imports: &ImportsFile) -> FastMap<CratesUserId, PublisherCacheUser> {
+    let mut user_info = FastMap::new();
+    for publisher in imports.publisher.values().flatten() {
+        user_info
+            .entry(publisher.user_id)
+            .or_insert_with(|| PublisherCacheUser {
+                login: publisher.user_login.clone(),
+                name: publisher.user_name.clone(),
+            });
+    }
+    user_info
 }
 
 /// A Registry in CARGO_HOME (usually the crates.io one)
@@ -2170,11 +2226,22 @@ impl Cache {
         guard.command_history.last_fetch = Some(last_fetch);
     }
 
+    /// Synchronous routine to get whatever publisher information is cached
+    /// without hitting the network.
+    pub fn get_cached_publishers(&self, name: PackageStr<'_>) -> Vec<PublisherCacheVersion> {
+        let guard = self.state.lock().unwrap();
+        guard
+            .publisher_cache
+            .crates
+            .get(name)
+            .map_or_else(Vec::new, |c| c.versions.clone())
+    }
+
     /// Look up information about who published each version of the specified
     /// crates. Versions for each crate are also specified in order to avoid
     /// hitting the network in the case where the cache already has the relevant
     /// information.
-    async fn get_publishers(
+    pub async fn get_publishers(
         &self,
         network: &Network,
         name: PackageStr<'_>,
@@ -2280,7 +2347,7 @@ impl Cache {
     }
 
     /// Look up user information for a crates.io user from the publisher cache.
-    fn get_crates_user_info(&self, user_id: u64) -> Option<PublisherCacheUser> {
+    pub fn get_crates_user_info(&self, user_id: u64) -> Option<PublisherCacheUser> {
         let guard = self.state.lock().unwrap();
         guard.publisher_cache.users.get(&user_id).cloned()
     }
@@ -2560,11 +2627,15 @@ where
         }
     }
 }
-fn store_toml<T>(heading: &str, val: T) -> Result<String, StoreTomlError>
+fn store_toml<T>(
+    heading: &str,
+    val: T,
+    user_info: Option<&FastMap<CratesUserId, PublisherCacheUser>>,
+) -> Result<String, StoreTomlError>
 where
     T: Serialize,
 {
-    let toml_document = to_formatted_toml(val)?;
+    let toml_document = to_formatted_toml(val, user_info)?;
     Ok(format!("{heading}{toml_document}"))
 }
 fn load_json<T>(reader: impl Read) -> Result<T, LoadJsonError>
@@ -2585,7 +2656,10 @@ where
     Ok(json_string)
 }
 
-fn store_audits(mut audits: AuditsFile) -> Result<String, StoreTomlError> {
+fn store_audits(
+    mut audits: AuditsFile,
+    user_info: &FastMap<CratesUserId, PublisherCacheUser>,
+) -> Result<String, StoreTomlError> {
     let heading = r###"
 # cargo-vet audits file
 "###;
@@ -2594,7 +2668,7 @@ fn store_audits(mut audits: AuditsFile) -> Result<String, StoreTomlError> {
         .values_mut()
         .for_each(|entries| entries.sort());
 
-    store_toml(heading, audits)
+    store_toml(heading, audits, Some(user_info))
 }
 fn store_config(mut config: ConfigFile) -> Result<String, StoreTomlError> {
     config
@@ -2606,19 +2680,22 @@ fn store_config(mut config: ConfigFile) -> Result<String, StoreTomlError> {
 # cargo-vet config file
 "###;
 
-    store_toml(heading, config)
+    store_toml(heading, config, None)
 }
-fn store_imports(imports: ImportsFile) -> Result<String, StoreTomlError> {
+fn store_imports(
+    imports: ImportsFile,
+    user_info: &FastMap<CratesUserId, PublisherCacheUser>,
+) -> Result<String, StoreTomlError> {
     let heading = r###"
 # cargo-vet imports lock
 "###;
 
-    store_toml(heading, imports)
+    store_toml(heading, imports, Some(user_info))
 }
 fn store_diff_cache(diff_cache: DiffCache) -> Result<String, StoreTomlError> {
     let heading = "";
 
-    store_toml(heading, diff_cache)
+    store_toml(heading, diff_cache, None)
 }
 fn store_command_history(command_history: CommandHistory) -> Result<String, StoreJsonError> {
     store_json(command_history)

@@ -1,0 +1,43 @@
+---
+source: src/tests/certify.rs
+expression: result
+---
+OUTPUT:
+<<<CLEAR SCREEN>>>
+choose trusted criteria for third-party1:* published by testuser
+  1. safe-to-run
+  2. safe-to-deploy
+  3. fuzzed
+  4. reviewed
+  5. strong-reviewed
+  6. weak-reviewed
+
+current selection: ["safe-to-deploy"]
+(press ENTER to accept the current criteria)
+> 
+
+
+AUDITS:
+
+[criteria.fuzzed]
+description = "fuzzed"
+
+[criteria.reviewed]
+description = "reviewed"
+implies = "weak-reviewed"
+
+[criteria.strong-reviewed]
+description = "strongly reviewed"
+implies = "reviewed"
+
+[criteria.weak-reviewed]
+description = "weakly reviewed"
+
+[audits]
+
+[[trusted.third-party1]]
+criteria = "safe-to-deploy"
+user-id = 2
+start = "2022-10-12"
+end = "2024-01-01"
+

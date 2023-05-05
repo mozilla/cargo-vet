@@ -146,6 +146,7 @@ fn imported_wildcard_audit() {
             .into_iter()
             .collect(),
             audits: SortedMap::new(),
+            trusted: SortedMap::new(),
         },
     );
     config.imports.insert(

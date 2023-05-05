@@ -39,7 +39,8 @@ use crate::errors::{
 };
 use crate::format::{
     AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesUserId, CriteriaEntry, ExemptedDependency,
-    FetchCommand, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo, WildcardEntry,
+    FetchCommand, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo, TrustEntry,
+    WildcardEntry,
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
@@ -470,6 +471,7 @@ fn real_main() -> Result<(), miette::Report> {
         Some(Init(sub_args)) => cmd_init(&out, &cfg, sub_args),
         Some(Certify(sub_args)) => cmd_certify(&out, &cfg, sub_args),
         Some(Import(sub_args)) => cmd_import(&out, &cfg, sub_args),
+        Some(Trust(sub_args)) => cmd_trust(&out, &cfg, sub_args),
         Some(AddExemption(sub_args)) => cmd_add_exemption(&out, &cfg, sub_args),
         Some(RecordViolation(sub_args)) => cmd_record_violation(&out, &cfg, sub_args),
         Some(Suggest(sub_args)) => cmd_suggest(&out, &cfg, sub_args),
@@ -754,9 +756,7 @@ fn do_cmd_certify(
         )
     };
 
-    let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
-
-    let criteria_names = if sub_args.criteria.is_empty() {
+    let (criteria_guess, prompt) = if sub_args.criteria.is_empty() {
         // If we don't have explicit cli criteria, guess the criteria
         //
         // * Check what would cause `cargo vet` to encounter fewer errors
@@ -764,99 +764,35 @@ fn do_cmd_certify(
         // * Otherwise guess nothing
         //
         // Regardless of the guess, prompt the user to confirm (just needs to mash enter)
-        let (mut chosen_criteria, version_suffix) = match &kind {
+        match &kind {
             CertifyKind::Full { version } => (
                 guess_audit_criteria(cfg, store, &package, None, version),
-                version.to_string(),
+                Some(format!(
+                    "choose criteria to certify for {package}:{version}"
+                )),
             ),
             CertifyKind::Delta { from, to } => (
                 guess_audit_criteria(cfg, store, &package, Some(from), to),
-                format!("{from} -> {to}"),
+                Some(format!(
+                    "choose criteria to certify for {package}:{from} -> {to}"
+                )),
             ),
             CertifyKind::Wildcard { .. } => {
                 // FIXME: Consider predicting the criteria better for wildcard
                 // audits in the future.
-                (vec![format::SAFE_TO_DEPLOY.to_owned()], "*".to_owned())
+                (
+                    vec![format::SAFE_TO_DEPLOY.to_owned()],
+                    Some(format!("choose criteria to certify for {package}:*")),
+                )
             }
-        };
-
-        // Prompt for criteria
-        loop {
-            out.clear_screen()?;
-            writeln!(
-                out,
-                "choose criteria to certify for {package}:{version_suffix}"
-            );
-            writeln!(out, "  0. <clear selections>");
-            let implied_criteria = criteria_mapper.criteria_from_list(&chosen_criteria);
-            for (criteria_idx, criteria_name) in criteria_mapper.all_criteria_names().enumerate() {
-                if chosen_criteria.iter().any(|s| s == criteria_name) {
-                    writeln!(
-                        out,
-                        "  {}. {}",
-                        criteria_idx + 1,
-                        out.style().green().apply_to(criteria_name)
-                    );
-                } else if implied_criteria.has_criteria(criteria_idx) {
-                    writeln!(
-                        out,
-                        "  {}. {}",
-                        criteria_idx + 1,
-                        out.style().yellow().apply_to(criteria_name)
-                    );
-                } else {
-                    writeln!(out, "  {}. {}", criteria_idx + 1, criteria_name);
-                }
-            }
-
-            writeln!(out);
-            writeln!(
-                out,
-                "current selection: {:?}",
-                criteria_mapper
-                    .criteria_names(&implied_criteria)
-                    .collect::<Vec<_>>()
-            );
-            writeln!(out, "(press ENTER to accept the current criteria)");
-            let input = out.read_line_with_prompt("> ")?;
-            let input = input.trim();
-            if input.is_empty() {
-                if chosen_criteria.is_empty() {
-                    return Err(CertifyError::NoCriteriaChosen);
-                }
-                // User done selecting criteria
-                break;
-            }
-
-            // FIXME: these errors get cleared away right away
-            let answer = if let Ok(val) = input.parse::<usize>() {
-                val
-            } else {
-                // ERRORS: immediate error print to output for feedback, non-fatal
-                writeln!(out, "error: not a valid integer");
-                continue;
-            };
-            if answer == 0 {
-                chosen_criteria.clear();
-                continue;
-            }
-            if answer > criteria_mapper.len() {
-                // ERRORS: immediate error print to output for feedback, non-fatal
-                writeln!(out, "error: not a valid criteria");
-                continue;
-            }
-            chosen_criteria.push(criteria_mapper.criteria_name(answer - 1).to_owned());
         }
-        chosen_criteria
     } else {
-        sub_args.criteria.clone()
+        // If we do have explcit criteria, don't prompt, but still pass through
+        // prompt_pick_criteria to simplify and validate.
+        (sub_args.criteria.clone(), None)
     };
-
-    // Round-trip this through the criteria_mapper to clean up `implies` relationships
-    let criteria_set = criteria_mapper.criteria_from_list(&criteria_names);
-    let criteria_names = criteria_mapper
-        .criteria_names(&criteria_set)
-        .collect::<Vec<_>>();
+    let criteria_names =
+        criteria_picker(out, &store.audits.criteria, criteria_guess, prompt.as_ref())?;
 
     let statement = match &kind {
         CertifyKind::Full { version } => {
@@ -887,7 +823,7 @@ fn do_cmd_certify(
         let eulas = tokio::runtime::Handle::current().block_on(join_all(
             criteria_names.iter().map(|criteria| async {
                 (
-                    *criteria,
+                    &criteria[..],
                     eula_for_criteria(network, &store.audits.criteria, criteria).await,
                 )
             }),
@@ -950,10 +886,7 @@ fn do_cmd_certify(
         };
     }
 
-    let criteria = criteria_names
-        .iter()
-        .map(|s| s.to_string().into())
-        .collect();
+    let criteria = criteria_names.into_iter().map(|s| s.into()).collect();
     match kind {
         CertifyKind::Full { version } => {
             store
@@ -1028,6 +961,82 @@ fn do_cmd_certify(
     });
 
     Ok(())
+}
+
+fn criteria_picker(
+    out: &Arc<dyn Out>,
+    store_criteria: &SortedMap<CriteriaName, CriteriaEntry>,
+    criteria_guess: Vec<CriteriaName>,
+    prompt: Option<&impl AsRef<str>>,
+) -> Result<Vec<CriteriaName>, CertifyError> {
+    let criteria_mapper = CriteriaMapper::new(store_criteria);
+
+    let mut chosen_criteria = criteria_guess;
+    if let Some(prompt) = prompt {
+        // Prompt for criteria
+        loop {
+            out.clear_screen()?;
+            writeln!(out, "{}", prompt.as_ref());
+            for (criteria_idx, criteria_name) in criteria_mapper.all_criteria_names().enumerate() {
+                if chosen_criteria.iter().any(|s| s == criteria_name) {
+                    writeln!(
+                        out,
+                        "  {}. {}",
+                        criteria_idx + 1,
+                        out.style().green().bold().apply_to(criteria_name)
+                    );
+                } else {
+                    writeln!(
+                        out,
+                        "  {}. {}",
+                        criteria_idx + 1,
+                        out.style().bold().dim().apply_to(criteria_name)
+                    );
+                }
+            }
+
+            writeln!(out);
+            writeln!(out, "current selection: {:?}", chosen_criteria);
+            writeln!(out, "(press ENTER to accept the current criteria)");
+            let input = out.read_line_with_prompt("> ")?;
+            let input = input.trim();
+            if input.is_empty() {
+                if chosen_criteria.is_empty() {
+                    return Err(CertifyError::NoCriteriaChosen);
+                }
+                // User done selecting criteria
+                break;
+            }
+
+            // FIXME: these errors get cleared away right away
+            let answer = if let Ok(val) = input.parse::<usize>() {
+                val
+            } else {
+                // ERRORS: immediate error print to output for feedback, non-fatal
+                writeln!(out, "error: not a valid integer");
+                continue;
+            };
+            if answer == 0 || answer > criteria_mapper.len() {
+                // ERRORS: immediate error print to output for feedback, non-fatal
+                writeln!(out, "error: not a valid criteria");
+                continue;
+            }
+
+            let selection = criteria_mapper.criteria_name(answer - 1).to_owned();
+            if chosen_criteria.contains(&selection) {
+                chosen_criteria.retain(|x| x != &selection);
+            } else {
+                chosen_criteria.push(selection);
+            }
+        }
+    }
+
+    // Round-trip this through the criteria_mapper to clean up `implies` relationships
+    let criteria_set = criteria_mapper.criteria_from_list(&chosen_criteria);
+    Ok(criteria_mapper
+        .criteria_names(&criteria_set)
+        .map(|s| s.to_owned())
+        .collect::<Vec<_>>())
 }
 
 /// Attempt to guess which criteria are being certified for a given package and
@@ -1202,6 +1211,223 @@ fn cmd_import(
 
     store.commit()?;
 
+    Ok(())
+}
+
+fn cmd_trust(out: &Arc<dyn Out>, cfg: &Config, sub_args: &TrustArgs) -> Result<(), miette::Report> {
+    // Certify that you have reviewed a crate's source for some version / delta
+    let network = Network::acquire(cfg);
+    let mut store = Store::acquire(cfg, network.as_ref(), false)?;
+
+    let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
+
+    do_cmd_trust(out, cfg, sub_args, &mut store, network.as_ref(), today)?;
+
+    store.commit()?;
+
+    Ok(())
+}
+
+fn do_cmd_trust(
+    out: &Arc<dyn Out>,
+    cfg: &Config,
+    sub_args: &TrustArgs,
+    store: &mut Store,
+    network: Option<&Network>,
+    today: chrono::NaiveDate,
+) -> Result<(), miette::Report> {
+    if let Some(package) = &sub_args.package {
+        // Fetch publisher information for relevant versions of `package`.
+        let publishers = store.ensure_publisher_versions(cfg, network, package)?;
+
+        let publisher_login = if let Some(login) = &sub_args.publisher_login {
+            login.clone()
+        } else if let Some(first) = publishers.first() {
+            if publishers
+                .iter()
+                .all(|publisher| publisher.user_id == first.user_id)
+            {
+                first.user_login.clone()
+            } else {
+                return Err(miette!(
+                    "The package '{}' has multiple known publishers, \
+                please explicitly specify which publisher to trust",
+                    package
+                ));
+            }
+        } else {
+            return Err(miette!(
+                "The package '{}' has no known publishers, so cannot be trusted",
+                package
+            ));
+        };
+
+        apply_cmd_trust(
+            out,
+            cfg,
+            store,
+            network,
+            today,
+            package,
+            &publisher_login,
+            sub_args.start_date,
+            sub_args.end_date,
+            &sub_args.criteria,
+            sub_args.notes.as_ref(),
+        )
+    } else if let Some(publisher_login) = &sub_args.all {
+        let criteria_names = criteria_picker(
+            out,
+            &store.audits.criteria,
+            if sub_args.criteria.is_empty() {
+                vec![format::SAFE_TO_DEPLOY.to_owned()]
+            } else {
+                sub_args.criteria.clone()
+            },
+            if sub_args.criteria.is_empty() {
+                Some(format!(
+                    "choose trusted criteria for packages published by {publisher_login}"
+                ))
+            } else {
+                None
+            }
+            .as_ref(),
+        )?;
+
+        let exemptions = store.config.exemptions.clone();
+        for package in exemptions.keys() {
+            let publishers = store.ensure_publisher_versions(cfg, network, package)?;
+
+            // Skip crates whose exempted versions were not published by this user.
+            if !exemptions[package]
+                .iter()
+                .map(|exemption| publishers.iter().find(|p| p.version == exemption.version))
+                .any(|publisher| publisher.map_or(false, |p| p.user_login == publisher_login[..]))
+            {
+                continue;
+            }
+
+            // Skip crates published partially but not exclusively but this user (with a note).
+            if publishers
+                .iter()
+                .any(|publisher| publisher.user_login != publisher_login[..])
+            {
+                warn!("Skipping {} because it has multiple publishers", package);
+                continue;
+            }
+
+            apply_cmd_trust(
+                out,
+                cfg,
+                store,
+                network,
+                today,
+                package,
+                publisher_login,
+                sub_args.start_date,
+                sub_args.end_date,
+                &criteria_names,
+                sub_args.notes.as_ref(),
+            )?;
+        }
+
+        Ok(())
+    } else {
+        Err(miette!("Please specify either a package to trust or --all"))
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_cmd_trust(
+    out: &Arc<dyn Out>,
+    cfg: &Config,
+    store: &mut Store,
+    network: Option<&Network>,
+    today: chrono::NaiveDate,
+    package: &str,
+    publisher_login: &str,
+    start_date: Option<chrono::NaiveDate>,
+    end_date: Option<chrono::NaiveDate>,
+    criteria: &[CriteriaName],
+    notes: Option<&String>,
+) -> Result<(), miette::Report> {
+    // Fetch publisher information for relevant versions of `package`.
+    let publishers = store.ensure_publisher_versions(cfg, network, package)?;
+
+    let published_versions = publishers
+        .iter()
+        .filter(|publisher| publisher.user_login == publisher_login);
+
+    let earliest = published_versions.min_by_key(|p| p.when).ok_or_else(|| {
+        CertifyError::NotAPublisher(publisher_login.to_owned(), package.to_owned())
+    })?;
+    let user_id = earliest.user_id;
+
+    // Get the from and to dates, defaulting to a from date of the earliest
+    // published package by the user, and a to date of 12 months from today.
+    let start = start_date.unwrap_or(earliest.when);
+
+    let end = end_date.unwrap_or(today + chrono::Months::new(12));
+
+    let criteria_names = criteria_picker(
+        out,
+        &store.audits.criteria,
+        if criteria.is_empty() {
+            vec![format::SAFE_TO_DEPLOY.to_owned()]
+        } else {
+            criteria.to_owned()
+        },
+        if criteria.is_empty() {
+            Some(format!(
+                "choose trusted criteria for {package}:* published by {publisher_login}"
+            ))
+        } else {
+            None
+        }
+        .as_ref(),
+    )?;
+    let criteria = criteria_names.into_iter().map(Spanned::from).collect();
+
+    // Check if we have an existing trust entry which could be extended to
+    // handle a wider date range, and update that instead if possible.
+    let trust_entries = store.audits.trusted.entry(package.to_owned()).or_default();
+    if let Some(trust_entry) = trust_entries.iter_mut().find(|trust_entry| {
+        trust_entry.criteria == criteria
+            && trust_entry.user_id == user_id
+            && start <= *trust_entry.start
+            && *trust_entry.end <= end
+            && notes.is_none()
+    }) {
+        trust_entry.start = start.into();
+        trust_entry.end = end.into();
+    } else {
+        trust_entries.push(TrustEntry {
+            criteria,
+            user_id,
+            start: start.into(),
+            end: end.into(),
+            notes: notes.cloned(),
+            aggregated_from: vec![],
+        });
+    }
+
+    store
+        .validate(today, false)
+        .expect("the new trusted entry made the store invalid?");
+
+    // Minimize exemptions after adding the new trust entry. This will be used
+    // to potentially update imports, and remove now-unnecessary exemptions for
+    // the target package. We only prefer fresh imports and prune exemptions for
+    // the package we trusted, to avoid unrelated changes.
+    resolver::update_store(cfg, store, |name| resolver::UpdateMode {
+        search_mode: if name == package {
+            resolver::SearchMode::PreferFreshImports
+        } else {
+            resolver::SearchMode::PreferExemptions
+        },
+        prune_exemptions: name == package,
+        prune_imports: false,
+    });
     Ok(())
 }
 
@@ -1839,7 +2065,7 @@ fn cmd_aggregate(
         .into_diagnostic()?;
 
     let merged_audits = do_aggregate_audits(sources).into_diagnostic()?;
-    let document = serialization::to_formatted_toml(merged_audits).into_diagnostic()?;
+    let document = serialization::to_formatted_toml(merged_audits, None).into_diagnostic()?;
     write!(out, "{document}");
     Ok(())
 }
@@ -1850,6 +2076,9 @@ fn do_aggregate_audits(sources: Vec<(String, AuditsFile)>) -> Result<AuditsFile,
         criteria: SortedMap::new(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        // FIXME: How should we handle aggregating trusted entries? Should we do
+        // any form of de-duplication?
+        trusted: SortedMap::new(),
     };
 
     for (source, audit_file) in sources {

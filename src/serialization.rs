@@ -1,6 +1,6 @@
 //! Serialization helpers
 
-use crate::format::{CriteriaMap, SortedMap};
+use crate::format::{CratesUserId, CriteriaMap, FastMap, PublisherCacheUser, SortedMap};
 use core::fmt;
 use serde::{
     de::{self, value, SeqAccess, Visitor},
@@ -409,14 +409,33 @@ fn table_should_be_inline(key: &str, value: &toml_edit::Item) -> bool {
 /// using it's `Display` implementation.
 ///
 /// Can fail if `T`'s implementation of `Serialize` fails.
-pub fn to_formatted_toml<T>(val: T) -> Result<toml_edit::Document, toml_edit::ser::Error>
+pub fn to_formatted_toml<T>(
+    val: T,
+    user_info: Option<&FastMap<CratesUserId, PublisherCacheUser>>,
+) -> Result<toml_edit::Document, toml_edit::ser::Error>
 where
     T: Serialize,
 {
     use toml_edit::visit_mut::VisitMut;
 
-    struct TomlFormatter;
-    impl VisitMut for TomlFormatter {
+    struct TomlFormatter<'a> {
+        user_info: Option<&'a FastMap<CratesUserId, PublisherCacheUser>>,
+    }
+    impl TomlFormatter<'_> {
+        fn add_user_login_comments(&self, v: &mut toml_edit::Item) {
+            let Some(user_info) = &self.user_info else { return };
+            let Some(v) = v.as_value_mut() else { return };
+            let Some(user_id) = v.as_integer() else { return };
+            let Some(info) = user_info.get(&(user_id as u64)) else { return };
+            let detail = if let Some(name) = &info.name {
+                format!("{} ({})", name, info.login)
+            } else {
+                info.login.clone()
+            };
+            v.decor_mut().set_suffix(format!(" # {}", detail));
+        }
+    }
+    impl VisitMut for TomlFormatter<'_> {
         fn visit_table_mut(&mut self, node: &mut toml_edit::Table) {
             // Hide unnecessary implicit table headers for tables containing
             // only other tables. We don't do this for empty tables as otherwise
@@ -424,6 +443,7 @@ where
             if !node.is_empty() {
                 node.set_implicit(true);
             }
+            let is_publisher_entry = node.get("user-login").is_some();
             for (k, v) in node.iter_mut() {
                 if !table_should_be_inline(&k, v) {
                     // Try to convert the value into either a table or an array of
@@ -450,13 +470,17 @@ where
                     array.set_trailing_comma(true);
                 }
 
+                if k == "user-id" && !is_publisher_entry {
+                    self.add_user_login_comments(v);
+                }
+
                 self.visit_item_mut(v);
             }
         }
     }
 
     let mut toml_document = toml_edit::ser::to_document(&val)?;
-    TomlFormatter.visit_document_mut(&mut toml_document);
+    TomlFormatter { user_info }.visit_document_mut(&mut toml_document);
     Ok(toml_document)
 }
 
@@ -772,15 +796,18 @@ mod test {
             }),
         );
 
-        let formatted = super::to_formatted_toml(ConfigFile {
-            cargo_vet: CargoVetConfig {
-                version: StoreVersion { major: 1, minor: 0 },
+        let formatted = super::to_formatted_toml(
+            ConfigFile {
+                cargo_vet: CargoVetConfig {
+                    version: StoreVersion { major: 1, minor: 0 },
+                },
+                default_criteria: get_default_criteria(),
+                imports: SortedMap::new(),
+                policy,
+                exemptions: SortedMap::new(),
             },
-            default_criteria: get_default_criteria(),
-            imports: SortedMap::new(),
-            policy,
-            exemptions: SortedMap::new(),
-        })
+            None,
+        )
         .unwrap()
         .to_string();
 

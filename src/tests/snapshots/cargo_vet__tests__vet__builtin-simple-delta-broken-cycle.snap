@@ -8,7 +8,8 @@ Vetting Failed!
   third-party1:10.0.0 missing ["safe-to-deploy"]
 
 recommended audits for safe-to-deploy:
-    cargo vet diff third-party1 7.0.0 8.0.0  (used by first-party)  (1 files changed, 15 insertions(+))
+    Command                                  Publisher  Used By      Audit Size
+    cargo vet diff third-party1 7.0.0 8.0.0  UNKNOWN    first-party  1 files changed, 15 insertions(+)
 
 estimated audit backlog: 15 lines
 

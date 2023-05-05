@@ -14,8 +14,8 @@ use crate::{
     format::{
         AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesPublisher, CriteriaEntry, CriteriaMap,
         CriteriaName, CriteriaStr, ExemptedDependency, FastMap, ImportsFile, MetaConfig,
-        PackageName, PackagePolicyEntry, PackageStr, PolicyEntry, SortedMap, SortedSet, VersionReq,
-        VetVersion, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        PackageName, PackagePolicyEntry, PackageStr, PolicyEntry, SortedMap, SortedSet, TrustEntry,
+        VersionReq, VetVersion, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     git_tool::Editor,
     network::Network,
@@ -52,6 +52,7 @@ mod import;
 mod regenerate_unaudited;
 mod registry;
 mod store_parsing;
+mod trusted;
 mod vet;
 mod violations;
 mod wildcard;
@@ -407,6 +408,17 @@ fn wildcard_audit_m(
         end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
         aggregated_from: vec![],
         is_fresh_import: false,
+    }
+}
+
+fn trusted_entry(user_id: u64, criteria: CriteriaStr) -> TrustEntry {
+    TrustEntry {
+        notes: None,
+        criteria: vec![criteria.to_string().into()],
+        user_id,
+        start: chrono::NaiveDate::from_ymd_opt(2022, 12, 1).unwrap().into(),
+        end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
+        aggregated_from: vec![],
     }
 }
 
@@ -958,6 +970,7 @@ fn init_files(
         criteria: criteria.into_iter().collect(),
         wildcard_audits: SortedMap::new(),
         audits: SortedMap::new(),
+        trusted: SortedMap::new(),
     };
     let imports = ImportsFile {
         publisher: SortedMap::new(),

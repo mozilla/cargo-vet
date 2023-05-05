@@ -29,6 +29,10 @@ stdout:
     {
       "name": "serde",
       "version": "1.0.136"
+    },
+    {
+      "name": "tracing",
+      "version": "0.1.33"
     }
   ],
   "vetted_partially": [
@@ -341,10 +345,6 @@ stdout:
     {
       "name": "tower-service",
       "version": "0.3.1"
-    },
-    {
-      "name": "tracing",
-      "version": "0.1.33"
     },
     {
       "name": "tracing-attributes",

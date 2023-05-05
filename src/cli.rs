@@ -269,6 +269,10 @@ pub enum Commands {
     #[clap(disable_version_flag = true)]
     Import(ImportArgs),
 
+    /// Trust a given crate and publisher
+    #[clap(disable_version_flag = true)]
+    Trust(TrustArgs),
+
     /// Explicitly regenerate various pieces of information
     ///
     /// There are several things that `cargo vet` *can* do for you automatically
@@ -517,6 +521,48 @@ pub struct ImportArgs {
     /// in the cargo-vet registry to determine the import URL(s).
     #[clap(action)]
     pub url: Vec<String>,
+}
+
+/// Trust a crate's publisher
+#[derive(clap::Args)]
+pub struct TrustArgs {
+    /// The package to trust
+    ///
+    /// Must be specified unless --all has been specified.
+    #[clap(action, required_unless_present("all"))]
+    pub package: Option<PackageName>,
+    /// The username of the publisher to trust
+    ///
+    /// If not provided, will be inferred to be the sole known publisher of the
+    /// given crate. If there is more than one publisher for the given crate,
+    /// the login must be provided explicitly.
+    #[clap(action)]
+    pub publisher_login: Option<String>,
+    /// The criteria to certify for this trust entry
+    ///
+    /// If not provided, we will prompt you for this information.
+    #[clap(long, action)]
+    pub criteria: Vec<CriteriaName>,
+    /// Start date to create the trust entry from.
+    ///
+    /// If not provided, will be the publication date of the first version
+    /// published by the given user.
+    #[clap(long, action)]
+    pub start_date: Option<chrono::NaiveDate>,
+    /// End date to create the trust entry from. May be at most 1 year in the future.
+    ///
+    /// If not provided, will be 1 year from the current date.
+    #[clap(long, action)]
+    pub end_date: Option<chrono::NaiveDate>,
+    /// A free-form string to include with the new audit entry
+    ///
+    /// If not provided, there will be no notes.
+    #[clap(long, action)]
+    pub notes: Option<String>,
+    /// If specified, trusts all packages with exemptions which are solely
+    /// published by the given user.
+    #[clap(long, action, conflicts_with("package"))]
+    pub all: Option<String>,
 }
 
 /// Forbids the given version

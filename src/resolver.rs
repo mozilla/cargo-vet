@@ -140,11 +140,21 @@ pub struct Suggest {
 }
 
 #[derive(Debug, Clone)]
+pub struct TrustHint {
+    trusted_by: Vec<String>,
+    publisher: String,
+    exact_version: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct SuggestItem {
     pub package: PackageIdx,
     pub suggested_criteria: CriteriaSet,
     pub suggested_diff: DiffRecommendation,
-    pub notable_parents: String,
+    pub notable_parents: Vec<String>,
+    pub publisher_login: Option<String>,
+    pub trust_hint: Option<TrustHint>,
+    pub is_sole_publisher: bool,
     pub registry_suggestion: Vec<RegistrySuggestion>,
 }
 
@@ -284,6 +294,8 @@ pub enum DeltaEdgeOrigin {
         audit_index: usize,
         publisher_index: usize,
     },
+    /// This edge represents a trusted publisher.
+    Trusted { publisher_index: usize },
     /// This edge represents an exemption from the local config.toml.
     Exemption { exemption_index: usize },
     /// This edge represents brand new exemption which didn't previously exist
@@ -1069,6 +1081,14 @@ impl<'a> AuditGraph<'a> {
                         })
                 });
 
+        // Iterator over every trusted entry.
+        let trusteds = store
+            .audits
+            .trusted
+            .get(package)
+            .map(|v| &v[..])
+            .unwrap_or(&[]);
+
         let publishers = store
             .publishers()
             .get(package)
@@ -1142,6 +1162,31 @@ impl<'a> AuditGraph<'a> {
                         criteria,
                         origin,
                         is_fresh_import,
+                    });
+                }
+            }
+
+            for entry in trusteds {
+                if entry.user_id == publisher.user_id
+                    && *entry.start <= publisher.when
+                    && publisher.when < *entry.end
+                {
+                    let from_ver = None;
+                    let to_ver = Some(&publisher.version);
+                    let criteria = criteria_mapper.criteria_from_list(&entry.criteria);
+                    let origin = DeltaEdgeOrigin::Trusted { publisher_index };
+
+                    forward_audits.entry(from_ver).or_default().push(DeltaEdge {
+                        version: to_ver,
+                        criteria: criteria.clone(),
+                        origin: origin.clone(),
+                        is_fresh_import: publisher.is_fresh_import,
+                    });
+                    backward_audits.entry(to_ver).or_default().push(DeltaEdge {
+                        version: from_ver,
+                        criteria,
+                        origin,
+                        is_fresh_import: publisher.is_fresh_import,
                     });
                 }
             }
@@ -1512,6 +1557,34 @@ fn search_for_path(
     Err(visited.into_iter().map(|v| v.cloned()).collect())
 }
 
+/// Format a short list with commas and an "and" before the last item in a
+/// multi-item list. Also returns whether the list has multiple items.
+fn format_short_list(mut items: Vec<String>) -> String {
+    // To keep the display compact, sort by name length and truncate long lists.
+    // We first sort by name because rust defaults to a stable sort and this will
+    // have by-name as the tie breaker.
+    items.sort();
+    items.sort_by_key(|item| item.len());
+    let cutoff_index = items
+        .iter()
+        .scan(0, |sum, s| {
+            *sum += s.len();
+            Some(*sum)
+        })
+        .position(|count| count > 20);
+    let remainder = cutoff_index.map(|i| items.len() - i).unwrap_or(0);
+    if remainder > 1 {
+        items.truncate(cutoff_index.unwrap());
+        items.push(format!("{remainder} others"));
+    }
+    match &items[..] {
+        [] => String::new(),
+        [a] => a.to_owned(),
+        [a, b] => format!("{a} and {b}"),
+        [items @ .., last] => format!("{}, and {}", items.join(", "), last),
+    }
+}
+
 impl<'a> ResolveReport<'a> {
     pub fn has_errors(&self) -> bool {
         // Just check the conclusion
@@ -1554,6 +1627,24 @@ impl<'a> ResolveReport<'a> {
             None
         };
 
+        const THIS_PROJECT: &str = "this project";
+
+        let mut trusted_publishers: FastMap<u64, SortedSet<ImportName>> = FastMap::new();
+        for trusted_entry in store.audits.trusted.values().flatten() {
+            trusted_publishers
+                .entry(trusted_entry.user_id)
+                .or_default()
+                .insert(THIS_PROJECT.to_owned());
+        }
+        for (import_name, audits_file) in store.imported_audits() {
+            for trusted_entry in audits_file.trusted.values().flatten() {
+                trusted_publishers
+                    .entry(trusted_entry.user_id)
+                    .or_default()
+                    .insert(import_name.clone());
+            }
+        }
+
         let suggest_progress =
             progress_bar("Suggesting", "relevant audits", fail.failures.len() as u64);
 
@@ -1569,32 +1660,11 @@ impl<'a> ResolveReport<'a> {
                         .expect("failed package without ResolveResults?");
 
                     // Precompute some "notable" parents
-                    let notable_parents = {
-                        let mut reverse_deps = self.graph.nodes[failure_idx]
-                            .reverse_deps
-                            .iter()
-                            .map(|&parent| self.graph.nodes[parent].name.to_string())
-                            .collect::<Vec<_>>();
-
-                        // To keep the display compact, sort by name length and truncate long lists.
-                        // We first sort by name because rust defaults to a stable sort and this will
-                        // have by-name as the tie breaker.
-                        reverse_deps.sort();
-                        reverse_deps.sort_by_key(|item| item.len());
-                        let cutoff_index = reverse_deps
-                            .iter()
-                            .scan(0, |sum, s| {
-                                *sum += s.len();
-                                Some(*sum)
-                            })
-                            .position(|count| count > 20);
-                        let remainder = cutoff_index.map(|i| reverse_deps.len() - i).unwrap_or(0);
-                        if remainder > 1 {
-                            reverse_deps.truncate(cutoff_index.unwrap());
-                            reverse_deps.push(format!("and {remainder} others"));
-                        }
-                        reverse_deps.join(", ")
-                    };
+                    let notable_parents = self.graph.nodes[failure_idx]
+                        .reverse_deps
+                        .iter()
+                        .map(|&parent| self.graph.nodes[parent].name.to_string())
+                        .collect();
 
                     let suggested_diff = suggest_delta(
                         &cfg.metadata,
@@ -1610,6 +1680,85 @@ impl<'a> ResolveReport<'a> {
                         &warnings,
                     )
                     .await?;
+
+                    // Attempt to look up the publisher of the target version
+                    // for the suggested diff, and also record whether the given
+                    // package has a sole publisher.
+                    let mut is_sole_publisher = false;
+                    let publisher_id =
+                        if let (Some(network), None) = (&network, &suggested_diff.to.git_rev) {
+                            let publishers = cache
+                                .get_publishers(
+                                    network,
+                                    package.name,
+                                    [&suggested_diff.to.semver].into_iter().collect(),
+                                )
+                                .await
+                                .unwrap_or_default();
+                            let publisher_count = publishers
+                                .iter()
+                                .flat_map(|publisher| &publisher.published_by)
+                                .collect::<FastSet<_>>()
+                                .len();
+                            is_sole_publisher = publisher_count == 1;
+                            publishers
+                                .into_iter()
+                                .find(|p| p.num == suggested_diff.to.semver)
+                                .and_then(|p| p.published_by)
+                        } else {
+                            None
+                        };
+
+                    // Compute the trust hint, which is the information used to generate "consider
+                    // cargo trust FOO" messages. There can be multiple potential hints, but we
+                    // only provide the most relevant one. If the publisher of the in-use version
+                    // of the crate is potentially trustworthy, we suggest that. If not (and we
+                    // don't already have at least one trusted entry for this crate), we iterate
+                    // over the crate releases in reverse order to see if another version was
+                    // published by a potentially-trustworth author. We pick the first one of
+                    // those we find, if any.
+                    let trust_hint = {
+                        let mut exact_version = false;
+                        let id_for_hint = if publisher_id
+                            .map_or(false, |i| trusted_publishers.contains_key(&i))
+                        {
+                            exact_version = true;
+                            publisher_id
+                        } else if store.audits.trusted.get(package.name).is_none() {
+                            cache
+                                .get_cached_publishers(package.name)
+                                .iter()
+                                .rev()
+                                .filter_map(|release| release.published_by)
+                                .find(|i| trusted_publishers.contains_key(i))
+                        } else {
+                            None
+                        };
+
+                        id_for_hint.map(|id| {
+                            let mut trusted_by: Vec<String> = trusted_publishers
+                                .get(&id)
+                                .unwrap()
+                                .iter()
+                                .cloned()
+                                .collect();
+                            // If we're already trusted by this project, don't
+                            // bother listing anyone else.
+                            if trusted_by.iter().any(|s| s == THIS_PROJECT) {
+                                trusted_by.retain(|s| s == THIS_PROJECT);
+                            }
+                            let publisher = cache.get_crates_user_info(id).unwrap().login;
+                            TrustHint {
+                                trusted_by,
+                                publisher,
+                                exact_version,
+                            }
+                        })
+                    };
+
+                    let publisher_login = publisher_id
+                        .and_then(|user_id| cache.get_crates_user_info(user_id))
+                        .map(|pi| pi.login);
 
                     let mut registry_suggestion: Vec<_> = join_all(registry.iter().flatten().map(
                         |(name, entry, audits)| async {
@@ -1669,6 +1818,9 @@ impl<'a> ResolveReport<'a> {
                         suggested_diff,
                         suggested_criteria: audit_failure.criteria_failures.clone(),
                         notable_parents,
+                        publisher_login,
+                        trust_hint,
+                        is_sole_publisher,
                         registry_suggestion,
                     })
                 },
@@ -1845,7 +1997,7 @@ impl<'a> ResolveReport<'a> {
                         let package = &self.graph.nodes[item.package];
                         JsonSuggestItem {
                             name: package.name.to_owned(),
-                            notable_parents: item.notable_parents.to_owned(),
+                            notable_parents: format_short_list(item.notable_parents.clone()),
                             suggested_criteria: self
                                 .criteria_mapper
                                 .criteria_names(&item.suggested_criteria)
@@ -1962,7 +2114,7 @@ impl Suggest {
         for (criteria, suggestions) in &self.suggestions_by_criteria {
             writeln!(out, "recommended audits for {criteria}:");
 
-            let strings = suggestions
+            let mut strings = suggestions
                 .iter()
                 .map(|item| {
                     let package = &report.graph.nodes[item.package];
@@ -1976,23 +2128,48 @@ impl Suggest {
                             package.name, item.suggested_diff.to
                         ),
                     };
-                    let parents = format!("(used by {})", item.notable_parents);
+                    let publisher = item
+                        .publisher_login
+                        .clone()
+                        .unwrap_or_else(|| "UNKNOWN".into());
+                    let parents = format_short_list(item.notable_parents.clone());
                     let diffstat = match &item.suggested_diff.from {
-                        Some(_) => format!("({})", item.suggested_diff.diffstat),
-                        None => format!("({} lines)", item.suggested_diff.diffstat.count()),
+                        Some(_) => format!("{}", item.suggested_diff.diffstat),
+                        None => format!("{} lines", item.suggested_diff.diffstat.count()),
                     };
-                    (cmd, parents, diffstat, item)
+                    (cmd, publisher, parents, diffstat, item)
                 })
                 .collect::<Vec<_>>();
 
-            let mut max0 = 0;
-            let mut max1 = 0;
-            for (s0, s1, ..) in &strings {
-                max0 = max0.max(console::measure_text_width(s0));
+            let (h0, h1, h2, h3) = ("Command", "Publisher", "Used By", "Audit Size");
+            let mut max0 = console::measure_text_width(h0);
+            let mut max1 = console::measure_text_width(h1);
+            let mut max2 = console::measure_text_width(h2);
+            for (s0, s1, s2, ..) in &mut strings {
+                // If the command is too long (happens occasionally, particularly with @git
+                // version specifiers), wrap subsequent columns to the next line.
+                const MAX_COMMAND_CHARS: usize = 52;
+                let command_width = console::measure_text_width(s0);
+                if command_width > MAX_COMMAND_CHARS {
+                    s0.push('\n');
+                    s0.push_str(&" ".repeat(MAX_COMMAND_CHARS + 4));
+                }
+                max0 = max0.max(command_width.min(MAX_COMMAND_CHARS));
                 max1 = max1.max(console::measure_text_width(s1));
+                max2 = max2.max(console::measure_text_width(s2));
             }
 
-            for (s0, s1, s2, item) in strings {
+            writeln!(
+                out,
+                "{}",
+                out.style()
+                    .bold()
+                    .dim()
+                    .apply_to(format_args!("    {h0:max0$}  {h1:max1$}  {h2:max2$}  {h3}"))
+            );
+            for (s0, s1, s2, s3, item) in strings {
+                let package = &report.graph.nodes[item.package];
+
                 write!(
                     out,
                     "{}",
@@ -2001,7 +2178,7 @@ impl Suggest {
                         .bold()
                         .apply_to(format_args!("    {s0:max0$}"))
                 );
-                writeln!(out, "  {s1:max1$}  {s2}");
+                writeln!(out, "  {s1:max1$}  {s2:max2$}  {s3}");
 
                 let dim = out.style().dim();
                 for suggestion in &item.registry_suggestion {
@@ -2018,6 +2195,41 @@ impl Suggest {
                                 0 => "would eliminate this".to_owned(),
                                 n => format!("would reduce this to a {n}-line diff"),
                             }),
+                    );
+                }
+                if let Some(hint) = &item.trust_hint {
+                    let trust = if hint.trusted_by.len() == 1 {
+                        "trusts"
+                    } else {
+                        "trust"
+                    };
+                    let caveat = if !hint.exact_version {
+                        ", who published another version of this crate"
+                    } else {
+                        ""
+                    };
+                    let publisher_login = hint.publisher.clone();
+                    let trusted_by = format_short_list(hint.trusted_by.clone());
+                    writeln!(
+                        out,
+                        "      {} {}",
+                        dim.clone().apply_to(format_args!(
+                            "NOTE: {trusted_by} {trust} {publisher_login}{caveat} - consider",
+                        )),
+                        if item.is_sole_publisher {
+                            let this_cmd = format!("cargo vet trust {}", package.name);
+                            let all_cmd = format!("cargo vet trust --all {}", publisher_login);
+                            format!(
+                                "{} {} {}",
+                                dim.clone().cyan().apply_to(this_cmd),
+                                dim.clone().apply_to("or"),
+                                dim.clone().cyan().apply_to(all_cmd),
+                            )
+                        } else {
+                            let cmd =
+                                format!("cargo vet trust {} {}", package.name, publisher_login);
+                            dim.clone().cyan().apply_to(cmd).to_string()
+                        }
                     );
                 }
             }
@@ -2372,6 +2584,9 @@ fn resolve_package_required_entries(
                         }
                         add_entry(RequiredEntry::Publisher { publisher_index })
                     }
+                    DeltaEdgeOrigin::Trusted { publisher_index } => {
+                        add_entry(RequiredEntry::Publisher { publisher_index })
+                    }
                     DeltaEdgeOrigin::StoredLocalAudit { .. } => {}
                 }
             }
@@ -2537,6 +2752,9 @@ pub(crate) fn get_store_updates(
                     (n.clone(), l)
                 })
                 .collect(),
+
+            // We never import trusted entries in imports.lock.
+            trusted: SortedMap::new(),
         };
         new_imports
             .audits

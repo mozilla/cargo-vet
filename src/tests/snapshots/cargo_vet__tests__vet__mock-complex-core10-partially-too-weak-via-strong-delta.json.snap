@@ -17,7 +17,7 @@ expression: json
     "suggestions": [
       {
         "name": "third-core",
-        "notable_parents": "firstB, thirdA, thirdAB",
+        "notable_parents": "firstB, thirdA, and thirdAB",
         "suggested_criteria": [
           "reviewed"
         ],
@@ -36,7 +36,7 @@ expression: json
       "reviewed": [
         {
           "name": "third-core",
-          "notable_parents": "firstB, thirdA, thirdAB",
+          "notable_parents": "firstB, thirdA, and thirdAB",
           "suggested_criteria": [
             "reviewed"
           ],

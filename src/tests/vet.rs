@@ -2466,6 +2466,7 @@ fn builtin_simple_foreign_tag_team() {
             )]
             .into_iter()
             .collect(),
+            trusted: SortedMap::new(),
         },
     );
     config.imports.insert(
@@ -2505,6 +2506,7 @@ fn builtin_simple_mega_foreign_tag_team() {
             )]
             .into_iter()
             .collect(),
+            trusted: SortedMap::new(),
         },
     );
     config.imports.insert(
@@ -2525,6 +2527,7 @@ fn builtin_simple_mega_foreign_tag_team() {
             )]
             .into_iter()
             .collect(),
+            trusted: SortedMap::new(),
         },
     );
     config.imports.insert(
@@ -2590,6 +2593,7 @@ fn builtin_simple_registry_suggestions() {
             ]
             .into_iter()
             .collect(),
+            trusted: SortedMap::new(),
         },
     );
     network.mock_serve_toml(
@@ -2609,6 +2613,7 @@ fn builtin_simple_registry_suggestions() {
             ]
             .into_iter()
             .collect(),
+            trusted: SortedMap::new(),
         },
     );
 

@@ -1,6 +1,6 @@
 ---
 source: src/tests/vet.rs
-expression: output
+expression: human
 ---
 Vetting Failed!
 
@@ -8,7 +8,8 @@ Vetting Failed!
   third-party1:10.0.0 missing ["reviewed"]
 
 recommended audits for reviewed:
-    cargo vet inspect third-party1 5.0.0  (used by first-party)  (25 lines)
+    Command                               Publisher  Used By      Audit Size
+    cargo vet inspect third-party1 5.0.0  UNKNOWN    first-party  25 lines
 
 estimated audit backlog: 25 lines
 

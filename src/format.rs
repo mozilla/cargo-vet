@@ -207,8 +207,10 @@ pub type WildcardAudits = SortedMap<PackageName, Vec<WildcardEntry>>;
 
 pub type AuditedDependencies = SortedMap<PackageName, Vec<AuditEntry>>;
 
+pub type TrustedPackages = SortedMap<PackageName, Vec<TrustEntry>>;
+
 /// audits.toml
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct AuditsFile {
     /// A map of criteria_name to details on that criteria.
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
@@ -221,6 +223,10 @@ pub struct AuditsFile {
     pub wildcard_audits: WildcardAudits,
     /// Actual audits.
     pub audits: AuditedDependencies,
+    /// Trusted packages
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
+    #[serde(default)]
+    pub trusted: TrustedPackages,
 }
 
 /// Foreign audits.toml with unparsed entries and audits. Should have the same
@@ -234,6 +240,8 @@ pub struct ForeignAuditsFile {
     pub wildcard_audits: SortedMap<PackageName, Vec<toml::Value>>,
     #[serde(default)]
     pub audits: SortedMap<PackageName, Vec<toml::Value>>,
+    #[serde(default)]
+    pub trusted: SortedMap<PackageName, Vec<toml::Value>>,
 }
 
 /// Information on a Criteria
@@ -405,6 +413,26 @@ impl WildcardEntry {
             && self.end == other.end
             && self.criteria == other.criteria
     }
+}
+
+/// An entry specifying a trusted publisher for a specific crate based on
+/// crates.io publication time and user-id.
+///
+/// Trusted crates will be reified in the imports.lock file when unlocked.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TrustEntry {
+    #[serde(with = "serialization::string_or_vec")]
+    pub criteria: Vec<Spanned<CriteriaName>>,
+    #[serde(rename = "user-id")]
+    pub user_id: CratesUserId,
+    pub start: Spanned<chrono::NaiveDate>,
+    pub end: Spanned<chrono::NaiveDate>,
+    pub notes: Option<String>,
+    #[serde(rename = "aggregated-from")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(with = "serialization::string_or_vec")]
+    #[serde(default)]
+    pub aggregated_from: Vec<Spanned<String>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -1084,7 +1112,7 @@ pub struct CratesAPICrate {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct RegistryFile {
     pub registry: SortedMap<ImportName, RegistryEntry>,
 }

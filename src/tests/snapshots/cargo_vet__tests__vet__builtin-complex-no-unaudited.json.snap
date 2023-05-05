@@ -54,7 +54,7 @@ expression: json
       },
       {
         "name": "third-core",
-        "notable_parents": "firstB, thirdA, thirdAB",
+        "notable_parents": "firstB, thirdA, and thirdAB",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -121,7 +121,7 @@ expression: json
         },
         {
           "name": "third-core",
-          "notable_parents": "firstB, thirdA, thirdAB",
+          "notable_parents": "firstB, thirdA, and thirdAB",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
