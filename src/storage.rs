@@ -32,12 +32,12 @@ use crate::{
     flock::{FileLock, Filesystem},
     format::{
         self, AuditEntry, AuditKind, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
-        CratesAPICrate, CratesPublisher, CratesUserId, CriteriaEntry, CriteriaMap, CriteriaName,
-        CriteriaStr, Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand, ForeignAuditsFile,
-        ImportName, ImportsFile, MetaConfig, PackageName, PackageStr, PublisherCache,
-        PublisherCacheEntry, PublisherCacheUser, PublisherCacheVersion, RegistryEntry,
-        RegistryFile, SortedMap, StoreVersion, TrustEntry, TrustedPackages, VetVersion,
-        WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        CratesAPICrate, CratesAPICrateMetadata, CratesPublisher, CratesUserId, CriteriaEntry,
+        CriteriaMap, CriteriaName, CriteriaStr, Delta, DiffCache, DiffStat, FastMap, FastSet,
+        FetchCommand, ForeignAuditsFile, ImportName, ImportsFile, MetaConfig, PackageName,
+        PackageStr, PublisherCache, PublisherCacheEntry, PublisherCacheUser, PublisherCacheVersion,
+        RegistryEntry, RegistryFile, SortedMap, StoreVersion, TrustEntry, TrustedPackages,
+        VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
@@ -1630,6 +1630,10 @@ impl Cache {
         }
 
         if cfg.mock_cache {
+            #[cfg(not(test))]
+            let publisher_cache = Default::default();
+            #[cfg(test)]
+            let publisher_cache = crate::tests::mock_publisher_cache();
             // We're in unit tests, everything should be mocked and not touch real caches
             return Ok(Cache {
                 _lock: None,
@@ -1642,7 +1646,7 @@ impl Cache {
                 state: Mutex::new(CacheState {
                     diff_cache: DiffCache::default(),
                     command_history: CommandHistory::default(),
-                    publisher_cache: PublisherCache::default(),
+                    publisher_cache,
                     fetched_packages: FastMap::new(),
                     diffed: FastMap::new(),
                 }),
@@ -2226,27 +2230,21 @@ impl Cache {
         guard.command_history.last_fetch = Some(last_fetch);
     }
 
-    /// Synchronous routine to get whatever publisher information is cached
-    /// without hitting the network.
-    pub fn get_cached_publishers(&self, name: PackageStr<'_>) -> Vec<PublisherCacheVersion> {
-        let guard = self.state.lock().unwrap();
-        guard
-            .publisher_cache
-            .crates
-            .get(name)
-            .map_or_else(Vec::new, |c| c.versions.clone())
-    }
-
-    /// Look up information about who published each version of the specified
-    /// crates. Versions for each crate are also specified in order to avoid
-    /// hitting the network in the case where the cache already has the relevant
-    /// information.
-    pub async fn get_publishers(
+    /// If `versions` is specified, the cached information will be used if all specified versions
+    /// are already present or if the missing versions are _not_ in the crates.io index and the
+    /// last fetched time is less than `NONINDEX_VERSION_PUBLISHER_REFRESH_DAYS`.
+    ///
+    /// If `versions` is None, the cached information is used _only_ when the last fetched time is
+    /// less than `NONINDEX_VERSION_PUBLISHER_REFRESH_DAYS`.
+    ///
+    /// When this function returns `Ok`, the returned state is guaranteed to have an entry for
+    /// `name` in `publisher_cache.crates`.
+    async fn update_publisher_cache(
         &self,
         network: &Network,
         name: PackageStr<'_>,
-        versions: FastSet<&semver::Version>,
-    ) -> Result<Vec<PublisherCacheVersion>, GetPublishersError> {
+        versions: Option<FastSet<&'_ semver::Version>>,
+    ) -> Result<std::sync::MutexGuard<CacheState>, GetPublishersError> {
         let now: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
 
         // Load the cached response from our publisher-cache.
@@ -2256,67 +2254,74 @@ impl Cache {
                 // Check if there are any relevant versions which are not present in
                 // the local cache. If none are missing, we have everything cached
                 // and can continue as normal.
-                let missing_versions: Vec<_> = versions
-                    .iter()
-                    .filter(|&&v| !published.versions.iter().any(|p| &p.num == v))
-                    .collect();
-                if missing_versions.is_empty() {
+                let missing_versions: Option<Vec<_>> = versions.map(|v| {
+                    v.into_iter()
+                        .filter(|&v| !published.versions.iter().any(|p| &p.num == v))
+                        .collect()
+                });
+                // If versions were specified and there were no missing versions, return
+                // immediately.
+                if missing_versions
+                    .as_ref()
+                    .map(|v| v.is_empty())
+                    .unwrap_or(false)
+                {
                     info!("using cached publisher info for {name} - relevant versions in cache");
-                    return Ok(published.versions.clone());
+                    return Ok(guard);
                 }
 
                 // If we last fetched this package's published versions less than a
                 // day ago, double-check if the versions we care about appear in the
                 // local crates.io index.
-                // If none of the versions appear in the local index, we can skip
-                // fetching. This should help in cases where a crate is marked as
-                // `audit-as-crates-io` but is not actually published, as we'll
-                // never find publisher information in those cases.
+                // If none of the versions appear in the local index or no versions were specified,
+                // we can skip fetching. This should help in cases where a crate is marked as
+                // `audit-as-crates-io` but is not actually published, as we'll never find
+                // publisher information in those cases.
                 if now - published.last_fetched
                     < chrono::Duration::days(NONINDEX_VERSION_PUBLISHER_REFRESH_DAYS)
                 {
                     if let Some(index_crate) = self.query_package_from_index(name) {
                         if missing_versions
-                            .iter()
-                            .all(|version| exact_version(&index_crate, version).is_none())
+                            .map(|v| {
+                                v.iter()
+                                    .all(|version| exact_version(&index_crate, version).is_none())
+                            })
+                            .unwrap_or(true)
                         {
                             info!("using cached publisher info for {name} - missing versions appear unpublished");
-                            return Ok(published.versions.clone());
+                            return Ok(guard);
                         }
                     }
                 }
             }
         }
 
-        // If we don't know the publisher for every "relevant" version
-        // of this crate, we want to make sure we have the most
-        // up-to-date information about the publisher of packages from
-        // crates.io, so need to fetch information from the crates.io
-        // API.
+        // If we don't know the publisher for every "relevant" version of this crate (or if no
+        // versions were specified), we want to make sure we have the most up-to-date information
+        // about the publisher of packages from crates.io, so need to fetch information from the
+        // crates.io API.
         //
-        // NOTE: The official scraper policy requests a rate limit of 1
-        // request per second (https://crates.io/policies#crawlers).
-        // This wouldn't be a very good user-experience to require a
-        // multi-second wait to fetch each crate's information, however
-        // the local caching and infrequent user-driven calls to the API
-        // should hopefully ensure we remain under the 1 request per
-        // second limit over time.
+        // NOTE: The official scraper policy requests a rate limit of 1 request per second
+        // (https://crates.io/policies#crawlers).  This wouldn't be a very good user-experience to
+        // require a multi-second wait to fetch each crate's information, however the local caching
+        // and infrequent user-driven calls to the API should hopefully ensure we remain under the
+        // 1 request per second limit over time.
         //
-        // If this ends up being an issue, we can look into adding some form
-        // of cross-call tracking in the cache to ensure that we don't
-        // exceed the rate over a slightly-extended period of time, (e.g. by
-        // throttling requests from consecutive calls).
+        // If this ends up being an issue, we can look into adding some form of cross-call tracking
+        // in the cache to ensure that we don't exceed the rate over a slightly-extended period of
+        // time, (e.g. by throttling requests from consecutive calls).
         assert!(!name.contains('/'), "invalid crate name");
         let url = Url::parse(&format!("https://crates.io/api/v1/crates/{name}"))
             .expect("invalid crate name");
 
         let response = network.download(url).await?;
-        let result = load_json::<CratesAPICrate>(&response[..])?.versions;
+        let result = load_json::<CratesAPICrate>(&response[..])?;
 
         // Update the users cache and individual crates caches, and return our
         // set of versions.
         let mut guard = self.state.lock().unwrap();
         let versions: Vec<_> = result
+            .versions
             .into_iter()
             .map(|api_version| PublisherCacheVersion {
                 num: api_version.num,
@@ -2339,11 +2344,61 @@ impl Cache {
             name.to_owned(),
             PublisherCacheEntry {
                 last_fetched: now,
-                versions: versions.clone(),
+                versions,
+                metadata: result.crate_data,
             },
         );
 
-        Ok(versions)
+        Ok(guard)
+    }
+
+    /// Synchronous routine to get whatever publisher information is cached
+    /// without hitting the network.
+    pub fn get_cached_publishers(&self, name: PackageStr<'_>) -> Vec<PublisherCacheVersion> {
+        let guard = self.state.lock().unwrap();
+        guard
+            .publisher_cache
+            .crates
+            .get(name)
+            .map_or_else(Vec::new, |c| c.versions.clone())
+    }
+
+    /// Look up information about who published each version of the specified
+    /// crates. Versions for each crate are also specified in order to avoid
+    /// hitting the network in the case where the cache already has the relevant
+    /// information.
+    pub async fn get_publishers(
+        &self,
+        network: &Network,
+        name: PackageStr<'_>,
+        versions: FastSet<&semver::Version>,
+    ) -> Result<Vec<PublisherCacheVersion>, GetPublishersError> {
+        let guard = self
+            .update_publisher_cache(network, name, Some(versions))
+            .await?;
+        Ok(guard
+            .publisher_cache
+            .crates
+            .get(name)
+            .expect("publisher cache update failed")
+            .versions
+            .clone())
+    }
+
+    /// Look up crates.io metadata for the given crate.
+    pub async fn get_crate_metadata(
+        &self,
+        network: &Network,
+        name: PackageStr<'_>,
+    ) -> Result<CratesAPICrateMetadata, GetPublishersError> {
+        let guard = self.update_publisher_cache(network, name, None).await?;
+        Ok(guard
+            .publisher_cache
+            .crates
+            .get(name)
+            .expect("publisher cache update failed")
+            .metadata
+            .clone())
     }
 
     /// Look up user information for a crates.io user from the publisher cache.

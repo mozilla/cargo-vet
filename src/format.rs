@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use cargo_metadata::semver;
+use cargo_metadata::{semver, Package};
 use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 // Collections based on how we're using, so it's easier to swap them out.
@@ -1047,14 +1047,9 @@ pub struct PublisherCacheVersion {
 pub struct PublisherCacheEntry {
     pub last_fetched: chrono::DateTime<chrono::Utc>,
     pub versions: Vec<PublisherCacheVersion>,
+    pub metadata: CratesAPICrateMetadata,
 }
 
-/// The current DiffCache file format in a tagged enum.
-///
-/// If we fail to read the DiffCache it will be silently re-built, meaning that
-/// the version enum tag can be changed to force the DiffCache to be
-/// re-generated after a breaking change to the format, such as a change to how
-/// diffs are computed or identified.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct PublisherCache {
     pub users: SortedMap<CratesUserId, PublisherCacheUser>,
@@ -1088,7 +1083,7 @@ pub struct CratesAPIVersion {
 }
 
 // NOTE: This is a subset of the format returned from the crates.io v1 API.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct CratesAPICrateMetadata {
     pub description: Option<String>,
     pub repository: Option<String>,
@@ -1100,6 +1095,15 @@ pub struct CratesAPICrate {
     #[serde(rename = "crate")]
     pub crate_data: CratesAPICrateMetadata,
     pub versions: Vec<CratesAPIVersion>,
+}
+
+impl CratesAPICrateMetadata {
+    /// Whether this metadata is similar enough to that of the given package to be considered the
+    /// same.
+    pub fn consider_as_same(&self, p: &Package) -> bool {
+        (self.description.is_some() && p.description == self.description)
+            || (self.repository.is_some() && p.repository == self.repository)
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
