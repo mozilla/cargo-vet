@@ -2148,24 +2148,34 @@ fn do_aggregate_audits(sources: Vec<(String, AuditsFile)>) -> Result<AuditsFile,
                 }
             }
         }
-        for (package_name, audits) in audit_file.audits {
+        for (package_name, entries) in audit_file.audits {
             aggregate
                 .audits
                 .entry(package_name)
                 .or_default()
-                .extend(audits.into_iter().map(|mut audit_entry| {
+                .extend(entries.into_iter().map(|mut audit_entry| {
                     audit_entry.aggregated_from.push(source.clone().into());
                     audit_entry
                 }));
         }
-        for (package_name, audits) in audit_file.wildcard_audits {
+        for (package_name, entries) in audit_file.wildcard_audits {
             aggregate
                 .wildcard_audits
                 .entry(package_name)
                 .or_default()
-                .extend(audits.into_iter().map(|mut wildcard_entry| {
+                .extend(entries.into_iter().map(|mut wildcard_entry| {
                     wildcard_entry.aggregated_from.push(source.clone().into());
                     wildcard_entry
+                }));
+        }
+        for (package_name, entries) in audit_file.trusted {
+            aggregate
+                .trusted
+                .entry(package_name)
+                .or_default()
+                .extend(entries.into_iter().map(|mut trusted_entry| {
+                    trusted_entry.aggregated_from.push(source.clone().into());
+                    trusted_entry
                 }));
         }
     }
