@@ -11,7 +11,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect try-lock 0.2.3                      seanmonstar    want                                                 380 lines
     cargo vet inspect openssl-probe 0.1.5                 alexcrichton   native-tls                                           442 lines
     cargo vet inspect tower-service 0.3.1                 davidpdrsn     hyper                                                501 lines
-      NOTE: this project trusts hawkw, who published another version of this crate - consider cargo vet trust tower-service hawkw
+      NOTE: this project trusts Eliza Weisman (hawkw), who published another version of this crate - consider cargo vet trust tower-service hawkw
     cargo vet inspect wasm-bindgen-shared 0.2.80          alexcrichton   wasm-bindgen-backend and wasm-bindgen-macro-support  515 lines
     cargo vet inspect pin-utils 0.1.0                     cramertj       futures-util                                         538 lines
     cargo vet inspect futures-sink 0.3.21                 taiki-e        h2 and tokio-util                                    544 lines
@@ -58,7 +58,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect winreg 0.10.1                       gentoo90       reqwest                                              3920 lines
     cargo vet inspect core-foundation 0.9.3               jrmuizel       security-framework                                   3953 lines
     cargo vet inspect tracing-attributes 0.1.20           hawkw          tracing                                              3957 lines
-      NOTE: this project trusts hawkw - consider cargo vet trust tracing-attributes or cargo vet trust --all hawkw
+      NOTE: this project trusts Eliza Weisman (hawkw) - consider cargo vet trust tracing-attributes or cargo vet trust --all hawkw
     cargo vet inspect ipnet 2.4.0                         krisprice      reqwest                                              3973 lines
     cargo vet inspect futures-channel 0.3.21              taiki-e        hyper                                                3992 lines
     cargo vet inspect tempfile 3.3.0                      Stebalien      native-tls                                           4059 lines
@@ -72,7 +72,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect socket2 0.4.4                       Thomasdezeeuw  hyper and tokio                                      6011 lines
     cargo vet inspect pin-project-lite 0.2.8              taiki-e        hyper, tokio, reqwest, and 4 others                  6100 lines
     cargo vet inspect tracing-core 0.1.25                 hawkw          tracing                                              6156 lines
-      NOTE: this project trusts hawkw - consider cargo vet trust tracing-core or cargo vet trust --all hawkw
+      NOTE: this project trusts Eliza Weisman (hawkw) - consider cargo vet trust tracing-core or cargo vet trust --all hawkw
     cargo vet inspect cc 1.0.73                           alexcrichton   openssl-sys                                          6554 lines
     cargo vet inspect httparse 1.7.0                      seanmonstar    hyper                                                7258 lines
     cargo vet inspect memchr 2.4.1                        BurntSushi     tokio and os_str_bytes                               8712 lines
@@ -84,7 +84,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect mio 0.8.2                           Thomasdezeeuw  tokio                                                11719 lines
     cargo vet inspect js-sys 0.3.57                       alexcrichton   reqwest, web-sys, and wasm-bindgen-futures           12874 lines
     cargo vet inspect tokio-util 0.7.1                    Darksonn       h2                                                   13870 lines
-      NOTE: this project trusts hawkw, who published another version of this crate - consider cargo vet trust tokio-util hawkw
+      NOTE: this project trusts Eliza Weisman (hawkw), who published another version of this crate - consider cargo vet trust tokio-util hawkw
     cargo vet inspect hashbrown 0.11.2                    Amanieu        indexmap                                             14603 lines
     cargo vet inspect url 2.2.2                           valenting      reqwest                                              16344 lines
     cargo vet inspect tinyvec 1.5.1                       Lokathor       unicode-normalization                                16751 lines
@@ -102,7 +102,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect idna 0.2.3                          SimonSapin     url                                                  32532 lines
     cargo vet inspect vcpkg 0.2.15                        waych          openssl-sys                                          42642 lines
     cargo vet inspect tokio 1.17.0                        hawkw          h2, hyper, reqwest, and 4 others                     91271 lines
-      NOTE: this project trusts hawkw - consider cargo vet trust tokio hawkw
+      NOTE: this project trusts Eliza Weisman (hawkw) - consider cargo vet trust tokio hawkw
     cargo vet inspect libc 0.2.123                        Amanieu        mio, atty, tokio, openssl, and 8 others              94060 lines
     cargo vet inspect winapi 0.3.9                        retep998       mio, atty, miow, ntapi, and 7 others                 181323 lines
     cargo vet inspect web-sys 0.3.57                      alexcrichton   reqwest and wasm-bindgen-futures                     197013 lines

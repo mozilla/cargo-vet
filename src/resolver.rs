@@ -58,7 +58,7 @@ use crate::format::{
     ExemptedDependency, FastMap, FastSet, ImportName, ImportsFile, JsonPackage, JsonReport,
     JsonReportConclusion, JsonReportFailForVet, JsonReportFailForViolationConflict,
     JsonReportSuccess, JsonSuggest, JsonSuggestItem, JsonVetFailure, PackageName, PackageStr,
-    Policy, VetVersion, WildcardEntry,
+    Policy, PublisherCacheUser, VetVersion, WildcardEntry,
 };
 use crate::format::{SortedMap, SortedSet};
 use crate::network::Network;
@@ -142,7 +142,7 @@ pub struct Suggest {
 #[derive(Debug, Clone)]
 pub struct TrustHint {
     trusted_by: Vec<String>,
-    publisher: String,
+    publisher: PublisherCacheUser,
     exact_version: bool,
 }
 
@@ -1747,7 +1747,7 @@ impl<'a> ResolveReport<'a> {
                             if trusted_by.iter().any(|s| s == THIS_PROJECT) {
                                 trusted_by.retain(|s| s == THIS_PROJECT);
                             }
-                            let publisher = cache.get_crates_user_info(id).unwrap().login;
+                            let publisher = cache.get_crates_user_info(id).unwrap();
                             TrustHint {
                                 trusted_by,
                                 publisher,
@@ -2208,17 +2208,17 @@ impl Suggest {
                     } else {
                         ""
                     };
-                    let publisher_login = hint.publisher.clone();
+                    let publisher = hint.publisher.clone();
                     let trusted_by = format_short_list(hint.trusted_by.clone());
                     writeln!(
                         out,
                         "      {} {}",
                         dim.clone().apply_to(format_args!(
-                            "NOTE: {trusted_by} {trust} {publisher_login}{caveat} - consider",
+                            "NOTE: {trusted_by} {trust} {publisher}{caveat} - consider",
                         )),
                         if item.is_sole_publisher {
                             let this_cmd = format!("cargo vet trust {}", package.name);
-                            let all_cmd = format!("cargo vet trust --all {}", publisher_login);
+                            let all_cmd = format!("cargo vet trust --all {}", publisher.login);
                             format!(
                                 "{} {} {}",
                                 dim.clone().cyan().apply_to(this_cmd),
@@ -2227,7 +2227,7 @@ impl Suggest {
                             )
                         } else {
                             let cmd =
-                                format!("cargo vet trust {} {}", package.name, publisher_login);
+                                format!("cargo vet trust {} {}", package.name, publisher.login);
                             dim.clone().cyan().apply_to(cmd).to_string()
                         }
                     );

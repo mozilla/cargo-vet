@@ -427,12 +427,7 @@ where
             let Some(v) = v.as_value_mut() else { return };
             let Some(user_id) = v.as_integer() else { return };
             let Some(info) = user_info.get(&(user_id as u64)) else { return };
-            let detail = if let Some(name) = &info.name {
-                format!("{} ({})", name, info.login)
-            } else {
-                info.login.clone()
-            };
-            v.decor_mut().set_suffix(format!(" # {}", detail));
+            v.decor_mut().set_suffix(format!(" # {}", info));
         }
     }
     impl VisitMut for TomlFormatter<'_> {
