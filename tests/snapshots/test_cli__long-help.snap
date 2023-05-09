@@ -1,5 +1,6 @@
 ---
 source: tests/test-cli.rs
+assertion_line: 104
 expression: format_outputs(&output)
 ---
 stdout:
@@ -23,6 +24,9 @@ OPTIONS:
 GLOBAL OPTIONS:
         --manifest-path <PATH>
             Path to Cargo.toml
+
+        --config <SUPPLY_CHAIN_DIR>
+            Path to the audits directory
 
         --no-all-features
             Don't use --all-features

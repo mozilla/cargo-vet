@@ -419,12 +419,24 @@ fn real_main() -> Result<(), miette::Report> {
         })
         .transpose()?;
 
+    let cli_metacfg = cli.config.as_ref().map(|path| {
+        MetaConfigInstance {
+            version: Some(1),
+            store: Some(StoreInfo {
+                path: Some(path.clone())
+            })
+        }
+    });
+
     if workspace_metacfg.is_some() && package_metacfg.is_some() {
         // ERRORS: immediate fatal diagnostic
         return Err(miette!("Both a workspace and a package defined [metadata.vet]! We don't know what that means, if you do, let us know!"));
     }
 
     let mut metacfgs = vec![default_config];
+    if let Some(metacfg) = cli_metacfg {
+        metacfgs.push(metacfg);
+    }
     if let Some(metacfg) = workspace_metacfg {
         metacfgs.push(metacfg);
     }

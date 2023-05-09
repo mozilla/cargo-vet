@@ -33,6 +33,11 @@ pub struct Cli {
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub manifest_path: Option<PathBuf>,
 
+    /// Path to the audits directory
+    #[clap(long, name = "SUPPLY_CHAIN_DIR", parse(from_os_str))]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    pub config: Option<PathBuf>,
+
     /// Don't use --all-features
     ///
     /// We default to passing --all-features to `cargo metadata`
