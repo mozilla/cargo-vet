@@ -1035,6 +1035,15 @@ pub struct PublisherCacheUser {
     pub login: String,
     pub name: Option<String>,
 }
+impl fmt::Display for PublisherCacheUser {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(name) = &self.name {
+            write!(f, "{} ({})", name, &self.login)
+        } else {
+            write!(f, "{}", &self.login)
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PublisherCacheVersion {
