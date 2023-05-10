@@ -419,13 +419,11 @@ fn real_main() -> Result<(), miette::Report> {
         })
         .transpose()?;
 
-    let cli_metacfg = cli.store_path.as_ref().map(|path| {
-        MetaConfigInstance {
-            version: Some(1),
-            store: Some(StoreInfo {
-                path: Some(path.clone())
-            })
-        }
+    let cli_metacfg = cli.store_path.as_ref().map(|path| MetaConfigInstance {
+        version: Some(1),
+        store: Some(StoreInfo {
+            path: Some(path.clone()),
+        }),
     });
 
     if workspace_metacfg.is_some() && package_metacfg.is_some() {
