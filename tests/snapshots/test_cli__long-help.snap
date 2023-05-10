@@ -24,6 +24,9 @@ GLOBAL OPTIONS:
         --manifest-path <PATH>
             Path to Cargo.toml
 
+        --store-path <STORE_PATH>
+            Path to the supply-chain directory
+
         --no-all-features
             Don't use --all-features
             
