@@ -1629,11 +1629,8 @@ impl Cache {
             warn!("Couldn't find cargo registry: {e}");
         }
 
+        #[cfg(test)]
         if cfg.mock_cache {
-            #[cfg(not(test))]
-            let publisher_cache = Default::default();
-            #[cfg(test)]
-            let publisher_cache = crate::tests::mock_publisher_cache();
             // We're in unit tests, everything should be mocked and not touch real caches
             return Ok(Cache {
                 _lock: None,
@@ -1646,7 +1643,7 @@ impl Cache {
                 state: Mutex::new(CacheState {
                     diff_cache: DiffCache::default(),
                     command_history: CommandHistory::default(),
-                    publisher_cache,
+                    publisher_cache: crate::tests::mock_publisher_cache(),
                     fetched_packages: FastMap::new(),
                     diffed: FastMap::new(),
                 }),
@@ -2243,8 +2240,8 @@ impl Cache {
         &self,
         network: &Network,
         name: PackageStr<'_>,
-        versions: Option<FastSet<&'_ semver::Version>>,
-    ) -> Result<std::sync::MutexGuard<CacheState>, GetPublishersError> {
+        versions: Option<FastSet<&semver::Version>>,
+    ) -> Result<std::sync::MutexGuard<'_, CacheState>, GetPublishersError> {
         let now: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
 
         // Load the cached response from our publisher-cache.
@@ -2281,15 +2278,20 @@ impl Cache {
                     < chrono::Duration::days(NONINDEX_VERSION_PUBLISHER_REFRESH_DAYS)
                 {
                     if let Some(index_crate) = self.query_package_from_index(name) {
-                        if missing_versions
-                            .map(|v| {
-                                v.iter()
+                        match missing_versions {
+                            Some(versions) => {
+                                if versions
+                                    .iter()
                                     .all(|version| exact_version(&index_crate, version).is_none())
-                            })
-                            .unwrap_or(true)
-                        {
-                            info!("using cached publisher info for {name} - missing versions appear unpublished");
-                            return Ok(guard);
+                                {
+                                    info!("using cached publisher info for {name} - missing versions appear unpublished");
+                                    return Ok(guard);
+                                }
+                            }
+                            None => {
+                                info!("using cached publisher info for {name} - no versions specified");
+                                return Ok(guard);
+                            }
                         }
                     }
                 }
