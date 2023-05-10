@@ -33,10 +33,10 @@ pub struct Cli {
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub manifest_path: Option<PathBuf>,
 
-    /// Path to the audits directory
-    #[clap(long, name = "SUPPLY_CHAIN_DIR", parse(from_os_str))]
+    /// Path to the supply-chain directory
+    #[clap(long, name = "STORE_PATH", parse(from_os_str))]
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
-    pub config: Option<PathBuf>,
+    pub store_path: Option<PathBuf>,
 
     /// Don't use --all-features
     ///

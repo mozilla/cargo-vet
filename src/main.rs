@@ -419,7 +419,7 @@ fn real_main() -> Result<(), miette::Report> {
         })
         .transpose()?;
 
-    let cli_metacfg = cli.config.as_ref().map(|path| {
+    let cli_metacfg = cli.store_path.as_ref().map(|path| {
         MetaConfigInstance {
             version: Some(1),
             store: Some(StoreInfo {
@@ -434,13 +434,13 @@ fn real_main() -> Result<(), miette::Report> {
     }
 
     let mut metacfgs = vec![default_config];
-    if let Some(metacfg) = cli_metacfg {
-        metacfgs.push(metacfg);
-    }
     if let Some(metacfg) = workspace_metacfg {
         metacfgs.push(metacfg);
     }
     if let Some(metacfg) = package_metacfg {
+        metacfgs.push(metacfg);
+    }
+    if let Some(metacfg) = cli_metacfg {
         metacfgs.push(metacfg);
     }
     let metacfg = MetaConfig(metacfgs);
