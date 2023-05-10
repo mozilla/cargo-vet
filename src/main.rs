@@ -2584,10 +2584,8 @@ async fn check_audit_as_crates_io(
             return Err(AuditAsErrors { errors });
         }
 
-        break 'restart;
+        return Ok(());
     }
-
-    Ok(())
 }
 
 /// Check crate policies for correctness.
