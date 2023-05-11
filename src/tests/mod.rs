@@ -96,6 +96,52 @@ lazy_static::lazy_static! {
 
 }
 
+pub fn mock_publisher_cache() -> crate::format::PublisherCache {
+    let now: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
+    let mut cache = crate::format::PublisherCache::default();
+
+    for pkg_name in [
+        "root-package",
+        "first-party",
+        "firstA",
+        "firstAB",
+        "firstB",
+        "firstB-nodeps",
+        "descriptive",
+    ] {
+        cache.crates.insert(
+            pkg_name.into(),
+            crate::format::PublisherCacheEntry {
+                last_fetched: now,
+                versions: vec![crate::format::PublisherCacheVersion {
+                    created_at: now,
+                    num: semver::Version {
+                        major: DEFAULT_VER,
+                        minor: 0,
+                        patch: 0,
+                        pre: Default::default(),
+                        build: Default::default(),
+                    },
+                    published_by: None,
+                }],
+                metadata: crate::format::CratesAPICrateMetadata {
+                    description: Some(
+                        if pkg_name == "descriptive" {
+                            "descriptive"
+                        } else {
+                            "whatever"
+                        }
+                        .into(),
+                    ),
+                    repository: None,
+                },
+            },
+        );
+    }
+
+    cache
+}
+
 struct MockMetadata {
     packages: Vec<MockPackage>,
     pkgids: Vec<String>,
@@ -801,6 +847,15 @@ impl MockMetadata {
                 ..Default::default()
             },
         ])
+    }
+
+    fn descriptive() -> Self {
+        MockMetadata::new(vec![MockPackage {
+            name: "descriptive",
+            is_workspace: true,
+            is_first_party: true,
+            ..Default::default()
+        }])
     }
 
     fn new(packages: Vec<MockPackage>) -> Self {
