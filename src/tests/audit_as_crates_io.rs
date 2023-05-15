@@ -1,46 +1,50 @@
 use super::*;
 
-fn get_audit_as_crates_io(cfg: &Config, store: &Store) -> String {
+fn get_audit_as_crates_io(cfg: &Config, store: &Store, add_packages_to_index: bool) -> String {
     let mut cache = crate::storage::Cache::acquire(cfg).unwrap();
     let mut network = crate::network::Network::new_mock();
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/first",
-        &serde_json::json!({
-            "crate": { "description": "whatever" },
-            "versions": [
-                {
-                    "crate": "first",
-                    "created_at": "2022-01-01T00:00:00.000000+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 1,
-                        "login": "user1",
-                        "name": "User One",
-                        "url": "https://github.com/user1"
+    if add_packages_to_index {
+        network.mock_serve_json(
+            "https://crates.io/api/v1/crates/first",
+            &serde_json::json!({
+                "crate": { "description": "whatever" },
+                "versions": [
+                    {
+                        "crate": "first",
+                        "created_at": "2022-01-01T00:00:00.000000+00:00",
+                        "num": "10.0.0",
+                        "published_by": {
+                            "id": 1,
+                            "login": "user1",
+                            "name": "User One",
+                            "url": "https://github.com/user1"
+                        }
                     }
-                }
-            ]
-        }),
-    );
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/root",
-        &serde_json::json!({
-            "crate": { "description": "whatever" },
-            "versions": [
-                {
-                    "crate": "root",
-                    "created_at": "2022-01-01T00:00:00.000000+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 1,
-                        "login": "user1",
-                        "name": "User One",
-                        "url": "https://github.com/user1"
+                ]
+            }),
+        );
+        network_mock_index(&mut network, "first", &["10.0.0"]);
+        network.mock_serve_json(
+            "https://crates.io/api/v1/crates/root",
+            &serde_json::json!({
+                "crate": { "description": "whatever" },
+                "versions": [
+                    {
+                        "crate": "root",
+                        "created_at": "2022-01-01T00:00:00.000000+00:00",
+                        "num": "10.0.0",
+                        "published_by": {
+                            "id": 1,
+                            "login": "user1",
+                            "name": "User One",
+                            "url": "https://github.com/user1"
+                        }
                     }
-                }
-            ]
-        }),
-    );
+                ]
+            }),
+        );
+        network_mock_index(&mut network, "root", &["10.0.0"]);
+    }
     let res = tokio::runtime::Handle::current().block_on(crate::check_audit_as_crates_io(
         cfg,
         store,
@@ -83,7 +87,7 @@ fn simple_audit_as_crates_io() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("simple-audit-as-crates-io", output);
 }
 
@@ -106,7 +110,7 @@ fn simple_audit_as_crates_io_all_true() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("simple-audit-as-crates-io-all-true", output);
 }
 
@@ -129,7 +133,7 @@ fn simple_audit_as_crates_io_all_false() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("simple-audit-as-crates-io-all-false", output);
 }
 
@@ -143,7 +147,7 @@ fn complex_audit_as_crates_io() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("complex-audit-as-crates-io", output);
 }
 
@@ -166,7 +170,7 @@ fn complex_audit_as_crates_io_all_true() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("complex-audit-as-crates-io-all-true", output);
 }
 
@@ -189,7 +193,7 @@ fn complex_audit_as_crates_io_all_false() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("complex-audit-as-crates-io-all-false", output);
 }
 
@@ -211,7 +215,7 @@ fn complex_audit_as_crates_io_max_wrong() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("complex-audit-as-crates-io-max-wrong", output);
 }
 
@@ -247,7 +251,7 @@ fn simple_deps_audit_as_crates_io() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("simple-deps-audit-as-crates-io", output);
 }
 
@@ -261,7 +265,7 @@ fn dev_detection_audit_as_crates_io() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("dev-detection-audit-as-crates-io", output);
 }
 
@@ -275,7 +279,7 @@ fn haunted_audit_as_crates_io() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, true);
     insta::assert_snapshot!("haunted-audit-as-crates-io", output);
 }
 
@@ -289,30 +293,8 @@ fn cycle_audit_as_crates_io() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("cycle-audit-as-crates-io", output);
-}
-
-#[test]
-fn audit_as_crates_io_need_update() {
-    // The "root" and "first" packages don't have their versions on crates.io until the index is
-    // updated and the information is fetched from the crates.io API. If an `audit_as_crates_io`
-    // entry requires `first` to be on crates.io, and it's not, we'll do an update, which should
-    // reveal that `root` also needs to be audited.
-
-    let _enter = TEST_RUNTIME.enter();
-
-    let mock = MockMetadata::haunted_tree();
-    let metadata = mock.metadata();
-    let (mut config, audits, imports) = builtin_files_full_audited(&metadata);
-    config
-        .policy
-        .insert("first".to_owned(), audit_as_policy(Some(true)));
-    let store = Store::mock(config, audits, imports);
-    let cfg = mock_cfg(&metadata);
-
-    let output = get_audit_as_crates_io(&cfg, &store);
-    insta::assert_snapshot!("audit-as-crates-io-need-update", output);
 }
 
 #[test]
@@ -332,7 +314,7 @@ fn audit_as_crates_io_non_first_party() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, false);
     insta::assert_snapshot!("audit-as-crates-io-non-first-party", output);
 }
 
@@ -351,6 +333,6 @@ fn audit_as_crates_io_metadata_mismatch() {
     let store = Store::mock(config, audits, imports);
     let cfg = mock_cfg(&metadata);
 
-    let output = get_audit_as_crates_io(&cfg, &store);
+    let output = get_audit_as_crates_io(&cfg, &store, true);
     insta::assert_snapshot!("audit-as-crates-io-metadata-mismatch", output);
 }

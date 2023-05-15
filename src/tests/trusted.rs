@@ -139,6 +139,7 @@ fn trusted_suggest_local() {
             ]
         }),
     );
+    network_mock_index(&mut network, "transitive-third-party1", &["10.0.0"]);
 
     let cfg = mock_cfg(&metadata);
 
@@ -197,6 +198,7 @@ fn trusted_suggest_import() {
             ]
         }),
     );
+    network_mock_index(&mut network, "transitive-third-party1", &["10.0.0"]);
 
     let cfg = mock_cfg(&metadata);
 
@@ -264,6 +266,7 @@ fn trusted_suggest_import_multiple() {
             ]
         }),
     );
+    network_mock_index(&mut network, "transitive-third-party1", &["10.0.0"]);
 
     let cfg = mock_cfg(&metadata);
 
@@ -320,6 +323,11 @@ fn trusted_suggest_local_ambiguous() {
                 },
             ]
         }),
+    );
+    network_mock_index(
+        &mut network,
+        "transitive-third-party1",
+        &["9.0.0", "10.0.0"],
     );
 
     let cfg = mock_cfg(&metadata);

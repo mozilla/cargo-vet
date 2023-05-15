@@ -282,6 +282,7 @@ fn mock_wildcard_certify_flow() {
             ]
         }),
     );
+    network_mock_index(&mut network, "third-party1", &["9.0.0", "10.0.0"]);
 
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");
@@ -361,6 +362,7 @@ fn mock_trust_flow_simple() {
             ]
         }),
     );
+    network_mock_index(&mut network, "third-party1", &["1.0.0", "9.0.0", "10.0.0"]);
 
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");
@@ -439,6 +441,7 @@ fn mock_trust_flow_ambiguous() {
             ]
         }),
     );
+    network_mock_index(&mut network, "third-party1", &["1.0.0", "9.0.0", "10.0.0"]);
 
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");
@@ -506,6 +509,7 @@ fn mock_trust_flow_explicit() {
             ]
         }),
     );
+    network_mock_index(&mut network, "third-party1", &["1.0.0", "9.0.0", "10.0.0"]);
 
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");
@@ -584,6 +588,7 @@ fn mock_trust_flow_all() {
             ]
         }),
     );
+    network_mock_index(&mut network, "third-party1", &["1.0.0", "9.0.0", "10.0.0"]);
 
     network.mock_serve_json(
         "https://crates.io/api/v1/crates/transitive-third-party1",
@@ -620,6 +625,11 @@ fn mock_trust_flow_all() {
             ]
         }),
     );
+    network_mock_index(
+        &mut network,
+        "transitive-third-party1",
+        &["1.0.0", "9.0.0", "10.0.0"],
+    );
 
     network.mock_serve_json(
         "https://crates.io/api/v1/crates/third-party2",
@@ -640,6 +650,7 @@ fn mock_trust_flow_all() {
             ]
         }),
     );
+    network_mock_index(&mut network, "third-party2", &["10.0.0"]);
 
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");

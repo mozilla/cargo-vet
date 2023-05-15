@@ -305,7 +305,7 @@ pub enum CertifyError {
     #[error(transparent)]
     FetchAuditError(#[from] FetchAuditError),
     #[error(transparent)]
-    GetPublishersError(#[from] GetPublishersError),
+    GetPublishersError(#[from] CrateInfoError),
     #[error(transparent)]
     CacheAcquire(#[from] CacheAcquireError),
 }
@@ -385,7 +385,7 @@ pub enum StoreAcquireError {
     FetchAuditError(#[from] Box<FetchAuditError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    GetPublishersError(#[from] Box<GetPublishersError>),
+    GetPublishersError(#[from] Box<CrateInfoError>),
     #[diagnostic(transparent)]
     #[error(transparent)]
     CriteriaChange(#[from] CriteriaChangeErrors),
@@ -770,18 +770,20 @@ pub struct FetchAuditAggregateError {
 }
 
 //////////////////////////////////////////////////////////
-// GetPublishersError
+// CrateInfoError
 //////////////////////////////////////////////////////////
 
 #[derive(Debug, Error, Diagnostic)]
 #[non_exhaustive]
-pub enum GetPublishersError {
+pub enum CrateInfoError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     Download(#[from] DownloadError),
     #[diagnostic(transparent)]
     #[error(transparent)]
     Json(#[from] LoadJsonError),
+    #[error("Cannot fetch crate information, '{name}' does not exist.")]
+    DoesNotExist { name: PackageName },
 }
 
 //////////////////////////////////////////////////////////
@@ -795,8 +797,8 @@ pub enum FetchRegistryError {
     Download(#[from] DownloadError),
     #[error("Import suggestions are disabled due to an incompatible registry. Consider upgrading to the most recent release of cargo-vet.")]
     Toml(#[from] LoadTomlError),
-    #[error("Error when fetching publisher information. Registry suggestions may be incomplete.")]
-    GetPublishers(#[from] GetPublishersError),
+    #[error("Error when fetching crate information. Registry suggestions may be incomplete.")]
+    CrateInfo(#[from] CrateInfoError),
 }
 
 //////////////////////////////////////////////////////////
