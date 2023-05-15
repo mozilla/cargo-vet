@@ -10,8 +10,7 @@ struct ExpireTest {
 
 impl ExpireTest {
     pub fn new(future: chrono::Duration) -> Self {
-        let today =
-            <chrono::DateTime<chrono::Utc>>::from(std::time::SystemTime::now()).date_naive();
+        let today = mock_today();
         let end = today + future;
         ExpireTest {
             today,
@@ -21,8 +20,7 @@ impl ExpireTest {
     }
 
     pub fn with_start(start: chrono::Duration, end: chrono::Duration) -> Self {
-        let today =
-            <chrono::DateTime<chrono::Utc>>::from(std::time::SystemTime::now()).date_naive();
+        let today = mock_today();
         let start = today + start;
         let end = today + end;
         ExpireTest { today, start, end }
@@ -54,7 +52,7 @@ impl ExpireTest {
         };
 
         let output = BasicTestOutput::new();
-        do_cmd_renew(&output.clone().as_dyn(), &mut store, sub_args);
+        do_cmd_renew(&output.clone().as_dyn(), &cfg, &mut store, sub_args);
         (store, output)
     }
 
@@ -71,7 +69,7 @@ impl ExpireTest {
                         user_id: 1,
                         start: me.start.into(),
                         end: me.end.into(),
-                        suggest_renewal: None,
+                        renew: None,
                         notes: None,
                         aggregated_from: Default::default(),
                         is_fresh_import: false,
@@ -125,7 +123,7 @@ fn renew_specific_crate() {
                     user_id: 1,
                     start: et.start.into(),
                     end: et.end.into(),
-                    suggest_renewal: None,
+                    renew: None,
                     notes: None,
                     aggregated_from: Default::default(),
                     is_fresh_import: false,
@@ -139,7 +137,7 @@ fn renew_specific_crate() {
                     user_id: 1,
                     start: et.start.into(),
                     end: et.end.into(),
-                    suggest_renewal: None,
+                    renew: None,
                     notes: None,
                     aggregated_from: Default::default(),
                     is_fresh_import: false,
@@ -154,9 +152,9 @@ fn renew_specific_crate() {
     assert!(*store.audits.wildcard_audits["third-dev"][0].end >= expire.renew_date());
 }
 
-/// A wildcard entry with `suggest_renewal = false` shouldn't be updated by renew.
+/// A wildcard entry with `renew = false` shouldn't be updated by renew.
 #[test]
-fn renew_expiring_suggest_false() {
+fn renew_expiring_set_false() {
     let expire = ExpireTest::new(chrono::Duration::weeks(3));
     let (store, _) = expire.test_complex(
         ["--expiring"],
@@ -170,7 +168,7 @@ fn renew_expiring_suggest_false() {
                     user_id: 1,
                     start: et.start.into(),
                     end: et.end.into(),
-                    suggest_renewal: Some(false),
+                    renew: Some(false),
                     notes: None,
                     aggregated_from: Default::default(),
                     is_fresh_import: false,
@@ -184,7 +182,7 @@ fn renew_expiring_suggest_false() {
                     user_id: 1,
                     start: et.start.into(),
                     end: et.end.into(),
-                    suggest_renewal: None,
+                    renew: None,
                     notes: None,
                     aggregated_from: Default::default(),
                     is_fresh_import: false,

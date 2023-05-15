@@ -4,7 +4,6 @@ use clap::{Parser, Subcommand, ValueEnum};
 use tracing::level_filters::LevelFilter;
 
 use crate::format::{CriteriaName, ImportName, PackageName, VersionReq, VetVersion};
-use crate::WILDCARD_AUDIT_EXPIRATION_STRING;
 
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
@@ -689,19 +688,11 @@ pub struct GcArgs {
     pub clean: bool,
 }
 
-lazy_static::lazy_static! {
-    static ref RENEW_EXPIRING_HELP: String = format!("Renew all wildcard audits which will have expired {WILDCARD_AUDIT_EXPIRATION_STRING} from now.");
-}
-
 #[derive(clap::Args)]
 pub struct RenewArgs {
-    /// Whether to renew expiring audits.
-    #[clap(
-        long,
-        action,
-        conflicts_with("crate-name"),
-        help = Some(RENEW_EXPIRING_HELP.as_str())
-    )]
+    // Change this doc string if the WILDCARD_AUDIT_EXPIRATION_STRING changes.
+    /// Renew all wildcard audits which will have expired six weeks from now.
+    #[clap(long, action, conflicts_with("crate-name"))]
     pub expiring: bool,
 
     /// The name of a crate to renew.

@@ -16,7 +16,7 @@ criteria = ...
 user-id = ...
 start = ...
 end = ...
-suggest-renewal = ...
+renew = ...
 notes = ...
 ```
 
@@ -28,11 +28,12 @@ that releases are always cut from a branch for which every change has been
 approved by a trusted individual who will enforce the criteria.
 
 Wildcard audits can be added with `cargo vet certify` using the `--wildcard`
-option. This sets the `end` date to one year in the future. Once added (whether
-manually or by `cargo vet certify --wildcard`), the `end` date can be updated to
-one year in the future using the `cargo vet renew CRATE` command. `cargo vet
-renew --expiring` can be used to automatically update _all_ audits which would
-expire in the next six weeks or have already expired.
+option. By default, this sets the `end` date to one year in the future. Once
+added (whether manually or by `cargo vet certify --wildcard`), the `end` date
+can be updated to one year in the future using the `cargo vet renew CRATE`
+command. `cargo vet renew --expiring` can be used to automatically update _all_
+audits which would expire in the next six weeks or have already expired, and
+don't have `renew = false` specified.
 
 ## `user-id`
 
@@ -58,11 +59,11 @@ required.
 
 Note that publication dates use UTC rather than local time.
 
-## `suggest-renewal`
+## `renew`
 
 Specifies whether `cargo vet check` should suggest renewal for this audit if the
 `end` date is going to expire within the next six weeks (or has already
-expired).
+expired), and whether `cargo vet renew --expiring` should renew this audit.
 
 ## `criteria`
 

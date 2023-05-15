@@ -849,7 +849,7 @@ The name of a crate to renew
 
 ### OPTIONS
 #### `--expiring`
-Renew all wildcard audits which will have expired six weeks from now.
+Renew all wildcard audits which will have expired six weeks from now
 
 #### `-h, --help`
 Print help information

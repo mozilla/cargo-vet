@@ -57,6 +57,7 @@ mod out;
 pub mod resolver;
 mod serialization;
 pub mod storage;
+mod string_format;
 #[cfg(test)]
 mod tests;
 
@@ -75,6 +76,8 @@ pub struct Config {
 pub struct PartialConfig {
     /// Details of the CLI invocation (args)
     pub cli: Cli,
+    /// The date to use as the current date.
+    pub today: chrono::NaiveDate,
     /// Path to the cache directory we're using
     pub cache_dir: PathBuf,
     /// Whether we should mock the global cache (for unit testing)
@@ -322,8 +325,10 @@ fn real_main() -> Result<(), miette::Report> {
             .unwrap_or_else(std::env::temp_dir)
             .join(CACHE_DIR_SUFFIX)
     });
+    let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
     let partial_cfg = PartialConfig {
         cli,
+        today,
         cache_dir,
         mock_cache: false,
     };
@@ -644,16 +649,7 @@ fn cmd_certify(
     // Grab the last fetch and immediately drop the cache
     let last_fetch = Cache::acquire(cfg)?.get_last_fetch();
 
-    let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
-    do_cmd_certify(
-        out,
-        cfg,
-        sub_args,
-        &mut store,
-        network.as_ref(),
-        last_fetch,
-        today,
-    )?;
+    do_cmd_certify(out, cfg, sub_args, &mut store, network.as_ref(), last_fetch)?;
 
     store.commit()?;
     Ok(())
@@ -666,7 +662,6 @@ fn do_cmd_certify(
     store: &mut Store,
     network: Option<&Network>,
     last_fetch: Option<FetchCommand>,
-    today: chrono::NaiveDate,
 ) -> Result<(), CertifyError> {
     // Before setting up magic, we need to agree on a package
     let package = if let Some(package) = &sub_args.package {
@@ -717,7 +712,7 @@ fn do_cmd_certify(
         // published package by the user, and a to date of 12 months from today.
         let start = sub_args.start_date.unwrap_or(earliest.when);
 
-        let max_end = today + chrono::Months::new(12);
+        let max_end = cfg.today + chrono::Months::new(12);
         let end = sub_args.end_date.unwrap_or(max_end);
         if end > max_end {
             return Err(CertifyError::BadWildcardEndDate(end));
@@ -952,7 +947,7 @@ fn do_cmd_certify(
                     user_id,
                     start: start.into(),
                     end: end.into(),
-                    suggest_renewal: None,
+                    renew: None,
                     notes,
                     aggregated_from: vec![],
                     is_fresh_import: false,
@@ -961,7 +956,7 @@ fn do_cmd_certify(
     };
 
     store
-        .validate(today, false)
+        .validate(cfg.today, false)
         .expect("the new audit entry made the store invalid?");
 
     // Minimize exemptions after adding the new audit. This will be used to
@@ -1237,9 +1232,7 @@ fn cmd_trust(out: &Arc<dyn Out>, cfg: &Config, sub_args: &TrustArgs) -> Result<(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
-    let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
-
-    do_cmd_trust(out, cfg, sub_args, &mut store, network.as_ref(), today)?;
+    do_cmd_trust(out, cfg, sub_args, &mut store, network.as_ref())?;
 
     store.commit()?;
 
@@ -1252,7 +1245,6 @@ fn do_cmd_trust(
     sub_args: &TrustArgs,
     store: &mut Store,
     network: Option<&Network>,
-    today: chrono::NaiveDate,
 ) -> Result<(), miette::Report> {
     if let Some(package) = &sub_args.package {
         // Fetch publisher information for relevant versions of `package`.
@@ -1285,7 +1277,6 @@ fn do_cmd_trust(
             cfg,
             store,
             network,
-            today,
             package,
             &publisher_login,
             sub_args.start_date,
@@ -1339,7 +1330,6 @@ fn do_cmd_trust(
                 cfg,
                 store,
                 network,
-                today,
                 package,
                 publisher_login,
                 sub_args.start_date,
@@ -1361,7 +1351,6 @@ fn apply_cmd_trust(
     cfg: &Config,
     store: &mut Store,
     network: Option<&Network>,
-    today: chrono::NaiveDate,
     package: &str,
     publisher_login: &str,
     start_date: Option<chrono::NaiveDate>,
@@ -1385,7 +1374,7 @@ fn apply_cmd_trust(
     // published package by the user, and a to date of 12 months from today.
     let start = start_date.unwrap_or(earliest.when);
 
-    let end = end_date.unwrap_or(today + chrono::Months::new(12));
+    let end = end_date.unwrap_or(cfg.today + chrono::Months::new(12));
 
     let criteria_names = criteria_picker(
         out,
@@ -1430,7 +1419,7 @@ fn apply_cmd_trust(
     }
 
     store
-        .validate(today, false)
+        .validate(cfg.today, false)
         .expect("the new trusted entry made the store invalid?");
 
     // Minimize exemptions after adding the new trust entry. This will be used
@@ -1660,70 +1649,74 @@ fn cmd_regenerate_audit_as(
 fn cmd_renew(out: &Arc<dyn Out>, cfg: &Config, sub_args: &RenewArgs) -> Result<(), miette::Report> {
     trace!("renewing wildcard audits");
     let mut store = Store::acquire_offline(cfg)?;
-    do_cmd_renew(out, &mut store, sub_args);
+    do_cmd_renew(out, cfg, &mut store, sub_args);
     store.commit()?;
     Ok(())
 }
 
-fn do_cmd_renew(out: &Arc<dyn Out>, store: &mut Store, sub_args: &RenewArgs) {
+fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &RenewArgs) {
     assert!(sub_args.expiring ^ sub_args.crate_name.is_some());
 
-    let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
-    let new_end_date = today + chrono::Months::new(12);
+    let new_end_date = cfg.today + chrono::Months::new(12);
 
-    let renew_entry = |entry: &mut WildcardEntry| {
-        entry.end = new_end_date.into();
+    let renew_entry = |entry: &mut WildcardEntry| -> bool {
+        let can_renew = entry.renew.unwrap_or(true);
+        if can_renew {
+            entry.end = new_end_date.into();
+        }
+        can_renew
     };
+
+    // Map from crate name to user ids that were updated.
+    let mut updated: SortedMap<&str, Vec<u64>> = Default::default();
 
     if let Some(name) = &sub_args.crate_name {
         match store.audits.wildcard_audits.get_mut(name) {
             Some(audits) => {
-                audits.iter_mut().for_each(renew_entry);
-                writeln!(
-                    out,
-                    "Updated wildcard audits for {name} to expire on {new_end_date}"
-                );
+                for entry in audits {
+                    if renew_entry(entry) {
+                        updated.entry(name).or_default().push(entry.user_id);
+                    }
+                }
             }
             None => {
                 warn!("ran `renew {name}`, but there are no wildcard audits for the crate");
+                return;
             }
         }
     } else {
         // Find and update all expiring crates.
         assert!(sub_args.expiring);
-        let expire_date = today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
+        let expire_date = cfg.today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
 
-        let mut updated = Vec::new();
         for (name, entries) in store.audits.wildcard_audits.iter_mut() {
-            let any = entries
-                .iter_mut()
-                .filter(|e| e.should_suggest_renewal(expire_date))
-                .any(|e| {
-                    renew_entry(e);
-                    true
-                });
-            if any {
-                updated.push(name);
+            for entry in entries {
+                if entry.should_suggest_renewal(expire_date) {
+                    renew_entry(entry);
+                    updated.entry(name).or_default().push(entry.user_id);
+                }
             }
         }
 
         if updated.is_empty() {
-            info!("no wildcard audits are expiring in the next {WILDCARD_AUDIT_EXPIRATION_STRING}");
+            info!("no wildcard audits have expired or are expiring in the next {WILDCARD_AUDIT_EXPIRATION_STRING}");
             return;
         }
+    }
 
-        updated.sort();
-
-        write!(
+    write!(
             out,
-            "Updated wildcard audits for the following crates to expire on {new_end_date}:"
+            "Updated wildcard audits for the following crates and user ids to expire on {new_end_date}:"
         );
-        let mut iter = updated.iter();
-        write!(out, " {}", iter.next().unwrap());
-        for name in iter {
-            write!(out, ", {name}");
-        }
-        writeln!(out);
+    for (name, ids) in updated {
+        writeln!(
+            out,
+            "  {}: {:80}",
+            name,
+            // FormatShortList ends up sorting the strings by length and then
+            // lexicographically, which will serendipitously be the same as a numeric sort.
+            string_format::FormatShortList::new(ids.into_iter().map(|a| a.to_string()).collect())
+        );
     }
 }
 
@@ -2057,8 +2050,7 @@ fn cmd_check(
 
         // Check for wildcard audits which will be expiring soon, and warn about them.
         {
-            let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
-            let expire_date = today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
+            let expire_date = cfg.today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
 
             let mut expired = Vec::new();
             let mut expiring_soon = Vec::new();
@@ -2073,7 +2065,7 @@ fn cmd_check(
                     .filter(|e| e.should_suggest_renewal(expire_date))
                 {
                     any = true;
-                    is_expired &= entry.should_suggest_renewal(today);
+                    is_expired &= entry.should_suggest_renewal(cfg.today);
                 }
                 if any {
                     if is_expired {
@@ -2085,17 +2077,17 @@ fn cmd_check(
             }
 
             if !(expired.is_empty() && expiring_soon.is_empty()) {
-                if !expiring_soon.is_empty() {
-                    let expiring = errors::FormatShortList::new(expiring_soon);
-                    warn!("Your audit set contains wildcard audits for {expiring} which expire within the next {WILDCARD_AUDIT_EXPIRATION_STRING}.");
-                }
                 if !expired.is_empty() {
-                    let expired = errors::FormatShortList::new(expired);
+                    let expired = string_format::FormatShortList::new(expired);
                     warn!(
                         "Your audit set contains wildcard audits for {expired} which have expired."
                     );
                 }
-                warn!("  Consider running `cargo vet renew --expiring` or adding `suggest-renewal = false` to the wildcard entries in audits.toml.");
+                if !expiring_soon.is_empty() {
+                    let expiring = string_format::FormatShortList::new(expiring_soon);
+                    warn!("Your audit set contains wildcard audits for {expiring} which expire within the next {WILDCARD_AUDIT_EXPIRATION_STRING}.");
+                }
+                warn!("  Consider running `cargo vet renew --expiring` or adding `renew = false` to the wildcard entries in audits.toml.");
             }
         }
 

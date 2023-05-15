@@ -52,7 +52,7 @@ use tracing::{trace, trace_span, warn};
 
 use crate::cli::{DumpGraphArgs, GraphFilter, GraphFilterProperty, GraphFilterQuery, OutputFormat};
 use crate::criteria::{CriteriaMapper, CriteriaSet};
-use crate::errors::{FormatShortList, SuggestError};
+use crate::errors::SuggestError;
 use crate::format::{
     self, AuditEntry, AuditKind, AuditsFile, CratesPublisher, CriteriaName, Delta, DiffStat,
     ExemptedDependency, FastMap, FastSet, ImportName, ImportsFile, JsonPackage, JsonReport,
@@ -64,6 +64,7 @@ use crate::format::{SortedMap, SortedSet};
 use crate::network::Network;
 use crate::out::{progress_bar, IncProgressOnDrop, Out};
 use crate::storage::Cache;
+use crate::string_format::FormatShortList;
 use crate::{Config, PackageExt, Store};
 
 pub struct ResolveReport<'a> {

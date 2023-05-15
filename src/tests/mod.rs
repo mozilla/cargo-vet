@@ -437,7 +437,7 @@ fn wildcard_audit(user_id: u64, criteria: CriteriaStr) -> WildcardEntry {
         user_id,
         start: chrono::NaiveDate::from_ymd_opt(2022, 12, 1).unwrap().into(),
         end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
-        suggest_renewal: None,
+        renew: None,
         aggregated_from: vec![],
         is_fresh_import: false,
     }
@@ -454,7 +454,7 @@ fn wildcard_audit_m(
         user_id,
         start: chrono::NaiveDate::from_ymd_opt(2022, 12, 1).unwrap().into(),
         end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
-        suggest_renewal: None,
+        renew: None,
         aggregated_from: vec![],
         is_fresh_import: false,
     }
@@ -1170,6 +1170,11 @@ fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile
     (config, audits, imports)
 }
 
+/// Returns a fixed date that should be considered `today`: 2023-01-01.
+fn mock_today() -> chrono::NaiveDate {
+    chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap()
+}
+
 fn mock_cfg(metadata: &Metadata) -> Config {
     mock_cfg_args(metadata, ["cargo", "vet"])
 }
@@ -1186,6 +1191,7 @@ where
         metadata: metadata.clone(),
         _rest: PartialConfig {
             cli,
+            today: mock_today(),
             cache_dir: PathBuf::new(),
             mock_cache: true,
         },
