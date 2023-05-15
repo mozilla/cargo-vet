@@ -978,7 +978,7 @@ stdout:
       },
       {
         "name": "itoa",
-        "notable_parents": "http, hyper, serde_json, and serde_urlencoded",
+        "notable_parents": "http, hyper, serde_json, and 1 other",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1458,7 +1458,7 @@ stdout:
       },
       {
         "name": "quote",
-        "notable_parents": "syn and 4 others",
+        "notable_parents": "syn, tracing-attributes, and 3 others",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1634,7 +1634,7 @@ stdout:
       },
       {
         "name": "log",
-        "notable_parents": "mio, want, reqwest, and 2 others",
+        "notable_parents": "mio, want, reqwest, native-tls, and 1 other",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1874,7 +1874,7 @@ stdout:
       },
       {
         "name": "js-sys",
-        "notable_parents": "reqwest, web-sys, and wasm-bindgen-futures",
+        "notable_parents": "reqwest, web-sys, and 1 other",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -1986,7 +1986,7 @@ stdout:
       },
       {
         "name": "wasm-bindgen",
-        "notable_parents": "js-sys, reqwest, web-sys, and wasm-bindgen-futures",
+        "notable_parents": "js-sys, reqwest, web-sys, and 1 other",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2162,7 +2162,7 @@ stdout:
       },
       {
         "name": "tokio",
-        "notable_parents": "h2, hyper, reqwest, and 4 others",
+        "notable_parents": "h2, hyper, reqwest, hyper-tls, and 3 others",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2194,7 +2194,7 @@ stdout:
       },
       {
         "name": "winapi",
-        "notable_parents": "mio, atty, miow, ntapi, and 7 others",
+        "notable_parents": "mio, atty, miow, ntapi, tokio, and 6 others",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2533,7 +2533,7 @@ stdout:
         },
         {
           "name": "itoa",
-          "notable_parents": "http, hyper, serde_json, and serde_urlencoded",
+          "notable_parents": "http, hyper, serde_json, and 1 other",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -2997,7 +2997,7 @@ stdout:
         },
         {
           "name": "quote",
-          "notable_parents": "syn and 4 others",
+          "notable_parents": "syn, tracing-attributes, and 3 others",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3173,7 +3173,7 @@ stdout:
         },
         {
           "name": "log",
-          "notable_parents": "mio, want, reqwest, and 2 others",
+          "notable_parents": "mio, want, reqwest, native-tls, and 1 other",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3413,7 +3413,7 @@ stdout:
         },
         {
           "name": "js-sys",
-          "notable_parents": "reqwest, web-sys, and wasm-bindgen-futures",
+          "notable_parents": "reqwest, web-sys, and 1 other",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3525,7 +3525,7 @@ stdout:
         },
         {
           "name": "wasm-bindgen",
-          "notable_parents": "js-sys, reqwest, web-sys, and wasm-bindgen-futures",
+          "notable_parents": "js-sys, reqwest, web-sys, and 1 other",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3701,7 +3701,7 @@ stdout:
         },
         {
           "name": "tokio",
-          "notable_parents": "h2, hyper, reqwest, and 4 others",
+          "notable_parents": "h2, hyper, reqwest, hyper-tls, and 3 others",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3733,7 +3733,7 @@ stdout:
         },
         {
           "name": "winapi",
-          "notable_parents": "mio, atty, miow, ntapi, and 7 others",
+          "notable_parents": "mio, atty, miow, ntapi, tokio, and 6 others",
           "suggested_criteria": [
             "safe-to-deploy"
           ],

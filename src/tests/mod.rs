@@ -51,6 +51,7 @@ mod crate_policies;
 mod import;
 mod regenerate_unaudited;
 mod registry;
+mod renew;
 mod store_parsing;
 mod trusted;
 mod vet;
@@ -436,6 +437,7 @@ fn wildcard_audit(user_id: u64, criteria: CriteriaStr) -> WildcardEntry {
         user_id,
         start: chrono::NaiveDate::from_ymd_opt(2022, 12, 1).unwrap().into(),
         end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
+        suggest_renewal: None,
         aggregated_from: vec![],
         is_fresh_import: false,
     }
@@ -452,6 +454,7 @@ fn wildcard_audit_m(
         user_id,
         start: chrono::NaiveDate::from_ymd_opt(2022, 12, 1).unwrap().into(),
         end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
+        suggest_renewal: None,
         aggregated_from: vec![],
         is_fresh_import: false,
     }

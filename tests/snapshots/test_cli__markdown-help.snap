@@ -151,6 +151,7 @@ graph
 * [aggregate](#cargo-vet-aggregate): Fetch and merge audits from multiple sources into a single `audits.toml` file
 * [dump-graph](#cargo-vet-dump-graph): Print the cargo build graph as understood by `cargo vet`
 * [gc](#cargo-vet-gc): Clean up old packages from the vet cache
+* [renew](#cargo-vet-renew): Renew wildcard audit expirations
 * [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 
 <br><br><br>
@@ -823,6 +824,32 @@ Packages in the vet cache which haven't been used for this many days will be rem
 #### `--clean`
 Remove the entire cache directory, forcing it to be regenerated next time you use cargo
 vet
+
+#### `-h, --help`
+Print help information
+
+### GLOBAL OPTIONS
+This subcommand accepts all the [global options](#global-options)
+
+<br><br><br>
+## cargo vet renew
+Renew wildcard audit expirations
+
+This will set a wildcard audit expiration to be one year in the future from when it is run. It can
+optionally do this for all audits which are expiring soon.
+
+### USAGE
+```
+cargo vet renew [OPTIONS] [CRATE]
+```
+
+### ARGS
+#### `<CRATE>`
+The name of a crate to renew
+
+### OPTIONS
+#### `--expiring`
+Renew all wildcard audits which will have expired six weeks from now.
 
 #### `-h, --help`
 Print help information

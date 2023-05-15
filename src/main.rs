@@ -138,6 +138,12 @@ const WORKSPACE_VET_CONFIG: &str = "vet";
 
 const DURATION_DAY: Duration = Duration::from_secs(60 * 60 * 24);
 
+lazy_static! {
+    static ref WILDCARD_AUDIT_EXPIRATION_DURATION: chrono::Duration = chrono::Duration::weeks(6);
+}
+/// This string is always used in a context such as "in the next {STR}".
+const WILDCARD_AUDIT_EXPIRATION_STRING: &str = "six weeks";
+
 /// Trick to let us std::process::exit while still cleaning up
 /// by panicking with this type instead of a string.
 struct ExitPanic(i32);
@@ -495,6 +501,7 @@ fn real_main() -> Result<(), miette::Report> {
         Some(Regenerate(AuditAsCratesIo(sub_args))) => {
             cmd_regenerate_audit_as(&out, &cfg, sub_args)
         }
+        Some(Renew(sub_args)) => cmd_renew(&out, &cfg, sub_args),
         Some(Aggregate(_)) | Some(HelpMarkdown(_)) | Some(Gc(_)) => unreachable!("handled earlier"),
     }
 }
@@ -945,6 +952,7 @@ fn do_cmd_certify(
                     user_id,
                     start: start.into(),
                     end: end.into(),
+                    suggest_renewal: None,
                     notes,
                     aggregated_from: vec![],
                     is_fresh_import: false,
@@ -1649,6 +1657,76 @@ fn cmd_regenerate_audit_as(
     Ok(())
 }
 
+fn cmd_renew(out: &Arc<dyn Out>, cfg: &Config, sub_args: &RenewArgs) -> Result<(), miette::Report> {
+    trace!("renewing wildcard audits");
+    let mut store = Store::acquire_offline(cfg)?;
+    do_cmd_renew(out, &mut store, sub_args);
+    store.commit()?;
+    Ok(())
+}
+
+fn do_cmd_renew(out: &Arc<dyn Out>, store: &mut Store, sub_args: &RenewArgs) {
+    assert!(sub_args.expiring ^ sub_args.crate_name.is_some());
+
+    let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
+    let new_end_date = today + chrono::Months::new(12);
+
+    let renew_entry = |entry: &mut WildcardEntry| {
+        entry.end = new_end_date.into();
+    };
+
+    if let Some(name) = &sub_args.crate_name {
+        match store.audits.wildcard_audits.get_mut(name) {
+            Some(audits) => {
+                audits.iter_mut().for_each(renew_entry);
+                writeln!(
+                    out,
+                    "Updated wildcard audits for {name} to expire on {new_end_date}"
+                );
+            }
+            None => {
+                warn!("ran `renew {name}`, but there are no wildcard audits for the crate");
+            }
+        }
+    } else {
+        // Find and update all expiring crates.
+        assert!(sub_args.expiring);
+        let expire_date = today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
+
+        let mut updated = Vec::new();
+        for (name, entries) in store.audits.wildcard_audits.iter_mut() {
+            let any = entries
+                .iter_mut()
+                .filter(|e| e.should_suggest_renewal(expire_date))
+                .any(|e| {
+                    renew_entry(e);
+                    true
+                });
+            if any {
+                updated.push(name);
+            }
+        }
+
+        if updated.is_empty() {
+            info!("no wildcard audits are expiring in the next {WILDCARD_AUDIT_EXPIRATION_STRING}");
+            return;
+        }
+
+        updated.sort();
+
+        write!(
+            out,
+            "Updated wildcard audits for the following crates to expire on {new_end_date}:"
+        );
+        let mut iter = updated.iter();
+        write!(out, " {}", iter.next().unwrap());
+        for name in iter {
+            write!(out, ", {name}");
+        }
+        writeln!(out);
+    }
+}
+
 /// Adjust the store to satisfy audit-as-crates-io issues
 ///
 /// Every reported issue will be resolved by just setting `audit-as-crates-io = Some(false)`,
@@ -1970,12 +2048,57 @@ fn cmd_check(
             // more clever comparisons.
             if store.config.exemptions != pruned_exemptions {
                 warn!("Your supply-chain has unnecessary exemptions which could be relaxed or pruned.");
-                warn!("Consider running `cargo vet prune` to prune unnecessary exemptions and imports.");
+                warn!("  Consider running `cargo vet prune` to prune unnecessary exemptions and imports.");
             } else if store.imports != pruned_imports {
                 warn!("Your supply-chain has unnecessary imports which could be pruned.");
-                warn!("Consider running `cargo vet prune` to prune unnecessary imports.");
+                warn!("  Consider running `cargo vet prune` to prune unnecessary imports.");
             }
         }
+
+        // Check for wildcard audits which will be expiring soon, and warn about them.
+        {
+            let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
+            let expire_date = today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
+
+            let mut expired = Vec::new();
+            let mut expiring_soon = Vec::new();
+            for (name, audits) in &store.audits.wildcard_audits {
+                // Check whether there are any audits expiring by the expiration date. Of those
+                // audits, check whether all of them are already expired (to change the warning
+                // message to be more informative).
+                let mut any = false;
+                let mut is_expired = true;
+                for entry in audits
+                    .iter()
+                    .filter(|e| e.should_suggest_renewal(expire_date))
+                {
+                    any = true;
+                    is_expired &= entry.should_suggest_renewal(today);
+                }
+                if any {
+                    if is_expired {
+                        expired.push(name);
+                    } else {
+                        expiring_soon.push(name);
+                    }
+                }
+            }
+
+            if !(expired.is_empty() && expiring_soon.is_empty()) {
+                if !expiring_soon.is_empty() {
+                    let expiring = errors::FormatShortList::new(expiring_soon);
+                    warn!("Your audit set contains wildcard audits for {expiring} which expire within the next {WILDCARD_AUDIT_EXPIRATION_STRING}.");
+                }
+                if !expired.is_empty() {
+                    let expired = errors::FormatShortList::new(expired);
+                    warn!(
+                        "Your audit set contains wildcard audits for {expired} which have expired."
+                    );
+                }
+                warn!("  Consider running `cargo vet renew --expiring` or adding `suggest-renewal = false` to the wildcard entries in audits.toml.");
+            }
+        }
+
         store.commit()?;
     }
 
