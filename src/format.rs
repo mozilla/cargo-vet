@@ -419,7 +419,7 @@ impl WildcardEntry {
     ///
     /// If the entry expires before `date` (and `renew` isn't `false`) a renewal will be
     /// suggested.
-    pub fn should_suggest_renewal(&self, date: chrono::NaiveDate) -> bool {
+    pub fn should_renew(&self, date: chrono::NaiveDate) -> bool {
         self.renew.unwrap_or(true) && self.end < date
     }
 }

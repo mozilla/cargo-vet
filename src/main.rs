@@ -1659,24 +1659,15 @@ fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &
 
     let new_end_date = cfg.today + chrono::Months::new(12);
 
-    let renew_entry = |entry: &mut WildcardEntry| -> bool {
-        let can_renew = entry.renew.unwrap_or(true);
-        if can_renew {
-            entry.end = new_end_date.into();
-        }
-        can_renew
-    };
-
-    // Map from crate name to user ids that were updated.
-    let mut updated: SortedMap<&str, Vec<u64>> = Default::default();
+    let mut renewing: WildcardAuditRenewal;
 
     if let Some(name) = &sub_args.crate_name {
-        match store.audits.wildcard_audits.get_mut(name) {
-            Some(audits) => {
-                for entry in audits {
-                    if renew_entry(entry) {
-                        updated.entry(name).or_default().push(entry.user_id);
-                    }
+        match WildcardAuditRenewal::single_crate(name, store) {
+            Some(renewal) => {
+                renewing = renewal;
+                if renewing.is_empty() {
+                    info!("no wildcard audits for {name} are eligible for renewal (all have `renew = false`)");
+                    return;
                 }
             }
             None => {
@@ -1687,35 +1678,30 @@ fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &
     } else {
         // Find and update all expiring crates.
         assert!(sub_args.expiring);
-        let expire_date = cfg.today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
+        renewing = WildcardAuditRenewal::expiring(cfg, store);
 
-        for (name, entries) in store.audits.wildcard_audits.iter_mut() {
-            for entry in entries {
-                if entry.should_suggest_renewal(expire_date) {
-                    renew_entry(entry);
-                    updated.entry(name).or_default().push(entry.user_id);
-                }
-            }
-        }
-
-        if updated.is_empty() {
-            info!("no wildcard audits have expired or are expiring in the next {WILDCARD_AUDIT_EXPIRATION_STRING}");
+        if renewing.is_empty() {
+            info!("no wildcard audits that are eligible for renewal have expired or are expiring in the next {WILDCARD_AUDIT_EXPIRATION_STRING}");
             return;
         }
     }
+
+    renewing.renew(new_end_date);
 
     write!(
             out,
             "Updated wildcard audits for the following crates and user ids to expire on {new_end_date}:"
         );
-    for (name, ids) in updated {
+    for (name, entries) in renewing.crates {
         writeln!(
             out,
             "  {}: {:80}",
             name,
             // FormatShortList ends up sorting the strings by length and then
             // lexicographically, which will serendipitously be the same as a numeric sort.
-            string_format::FormatShortList::new(ids.into_iter().map(|a| a.to_string()).collect())
+            string_format::FormatShortList::new(
+                entries.iter().map(|a| a.0.user_id.to_string()).collect()
+            )
         );
     }
 }
@@ -2048,35 +2034,13 @@ fn cmd_check(
             }
         }
 
-        // Check for wildcard audits which will be expiring soon, and warn about them.
+        // Warn about wildcard audits which will be expiring soon or have expired.
         {
-            let expire_date = cfg.today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
+            let expiry = WildcardAuditRenewal::expiring(cfg, &mut store);
 
-            let mut expired = Vec::new();
-            let mut expiring_soon = Vec::new();
-            for (name, audits) in &store.audits.wildcard_audits {
-                // Check whether there are any audits expiring by the expiration date. Of those
-                // audits, check whether all of them are already expired (to change the warning
-                // message to be more informative).
-                let mut any = false;
-                let mut is_expired = true;
-                for entry in audits
-                    .iter()
-                    .filter(|e| e.should_suggest_renewal(expire_date))
-                {
-                    any = true;
-                    is_expired &= entry.should_suggest_renewal(cfg.today);
-                }
-                if any {
-                    if is_expired {
-                        expired.push(name);
-                    } else {
-                        expiring_soon.push(name);
-                    }
-                }
-            }
-
-            if !(expired.is_empty() && expiring_soon.is_empty()) {
+            if !expiry.is_empty() {
+                let expired = expiry.expired_crates();
+                let expiring_soon = expiry.expiring_crates();
                 if !expired.is_empty() {
                     let expired = string_format::FormatShortList::new(expired);
                     warn!(
@@ -2095,6 +2059,86 @@ fn cmd_check(
     }
 
     Ok(())
+}
+
+#[derive(Default)]
+struct WildcardAuditRenewal<'a> {
+    // the bool indicates whether the entry for that user id is already expired (true) or will
+    // expire soon (false)
+    pub crates: SortedMap<PackageStr<'a>, Vec<(&'a mut WildcardEntry, bool)>>,
+}
+
+impl<'a> WildcardAuditRenewal<'a> {
+    /// Get all wildcard audit entries which have expired or will expire soon.
+    ///
+    /// This function _does not_ modify the store, but since the mutable references to the entries
+    /// are stored (for potential use by `renew`), it must take a mutable Store.
+    pub fn expiring(cfg: &Config, store: &'a mut Store) -> Self {
+        let expire_date = cfg.today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
+
+        let mut crates: SortedMap<PackageStr<'a>, Vec<(&'a mut WildcardEntry, bool)>> =
+            Default::default();
+        for (name, audits) in store.audits.wildcard_audits.iter_mut() {
+            // Check whether there are any audits expiring by the expiration date. Of those
+            // audits, check whether all of them are already expired (to change the warning
+            // message to be more informative).
+            for entry in audits.iter_mut().filter(|e| e.should_renew(expire_date)) {
+                let expired = entry.should_renew(cfg.today);
+                crates.entry(name).or_default().push((entry, expired));
+            }
+        }
+
+        WildcardAuditRenewal { crates }
+    }
+
+    /// Create a renewal with a single crate explicitly provided.
+    ///
+    /// This will renew all eligible audits, regardless of expiration. Thus `expired_crates` and
+    /// `expiring_crates` should not be used.
+    pub fn single_crate(name: PackageStr<'a>, store: &'a mut Store) -> Option<Self> {
+        let mut crates: SortedMap<PackageStr<'a>, Vec<(&'a mut WildcardEntry, bool)>> =
+            Default::default();
+        let audits = store.audits.wildcard_audits.get_mut(name)?;
+        for entry in audits {
+            if entry.renew.unwrap_or(true) {
+                // We don't care about the expiring/expired, so insert with false.
+                crates.entry(name).or_default().push((entry, false));
+            }
+        }
+        Some(WildcardAuditRenewal { crates })
+    }
+
+    /// Whether there are no wildcard audits expiring or expired.
+    pub fn is_empty(&self) -> bool {
+        self.crates.is_empty()
+    }
+
+    /// Get the crate names for which wildcard audits have expired.
+    pub fn expired_crates(&'a self) -> Vec<PackageStr<'a>> {
+        self.crates
+            .iter()
+            .filter_map(|(name, ids)| ids.iter().any(|e| e.1).then_some(*name))
+            .collect()
+    }
+
+    /// Get the crate names for which wildcard audits will expire soon.
+    pub fn expiring_crates(&'a self) -> Vec<PackageStr<'a>> {
+        self.crates
+            .iter()
+            .filter_map(|(name, ids)| ids.iter().any(|e| !e.1).then_some(*name))
+            .collect()
+    }
+
+    /// Renew all stored entries.
+    pub fn renew(&mut self, new_end_date: chrono::NaiveDate) {
+        for entry in self
+            .crates
+            .values_mut()
+            .flat_map(|v| v.iter_mut().map(|t| &mut t.0))
+        {
+            entry.end = new_end_date.into();
+        }
+    }
 }
 
 fn cmd_prune(

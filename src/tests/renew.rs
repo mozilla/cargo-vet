@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::do_cmd_renew;
+use crate::{do_cmd_renew, WildcardAuditRenewal};
 
 struct ExpireTest {
     today: chrono::NaiveDate,
@@ -90,7 +90,7 @@ impl ExpireTest {
 fn renew_expiring_wildcard_audits() {
     let expire = ExpireTest::new(chrono::Duration::weeks(2));
     let end = expire.test_simple();
-    assert!(end >= expire.renew_date());
+    assert_eq!(end, expire.renew_date());
 }
 
 /// The renew command should update an already-expired wildcard audit.
@@ -98,7 +98,7 @@ fn renew_expiring_wildcard_audits() {
 fn renew_already_expired_wildcard_audits() {
     let expire = ExpireTest::with_start(chrono::Duration::weeks(-5), chrono::Duration::weeks(-3));
     let end = expire.test_simple();
-    assert!(end >= expire.renew_date());
+    assert_eq!(end, expire.renew_date());
 }
 
 /// The renew command should not update anything if end dates are far enough in the future.
@@ -149,7 +149,10 @@ fn renew_specific_crate() {
         *store.audits.wildcard_audits["third-normal"][0].end,
         expire.end
     );
-    assert!(*store.audits.wildcard_audits["third-dev"][0].end >= expire.renew_date());
+    assert_eq!(
+        *store.audits.wildcard_audits["third-dev"][0].end,
+        expire.renew_date()
+    );
 }
 
 /// A wildcard entry with `renew = false` shouldn't be updated by renew.
@@ -195,5 +198,88 @@ fn renew_expiring_set_false() {
         *store.audits.wildcard_audits["third-normal"][0].end,
         expire.end
     );
-    assert!(*store.audits.wildcard_audits["third-dev"][0].end >= expire.renew_date());
+    assert_eq!(
+        *store.audits.wildcard_audits["third-dev"][0].end,
+        expire.renew_date()
+    );
+}
+
+fn wildcard_audit_renewal_test<'a, Args, Create>(test_name: &str, args: Args, create: Create)
+where
+    Args: IntoIterator<Item = &'a str>,
+    Create: for<'s> FnOnce(&Config, &'s mut Store) -> WildcardAuditRenewal<'s>,
+{
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = MockMetadata::simple().metadata();
+    let (config, mut audits, imports) = builtin_files_no_exemptions(&metadata);
+
+    let today = mock_today();
+    use chrono::Duration;
+    let start = today - Duration::weeks(10);
+    let expired = today - Duration::weeks(1);
+    let expiring = today + Duration::weeks(1);
+    let not_expiring = today + Duration::weeks(7);
+
+    let entry = |user_id: u64, end: chrono::NaiveDate, renew: Option<bool>| -> WildcardEntry {
+        WildcardEntry {
+            who: vec!["user".to_owned().into()],
+            criteria: vec!["safe-to-deploy".to_owned().into()],
+            user_id,
+            start: start.into(),
+            end: end.into(),
+            renew,
+            notes: None,
+            aggregated_from: Default::default(),
+            is_fresh_import: false,
+        }
+    };
+
+    audits.wildcard_audits.insert(
+        "foo".into(),
+        vec![
+            entry(1, expired, None),
+            entry(2, expiring, None),
+            entry(3, expiring, Some(false)),
+            entry(4, not_expiring, Some(false)),
+            entry(5, expired, Some(true)),
+        ],
+    );
+    audits.wildcard_audits.insert(
+        "bar".into(),
+        vec![entry(3, expired, Some(false)), entry(6, not_expiring, None)],
+    );
+    audits
+        .wildcard_audits
+        .insert("baz".into(), vec![entry(7, expiring, None)]);
+    audits
+        .wildcard_audits
+        .insert("quux".into(), vec![entry(8, expired, None)]);
+
+    let mut store = Store::mock(config, audits, imports);
+    let cfg = mock_cfg_args(&metadata, ["cargo", "vet", "renew"].into_iter().chain(args));
+    let before = store.mock_commit();
+    create(&cfg, &mut store).renew(today + chrono::Months::new(12));
+    let after = store.mock_commit();
+    insta::assert_snapshot!(test_name, diff_store_commits(&before, &after));
+}
+
+#[test]
+fn renew_expiring_selection_logic() {
+    wildcard_audit_renewal_test(
+        "renew-expiring-selection-logic",
+        ["--expiring"],
+        |cfg, store| {
+            let renewal = WildcardAuditRenewal::expiring(cfg, store);
+            assert_eq!(renewal.expired_crates(), vec!["foo", "quux"]);
+            assert_eq!(renewal.expiring_crates(), vec!["baz", "foo"]);
+            renewal
+        },
+    );
+}
+
+#[test]
+fn renew_specific_selection_logic() {
+    wildcard_audit_renewal_test("renew-specific-selection-logic", ["foo"], |_, store| {
+        WildcardAuditRenewal::single_crate("foo", store).expect("store inconsistent")
+    });
 }

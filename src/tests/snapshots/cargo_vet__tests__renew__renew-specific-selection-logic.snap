@@ -1,0 +1,83 @@
+---
+source: src/tests/renew.rs
+expression: "diff_store_commits(&before, &after)"
+---
+audits.toml:
+ 
+ # cargo-vet audits file
+ 
+ [[wildcard-audits.bar]]
+ who = "user"
+ criteria = "safe-to-deploy"
+ user-id = 3
+ start = "2022-10-23"
+ end = "2022-12-25"
+ renew = false
+ 
+ [[wildcard-audits.bar]]
+ who = "user"
+ criteria = "safe-to-deploy"
+ user-id = 6
+ start = "2022-10-23"
+ end = "2023-02-19"
+ 
+ [[wildcard-audits.baz]]
+ who = "user"
+ criteria = "safe-to-deploy"
+ user-id = 7
+ start = "2022-10-23"
+ end = "2023-01-08"
+ 
+ [[wildcard-audits.foo]]
+ who = "user"
+ criteria = "safe-to-deploy"
+ user-id = 1
+ start = "2022-10-23"
+-end = "2022-12-25"
++end = "2024-01-01"
+ 
+ [[wildcard-audits.foo]]
+ who = "user"
+ criteria = "safe-to-deploy"
+ user-id = 2
+ start = "2022-10-23"
+-end = "2023-01-08"
++end = "2024-01-01"
+ 
+ [[wildcard-audits.foo]]
+ who = "user"
+ criteria = "safe-to-deploy"
+ user-id = 3
+ start = "2022-10-23"
+ end = "2023-01-08"
+ renew = false
+ 
+ [[wildcard-audits.foo]]
+ who = "user"
+ criteria = "safe-to-deploy"
+ user-id = 4
+ start = "2022-10-23"
+ end = "2023-02-19"
+ renew = false
+ 
+ [[wildcard-audits.foo]]
+ who = "user"
+ criteria = "safe-to-deploy"
+ user-id = 5
+ start = "2022-10-23"
+-end = "2022-12-25"
++end = "2024-01-01"
+ renew = true
+ 
+ [[wildcard-audits.quux]]
+ who = "user"
+ criteria = "safe-to-deploy"
+ user-id = 8
+ start = "2022-10-23"
+ end = "2022-12-25"
+ 
+ [audits]
+
+config.toml: (unchanged)
+imports.lock: (unchanged)
+
