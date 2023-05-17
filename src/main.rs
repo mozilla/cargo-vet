@@ -694,6 +694,7 @@ fn do_cmd_certify(
             user_id: CratesUserId,
             start: chrono::NaiveDate,
             end: chrono::NaiveDate,
+            set_renew_false: bool,
         },
     }
 
@@ -714,6 +715,7 @@ fn do_cmd_certify(
 
         let max_end = cfg.today + chrono::Months::new(12);
         let end = sub_args.end_date.unwrap_or(max_end);
+        let set_renew_false = sub_args.end_date.is_some();
         if end > max_end {
             return Err(CertifyError::BadWildcardEndDate(end));
         }
@@ -723,6 +725,7 @@ fn do_cmd_certify(
             user_id: earliest.user_id,
             start,
             end,
+            set_renew_false,
         }
     } else if let Some(v1) = &sub_args.version1 {
         // If explicit versions were provided, use those
@@ -934,6 +937,7 @@ fn do_cmd_certify(
             user_id,
             start,
             end,
+            set_renew_false,
             ..
         } => {
             store
@@ -947,7 +951,7 @@ fn do_cmd_certify(
                     user_id,
                     start: start.into(),
                     end: end.into(),
-                    renew: None,
+                    renew: set_renew_false.then_some(false),
                     notes,
                     aggregated_from: vec![],
                     is_fresh_import: false,
@@ -2032,10 +2036,8 @@ fn cmd_check(
                 warn!("Your supply-chain has unnecessary imports which could be pruned.");
                 warn!("  Consider running `cargo vet prune` to prune unnecessary imports.");
             }
-        }
 
-        // Warn about wildcard audits which will be expiring soon or have expired.
-        {
+            // Warn about wildcard audits which will be expiring soon or have expired.
             let expiry = WildcardAuditRenewal::expiring(cfg, &mut store);
 
             if !expiry.is_empty() {
