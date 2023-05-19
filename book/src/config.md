@@ -125,7 +125,7 @@ A list of crates whose audit entries should not be imported from this source.
 This can be used as a last resort to resolve disagreements over the suitability
 of a given crate.
 
-### the `policy` Table
+### The `policy` Table
 
 This table allows projects to configure the audit requirements that `cargo vet`
 should enforce on various dependencies. When unspecified, non-top-level crates
@@ -135,6 +135,12 @@ the defaults described below.
 In this context, "top-level" generally refers to crates with no
 reverse-dependencies — except when evaluating dev-dependencies, in which case
 every workspace member is considered a root.
+
+Keys of this table can be crate names (in which case the policy is applied to
+_all_ versions of the crate) or strings of the form `"CRATE:VERSION"` (you'll
+more than likely need to add quotes in TOML because the version string will have
+periods). If you specify versions, they may only refer to crate versions which
+are in the graph.
 
 #### `criteria`
 
@@ -164,11 +170,17 @@ notes = "bar is only used to implement a foo feature we never plan to enable."
 
 Unlike `criteria` and `dev-criteria`, `dependency-criteria` may apply directly
 to third-party crates (both `foo` and `bar` may be third-party in the above
-example).  Specifying `criteria` is disallowed for third-party crates because a
+example). Specifying `criteria` is disallowed for third-party crates because a
 given third-party crate can often be used in multiple unrelated places in a
 project's dependency graph. So in the above example, we want to exempt `bar`
 from auditing insofar as it's used by `foo`, but not necessarily if it crops up
 somewhere else.
+
+Third-party crates with `dependency-criteria` must be associated with specific
+versions in the policy table (see the description of policy table keys above).
+Additionally, if a crate has any `dependency-criteria` specified and any version
+exists as a third-party crate in the graph, all versions of the crate must be
+explicitly specified in the policy table keys.
 
 Defaults to the empty set and is not inherited.
 
