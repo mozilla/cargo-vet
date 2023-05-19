@@ -1661,6 +1661,10 @@ fn cmd_renew(out: &Arc<dyn Out>, cfg: &Config, sub_args: &RenewArgs) -> Result<(
 fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &RenewArgs) {
     assert!(sub_args.expiring ^ sub_args.crate_name.is_some());
 
+    // We need the cache to map user ids to user names, though we can work around it if there is an
+    // error.
+    let cache = Cache::acquire(cfg).ok();
+
     let new_end_date = cfg.today + chrono::Months::new(12);
 
     let mut renewing: WildcardAuditRenewal;
@@ -1692,19 +1696,28 @@ fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &
 
     renewing.renew(new_end_date);
 
-    write!(
-            out,
-            "Updated wildcard audits for the following crates and user ids to expire on {new_end_date}:"
-        );
+    writeln!(
+        out,
+        "Updated wildcard audits for the following crates and publishers to expire on {new_end_date}:"
+    );
+
+    let user_string = |user_id: u64| -> String {
+        cache
+            .as_ref()
+            .and_then(|c| c.get_crates_user_info(user_id))
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| format!("id={}", user_id))
+    };
     for (name, entries) in renewing.crates {
         writeln!(
             out,
             "  {}: {:80}",
             name,
-            // FormatShortList ends up sorting the strings by length and then
-            // lexicographically, which will serendipitously be the same as a numeric sort.
             string_format::FormatShortList::new(
-                entries.iter().map(|a| a.0.user_id.to_string()).collect()
+                entries
+                    .iter()
+                    .map(|(entry, _)| user_string(entry.user_id))
+                    .collect()
             )
         );
     }
@@ -2119,7 +2132,7 @@ impl<'a> WildcardAuditRenewal<'a> {
     pub fn expired_crates(&'a self) -> Vec<PackageStr<'a>> {
         self.crates
             .iter()
-            .filter_map(|(name, ids)| ids.iter().any(|e| e.1).then_some(*name))
+            .filter_map(|(name, ids)| ids.iter().any(|(_, expired)| *expired).then_some(*name))
             .collect()
     }
 
@@ -2127,7 +2140,7 @@ impl<'a> WildcardAuditRenewal<'a> {
     pub fn expiring_crates(&'a self) -> Vec<PackageStr<'a>> {
         self.crates
             .iter()
-            .filter_map(|(name, ids)| ids.iter().any(|e| !e.1).then_some(*name))
+            .filter_map(|(name, ids)| ids.iter().any(|(_, expired)| !*expired).then_some(*name))
             .collect()
     }
 
