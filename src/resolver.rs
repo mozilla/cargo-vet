@@ -64,6 +64,7 @@ use crate::format::{SortedMap, SortedSet};
 use crate::network::Network;
 use crate::out::{progress_bar, IncProgressOnDrop, Out};
 use crate::storage::Cache;
+use crate::string_format::FormatShortList;
 use crate::{Config, PackageExt, Store};
 
 pub struct ResolveReport<'a> {
@@ -1557,34 +1558,6 @@ fn search_for_path(
     Err(visited.into_iter().map(|v| v.cloned()).collect())
 }
 
-/// Format a short list with commas and an "and" before the last item in a
-/// multi-item list. Also returns whether the list has multiple items.
-fn format_short_list(mut items: Vec<String>) -> String {
-    // To keep the display compact, sort by name length and truncate long lists.
-    // We first sort by name because rust defaults to a stable sort and this will
-    // have by-name as the tie breaker.
-    items.sort();
-    items.sort_by_key(|item| item.len());
-    let cutoff_index = items
-        .iter()
-        .scan(0, |sum, s| {
-            *sum += s.len();
-            Some(*sum)
-        })
-        .position(|count| count > 20);
-    let remainder = cutoff_index.map(|i| items.len() - i).unwrap_or(0);
-    if remainder > 1 {
-        items.truncate(cutoff_index.unwrap());
-        items.push(format!("{remainder} others"));
-    }
-    match &items[..] {
-        [] => String::new(),
-        [a] => a.to_owned(),
-        [a, b] => format!("{a} and {b}"),
-        [items @ .., last] => format!("{}, and {}", items.join(", "), last),
-    }
-}
-
 impl<'a> ResolveReport<'a> {
     pub fn has_errors(&self) -> bool {
         // Just check the conclusion
@@ -1997,7 +1970,7 @@ impl<'a> ResolveReport<'a> {
                         let package = &self.graph.nodes[item.package];
                         JsonSuggestItem {
                             name: package.name.to_owned(),
-                            notable_parents: format_short_list(item.notable_parents.clone()),
+                            notable_parents: FormatShortList::string(item.notable_parents.clone()),
                             suggested_criteria: self
                                 .criteria_mapper
                                 .criteria_names(&item.suggested_criteria)
@@ -2132,7 +2105,7 @@ impl Suggest {
                         .publisher_login
                         .clone()
                         .unwrap_or_else(|| "UNKNOWN".into());
-                    let parents = format_short_list(item.notable_parents.clone());
+                    let parents = FormatShortList::string(item.notable_parents.clone());
                     let diffstat = match &item.suggested_diff.from {
                         Some(_) => format!("{}", item.suggested_diff.diffstat),
                         None => format!("{} lines", item.suggested_diff.diffstat.count()),
@@ -2209,7 +2182,7 @@ impl Suggest {
                         ""
                     };
                     let publisher = hint.publisher.clone();
-                    let trusted_by = format_short_list(hint.trusted_by.clone());
+                    let trusted_by = FormatShortList::new(hint.trusted_by.clone());
                     writeln!(
                         out,
                         "      {} {}",

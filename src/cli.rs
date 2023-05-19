@@ -388,6 +388,13 @@ pub enum Commands {
     /// In the future, many cargo-vet subcommands will implicitly do this.
     #[clap(disable_version_flag = true)]
     Gc(GcArgs),
+
+    /// Renew wildcard audit expirations
+    ///
+    /// This will set a wildcard audit expiration to be one year in the future from when it is run.
+    /// It can optionally do this for all audits which are expiring soon.
+    #[clap(disable_version_flag = true)]
+    Renew(RenewArgs),
 }
 
 #[derive(Subcommand)]
@@ -679,6 +686,18 @@ pub struct GcArgs {
     /// time you use cargo vet.
     #[clap(long, action)]
     pub clean: bool,
+}
+
+#[derive(clap::Args)]
+pub struct RenewArgs {
+    // Change this doc string if the WILDCARD_AUDIT_EXPIRATION_STRING changes.
+    /// Renew all wildcard audits which will have expired six weeks from now.
+    #[clap(long, action, conflicts_with("crate-name"))]
+    pub expiring: bool,
+
+    /// The name of a crate to renew.
+    #[clap(value_name("CRATE"), action, required_unless_present("expiring"))]
+    pub crate_name: Option<String>,
 }
 
 #[derive(clap::Args)]

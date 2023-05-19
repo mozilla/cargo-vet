@@ -138,7 +138,6 @@ fn mock_simple_certify_flow() {
         &mut store,
         None,
         None,
-        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
     )
     .expect("do_cmd_certify failed");
 
@@ -201,7 +200,6 @@ fn mock_delta_certify_flow() {
         &mut store,
         None,
         None,
-        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
     )
     .expect("do_cmd_certify failed");
 
@@ -295,7 +293,6 @@ fn mock_wildcard_certify_flow() {
         &mut store,
         Some(&network),
         None,
-        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
     )
     .expect("do_cmd_certify failed");
 
@@ -374,7 +371,6 @@ fn mock_trust_flow_simple() {
         sub_args,
         &mut store,
         Some(&network),
-        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
     )
     .expect("do_cmd_trust failed");
 
@@ -447,15 +443,8 @@ fn mock_trust_flow_ambiguous() {
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");
 
-    let error = crate::do_cmd_trust(
-        &output.as_dyn(),
-        &cfg,
-        sub_args,
-        &mut store,
-        Some(&network),
-        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
-    )
-    .expect_err("do_cmd_trust succeeded");
+    let error = crate::do_cmd_trust(&output.as_dyn(), &cfg, sub_args, &mut store, Some(&network))
+        .expect_err("do_cmd_trust succeeded");
 
     insta::assert_snapshot!(format!("{error:?}"));
 }
@@ -527,7 +516,6 @@ fn mock_trust_flow_explicit() {
         sub_args,
         &mut store,
         Some(&network),
-        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
     )
     .expect("do_cmd_trust failed");
 
@@ -662,7 +650,6 @@ fn mock_trust_flow_all() {
         sub_args,
         &mut store,
         Some(&network),
-        chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
     )
     .expect("do_cmd_trust failed");
 

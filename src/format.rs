@@ -391,6 +391,7 @@ pub struct WildcardEntry {
     pub user_id: CratesUserId,
     pub start: Spanned<chrono::NaiveDate>,
     pub end: Spanned<chrono::NaiveDate>,
+    pub renew: Option<bool>,
     pub notes: Option<String>,
     #[serde(rename = "aggregated-from")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -412,6 +413,14 @@ impl WildcardEntry {
             && self.start == other.start
             && self.end == other.end
             && self.criteria == other.criteria
+    }
+
+    /// Whether a renewal should be suggested for the entry.
+    ///
+    /// If the entry expires before `date` (and `renew` isn't `false`) a renewal will be
+    /// suggested.
+    pub fn should_renew(&self, date: chrono::NaiveDate) -> bool {
+        self.renew.unwrap_or(true) && self.end < date
     }
 }
 
