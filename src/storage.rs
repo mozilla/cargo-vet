@@ -94,7 +94,6 @@ const DIFF_SKIP_PATHS: &[&str] = &["Cargo.lock", ".cargo_vcs_info.json", ".cargo
 const MAX_CONCURRENT_DIFFS: usize = 40;
 
 // Check for new crate metadata every 60 days.
-// TODO should this be a much larger number?
 const METADATA_CACHE_EXPIRY_DAYS: i64 = 60;
 // Re-check the set of versions that exist for a specific crate every day.
 const VERSIONS_CACHE_EXPIRY_DAYS: i64 = 1;
@@ -1651,7 +1650,7 @@ impl Cache {
                 state: Mutex::new(CacheState {
                     diff_cache: DiffCache::default(),
                     command_history: CommandHistory::default(),
-                    crates_cache: crate::tests::mock_publisher_cache(),
+                    crates_cache: crate::tests::mock_crates_cache(),
                     fetched_packages: FastMap::new(),
                     diffed: FastMap::new(),
                 }),
@@ -2485,7 +2484,7 @@ impl<'a> UpdateCratesCache<'a> {
     ///
     /// # Note
     /// The official scraper policy requests a rate limit of 1 request per second
-    /// (https://crates.io/policies#crawlers).  This wouldn't be a very good user-experience to
+    /// <https://crates.io/policies#crawlers>. This wouldn't be a very good user-experience to
     /// require a multi-second wait to fetch each crate's information, however the local caching
     /// and infrequent user-driven calls to the API should hopefully ensure we remain under the
     /// 1 request per second limit over time.
@@ -2566,8 +2565,8 @@ impl<'a> UpdateCratesCache<'a> {
         let name = self.crate_name;
         use std::fmt::Write;
         match name.len() {
-            1 => write!(url, "1/{}", name),
-            2 => write!(url, "2/{}", name),
+            1 => write!(url, "1/{name}"),
+            2 => write!(url, "2/{name}"),
             3 => write!(url, "3/{}/{name}", &name[0..1]),
             _ => write!(url, "{}/{}/{name}", &name[0..2], &name[2..4]),
         }
@@ -2576,29 +2575,28 @@ impl<'a> UpdateCratesCache<'a> {
 
         let response = self.try_download(network, url).await?;
 
-        #[derive(Deserialize, Debug, Clone)]
-        struct IndexEntry {
-            vers: semver::Version,
-        }
-
-        let result = load_json_lines::<IndexEntry>(&response[..])?;
+        let result = crates_index::Crate::from_slice(&response[..]).map_err(LoadJsonError::from)?;
 
         // Update the crates cache with version info (if not already present).
         let mut guard = self.cache.state.lock().unwrap();
-        info!("found {} versions for crate {}", result.len(), name);
+        info!(
+            "found {} versions for crate {}",
+            result.versions().len(),
+            name
+        );
 
         let entry = guard
             .crates_cache
             .crates
             .entry(name.to_owned())
-            .or_insert_with(|| CratesCacheEntry {
-                last_fetched: self.now,
-                versions: Default::default(),
-                metadata: None,
-            });
+            .or_default();
         entry.last_fetched = self.now;
-        for index_entry in result {
-            entry.versions.entry(index_entry.vers).or_default();
+        for version in result
+            .versions()
+            .iter()
+            .filter_map(|v| semver::Version::parse(v.version()).ok())
+        {
+            entry.versions.entry(version).or_default();
         }
 
         Ok(guard)
@@ -2934,18 +2932,6 @@ where
     let json_string = serde_json::to_string(&val)?;
     Ok(json_string)
 }
-
-fn load_json_lines<T>(reader: impl Read) -> Result<Vec<T>, LoadJsonError>
-where
-    T: for<'a> Deserialize<'a>,
-{
-    use io::BufRead;
-    BufReader::new(reader)
-        .lines()
-        .map(|result| Ok(serde_json::from_str(&result?).map_err(|error| JsonParseError { error })?))
-        .collect()
-}
-
 fn store_audits(
     mut audits: AuditsFile,
     user_info: &FastMap<CratesUserId, CratesCacheUser>,

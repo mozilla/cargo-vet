@@ -1065,7 +1065,7 @@ pub struct CratesCacheVersionDetails {
 /// that update _should_ only have new versions which would append to a Vec if it were that).
 pub type CratesCacheVersions = SortedMap<semver::Version, Option<CratesCacheVersionDetails>>;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CratesCacheEntry {
     pub last_fetched: chrono::DateTime<chrono::Utc>,
     /// If versions is empty, this indicates that we queried the info and found that the crate has

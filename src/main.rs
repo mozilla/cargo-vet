@@ -2686,97 +2686,125 @@ async fn check_audit_as_crates_io(
         return Ok(());
     }
 
-    let mut needs_audit_as_entry = vec![];
-    let mut shouldnt_be_audit_as = vec![];
-
-    let mut unused_audit_as: SortedSet<(PackageName, Option<VetVersion>)> = store
-        .config
-        .policy
-        .iter()
-        .filter(|(_, _, policy)| policy.audit_as_crates_io.is_some())
-        .map(|(name, version, _)| (name.clone(), version.cloned()))
-        .collect();
-
     let first_party_packages: Vec<_> =
         first_party_packages_strict(&cfg.metadata, &store.config).collect();
 
-    let progress = progress_bar(
-        "Fetching",
-        "crate metadata",
-        first_party_packages.len() as u64,
-    );
+    let mut errors = vec![];
 
-    for package in first_party_packages {
-        let _inc_progress = IncProgressOnDrop(&progress, 1);
-        progress.set_message(format!("crate metadata for {}", package.name));
-        // Remove both versioned and unversioned entries
-        unused_audit_as.remove(&(package.name.clone(), Some(package.vet_version())));
-        unused_audit_as.remove(&(package.name.clone(), None));
+    {
+        let mut unused_audit_as: SortedSet<(PackageName, Option<VetVersion>)> = store
+            .config
+            .policy
+            .iter()
+            .filter(|(_, _, policy)| policy.audit_as_crates_io.is_some())
+            .map(|(name, version, _)| (name.clone(), version.cloned()))
+            .collect();
 
-        if network.is_none() {
-            // If we don't have a network, we shouldn't check the audit-as-crates-io entries
-            // because we shouldn't make recommendations based on potentially stale
-            // information.
-            continue;
+        for package in &first_party_packages {
+            // Remove both versioned and unversioned entries
+            unused_audit_as.remove(&(package.name.clone(), Some(package.vet_version())));
+            unused_audit_as.remove(&(package.name.clone(), None));
         }
-
-        let audit_policy = package
-            .policy_entry(&store.config.policy)
-            .and_then(|policy| policy.audit_as_crates_io);
-        if audit_policy == Some(false) {
-            // They've explicitly said this is first-party so we don't care about what's in the
-            // registry.
-            continue;
-        }
-
-        // To avoid unnecessary metadata lookup, only do so for packages which exist in the
-        // index. The case which doesn't work with this logic is if someone is using a
-        // package before it has ever been published, and then later it is published (in
-        // which case a third-party change causes a warning to unexpectedly come up).
-        // However, this case is sufficiently unlikely that for now it's worth the initial
-        // lookup to avoid unnecessarily trying to fetch metadata for unpublished crates.
-        //
-        // The caching logic already does this for us as an optimization, but since we may
-        // need to look at the specific versions later, we fetch it anyway.
-        let versions = cache.get_versions(network, &package.name).await.ok();
-        let mut matches_crates_io_package = false;
-        if versions.is_some() {
-            if let Ok(metadata) = cache.get_crate_metadata(network, &package.name).await {
-                matches_crates_io_package = metadata.consider_as_same(package);
-            }
-        }
-
-        if matches_crates_io_package && audit_policy.is_none() {
-            // We found a package that has similar metadata to one with the same name
-            // on crates.io: having no policy is an error.
-            needs_audit_as_entry.push(PackageError {
-                package: package.name.clone(),
-                version: Some(package.vet_version()),
-            });
-            continue;
-        }
-        if audit_policy == Some(true) {
-            // Check whether there is a matching version on crates.io. No matching
-            // version is considered an error.
-            if !matches_crates_io_package
-                || !versions
-                    .expect("metadata implies versions")
-                    .contains(&package.version)
-            {
-                shouldnt_be_audit_as.push(PackageError {
-                    package: package.name.clone(),
-                    version: Some(package.vet_version()),
-                });
-            }
+        if !unused_audit_as.is_empty() {
+            errors.push(AuditAsError::UnusedAuditAs(UnusedAuditAsErrors {
+                errors: unused_audit_as
+                    .into_iter()
+                    .map(|(package, version)| PackageError { package, version })
+                    .collect(),
+            }))
         }
     }
-    progress.finish_with_message("crate metadata complete");
 
-    if !needs_audit_as_entry.is_empty()
-        || !shouldnt_be_audit_as.is_empty()
-        || !unused_audit_as.is_empty()
-    {
-        let mut errors = vec![];
+    // We should only check the audit-as-crates-io entries if we have a network, because we
+    // shouldn't make recommendations based on potentially stale information.
+    if network.is_some() {
+        let progress = progress_bar(
+            "Fetching",
+            "crate metadata",
+            first_party_packages.len() as u64,
+        );
+
+        enum CheckAction {
+            NeedAuditAs,
+            ShouldntBeAuditAs,
+        }
+
+        let actions: Vec<_> = join_all(first_party_packages.into_iter().map(|package| {
+            let progress = &progress;
+            let cache = &cache;
+            async move {
+                let _inc_progress = IncProgressOnDrop(progress, 1);
+
+                let audit_policy = package
+                    .policy_entry(&store.config.policy)
+                    .and_then(|policy| policy.audit_as_crates_io);
+                if audit_policy == Some(false) {
+                    // They've explicitly said this is first-party so we don't care about what's in the
+                    // registry.
+                    return None;
+                }
+
+                // To avoid unnecessary metadata lookup, only do so for packages which exist in the
+                // index. The case which doesn't work with this logic is if someone is using a
+                // package before it has ever been published, and then later it is published (in
+                // which case a third-party change causes a warning to unexpectedly come up).
+                // However, this case is sufficiently unlikely that for now it's worth the initial
+                // lookup to avoid unnecessarily trying to fetch metadata for unpublished crates.
+                //
+                // The caching logic already does this for us as an optimization, but since we may
+                // need to look at the specific versions later, we fetch it anyway.
+                let versions = cache.get_versions(network, &package.name).await.ok();
+                let mut matches_crates_io_package = false;
+                if versions.is_some() {
+                    if let Ok(metadata) = cache.get_crate_metadata(network, &package.name).await {
+                        matches_crates_io_package = metadata.consider_as_same(package);
+                    }
+                }
+
+                if matches_crates_io_package && audit_policy.is_none() {
+                    // We found a package that has similar metadata to one with the same name
+                    // on crates.io: having no policy is an error.
+                    return Some((CheckAction::NeedAuditAs, package));
+                }
+                if audit_policy == Some(true) {
+                    // Check whether there is a matching version on crates.io. No matching
+                    // version is considered an error.
+                    if !matches_crates_io_package
+                        || !versions
+                            .expect("metadata implies versions")
+                            .contains(&package.version)
+                    {
+                        return Some((CheckAction::ShouldntBeAuditAs, package));
+                    }
+                }
+                None
+            }
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect();
+
+        let mut needs_audit_as_entry = vec![];
+        let mut shouldnt_be_audit_as = vec![];
+
+        for (action, package) in actions {
+            match action {
+                CheckAction::NeedAuditAs => {
+                    needs_audit_as_entry.push(PackageError {
+                        package: package.name.clone(),
+                        version: Some(package.vet_version()),
+                    });
+                }
+                CheckAction::ShouldntBeAuditAs => {
+                    shouldnt_be_audit_as.push(PackageError {
+                        package: package.name.clone(),
+                        version: Some(package.vet_version()),
+                    });
+                }
+            }
+        }
+
         if !needs_audit_as_entry.is_empty() {
             errors.push(AuditAsError::NeedsAuditAs(NeedsAuditAsErrors {
                 errors: needs_audit_as_entry,
@@ -2787,18 +2815,15 @@ async fn check_audit_as_crates_io(
                 errors: shouldnt_be_audit_as,
             }));
         }
-        if !unused_audit_as.is_empty() {
-            errors.push(AuditAsError::UnusedAuditAs(UnusedAuditAsErrors {
-                errors: unused_audit_as
-                    .into_iter()
-                    .map(|(package, version)| PackageError { package, version })
-                    .collect(),
-            }))
-        }
-        return Err(AuditAsErrors { errors });
+
+        progress.finish();
     }
 
-    Ok(())
+    if !errors.is_empty() {
+        Err(AuditAsErrors { errors })
+    } else {
+        Ok(())
+    }
 }
 
 /// Check crate policies for correctness.

@@ -97,7 +97,7 @@ lazy_static::lazy_static! {
 
 }
 
-pub fn mock_publisher_cache() -> crate::format::CratesCache {
+pub fn mock_crates_cache() -> crate::format::CratesCache {
     let now: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
     let mut cache = crate::format::CratesCache::default();
 
@@ -1294,6 +1294,10 @@ fn network_mock_index(network: &mut Network, package: &str, versions: &[&str]) {
                 serde_json::to_string(&json!({
                     "name": package,
                     "vers": v,
+                    "deps": [],
+                    "cksum": "90527ab4abff2f0608cdb1a78e2349180e1d92059f59b5a65ce2a1a15a499b73",
+                    "features": {},
+                    "yanked": false
                 }))
                 .unwrap()
             })
