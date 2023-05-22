@@ -1114,9 +1114,22 @@ fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile
     (config, audits, imports)
 }
 
-/// Returns a fixed date that should be considered `today`: 2023-01-01.
+/// Returns a fixed datetime that should be considered `now`: 2023-01-01 12:00 UTC.
+fn mock_now() -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::from_utc(
+        chrono::NaiveDateTime::new(
+            chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+            chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+        ),
+        chrono::Utc,
+    )
+}
+
+/// Returns a fixed datetime that should be considered `today`: 2023-01-01.
+///
+/// This is derived from `mock_now()`.
 fn mock_today() -> chrono::NaiveDate {
-    chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap()
+    mock_now().date_naive()
 }
 
 fn mock_cfg(metadata: &Metadata) -> Config {
@@ -1135,7 +1148,7 @@ where
         metadata: metadata.clone(),
         _rest: PartialConfig {
             cli,
-            today: mock_today(),
+            now: mock_now(),
             cache_dir: PathBuf::new(),
             mock_cache: true,
         },

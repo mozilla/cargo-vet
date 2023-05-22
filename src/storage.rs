@@ -242,11 +242,8 @@ impl Store {
             imports_src,
         };
 
-        // We need to know today's date to validate that end dates are valid.
-        let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
-
         // Check that the store isn't corrupt
-        store.validate(today, cfg.cli.locked)?;
+        store.validate(cfg.today(), cfg.cli.locked)?;
 
         Ok(store)
     }
@@ -270,9 +267,7 @@ impl Store {
                 allow_criteria_changes,
             ))?;
 
-            // re-validate
-            let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
-            this.validate(today, cfg.cli.locked)?;
+            this.validate(cfg.today(), cfg.cli.locked)?;
         }
         Ok(this)
     }
@@ -1584,6 +1579,8 @@ pub struct Cache {
     publisher_cache_path: Option<PathBuf>,
     /// Semaphore preventing exceeding the maximum number of concurrent diffs.
     diff_semaphore: tokio::sync::Semaphore,
+    /// The time to use as `now` when considering cache expiry.
+    now: chrono::DateTime<chrono::Utc>,
     /// Common mutable state for the cache which can be mutated concurrently
     /// from multiple tasks.
     state: Mutex<CacheState>,
@@ -1647,6 +1644,7 @@ impl Cache {
                 command_history_path: None,
                 publisher_cache_path: None,
                 diff_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_DIFFS),
+                now: cfg.now,
                 state: Mutex::new(CacheState {
                     diff_cache: DiffCache::default(),
                     command_history: CommandHistory::default(),
@@ -1713,6 +1711,7 @@ impl Cache {
             publisher_cache_path: Some(publisher_cache_path),
             cargo_registry: cargo_registry.ok(),
             diff_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_DIFFS),
+            now: cfg.now,
             state: Mutex::new(CacheState {
                 diff_cache,
                 command_history,
@@ -1831,11 +1830,11 @@ impl Cache {
 
                 // Check if the resource is already available in our local cache.
                 let fetched_package_ = fetched_package.clone();
+                let now = filetime::FileTime::from_system_time(SystemTime::from(self.now));
                 let cached_file = tokio::task::spawn_blocking(move || {
                     File::open(&fetched_package_).map(|file| {
                         // Update the atime and mtime for this crate to ensure it isn't
                         // collected by the gc.
-                        let now = filetime::FileTime::now();
                         if let Err(err) =
                             filetime::set_file_handle_times(&file, Some(now), Some(now))
                         {
@@ -2165,7 +2164,7 @@ impl Cache {
 
         let mut cache_entries = tokio::fs::read_dir(&cache).await?;
         while let Some(entry) = cache_entries.next_entry().await? {
-            if let Some(to_keep) = should_keep_package(&entry, max_package_age).await {
+            if let Some(to_keep) = self.should_keep_package(&entry, max_package_age).await {
                 kept_packages.push(to_keep);
             } else {
                 remove_dir_entry(&entry).await?;
@@ -2179,6 +2178,35 @@ impl Cache {
             }
         }
         Ok(())
+    }
+
+    /// Given a directory entry for a file, returns how old it is. If there is an
+    /// issue (e.g. mtime >= now), will return `None` instead.
+    async fn get_file_age(&self, entry: &tokio::fs::DirEntry) -> Option<Duration> {
+        let meta = entry.metadata().await.ok()?;
+        SystemTime::from(self.now)
+            .duration_since(meta.modified().ok()?)
+            .ok()
+    }
+
+    /// Returns tne name of the crate if it should be preserved, or `None` if it shouldn't.
+    async fn should_keep_package(
+        &self,
+        entry: &tokio::fs::DirEntry,
+        max_package_age: Duration,
+    ) -> Option<OsString> {
+        // Get the stem and extension from the directory entry's path, and
+        // immediately remove it if something goes wrong.
+        let path = entry.path();
+        let stem = path.file_stem()?;
+        if path.extension()? != OsStr::new("crate") {
+            return None;
+        }
+
+        match self.get_file_age(entry).await {
+            Some(age) if age > max_package_age => None,
+            _ => Some(stem.to_owned()),
+        }
     }
 
     /// Delete every file in the cache directory other than the cache lock, and
@@ -2327,7 +2355,6 @@ impl Cache {
 struct UpdateCratesCache<'a> {
     cache: &'a Cache,
     crate_name: PackageStr<'a>,
-    now: chrono::DateTime<chrono::Utc>,
     cache_expiration: Option<chrono::Duration>,
     versions: Option<FastSet<&'a semver::Version>>,
     need_version_details: bool,
@@ -2343,7 +2370,6 @@ impl<'a> UpdateCratesCache<'a> {
         UpdateCratesCache {
             cache,
             crate_name,
-            now: std::time::SystemTime::now().into(),
             cache_expiration: None,
             versions: None,
             need_version_details: false,
@@ -2417,7 +2443,7 @@ impl<'a> UpdateCratesCache<'a> {
     ) -> Result<Option<std::sync::MutexGuard<'a, CacheState>>, CrateInfoError> {
         let guard = self.cache.state.lock().unwrap();
         if let Some(entry) = guard.crates_cache.crates.get(self.crate_name) {
-            let cache_age = self.now - entry.last_fetched;
+            let cache_age = self.cache.now - entry.last_fetched;
             // If a crate was previously found to not exist...
             if !entry.exists() {
                 if cache_age < chrono::Duration::days(NONEXISTENT_CRATE_EXPIRY_DAYS) {
@@ -2539,7 +2565,7 @@ impl<'a> UpdateCratesCache<'a> {
         guard.crates_cache.crates.insert(
             self.crate_name.to_owned(),
             CratesCacheEntry {
-                last_fetched: self.now,
+                last_fetched: self.cache.now,
                 versions,
                 metadata: Some(result.crate_data),
             },
@@ -2590,7 +2616,7 @@ impl<'a> UpdateCratesCache<'a> {
             .crates
             .entry(name.to_owned())
             .or_default();
-        entry.last_fetched = self.now;
+        entry.last_fetched = self.cache.now;
         for version in result
             .versions()
             .iter()
@@ -2622,7 +2648,7 @@ impl<'a> UpdateCratesCache<'a> {
         guard.crates_cache.crates.insert(
             self.crate_name.to_owned(),
             CratesCacheEntry {
-                last_fetched: self.now,
+                last_fetched: self.cache.now,
                 versions: Default::default(),
                 metadata: None,
             },
@@ -2835,33 +2861,6 @@ async fn remove_dir_entry(entry: &tokio::fs::DirEntry) -> Result<(), io::Error> 
         tokio::fs::remove_file(entry.path()).await?;
     }
     Ok(())
-}
-
-/// Given a directory entry for a file, returns how old it is. If there is an
-/// issue (e.g. mtime >= now), will return `None` instead.
-async fn get_file_age(entry: &tokio::fs::DirEntry) -> Option<Duration> {
-    let now = SystemTime::now();
-    let meta = entry.metadata().await.ok()?;
-    now.duration_since(meta.modified().ok()?).ok()
-}
-
-/// Returns tne name of the crate if it should be preserved, or `None` if it shouldn't.
-async fn should_keep_package(
-    entry: &tokio::fs::DirEntry,
-    max_package_age: Duration,
-) -> Option<OsString> {
-    // Get the stem and extension from the directory entry's path, and
-    // immediately remove it if something goes wrong.
-    let path = entry.path();
-    let stem = path.file_stem()?;
-    if path.extension()? != OsStr::new("crate") {
-        return None;
-    }
-
-    match get_file_age(entry).await {
-        Some(age) if age > max_package_age => None,
-        _ => Some(stem.to_owned()),
-    }
 }
 
 fn find_cargo_registry() -> Result<CargoRegistry, crates_index::Error> {

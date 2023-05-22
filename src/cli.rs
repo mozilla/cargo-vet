@@ -115,6 +115,11 @@ pub struct Cli {
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub cache_dir: Option<PathBuf>,
 
+    /// The date and time to use as now.
+    #[clap(long, action, hide = true)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    pub current_time: Option<chrono::DateTime<chrono::Utc>>,
+
     /// Filter out different parts of the build graph and pretend that's the true graph
     ///
     /// Example: `--filter-graph="exclude(any(eq(is_dev_only(true)),eq(name(serde_derive))))"`

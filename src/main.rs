@@ -76,12 +76,18 @@ pub struct Config {
 pub struct PartialConfig {
     /// Details of the CLI invocation (args)
     pub cli: Cli,
-    /// The date to use as the current date.
-    pub today: chrono::NaiveDate,
+    /// The date and time to use as the current time.
+    pub now: chrono::DateTime<chrono::Utc>,
     /// Path to the cache directory we're using
     pub cache_dir: PathBuf,
     /// Whether we should mock the global cache (for unit testing)
     pub mock_cache: bool,
+}
+
+impl PartialConfig {
+    pub fn today(&self) -> chrono::NaiveDate {
+        self.now.date_naive()
+    }
 }
 
 // Makes it a bit easier to have both a "partial" and "full" config
@@ -325,10 +331,12 @@ fn real_main() -> Result<(), miette::Report> {
             .unwrap_or_else(std::env::temp_dir)
             .join(CACHE_DIR_SUFFIX)
     });
-    let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
+    let now = cli
+        .current_time
+        .unwrap_or_else(|| chrono::DateTime::from(SystemTime::now()));
     let partial_cfg = PartialConfig {
         cli,
-        today,
+        now,
         cache_dir,
         mock_cache: false,
     };
@@ -713,7 +721,7 @@ fn do_cmd_certify(
         // published package by the user, and a to date of 12 months from today.
         let start = sub_args.start_date.unwrap_or(earliest.when);
 
-        let max_end = cfg.today + chrono::Months::new(12);
+        let max_end = cfg.today() + chrono::Months::new(12);
         let end = sub_args.end_date.unwrap_or(max_end);
         let set_renew_false = sub_args.end_date.is_some();
         if end > max_end {
@@ -960,7 +968,7 @@ fn do_cmd_certify(
     };
 
     store
-        .validate(cfg.today, false)
+        .validate(cfg.today(), false)
         .expect("the new audit entry made the store invalid?");
 
     // Minimize exemptions after adding the new audit. This will be used to
@@ -1378,7 +1386,7 @@ fn apply_cmd_trust(
     // published package by the user, and a to date of 12 months from today.
     let start = start_date.unwrap_or(earliest.when);
 
-    let end = end_date.unwrap_or(cfg.today + chrono::Months::new(12));
+    let end = end_date.unwrap_or(cfg.today() + chrono::Months::new(12));
 
     let criteria_names = criteria_picker(
         out,
@@ -1423,7 +1431,7 @@ fn apply_cmd_trust(
     }
 
     store
-        .validate(cfg.today, false)
+        .validate(cfg.today(), false)
         .expect("the new trusted entry made the store invalid?");
 
     // Minimize exemptions after adding the new trust entry. This will be used
@@ -1665,7 +1673,7 @@ fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &
     // error.
     let cache = Cache::acquire(cfg).ok();
 
-    let new_end_date = cfg.today + chrono::Months::new(12);
+    let new_end_date = cfg.today() + chrono::Months::new(12);
 
     let mut renewing: WildcardAuditRenewal;
 
@@ -2092,7 +2100,7 @@ impl<'a> WildcardAuditRenewal<'a> {
     /// This function _does not_ modify the store, but since the mutable references to the entries
     /// are stored (for potential use by `renew`), it must take a mutable Store.
     pub fn expiring(cfg: &Config, store: &'a mut Store) -> Self {
-        let expire_date = cfg.today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
+        let expire_date = cfg.today() + *WILDCARD_AUDIT_EXPIRATION_DURATION;
 
         let mut crates: SortedMap<PackageStr<'a>, Vec<(&'a mut WildcardEntry, bool)>> =
             Default::default();
@@ -2101,7 +2109,7 @@ impl<'a> WildcardAuditRenewal<'a> {
             // audits, check whether all of them are already expired (to change the warning
             // message to be more informative).
             for entry in audits.iter_mut().filter(|e| e.should_renew(expire_date)) {
-                let expired = entry.should_renew(cfg.today);
+                let expired = entry.should_renew(cfg.today());
                 crates.entry(name).or_default().push((entry, expired));
             }
         }

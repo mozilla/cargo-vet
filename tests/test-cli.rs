@@ -135,6 +135,19 @@ fn test_markdown_help() {
     assert!(output.status.success(), "{}", output.status);
 }
 
+trait CommandExt {
+    fn set_cache(&mut self) -> &mut Self;
+}
+
+impl CommandExt for Command {
+    fn set_cache(&mut self) -> &mut Self {
+        self.arg("--cache-dir")
+            .arg("../cache")
+            .arg("--current-time")
+            .arg("2023-01-01 12:00:00Z")
+    }
+}
+
 #[test]
 fn test_project() {
     let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -146,8 +159,7 @@ fn test_project() {
         .arg("vet")
         .arg("--manifest-path")
         .arg("Cargo.toml")
-        .arg("--cache-dir")
-        .arg("../cache")
+        .set_cache()
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -168,8 +180,7 @@ fn test_project_json() {
         .arg("vet")
         .arg("--manifest-path")
         .arg("Cargo.toml")
-        .arg("--cache-dir")
-        .arg("../cache")
+        .set_cache()
         .arg("--output-format=json")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -190,8 +201,7 @@ fn test_project_suggest() {
         .current_dir(&project)
         .arg("vet")
         .arg("suggest")
-        .arg("--cache-dir")
-        .arg("../cache")
+        .set_cache()
         .arg("--no-registry-suggestions")
         .arg("--manifest-path")
         .arg("Cargo.toml")
@@ -214,8 +224,7 @@ fn test_project_suggest_json() {
         .current_dir(&project)
         .arg("vet")
         .arg("suggest")
-        .arg("--cache-dir")
-        .arg("../cache")
+        .set_cache()
         .arg("--no-registry-suggestions")
         .arg("--manifest-path")
         .arg("Cargo.toml")
@@ -239,8 +248,7 @@ fn test_project_dump_graph_full_json() {
         .current_dir(&project)
         .arg("vet")
         .arg("dump-graph")
-        .arg("--cache-dir")
-        .arg("../cache")
+        .set_cache()
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--output-format=json")
@@ -264,8 +272,7 @@ fn test_project_dump_graph_full() {
         .current_dir(&project)
         .arg("vet")
         .arg("dump-graph")
-        .arg("--cache-dir")
-        .arg("../cache")
+        .set_cache()
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--depth=full")
@@ -288,8 +295,7 @@ fn test_project_bad_certify_human() {
         .current_dir(&project)
         .arg("vet")
         .arg("certify")
-        .arg("--cache-dir")
-        .arg("../cache")
+        .set_cache()
         .arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("asdfsdfs")
@@ -312,8 +318,7 @@ fn test_project_bad_certify_json() {
         .current_dir(&project)
         .arg("vet")
         .arg("certify")
-        .arg("--cache-dir")
-        .arg("../cache")
+        .set_cache()
         .arg("--output-format=json")
         .arg("--manifest-path")
         .arg("Cargo.toml")
@@ -340,8 +345,7 @@ fn test_project_diff_output() {
         .current_dir(&project)
         .arg("vet")
         .arg("diff")
-        .arg("--cache-dir")
-        .arg("../cache")
+        .set_cache()
         .arg("--mode")
         .arg("local")
         .arg("syn")
@@ -373,8 +377,7 @@ fn test_project_diff_output_git() {
         .current_dir(&project)
         .arg("vet")
         .arg("diff")
-        .arg("--cache-dir")
-        .arg("../cache")
+        .set_cache()
         .arg("--mode")
         .arg("local")
         .arg("proc-macro2")
