@@ -2823,8 +2823,6 @@ async fn check_audit_as_crates_io(
                 errors: shouldnt_be_audit_as,
             }));
         }
-
-        progress.finish();
     }
 
     if !errors.is_empty() {

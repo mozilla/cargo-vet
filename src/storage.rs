@@ -1413,8 +1413,7 @@ async fn import_publisher_versions(
     // We may care about other versions for these packages as well if they
     // appear on the `from` side of a delta audit, or if they are named by an
     // exemption.
-    let mut relevant_publishers = Vec::new();
-    for (pkg_name, mut versions) in relevant_versions {
+    for (&pkg_name, versions) in relevant_versions.iter_mut() {
         // If there is a delta audit originating from a specific version, that
         // version may be relevant, so record it.
         for audit in [audits_file]
@@ -1442,15 +1441,29 @@ async fn import_publisher_versions(
                 versions.insert(&publisher.version.semver);
             }
         }
-
-        // Access the set of publishers. We provide the set of relevant versions
-        // to help decide whether or not to fetch new publisher information from
-        // crates.io, to reduce API activity.
-        let publishers = cache
-            .get_publishers(Some(network), pkg_name, versions)
-            .await?;
-        relevant_publishers.push((pkg_name, publishers));
     }
+
+    let relevant_publishers = {
+        let progress = progress_bar(
+            "Fetching",
+            "crate publishers",
+            relevant_versions.len() as u64,
+        );
+        try_join_all(relevant_versions.into_iter().map(|(pkg_name, versions)| {
+            let progress = &progress;
+            async move {
+                let _inc_progress = IncProgressOnDrop(progress, 1);
+                // Access the set of publishers. We provide the set of relevant versions
+                // to help decide whether or not to fetch new publisher information from
+                // crates.io, to reduce API activity.
+                cache
+                    .get_publishers(Some(network), pkg_name, versions)
+                    .await
+                    .map(|publishers| (pkg_name, publishers))
+            }
+        }))
+        .await?
+    };
 
     // NOTE: We make sure to process all imports before we look up user
     // information in the cache, to ensure we're fetching consistent user
