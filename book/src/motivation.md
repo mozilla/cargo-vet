@@ -63,5 +63,5 @@ ground, and substantial room for improvement beyond no sharing at all.
   along with removing duplicates due to different versions of the same crate:
 
 ```
-cat Cargo.lock | grep -e "name = " -e "source = \"registry" | awk '/source =/ { print prv_line; next } { prv_line = $0 }' | sort | uniq
+grep -e "name = " -e "source = \"registry" Cargo.lock | awk '/source =/ { print prv_line; next } { prv_line = $0 }' | sort -u
 ```
