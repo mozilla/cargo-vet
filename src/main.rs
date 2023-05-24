@@ -2727,8 +2727,8 @@ async fn check_audit_as_crates_io(
     // shouldn't make recommendations based on potentially stale information.
     if network.is_some() {
         let progress = progress_bar(
-            "Fetching",
-            "crate metadata",
+            "Validating",
+            "audit-as-crates-io specifications",
             first_party_packages.len() as u64,
         );
 
