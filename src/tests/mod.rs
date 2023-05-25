@@ -97,9 +97,9 @@ lazy_static::lazy_static! {
 
 }
 
-pub fn mock_publisher_cache() -> crate::format::PublisherCache {
+pub fn mock_crates_cache() -> crate::format::CratesCache {
     let now: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
-    let mut cache = crate::format::PublisherCache::default();
+    let mut cache = crate::format::CratesCache::default();
 
     for pkg_name in [
         "root-package",
@@ -112,20 +112,24 @@ pub fn mock_publisher_cache() -> crate::format::PublisherCache {
     ] {
         cache.crates.insert(
             pkg_name.into(),
-            crate::format::PublisherCacheEntry {
+            crate::format::CratesCacheEntry {
                 last_fetched: now,
-                versions: vec![crate::format::PublisherCacheVersion {
-                    created_at: now,
-                    num: semver::Version {
+                versions: [(
+                    semver::Version {
                         major: DEFAULT_VER,
                         minor: 0,
                         patch: 0,
                         pre: Default::default(),
                         build: Default::default(),
                     },
-                    published_by: None,
-                }],
-                metadata: crate::format::CratesAPICrateMetadata {
+                    Some(crate::format::CratesCacheVersionDetails {
+                        created_at: now,
+                        published_by: None,
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+                metadata: Some(crate::format::CratesAPICrateMetadata {
                     description: Some(
                         if pkg_name == "descriptive" {
                             "descriptive"
@@ -135,7 +139,7 @@ pub fn mock_publisher_cache() -> crate::format::PublisherCache {
                         .into(),
                     ),
                     repository: None,
-                },
+                }),
             },
         );
     }
@@ -171,15 +175,15 @@ pub struct MockIndex {
 }
 
 struct MockRegistryVersion {
-    version: VetVersion,
+    _version: VetVersion,
     /// Dependency info dummied out in case we ever want that
-    deps: Vec<()>,
+    _deps: Vec<()>,
 }
 
 fn reg_ver(pub_ver: u64) -> MockRegistryVersion {
     MockRegistryVersion {
-        version: ver(pub_ver),
-        deps: vec![],
+        _version: ver(pub_ver),
+        _deps: vec![],
     }
 }
 
@@ -234,66 +238,6 @@ impl MockIndex {
             .unwrap()
             .push(reg_ver(DEFAULT_VER));
         Ok(())
-    }
-    pub fn crate_(&self, name: PackageStr) -> Option<crates_index::Crate> {
-        use std::io::Write;
-
-        let package_entry = self.packages.get(name)?;
-        let mut package_file = Vec::<u8>::new();
-        for package_version in package_entry {
-            // Dependencies dummied out in case we ever want them
-            let line = json!({
-                "name": name,
-                "vers": package_version.version,
-                // These fields are all dummied out here in case we ever want them
-                "deps": package_version.deps.iter().map(|_dep| json!({
-                    "name": "some_dep_name",
-                    "req": "^0.1.2",
-                    "features": [],
-                    "optional": false,
-                    "default_features": true,
-                    // The target platform for the dependency.
-                    // null if not a target dependency.
-                    // Otherwise, a string such as "cfg(windows)".
-                    "target": null,
-                    // The dependency kind.
-                    // "dev", "build", or "normal".
-                    // Note: this is a required field, but a small number of entries
-                    // exist in the crates.io index with either a missing or null
-                    // `kind` field due to implementation bugs.
-                    "kind": "normal",
-                    // The URL of the index of the registry where this dependency is
-                    // from as a string. If not specified or null, it is assumed the
-                    // dependency is in the current registry.
-                    "registry": null,
-                    // If the dependency is renamed, this is a string of the actual
-                    // package name. If not specified or null, this dependency is not
-                    // renamed.
-                    "package": null,
-                })).collect::<Vec<_>>(),
-                // A SHA256 checksum of the `.crate` file.
-                "cksum": "d867001db0e2b6e0496f9fac96930e2d42233ecd3ca0413e0753d4c7695d289c",
-                // Set of features defined for the package.
-                // Each feature maps to an array of features or dependencies it enables.
-                "features": {},
-                "yanked": false,
-                // The `links` string value from the package's manifest, or null if not
-                // specified. This field is optional and defaults to null.
-                "links": null,
-                // An unsigned 32-bit integer value indicating the schema version of this
-                // entry.
-                "v": 2u32,
-                // This optional field contains features with new, extended syntax.
-                // Specifically, namespaced features (`dep:`) and weak dependencies
-                // (`pkg?/feat`).
-                "features2": {},
-            });
-            serde_json::ser::to_writer(&mut package_file, &line).unwrap();
-            writeln!(&mut package_file).unwrap();
-        }
-        let result = crates_index::Crate::from_slice(&package_file)
-            .expect("failed to parse mock crates index file");
-        Some(result)
     }
     pub fn path(&self) -> &Path {
         &self.path
@@ -1170,9 +1114,22 @@ fn builtin_files_minimal_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile
     (config, audits, imports)
 }
 
-/// Returns a fixed date that should be considered `today`: 2023-01-01.
+/// Returns a fixed datetime that should be considered `now`: 2023-01-01 12:00 UTC.
+fn mock_now() -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::from_utc(
+        chrono::NaiveDateTime::new(
+            chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+            chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+        ),
+        chrono::Utc,
+    )
+}
+
+/// Returns a fixed datetime that should be considered `today`: 2023-01-01.
+///
+/// This is derived from `mock_now()`.
 fn mock_today() -> chrono::NaiveDate {
-    chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap()
+    mock_now().date_naive()
 }
 
 fn mock_cfg(metadata: &Metadata) -> Config {
@@ -1191,7 +1148,7 @@ where
         metadata: metadata.clone(),
         _rest: PartialConfig {
             cli,
-            today: mock_today(),
+            now: mock_now(),
             cache_dir: PathBuf::new(),
             mock_cache: true,
         },
@@ -1333,6 +1290,33 @@ fn diff_store_commits(old: &SortedMap<String, String>, new: &SortedMap<String, S
         writeln!(&mut result, "{key}:\n{diff}").unwrap();
     }
     result
+}
+
+fn network_mock_index(network: &mut Network, package: &str, versions: &[&str]) {
+    // To keep things simple, only handle the URL for 4+ characters in package names.
+    assert!(package.len() >= 4);
+    network.mock_serve(
+        format!(
+            "https://index.crates.io/{}/{}/{package}",
+            &package[0..2],
+            &package[2..4]
+        ),
+        versions
+            .iter()
+            .map(|v| {
+                serde_json::to_string(&json!({
+                    "name": package,
+                    "vers": v,
+                    "deps": [],
+                    "cksum": "90527ab4abff2f0608cdb1a78e2349180e1d92059f59b5a65ce2a1a15a499b73",
+                    "features": {},
+                    "yanked": false
+                }))
+                .unwrap()
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
 }
 
 // TESTING BACKLOG:

@@ -1,6 +1,6 @@
 //! Serialization helpers
 
-use crate::format::{CratesUserId, CriteriaMap, FastMap, PublisherCacheUser, SortedMap};
+use crate::format::{CratesCacheUser, CratesUserId, CriteriaMap, FastMap, SortedMap};
 use core::fmt;
 use serde::{
     de::{self, value, SeqAccess, Visitor},
@@ -411,7 +411,7 @@ fn table_should_be_inline(key: &str, value: &toml_edit::Item) -> bool {
 /// Can fail if `T`'s implementation of `Serialize` fails.
 pub fn to_formatted_toml<T>(
     val: T,
-    user_info: Option<&FastMap<CratesUserId, PublisherCacheUser>>,
+    user_info: Option<&FastMap<CratesUserId, CratesCacheUser>>,
 ) -> Result<toml_edit::Document, toml_edit::ser::Error>
 where
     T: Serialize,
@@ -419,7 +419,7 @@ where
     use toml_edit::visit_mut::VisitMut;
 
     struct TomlFormatter<'a> {
-        user_info: Option<&'a FastMap<CratesUserId, PublisherCacheUser>>,
+        user_info: Option<&'a FastMap<CratesUserId, CratesCacheUser>>,
     }
     impl TomlFormatter<'_> {
         fn add_user_login_comments(&self, v: &mut toml_edit::Item) {

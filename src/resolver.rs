@@ -54,11 +54,11 @@ use crate::cli::{DumpGraphArgs, GraphFilter, GraphFilterProperty, GraphFilterQue
 use crate::criteria::{CriteriaMapper, CriteriaSet};
 use crate::errors::SuggestError;
 use crate::format::{
-    self, AuditEntry, AuditKind, AuditsFile, CratesPublisher, CriteriaName, Delta, DiffStat,
-    ExemptedDependency, FastMap, FastSet, ImportName, ImportsFile, JsonPackage, JsonReport,
-    JsonReportConclusion, JsonReportFailForVet, JsonReportFailForViolationConflict,
+    self, AuditEntry, AuditKind, AuditsFile, CratesCacheUser, CratesPublisher, CriteriaName, Delta,
+    DiffStat, ExemptedDependency, FastMap, FastSet, ImportName, ImportsFile, JsonPackage,
+    JsonReport, JsonReportConclusion, JsonReportFailForVet, JsonReportFailForViolationConflict,
     JsonReportSuccess, JsonSuggest, JsonSuggestItem, JsonVetFailure, PackageName, PackageStr,
-    Policy, PublisherCacheUser, VetVersion, WildcardEntry,
+    Policy, VetVersion, WildcardEntry,
 };
 use crate::format::{SortedMap, SortedSet};
 use crate::network::Network;
@@ -143,7 +143,7 @@ pub struct Suggest {
 #[derive(Debug, Clone)]
 pub struct TrustHint {
     trusted_by: Vec<String>,
-    publisher: PublisherCacheUser,
+    publisher: CratesCacheUser,
     exact_version: bool,
 }
 
@@ -1660,24 +1660,24 @@ impl<'a> ResolveReport<'a> {
                     let mut is_sole_publisher = false;
                     let publisher_id =
                         if let (Some(network), None) = (&network, &suggested_diff.to.git_rev) {
-                            let publishers = cache
+                            let versions = cache
                                 .get_publishers(
-                                    network,
+                                    Some(network),
                                     package.name,
                                     [&suggested_diff.to.semver].into_iter().collect(),
                                 )
                                 .await
                                 .unwrap_or_default();
-                            let publisher_count = publishers
+                            let publisher_count = versions
                                 .iter()
-                                .flat_map(|publisher| &publisher.published_by)
+                                .flat_map(|(_, details)| &details.as_ref().unwrap().published_by)
                                 .collect::<FastSet<_>>()
                                 .len();
                             is_sole_publisher = publisher_count == 1;
-                            publishers
+                            versions
                                 .into_iter()
-                                .find(|p| p.num == suggested_diff.to.semver)
-                                .and_then(|p| p.published_by)
+                                .find(|(v, _)| v == &suggested_diff.to.semver)
+                                .and_then(|(_, d)| d.unwrap().published_by)
                         } else {
                             None
                         };
@@ -1702,7 +1702,9 @@ impl<'a> ResolveReport<'a> {
                                 .get_cached_publishers(package.name)
                                 .iter()
                                 .rev()
-                                .filter_map(|release| release.published_by)
+                                .filter_map(|(_, details)| {
+                                    details.as_ref().and_then(|d| d.published_by)
+                                })
                                 .find(|i| trusted_publishers.contains_key(i))
                         } else {
                             None

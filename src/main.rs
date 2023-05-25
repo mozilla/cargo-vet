@@ -76,12 +76,18 @@ pub struct Config {
 pub struct PartialConfig {
     /// Details of the CLI invocation (args)
     pub cli: Cli,
-    /// The date to use as the current date.
-    pub today: chrono::NaiveDate,
+    /// The date and time to use as the current time.
+    pub now: chrono::DateTime<chrono::Utc>,
     /// Path to the cache directory we're using
     pub cache_dir: PathBuf,
     /// Whether we should mock the global cache (for unit testing)
     pub mock_cache: bool,
+}
+
+impl PartialConfig {
+    pub fn today(&self) -> chrono::NaiveDate {
+        self.now.date_naive()
+    }
 }
 
 // Makes it a bit easier to have both a "partial" and "full" config
@@ -325,10 +331,12 @@ fn real_main() -> Result<(), miette::Report> {
             .unwrap_or_else(std::env::temp_dir)
             .join(CACHE_DIR_SUFFIX)
     });
-    let today = <chrono::DateTime<chrono::Utc>>::from(SystemTime::now()).date_naive();
+    let now = cli
+        .current_time
+        .unwrap_or_else(|| chrono::DateTime::from(SystemTime::now()));
     let partial_cfg = PartialConfig {
         cli,
-        today,
+        now,
         cache_dir,
         mock_cache: false,
     };
@@ -713,7 +721,7 @@ fn do_cmd_certify(
         // published package by the user, and a to date of 12 months from today.
         let start = sub_args.start_date.unwrap_or(earliest.when);
 
-        let max_end = cfg.today + chrono::Months::new(12);
+        let max_end = cfg.today() + chrono::Months::new(12);
         let end = sub_args.end_date.unwrap_or(max_end);
         let set_renew_false = sub_args.end_date.is_some();
         if end > max_end {
@@ -960,7 +968,7 @@ fn do_cmd_certify(
     };
 
     store
-        .validate(cfg.today, false)
+        .validate(cfg.today(), false)
         .expect("the new audit entry made the store invalid?");
 
     // Minimize exemptions after adding the new audit. This will be used to
@@ -1378,7 +1386,7 @@ fn apply_cmd_trust(
     // published package by the user, and a to date of 12 months from today.
     let start = start_date.unwrap_or(earliest.when);
 
-    let end = end_date.unwrap_or(cfg.today + chrono::Months::new(12));
+    let end = end_date.unwrap_or(cfg.today() + chrono::Months::new(12));
 
     let criteria_names = criteria_picker(
         out,
@@ -1423,7 +1431,7 @@ fn apply_cmd_trust(
     }
 
     store
-        .validate(cfg.today, false)
+        .validate(cfg.today(), false)
         .expect("the new trusted entry made the store invalid?");
 
     // Minimize exemptions after adding the new trust entry. This will be used
@@ -1665,7 +1673,7 @@ fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &
     // error.
     let cache = Cache::acquire(cfg).ok();
 
-    let new_end_date = cfg.today + chrono::Months::new(12);
+    let new_end_date = cfg.today() + chrono::Months::new(12);
 
     let mut renewing: WildcardAuditRenewal;
 
@@ -1781,10 +1789,11 @@ async fn fix_audit_as(
                         // false positives, but is certainly a bit of a loose
                         // comparison. If it turns out to be an issue we can
                         // improve it in the future.
-                        let default_audit_as = if let Some(network) = network {
-                            // NOTE: Handle all errors silently here, as we can
-                            // always recover by setting `audit-as-crates-io =
-                            // false`.
+                        let default_audit_as = if network.is_some() {
+                            // NOTE: Handle all errors silently here, as we can always recover by
+                            // setting `audit-as-crates-io = false`. The error cases below are very
+                            // unlikely to occur since information will be cached from the initial
+                            // checks which generated the NeedsAuditAsErrors.
                             let crates_api_metadata =
                                 match cache.get_crate_metadata(network, &err.package).await {
                                     Ok(v) => v,
@@ -1794,12 +1803,24 @@ async fn fix_audit_as(
                                     }
                                 };
 
+                            let crates_io_versions =
+                                match cache.get_versions(network, &err.package).await {
+                                    Ok(v) => v,
+                                    Err(e) => {
+                                        warn!("crate versions error for {}: {e}", &err.package);
+                                        Default::default()
+                                    }
+                                };
+
                             cfg.metadata.packages.iter().any(|p| {
                                 p.name == err.package
                                     && err
                                         .version
                                         .as_ref()
-                                        .map(|v| v == &p.vet_version())
+                                        .map(|v| {
+                                            v == &p.vet_version()
+                                                && crates_io_versions.contains(&v.semver)
+                                        })
                                         .unwrap_or(true)
                                     && crates_api_metadata.consider_as_same(p)
                             })
@@ -2089,7 +2110,7 @@ impl<'a> WildcardAuditRenewal<'a> {
     /// This function _does not_ modify the store, but since the mutable references to the entries
     /// are stored (for potential use by `renew`), it must take a mutable Store.
     pub fn expiring(cfg: &Config, store: &'a mut Store) -> Self {
-        let expire_date = cfg.today + *WILDCARD_AUDIT_EXPIRATION_DURATION;
+        let expire_date = cfg.today() + *WILDCARD_AUDIT_EXPIRATION_DURATION;
 
         let mut crates: SortedMap<PackageStr<'a>, Vec<(&'a mut WildcardEntry, bool)>> =
             Default::default();
@@ -2098,7 +2119,7 @@ impl<'a> WildcardAuditRenewal<'a> {
             // audits, check whether all of them are already expired (to change the warning
             // message to be more informative).
             for entry in audits.iter_mut().filter(|e| e.should_renew(expire_date)) {
-                let expired = entry.should_renew(cfg.today);
+                let expired = entry.should_renew(cfg.today());
                 crates.entry(name).or_default().push((entry, expired));
             }
         }
@@ -2678,15 +2699,17 @@ async fn check_audit_as_crates_io(
     network: Option<&Network>,
     cache: &mut Cache,
 ) -> Result<(), AuditAsErrors> {
-    'restart: loop {
-        // If we don't have a registry, we can't check audit-as-crates-io.
-        if !cache.has_registry() {
-            return Ok(());
-        }
+    // If we don't have a registry, we can't check audit-as-crates-io.
+    if !cache.has_registry() {
+        return Ok(());
+    }
 
-        let mut needs_audit_as_entry = vec![];
-        let mut shouldnt_be_audit_as = vec![];
+    let first_party_packages: Vec<_> =
+        first_party_packages_strict(&cfg.metadata, &store.config).collect();
 
+    let mut errors = vec![];
+
+    {
         let mut unused_audit_as: SortedSet<(PackageName, Option<VetVersion>)> = store
             .config
             .policy
@@ -2695,90 +2718,127 @@ async fn check_audit_as_crates_io(
             .map(|(name, version, _)| (name.clone(), version.cloned()))
             .collect();
 
-        for package in first_party_packages_strict(&cfg.metadata, &store.config) {
+        for package in &first_party_packages {
             // Remove both versioned and unversioned entries
             unused_audit_as.remove(&(package.name.clone(), Some(package.vet_version())));
             unused_audit_as.remove(&(package.name.clone(), None));
+        }
+        if !unused_audit_as.is_empty() {
+            errors.push(AuditAsError::UnusedAuditAs(UnusedAuditAsErrors {
+                errors: unused_audit_as
+                    .into_iter()
+                    .map(|(package, version)| PackageError { package, version })
+                    .collect(),
+            }))
+        }
+    }
 
-            let audit_policy = package
-                .policy_entry(&store.config.policy)
-                .and_then(|policy| policy.audit_as_crates_io);
-            if audit_policy == Some(false) {
-                // They've explicitly said this is first-party so we don't care about what's in the
-                // registry.
-                continue;
-            }
+    // We should only check the audit-as-crates-io entries if we have a network, because we
+    // shouldn't make recommendations based on potentially stale information.
+    if network.is_some() {
+        let progress = progress_bar(
+            "Validating",
+            "audit-as-crates-io specifications",
+            first_party_packages.len() as u64,
+        );
 
-            // To avoid unnecessary metadata lookup, only do so for packages which exist in the
-            // index. The case which doesn't work with this logic is if someone is using a package
-            // before it has ever been published, and then later it is published (in which case a
-            // third-party change causes a warning to unexpectedly come up). However, this case is
-            // sufficiently unlikely that for now it's worth the initial lookup to avoid
-            // unnecessarily trying to fetch metadata for unpublished crates.
-            if cache.query_package_from_index(&package.name).is_some() {
-                if let Some(network) = network {
+        enum CheckAction {
+            NeedAuditAs,
+            ShouldntBeAuditAs,
+        }
+
+        let actions: Vec<_> = join_all(first_party_packages.into_iter().map(|package| {
+            let progress = &progress;
+            let cache = &cache;
+            async move {
+                let _inc_progress = IncProgressOnDrop(progress, 1);
+
+                let audit_policy = package
+                    .policy_entry(&store.config.policy)
+                    .and_then(|policy| policy.audit_as_crates_io);
+                if audit_policy == Some(false) {
+                    // They've explicitly said this is first-party so we don't care about what's in the
+                    // registry.
+                    return None;
+                }
+
+                // To avoid unnecessary metadata lookup, only do so for packages which exist in the
+                // index. The case which doesn't work with this logic is if someone is using a
+                // package before it has ever been published, and then later it is published (in
+                // which case a third-party change causes a warning to unexpectedly come up).
+                // However, this case is sufficiently unlikely that for now it's worth the initial
+                // lookup to avoid unnecessarily trying to fetch metadata for unpublished crates.
+                //
+                // The caching logic already does this for us as an optimization, but since we may
+                // need to look at the specific versions later, we fetch it anyway.
+                let versions = cache.get_versions(network, &package.name).await.ok();
+                let mut matches_crates_io_package = false;
+                if versions.is_some() {
                     if let Ok(metadata) = cache.get_crate_metadata(network, &package.name).await {
-                        if metadata.consider_as_same(package) {
-                            if audit_policy.is_none() {
-                                // We found a package that has similar metadata to one with the
-                                // same name on crates.io. At this point, having no policy is an
-                                // error.
-                                needs_audit_as_entry.push(PackageError {
-                                    package: package.name.clone(),
-                                    version: Some(package.vet_version()),
-                                });
-                            }
-                            // Now that we've found a matching package, we're done.
-                            continue;
-                        }
+                        matches_crates_io_package = metadata.consider_as_same(package);
                     }
                 }
-            }
 
-            // If we reach this point, then we couldn't find a matching package in the registry, so
-            // any `audit-as-crates-io = true` is an error that should be corrected.
-            if audit_policy == Some(true) {
-                // We found a crate which someone thought was on crates-io, but doesn't appear to
-                // be according to our local index. Before reporting an error, ensure the index is
-                // up to date, and restart if it was not.
-                if cache.ensure_index_up_to_date() {
-                    continue 'restart;
+                if matches_crates_io_package && audit_policy.is_none() {
+                    // We found a package that has similar metadata to one with the same name
+                    // on crates.io: having no policy is an error.
+                    return Some((CheckAction::NeedAuditAs, package));
                 }
+                if audit_policy == Some(true) {
+                    // Check whether there is a matching version on crates.io. No matching
+                    // version is considered an error.
+                    if !matches_crates_io_package
+                        || !versions
+                            .expect("metadata implies versions")
+                            .contains(&package.version)
+                    {
+                        return Some((CheckAction::ShouldntBeAuditAs, package));
+                    }
+                }
+                None
+            }
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .collect();
 
-                shouldnt_be_audit_as.push(PackageError {
-                    package: package.name.clone(),
-                    version: Some(package.vet_version()),
-                });
+        let mut needs_audit_as_entry = vec![];
+        let mut shouldnt_be_audit_as = vec![];
+
+        for (action, package) in actions {
+            match action {
+                CheckAction::NeedAuditAs => {
+                    needs_audit_as_entry.push(PackageError {
+                        package: package.name.clone(),
+                        version: Some(package.vet_version()),
+                    });
+                }
+                CheckAction::ShouldntBeAuditAs => {
+                    shouldnt_be_audit_as.push(PackageError {
+                        package: package.name.clone(),
+                        version: Some(package.vet_version()),
+                    });
+                }
             }
         }
 
-        if !needs_audit_as_entry.is_empty()
-            || !shouldnt_be_audit_as.is_empty()
-            || !unused_audit_as.is_empty()
-        {
-            let mut errors = vec![];
-            if !needs_audit_as_entry.is_empty() {
-                errors.push(AuditAsError::NeedsAuditAs(NeedsAuditAsErrors {
-                    errors: needs_audit_as_entry,
-                }));
-            }
-            if !shouldnt_be_audit_as.is_empty() {
-                errors.push(AuditAsError::ShouldntBeAuditAs(ShouldntBeAuditAsErrors {
-                    errors: shouldnt_be_audit_as,
-                }));
-            }
-            if !unused_audit_as.is_empty() {
-                errors.push(AuditAsError::UnusedAuditAs(UnusedAuditAsErrors {
-                    errors: unused_audit_as
-                        .into_iter()
-                        .map(|(package, version)| PackageError { package, version })
-                        .collect(),
-                }))
-            }
-            return Err(AuditAsErrors { errors });
+        if !needs_audit_as_entry.is_empty() {
+            errors.push(AuditAsError::NeedsAuditAs(NeedsAuditAsErrors {
+                errors: needs_audit_as_entry,
+            }));
         }
+        if !shouldnt_be_audit_as.is_empty() {
+            errors.push(AuditAsError::ShouldntBeAuditAs(ShouldntBeAuditAsErrors {
+                errors: shouldnt_be_audit_as,
+            }));
+        }
+    }
 
-        return Ok(());
+    if !errors.is_empty() {
+        Err(AuditAsErrors { errors })
+    } else {
+        Ok(())
     }
 }
 

@@ -2,4 +2,4 @@
 # diff-cache.toml and publisher-cache.json
 cache/*
 !cache/diff-cache.toml
-!cache/publisher-cache.json
+!cache/crates-io-cache.json

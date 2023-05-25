@@ -135,19 +135,28 @@ fn test_markdown_help() {
     assert!(output.status.success(), "{}", output.status);
 }
 
-#[test]
-fn test_project() {
+fn test_project_command(subcommand: Option<&str>) -> Command {
     let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("test-project");
     let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let output = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("--manifest-path")
+    let mut cmd = Command::new(bin);
+    cmd.current_dir(&project).arg("vet");
+    if let Some(sub) = subcommand {
+        cmd.arg(sub);
+    }
+    cmd.arg("--manifest-path")
         .arg("Cargo.toml")
         .arg("--cache-dir")
         .arg("../cache")
+        .arg("--current-time")
+        .arg("2023-01-01 12:00:00Z");
+    cmd
+}
+
+#[test]
+fn test_project() {
+    let output = test_project_command(None)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -159,17 +168,7 @@ fn test_project() {
 
 #[test]
 fn test_project_json() {
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let output = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("--manifest-path")
-        .arg("Cargo.toml")
-        .arg("--cache-dir")
-        .arg("../cache")
+    let output = test_project_command(None)
         .arg("--output-format=json")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -182,19 +181,8 @@ fn test_project_json() {
 
 #[test]
 fn test_project_suggest() {
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let output = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("suggest")
-        .arg("--cache-dir")
-        .arg("../cache")
+    let output = test_project_command(Some("suggest"))
         .arg("--no-registry-suggestions")
-        .arg("--manifest-path")
-        .arg("Cargo.toml")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -206,19 +194,8 @@ fn test_project_suggest() {
 
 #[test]
 fn test_project_suggest_json() {
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let output = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("suggest")
-        .arg("--cache-dir")
-        .arg("../cache")
+    let output = test_project_command(Some("suggest"))
         .arg("--no-registry-suggestions")
-        .arg("--manifest-path")
-        .arg("Cargo.toml")
         .arg("--output-format=json")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -231,18 +208,7 @@ fn test_project_suggest_json() {
 
 #[test]
 fn test_project_dump_graph_full_json() {
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let output = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("dump-graph")
-        .arg("--cache-dir")
-        .arg("../cache")
-        .arg("--manifest-path")
-        .arg("Cargo.toml")
+    let output = test_project_command(Some("dump-graph"))
         .arg("--output-format=json")
         .arg("--depth=full")
         .stdout(Stdio::piped())
@@ -256,18 +222,7 @@ fn test_project_dump_graph_full_json() {
 
 #[test]
 fn test_project_dump_graph_full() {
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let output = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("dump-graph")
-        .arg("--cache-dir")
-        .arg("../cache")
-        .arg("--manifest-path")
-        .arg("Cargo.toml")
+    let output = test_project_command(Some("dump-graph"))
         .arg("--depth=full")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -280,18 +235,7 @@ fn test_project_dump_graph_full() {
 
 #[test]
 fn test_project_bad_certify_human() {
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let output = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("certify")
-        .arg("--cache-dir")
-        .arg("../cache")
-        .arg("--manifest-path")
-        .arg("Cargo.toml")
+    let output = test_project_command(Some("certify"))
         .arg("asdfsdfs")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -304,19 +248,8 @@ fn test_project_bad_certify_human() {
 
 #[test]
 fn test_project_bad_certify_json() {
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let output = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("certify")
-        .arg("--cache-dir")
-        .arg("../cache")
+    let output = test_project_command(Some("certify"))
         .arg("--output-format=json")
-        .arg("--manifest-path")
-        .arg("Cargo.toml")
         .arg("asdfsdfs")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -332,16 +265,7 @@ fn test_project_diff_output() {
     // Test that the diff output from `cargo vet diff` is correctly filtered to
     // remove files like .cargo_vcs_info.json.
 
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let mut child = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("diff")
-        .arg("--cache-dir")
-        .arg("../cache")
+    let mut child = test_project_command(Some("diff"))
         .arg("--mode")
         .arg("local")
         .arg("syn")
@@ -365,16 +289,7 @@ fn test_project_diff_output() {
 fn test_project_diff_output_git() {
     // Test that the diff output handles git revisions.
 
-    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("test-project");
-    let bin = env!("CARGO_BIN_EXE_cargo-vet");
-    let mut child = Command::new(bin)
-        .current_dir(&project)
-        .arg("vet")
-        .arg("diff")
-        .arg("--cache-dir")
-        .arg("../cache")
+    let mut child = test_project_command(Some("diff"))
         .arg("--mode")
         .arg("local")
         .arg("proc-macro2")

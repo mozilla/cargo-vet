@@ -207,6 +207,7 @@ fn existing_peer_skip_import() {
             ]
         }),
     );
+    network_mock_index(&mut network, "third-party2", &["10.0.0"]);
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
 
@@ -1562,6 +1563,7 @@ fn import_wildcard_audit_publisher() {
             ]
         }),
     );
+    network_mock_index(&mut network, "third-party1", &["5.0.0", "10.0.0"]);
     network.mock_serve_json(
         "https://crates.io/api/v1/crates/third-party2",
         &serde_json::json!({
@@ -1592,6 +1594,7 @@ fn import_wildcard_audit_publisher() {
             ]
         }),
     );
+    network_mock_index(&mut network, "third-party2", &["5.0.0", "10.0.0"]);
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
 
     let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();

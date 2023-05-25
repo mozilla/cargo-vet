@@ -1033,18 +1033,18 @@ pub struct CommandHistory {
 //                                                                                //
 //                                                                                //
 //                                                                                //
-//                             publisher-cache.json                               //
+//                             crates-io-cache.json                               //
 //                                                                                //
 //                                                                                //
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct PublisherCacheUser {
+pub struct CratesCacheUser {
     pub login: String,
     pub name: Option<String>,
 }
-impl fmt::Display for PublisherCacheUser {
+impl fmt::Display for CratesCacheUser {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(name) = &self.name {
             write!(f, "{} ({})", name, &self.login)
@@ -1055,23 +1055,38 @@ impl fmt::Display for PublisherCacheUser {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct PublisherCacheVersion {
+pub struct CratesCacheVersionDetails {
     pub created_at: chrono::DateTime<chrono::Utc>,
-    pub num: semver::Version,
     pub published_by: Option<CratesUserId>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct PublisherCacheEntry {
+/// Versions are a sorted map because we sometimes need to iterate in order. We don't use a sorted
+/// Vec because we may partially update the versions when we access the index (though technically
+/// that update _should_ only have new versions which would append to a Vec if it were that).
+pub type CratesCacheVersions = SortedMap<semver::Version, Option<CratesCacheVersionDetails>>;
+
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct CratesCacheEntry {
     pub last_fetched: chrono::DateTime<chrono::Utc>,
-    pub versions: Vec<PublisherCacheVersion>,
-    pub metadata: CratesAPICrateMetadata,
+    /// If versions is empty, this indicates that we queried the info and found that the crate has
+    /// no published versions (and thus doesn't exist as of `last_fetched`).
+    pub versions: CratesCacheVersions,
+    pub metadata: Option<CratesAPICrateMetadata>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
-pub struct PublisherCache {
-    pub users: SortedMap<CratesUserId, PublisherCacheUser>,
-    pub crates: SortedMap<PackageName, PublisherCacheEntry>,
+pub struct CratesCache {
+    pub users: SortedMap<CratesUserId, CratesCacheUser>,
+    pub crates: SortedMap<PackageName, CratesCacheEntry>,
+}
+
+impl CratesCacheEntry {
+    /// Return whether the crate exists.
+    ///
+    /// The cache stores non-existent results when fetching.
+    pub fn exists(&self) -> bool {
+        !self.versions.is_empty()
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
