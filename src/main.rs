@@ -1790,17 +1790,24 @@ async fn fix_audit_as(
                         // comparison. If it turns out to be an issue we can
                         // improve it in the future.
                         let default_audit_as = if network.is_some() {
-                            // NOTE: Handle all errors silently here, as we can
-                            // always recover by setting `audit-as-crates-io =
-                            // false`.
+                            // NOTE: Handle all errors silently here, as we can always recover by
+                            // setting `audit-as-crates-io = false`. The error cases below are very
+                            // unlikely to occur since information will be cached from the initial
+                            // checks which generated the NeedsAuditAsErrors.
                             let crates_api_metadata =
                                 match cache.get_crate_metadata(network, &err.package).await {
                                     Ok(v) => v,
                                     Err(e) => {
-                                        // This error case is very unlikely to occur since it'll be
-                                        // cached from the initial checks which generated the
-                                        // NeedsAuditAsErrors.
                                         warn!("crate metadata error for {}: {e}", &err.package);
+                                        Default::default()
+                                    }
+                                };
+
+                            let crates_io_versions =
+                                match cache.get_versions(network, &err.package).await {
+                                    Ok(v) => v,
+                                    Err(e) => {
+                                        warn!("crate versions error for {}: {e}", &err.package);
                                         Default::default()
                                     }
                                 };
@@ -1810,7 +1817,10 @@ async fn fix_audit_as(
                                     && err
                                         .version
                                         .as_ref()
-                                        .map(|v| v == &p.vet_version())
+                                        .map(|v| {
+                                            v == &p.vet_version()
+                                                && crates_io_versions.contains(&v.semver)
+                                        })
                                         .unwrap_or(true)
                                     && crates_api_metadata.consider_as_same(p)
                             })
