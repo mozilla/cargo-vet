@@ -33,11 +33,11 @@ use crate::{
     format::{
         self, AuditEntry, AuditKind, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
         CratesAPICrate, CratesAPICrateMetadata, CratesCache, CratesCacheEntry, CratesCacheUser,
-        CratesCacheVersionDetails, CratesCacheVersions, CratesPublisher, CratesUserId,
-        CriteriaEntry, CriteriaMap, CriteriaName, CriteriaStr, Delta, DiffCache, DiffStat, FastMap,
-        FastSet, FetchCommand, ForeignAuditsFile, ImportName, ImportsFile, MetaConfig, PackageName,
-        PackageStr, RegistryEntry, RegistryFile, SortedMap, StoreVersion, TrustEntry,
-        TrustedPackages, VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        CratesCacheVersionDetails, CratesPublisher, CratesUserId, CriteriaEntry, CriteriaMap,
+        CriteriaName, CriteriaStr, Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand,
+        ForeignAuditsFile, ImportName, ImportsFile, MetaConfig, PackageName, PackageStr,
+        RegistryEntry, RegistryFile, SortedMap, StoreVersion, TrustEntry, TrustedPackages,
+        VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
@@ -1483,7 +1483,6 @@ async fn import_publisher_versions(
             publishers
                 .into_iter()
                 .filter_map(|(version, details)| {
-                    let details = details.expect("get_publishers failed");
                     let user_id = details.published_by?;
                     let user_info = cache.get_crates_user_info(user_id)?;
                     let is_fresh_import = !nonfresh_versions.contains(&version);
@@ -2278,13 +2277,23 @@ impl Cache {
 
     /// Synchronous routine to get whatever publisher information is cached
     /// without hitting the network.
-    pub fn get_cached_publishers(&self, name: PackageStr<'_>) -> CratesCacheVersions {
+    pub fn get_cached_publishers(
+        &self,
+        name: PackageStr<'_>,
+    ) -> SortedMap<semver::Version, CratesCacheVersionDetails> {
         let guard = self.state.lock().unwrap();
         guard
             .crates_cache
             .crates
             .get(name)
-            .map(|c| c.versions.clone())
+            .map(|c| {
+                c.versions
+                    .iter()
+                    .flat_map(|(version, details)| {
+                        details.clone().map(|details| (version.clone(), details))
+                    })
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -2297,7 +2306,7 @@ impl Cache {
         network: Option<&Network>,
         name: PackageStr<'_>,
         versions: FastSet<&semver::Version>,
-    ) -> Result<CratesCacheVersions, CrateInfoError> {
+    ) -> Result<SortedMap<semver::Version, CratesCacheVersionDetails>, CrateInfoError> {
         let guard = self
             .update_crates_cache(name)
             .versions(versions)
@@ -2310,7 +2319,11 @@ impl Cache {
             .get(name)
             .expect("publisher cache update failed")
             .versions
-            .clone())
+            .iter()
+            .flat_map(|(version, details)| {
+                details.clone().map(|details| (version.clone(), details))
+            })
+            .collect())
     }
 
     /// Look up crates.io metadata for the given crate.

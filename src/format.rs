@@ -965,7 +965,7 @@ impl Default for DiffCache {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct DiffStat {
     pub insertions: u64,
     pub deletions: u64,
@@ -1060,17 +1060,16 @@ pub struct CratesCacheVersionDetails {
     pub published_by: Option<CratesUserId>,
 }
 
-/// Versions are a sorted map because we sometimes need to iterate in order. We don't use a sorted
-/// Vec because we may partially update the versions when we access the index (though technically
-/// that update _should_ only have new versions which would append to a Vec if it were that).
-pub type CratesCacheVersions = SortedMap<semver::Version, Option<CratesCacheVersionDetails>>;
-
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CratesCacheEntry {
     pub last_fetched: chrono::DateTime<chrono::Utc>,
     /// If versions is empty, this indicates that we queried the info and found that the crate has
     /// no published versions (and thus doesn't exist as of `last_fetched`).
-    pub versions: CratesCacheVersions,
+    ///
+    /// Versions are a sorted map because we sometimes need to iterate in order. We don't use a sorted
+    /// Vec because we may partially update the versions when we access the index (though technically
+    /// that update _should_ only have new versions which would append to a Vec if it were that).
+    pub versions: SortedMap<semver::Version, Option<CratesCacheVersionDetails>>,
     pub metadata: Option<CratesAPICrateMetadata>,
 }
 

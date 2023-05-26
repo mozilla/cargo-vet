@@ -11,3 +11,4 @@ reqwest = "0.11.10"
 serde_json = "1.0.79"
 tokio = "1.17.0"
 proc-macro2 = { git = "https://github.com/dtolnay/proc-macro2", rev = "4445659b0f753a928059244c875a58bb12f791e9" }
+cfg-if = "0.1.10"

@@ -15,7 +15,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect wasm-bindgen-shared 0.2.80          alexcrichton   wasm-bindgen-backend and wasm-bindgen-macro-support  515 lines
     cargo vet inspect pin-utils 0.1.0                     cramertj       futures-util                                         538 lines
     cargo vet inspect futures-sink 0.3.21                 taiki-e        h2 and tokio-util                                    544 lines
-    cargo vet inspect cfg-if 1.0.0                        alexcrichton   log, instant, openssl, and 5 others                  582 lines
+    cargo vet inspect cfg-if 0.1.10                       alexcrichton   log, instant, openssl, and 6 others                  579 lines
     cargo vet inspect foreign-types 0.3.2                 UNKNOWN        openssl                                              583 lines
     cargo vet inspect remove_dir_all 0.5.3                XAMPPRocky     tempfile                                             592 lines
     cargo vet inspect instant 0.1.12                      sebcrozet      fastrand                                             672 lines
@@ -42,7 +42,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect core-foundation-sys 0.8.3           jdm            core-foundation and 2 others                         1965 lines
     cargo vet inspect wasm-bindgen-macro-support 0.2.80   alexcrichton   wasm-bindgen-macro                                   1965 lines
     cargo vet inspect security-framework-sys 2.6.1        kornelski      native-tls and security-framework                    2016 lines
-    cargo vet inspect unicode-xid 0.2.2                   Manishearth    syn, proc-macro2, and proc-macro2                    2044 lines
+    cargo vet inspect unicode-xid 0.2.2                   Manishearth    syn and proc-macro2                                  2044 lines
     cargo vet inspect serde_urlencoded 0.7.1              nox            reqwest                                              2120 lines
     cargo vet inspect termcolor 1.1.3                     BurntSushi     clap                                                 2578 lines
     cargo vet inspect slab 0.4.6                          taiki-e        h2                                                   2615 lines
@@ -112,7 +112,7 @@ recommended audits for safe-to-run:
     Command                              Publisher  Used By  Audit Size
     cargo vet inspect hermit-abi 0.1.19  stlankes   atty     932 lines
 
-estimated audit backlog: 1712741 lines
+estimated audit backlog: 1712738 lines
 
 Use |cargo vet certify| to record the audits.
 

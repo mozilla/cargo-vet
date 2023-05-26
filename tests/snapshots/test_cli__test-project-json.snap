@@ -37,6 +37,10 @@ stdout:
   ],
   "vetted_partially": [
     {
+      "name": "cfg-if",
+      "version": "1.0.0"
+    },
+    {
       "name": "unicode-bidi",
       "version": "0.3.7"
     }
@@ -56,7 +60,7 @@ stdout:
     },
     {
       "name": "cfg-if",
-      "version": "1.0.0"
+      "version": "0.1.10"
     },
     {
       "name": "core-foundation",

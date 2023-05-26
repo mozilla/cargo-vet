@@ -29,6 +29,13 @@ stdout:
     },
     {
       "name": "cfg-if",
+      "version": "0.1.10",
+      "missing_criteria": [
+        "safe-to-deploy"
+      ]
+    },
+    {
+      "name": "cfg-if",
       "version": "1.0.0",
       "missing_criteria": [
         "safe-to-deploy"
@@ -834,15 +841,15 @@ stdout:
       },
       {
         "name": "cfg-if",
-        "notable_parents": "log, instant, openssl, and 5 others",
+        "notable_parents": "log, instant, openssl, and 6 others",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
         "suggested_diff": {
           "from": null,
-          "to": "1.0.0",
+          "to": "0.1.10",
           "diffstat": {
-            "insertions": 582,
+            "insertions": 579,
             "deletions": 0,
             "files_changed": 9
           }
@@ -1282,7 +1289,7 @@ stdout:
       },
       {
         "name": "unicode-xid",
-        "notable_parents": "syn, proc-macro2, and proc-macro2",
+        "notable_parents": "syn and proc-macro2",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2389,15 +2396,15 @@ stdout:
         },
         {
           "name": "cfg-if",
-          "notable_parents": "log, instant, openssl, and 5 others",
+          "notable_parents": "log, instant, openssl, and 6 others",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
           "suggested_diff": {
             "from": null,
-            "to": "1.0.0",
+            "to": "0.1.10",
             "diffstat": {
-              "insertions": 582,
+              "insertions": 579,
               "deletions": 0,
               "files_changed": 9
             }
@@ -2821,7 +2828,7 @@ stdout:
         },
         {
           "name": "unicode-xid",
-          "notable_parents": "syn, proc-macro2, and proc-macro2",
+          "notable_parents": "syn and proc-macro2",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3799,7 +3806,7 @@ stdout:
         }
       ]
     },
-    "total_lines": 1712741
+    "total_lines": 1712738
   }
 }
 stderr:

@@ -5,12 +5,12 @@ expression: format_outputs(&output)
 stdout:
 graph LR
     subgraph roots
-        node75{test-project:0.1.0}
+        node76{test-project:0.1.0}
     end
     subgraph workspace-members
     end
     subgraph first-party
-        node56[proc-macro2:1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9]
+        node57[proc-macro2:1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9]
     end
     subgraph third-party
         node0(atty:0.2.14)
@@ -20,326 +20,328 @@ graph LR
         node4(bumpalo:3.9.1)
         node5(bytes:1.1.0)
         node6(cc:1.0.73)
-        node7(cfg-if:1.0.0)
-        node8(clap:3.1.8)
-        node9(core-foundation:0.9.3)
-        node10(core-foundation-sys:0.8.3)
-        node11(encoding_rs:0.8.31)
-        node12(fastrand:1.7.0)
-        node13(fnv:1.0.7)
-        node14(foreign-types:0.3.2)
-        node15(foreign-types-shared:0.1.1)
-        node16(form_urlencoded:1.0.1)
-        node17(futures-channel:0.3.21)
-        node18(futures-core:0.3.21)
-        node19(futures-sink:0.3.21)
-        node20(futures-task:0.3.21)
-        node21(futures-util:0.3.21)
-        node22(h2:0.3.13)
-        node23(hashbrown:0.11.2)
-        node24(hermit-abi:0.1.19)
-        node25(http:0.2.6)
-        node26(http-body:0.4.4)
-        node27(httparse:1.7.0)
-        node28(httpdate:1.0.2)
-        node29(hyper:0.14.18)
-        node30(hyper-tls:0.5.0)
-        node31(idna:0.2.3)
-        node32(indexmap:1.8.1)
-        node33(instant:0.1.12)
-        node34(ipnet:2.4.0)
-        node35(itoa:1.0.1)
-        node36(js-sys:0.3.57)
-        node37(lazy_static:1.4.0)
-        node38(libc:0.2.123)
-        node39(log:0.4.16)
-        node40(matches:0.1.9)
-        node41(memchr:2.4.1)
-        node42(mime:0.3.16)
-        node43(mio:0.8.2)
-        node44(miow:0.3.7)
-        node45(native-tls:0.2.10)
-        node46(ntapi:0.3.7)
-        node47(once_cell:1.10.0)
-        node48(openssl:0.10.38)
-        node49(openssl-probe:0.1.5)
-        node50(openssl-sys:0.9.72)
-        node51(os_str_bytes:6.0.0)
-        node52(percent-encoding:2.1.0)
-        node53(pin-project-lite:0.2.8)
-        node54(pin-utils:0.1.0)
-        node55(pkg-config:0.3.25)
-        node57(proc-macro2:1.0.37)
-        node58(quote:1.0.18)
-        node59(redox_syscall:0.2.13)
-        node60(remove_dir_all:0.5.3)
-        node61(reqwest:0.11.10)
-        node62(ryu:1.0.9)
-        node63(schannel:0.1.19)
-        node64(security-framework:2.6.1)
-        node65(security-framework-sys:2.6.1)
-        node66(serde:1.0.136)
-        node67(serde_json:1.0.79)
-        node68(serde_urlencoded:0.7.1)
-        node69(slab:0.4.6)
-        node70(socket2:0.4.4)
-        node71(strsim:0.10.0)
-        node72(syn:1.0.91)
-        node73(tempfile:3.3.0)
-        node74(termcolor:1.1.3)
-        node76(textwrap:0.15.0)
-        node77(tinyvec:1.5.1)
-        node78(tinyvec_macros:0.1.0)
-        node79(tokio:1.17.0)
-        node80(tokio-native-tls:0.3.0)
-        node81(tokio-util:0.7.1)
-        node82(tower-service:0.3.1)
-        node83(tracing:0.1.33)
-        node84(tracing-attributes:0.1.20)
-        node85(tracing-core:0.1.25)
-        node86(try-lock:0.2.3)
-        node87(unicode-bidi:0.3.7)
-        node88(unicode-normalization:0.1.19)
-        node89(unicode-xid:0.2.2)
-        node90(url:2.2.2)
-        node91(vcpkg:0.2.15)
-        node92(want:0.3.0)
-        node93(wasi:0.11.0+wasi-snapshot-preview1)
-        node94(wasm-bindgen:0.2.80)
-        node95(wasm-bindgen-backend:0.2.80)
-        node96(wasm-bindgen-futures:0.4.30)
-        node97(wasm-bindgen-macro:0.2.80)
-        node98(wasm-bindgen-macro-support:0.2.80)
-        node99(wasm-bindgen-shared:0.2.80)
-        node100(web-sys:0.3.57)
-        node101(winapi:0.3.9)
-        node102(winapi-i686-pc-windows-gnu:0.4.0)
-        node103(winapi-util:0.1.5)
-        node104(winapi-x86_64-pc-windows-gnu:0.4.0)
-        node105(winreg:0.10.1)
+        node7(cfg-if:0.1.10)
+        node8(cfg-if:1.0.0)
+        node9(clap:3.1.8)
+        node10(core-foundation:0.9.3)
+        node11(core-foundation-sys:0.8.3)
+        node12(encoding_rs:0.8.31)
+        node13(fastrand:1.7.0)
+        node14(fnv:1.0.7)
+        node15(foreign-types:0.3.2)
+        node16(foreign-types-shared:0.1.1)
+        node17(form_urlencoded:1.0.1)
+        node18(futures-channel:0.3.21)
+        node19(futures-core:0.3.21)
+        node20(futures-sink:0.3.21)
+        node21(futures-task:0.3.21)
+        node22(futures-util:0.3.21)
+        node23(h2:0.3.13)
+        node24(hashbrown:0.11.2)
+        node25(hermit-abi:0.1.19)
+        node26(http:0.2.6)
+        node27(http-body:0.4.4)
+        node28(httparse:1.7.0)
+        node29(httpdate:1.0.2)
+        node30(hyper:0.14.18)
+        node31(hyper-tls:0.5.0)
+        node32(idna:0.2.3)
+        node33(indexmap:1.8.1)
+        node34(instant:0.1.12)
+        node35(ipnet:2.4.0)
+        node36(itoa:1.0.1)
+        node37(js-sys:0.3.57)
+        node38(lazy_static:1.4.0)
+        node39(libc:0.2.123)
+        node40(log:0.4.16)
+        node41(matches:0.1.9)
+        node42(memchr:2.4.1)
+        node43(mime:0.3.16)
+        node44(mio:0.8.2)
+        node45(miow:0.3.7)
+        node46(native-tls:0.2.10)
+        node47(ntapi:0.3.7)
+        node48(once_cell:1.10.0)
+        node49(openssl:0.10.38)
+        node50(openssl-probe:0.1.5)
+        node51(openssl-sys:0.9.72)
+        node52(os_str_bytes:6.0.0)
+        node53(percent-encoding:2.1.0)
+        node54(pin-project-lite:0.2.8)
+        node55(pin-utils:0.1.0)
+        node56(pkg-config:0.3.25)
+        node58(proc-macro2:1.0.37)
+        node59(quote:1.0.18)
+        node60(redox_syscall:0.2.13)
+        node61(remove_dir_all:0.5.3)
+        node62(reqwest:0.11.10)
+        node63(ryu:1.0.9)
+        node64(schannel:0.1.19)
+        node65(security-framework:2.6.1)
+        node66(security-framework-sys:2.6.1)
+        node67(serde:1.0.136)
+        node68(serde_json:1.0.79)
+        node69(serde_urlencoded:0.7.1)
+        node70(slab:0.4.6)
+        node71(socket2:0.4.4)
+        node72(strsim:0.10.0)
+        node73(syn:1.0.91)
+        node74(tempfile:3.3.0)
+        node75(termcolor:1.1.3)
+        node77(textwrap:0.15.0)
+        node78(tinyvec:1.5.1)
+        node79(tinyvec_macros:0.1.0)
+        node80(tokio:1.17.0)
+        node81(tokio-native-tls:0.3.0)
+        node82(tokio-util:0.7.1)
+        node83(tower-service:0.3.1)
+        node84(tracing:0.1.33)
+        node85(tracing-attributes:0.1.20)
+        node86(tracing-core:0.1.25)
+        node87(try-lock:0.2.3)
+        node88(unicode-bidi:0.3.7)
+        node89(unicode-normalization:0.1.19)
+        node90(unicode-xid:0.2.2)
+        node91(url:2.2.2)
+        node92(vcpkg:0.2.15)
+        node93(want:0.3.0)
+        node94(wasi:0.11.0+wasi-snapshot-preview1)
+        node95(wasm-bindgen:0.2.80)
+        node96(wasm-bindgen-backend:0.2.80)
+        node97(wasm-bindgen-futures:0.4.30)
+        node98(wasm-bindgen-macro:0.2.80)
+        node99(wasm-bindgen-macro-support:0.2.80)
+        node100(wasm-bindgen-shared:0.2.80)
+        node101(web-sys:0.3.57)
+        node102(winapi:0.3.9)
+        node103(winapi-i686-pc-windows-gnu:0.4.0)
+        node104(winapi-util:0.1.5)
+        node105(winapi-x86_64-pc-windows-gnu:0.4.0)
+        node106(winreg:0.10.1)
     end
-    node0 --> node24
-    node0 --> node38
-    node0 --> node101
-    node8 --> node0
-    node8 --> node3
-    node8 --> node32
-    node8 --> node51
-    node8 --> node71
-    node8 --> node74
-    node8 --> node76
-    node9 --> node10
-    node9 --> node38
-    node11 --> node7
-    node12 --> node33
-    node14 --> node15
-    node16 --> node40
-    node16 --> node52
-    node17 --> node18
-    node21 --> node18
-    node21 --> node20
-    node21 --> node53
-    node21 --> node54
-    node22 --> node5
-    node22 --> node13
-    node22 --> node18
+    node0 --> node25
+    node0 --> node39
+    node0 --> node102
+    node9 --> node0
+    node9 --> node3
+    node9 --> node33
+    node9 --> node52
+    node9 --> node72
+    node9 --> node75
+    node9 --> node77
+    node10 --> node11
+    node10 --> node39
+    node12 --> node8
+    node13 --> node34
+    node15 --> node16
+    node17 --> node41
+    node17 --> node53
+    node18 --> node19
     node22 --> node19
     node22 --> node21
-    node22 --> node25
-    node22 --> node32
-    node22 --> node69
-    node22 --> node79
-    node22 --> node81
-    node22 --> node83
-    node24 --> node38
-    node25 --> node5
-    node25 --> node13
-    node25 --> node35
+    node22 --> node54
+    node22 --> node55
+    node23 --> node5
+    node23 --> node14
+    node23 --> node19
+    node23 --> node20
+    node23 --> node22
+    node23 --> node26
+    node23 --> node33
+    node23 --> node70
+    node23 --> node80
+    node23 --> node82
+    node23 --> node84
+    node25 --> node39
     node26 --> node5
-    node26 --> node25
-    node26 --> node53
-    node29 --> node5
-    node29 --> node17
-    node29 --> node18
-    node29 --> node21
-    node29 --> node22
-    node29 --> node25
-    node29 --> node26
-    node29 --> node27
-    node29 --> node28
-    node29 --> node35
-    node29 --> node53
-    node29 --> node70
-    node29 --> node79
-    node29 --> node82
-    node29 --> node83
-    node29 --> node92
+    node26 --> node14
+    node26 --> node36
+    node27 --> node5
+    node27 --> node26
+    node27 --> node54
     node30 --> node5
+    node30 --> node18
+    node30 --> node19
+    node30 --> node22
+    node30 --> node23
+    node30 --> node26
+    node30 --> node27
+    node30 --> node28
     node30 --> node29
-    node30 --> node45
-    node30 --> node79
+    node30 --> node36
+    node30 --> node54
+    node30 --> node71
     node30 --> node80
-    node31 --> node40
-    node31 --> node87
-    node31 --> node88
-    node32 --> node1
-    node32 --> node23
-    node33 --> node7
-    node36 --> node94
-    node39 --> node7
-    node43 --> node38
-    node43 --> node39
-    node43 --> node44
-    node43 --> node46
-    node43 --> node93
-    node43 --> node101
-    node44 --> node101
-    node45 --> node37
-    node45 --> node38
-    node45 --> node39
-    node45 --> node48
-    node45 --> node49
-    node45 --> node50
-    node45 --> node63
-    node45 --> node64
-    node45 --> node65
-    node45 --> node73
-    node46 --> node101
-    node48 --> node3
-    node48 --> node7
-    node48 --> node14
-    node48 --> node38
-    node48 --> node47
-    node48 --> node50
-    node50 --> node1
-    node50 --> node6
-    node50 --> node38
-    node50 --> node55
-    node50 --> node91
-    node51 --> node41
-    node56 --> node89
-    node57 --> node89
-    node58 --> node57
-    node59 --> node3
-    node60 --> node101
-    node61 --> node2
-    node61 --> node5
-    node61 --> node11
-    node61 --> node18
-    node61 --> node21
-    node61 --> node22
-    node61 --> node25
-    node61 --> node26
-    node61 --> node29
-    node61 --> node30
-    node61 --> node34
-    node61 --> node36
-    node61 --> node37
-    node61 --> node39
-    node61 --> node42
-    node61 --> node45
-    node61 --> node52
-    node61 --> node53
-    node61 --> node66
-    node61 --> node67
-    node61 --> node68
-    node61 --> node79
-    node61 --> node80
-    node61 --> node90
-    node61 --> node94
-    node61 --> node96
-    node61 --> node100
-    node61 --> node105
-    node63 --> node37
-    node63 --> node101
-    node64 --> node3
-    node64 --> node9
-    node64 --> node10
+    node30 --> node83
+    node30 --> node84
+    node30 --> node93
+    node31 --> node5
+    node31 --> node30
+    node31 --> node46
+    node31 --> node80
+    node31 --> node81
+    node32 --> node41
+    node32 --> node88
+    node32 --> node89
+    node33 --> node1
+    node33 --> node24
+    node34 --> node8
+    node37 --> node95
+    node40 --> node8
+    node44 --> node39
+    node44 --> node40
+    node44 --> node45
+    node44 --> node47
+    node44 --> node94
+    node44 --> node102
+    node45 --> node102
+    node46 --> node38
+    node46 --> node39
+    node46 --> node40
+    node46 --> node49
+    node46 --> node50
+    node46 --> node51
+    node46 --> node64
+    node46 --> node65
+    node46 --> node66
+    node46 --> node74
+    node47 --> node102
+    node49 --> node3
+    node49 --> node8
+    node49 --> node15
+    node49 --> node39
+    node49 --> node48
+    node49 --> node51
+    node51 --> node1
+    node51 --> node6
+    node51 --> node39
+    node51 --> node56
+    node51 --> node92
+    node52 --> node42
+    node57 --> node90
+    node58 --> node90
+    node59 --> node58
+    node60 --> node3
+    node61 --> node102
+    node62 --> node2
+    node62 --> node5
+    node62 --> node12
+    node62 --> node19
+    node62 --> node22
+    node62 --> node23
+    node62 --> node26
+    node62 --> node27
+    node62 --> node30
+    node62 --> node31
+    node62 --> node35
+    node62 --> node37
+    node62 --> node38
+    node62 --> node40
+    node62 --> node43
+    node62 --> node46
+    node62 --> node53
+    node62 --> node54
+    node62 --> node67
+    node62 --> node68
+    node62 --> node69
+    node62 --> node80
+    node62 --> node81
+    node62 --> node91
+    node62 --> node95
+    node62 --> node97
+    node62 --> node101
+    node62 --> node106
     node64 --> node38
-    node64 --> node65
+    node64 --> node102
+    node65 --> node3
     node65 --> node10
-    node65 --> node38
-    node67 --> node35
-    node67 --> node62
-    node67 --> node66
-    node68 --> node16
-    node68 --> node35
-    node68 --> node62
-    node68 --> node66
-    node70 --> node38
-    node70 --> node101
-    node72 --> node57
-    node72 --> node58
-    node72 --> node89
-    node73 --> node7
-    node73 --> node12
-    node73 --> node38
+    node65 --> node11
+    node65 --> node39
+    node65 --> node66
+    node66 --> node11
+    node66 --> node39
+    node68 --> node36
+    node68 --> node63
+    node68 --> node67
+    node69 --> node17
+    node69 --> node36
+    node69 --> node63
+    node69 --> node67
+    node71 --> node39
+    node71 --> node102
+    node73 --> node58
     node73 --> node59
-    node73 --> node60
-    node73 --> node101
-    node74 --> node103
-    node75 --> node8
-    node75 --> node56
-    node75 --> node61
-    node75 --> node67
-    node75 --> node79
-    node77 --> node78
-    node79 --> node5
-    node79 --> node38
-    node79 --> node41
-    node79 --> node43
-    node79 --> node53
-    node79 --> node70
-    node79 --> node101
-    node80 --> node45
-    node80 --> node79
-    node81 --> node5
-    node81 --> node18
-    node81 --> node19
-    node81 --> node53
-    node81 --> node79
-    node81 --> node83
-    node83 --> node7
-    node83 --> node53
-    node83 --> node84
-    node83 --> node85
-    node84 --> node57
-    node84 --> node58
-    node84 --> node72
-    node85 --> node37
-    node88 --> node77
-    node90 --> node16
-    node90 --> node31
-    node90 --> node40
-    node90 --> node52
-    node92 --> node39
-    node92 --> node86
-    node94 --> node7
-    node94 --> node97
-    node95 --> node4
-    node95 --> node37
-    node95 --> node39
-    node95 --> node57
-    node95 --> node58
-    node95 --> node72
-    node95 --> node99
-    node96 --> node7
-    node96 --> node36
-    node96 --> node94
+    node73 --> node90
+    node74 --> node8
+    node74 --> node13
+    node74 --> node39
+    node74 --> node60
+    node74 --> node61
+    node74 --> node102
+    node75 --> node104
+    node76 --> node7
+    node76 --> node9
+    node76 --> node57
+    node76 --> node62
+    node76 --> node68
+    node76 --> node80
+    node78 --> node79
+    node80 --> node5
+    node80 --> node39
+    node80 --> node42
+    node80 --> node44
+    node80 --> node54
+    node80 --> node71
+    node80 --> node102
+    node81 --> node46
+    node81 --> node80
+    node82 --> node5
+    node82 --> node19
+    node82 --> node20
+    node82 --> node54
+    node82 --> node80
+    node82 --> node84
+    node84 --> node8
+    node84 --> node54
+    node84 --> node85
+    node84 --> node86
+    node85 --> node58
+    node85 --> node59
+    node85 --> node73
+    node86 --> node38
+    node89 --> node78
+    node91 --> node17
+    node91 --> node32
+    node91 --> node41
+    node91 --> node53
+    node93 --> node40
+    node93 --> node87
+    node95 --> node8
+    node95 --> node98
+    node96 --> node4
+    node96 --> node38
+    node96 --> node40
+    node96 --> node58
+    node96 --> node59
+    node96 --> node73
     node96 --> node100
-    node97 --> node58
-    node97 --> node98
-    node98 --> node57
-    node98 --> node58
-    node98 --> node72
-    node98 --> node95
+    node97 --> node8
+    node97 --> node37
+    node97 --> node95
+    node97 --> node101
+    node98 --> node59
     node98 --> node99
-    node100 --> node36
-    node100 --> node94
-    node101 --> node102
-    node101 --> node104
-    node103 --> node101
-    node105 --> node101
+    node99 --> node58
+    node99 --> node59
+    node99 --> node73
+    node99 --> node96
+    node99 --> node100
+    node101 --> node37
+    node101 --> node95
+    node102 --> node103
+    node102 --> node105
+    node104 --> node102
+    node106 --> node102
 
 stderr:
 
