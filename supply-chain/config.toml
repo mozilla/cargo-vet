@@ -2,7 +2,7 @@
 # cargo-vet config file
 
 [cargo-vet]
-version = "0.6"
+version = "0.7"
 
 [imports.bytecodealliance]
 url = "https://raw.githubusercontent.com/bytecodealliance/wasmtime/main/supply-chain/audits.toml"
@@ -46,10 +46,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.camino]]
 version = "1.0.9"
-criteria = "safe-to-deploy"
-
-[[exemptions.cargo-platform]]
-version = "0.1.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.chrono]]
@@ -184,10 +180,6 @@ criteria = "safe-to-deploy"
 version = "1.7.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.httpdate]]
-version = "1.0.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.hyper]]
 version = "0.14.19"
 criteria = "safe-to-deploy"
@@ -316,14 +308,6 @@ criteria = "safe-to-deploy"
 version = "0.2.9"
 criteria = "safe-to-deploy"
 
-[[exemptions.pin-utils]]
-version = "0.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.pkg-config]]
-version = "0.3.25"
-criteria = "safe-to-deploy"
-
 [[exemptions.proc-macro-error]]
 version = "1.0.4"
 criteria = "safe-to-deploy"
@@ -376,10 +360,6 @@ criteria = "safe-to-deploy"
 version = "1.0.10"
 criteria = "safe-to-deploy"
 
-[[exemptions.sct]]
-version = "0.7.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.semver]]
 version = "1.0.10"
 criteria = "safe-to-deploy"
@@ -410,10 +390,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.signal-hook-registry]]
 version = "1.4.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.slab]]
-version = "0.4.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.smallvec]]
@@ -556,10 +532,6 @@ criteria = "safe-to-deploy"
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.unicode-width]]
-version = "0.1.9"
-criteria = "safe-to-deploy"
-
 [[exemptions.untrusted]]
 version = "0.7.1"
 criteria = "safe-to-deploy"
@@ -572,16 +544,8 @@ criteria = "safe-to-deploy"
 version = "0.1.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.vcpkg]]
-version = "0.2.15"
-criteria = "safe-to-deploy"
-
 [[exemptions.version_check]]
 version = "0.9.4"
-criteria = "safe-to-deploy"
-
-[[exemptions.want]]
-version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasi]]
