@@ -13,6 +13,15 @@ url = "https://raw.githubusercontent.com/EmbarkStudios/rust-ecosystem/main/audit
 [imports.firefox]
 url = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[imports.google]
+url = "https://raw.githubusercontent.com/google/supply-chain/main/audits.toml"
+
+[imports.isrg]
+url = "https://raw.githubusercontent.com/divviup/libprio-rs/main/supply-chain/audits.toml"
+
+[imports.zcash]
+url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/audits.toml"
+
 [policy.cargo-vet]
 audit-as-crates-io = false
 
@@ -46,10 +55,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.camino]]
 version = "1.0.9"
-criteria = "safe-to-deploy"
-
-[[exemptions.cargo-platform]]
-version = "0.1.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.chrono]]
@@ -184,10 +189,6 @@ criteria = "safe-to-deploy"
 version = "1.7.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.httpdate]]
-version = "1.0.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.hyper]]
 version = "0.14.19"
 criteria = "safe-to-deploy"
@@ -316,19 +317,7 @@ criteria = "safe-to-deploy"
 version = "0.2.9"
 criteria = "safe-to-deploy"
 
-[[exemptions.pin-utils]]
-version = "0.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.pkg-config]]
-version = "0.3.25"
-criteria = "safe-to-deploy"
-
 [[exemptions.proc-macro-error]]
-version = "1.0.4"
-criteria = "safe-to-deploy"
-
-[[exemptions.proc-macro-error-attr]]
 version = "1.0.4"
 criteria = "safe-to-deploy"
 
@@ -376,10 +365,6 @@ criteria = "safe-to-deploy"
 version = "1.0.10"
 criteria = "safe-to-deploy"
 
-[[exemptions.sct]]
-version = "0.7.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.semver]]
 version = "1.0.10"
 criteria = "safe-to-deploy"
@@ -410,10 +395,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.signal-hook-registry]]
 version = "1.4.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.slab]]
-version = "0.4.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.smallvec]]
@@ -556,32 +537,12 @@ criteria = "safe-to-deploy"
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.unicode-width]]
-version = "0.1.9"
-criteria = "safe-to-deploy"
-
-[[exemptions.untrusted]]
-version = "0.7.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.url]]
 version = "2.2.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.valuable]]
 version = "0.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.vcpkg]]
-version = "0.2.15"
-criteria = "safe-to-deploy"
-
-[[exemptions.version_check]]
-version = "0.9.4"
-criteria = "safe-to-deploy"
-
-[[exemptions.want]]
-version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasi]]
@@ -605,10 +566,6 @@ version = "0.2.80"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-macro-support]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasm-bindgen-shared]]
 version = "0.2.80"
 criteria = "safe-to-deploy"
 
