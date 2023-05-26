@@ -1,7 +1,7 @@
 # Performing Audits
 
 Human attention is a precious resource, so `cargo vet` provides several features
-to spend that attention as efficiently as possibly.
+to spend that attention as efficiently as possible.
 
 ## Managing Dependency Changes
 
@@ -145,3 +145,41 @@ $ cargo vet suggest
 
   Use |cargo vet certify| to record the audits.
 ```
+
+## Trusting Authors of Crates
+
+`cargo vet` achieves supply-chain integrity by ensuring that the contents of each crate you depend
+on are signed-off by a trusted source. However, sometimes it's the case that one or more crates you
+depend on are _developed_ by a trusted source. Rather than requiring an additional audit of these
+crates, or encouraging a false audit that says "we trust this developer" (as that isn't really an
+audit of the code), `cargo vet` allows you to declare that you trust a developer to satisfactorily
+audit code which they have published.
+
+This is particularly useful as a means of self-certification, where members or groups in your
+organization have published crates separately from your project, but you consider them trustworthy
+auditors of their own code.
+
+Trusted publishers may be added with `cargo vet trust`. This allows you to either trust all crates
+solely published by a specific author (`cargo vet trust --all USER`), the sole publisher of a
+specific crate (`cargo vet trust CRATE`), or a specific publisher of a crate when more than one
+exists (`cargo vet trust CRATE USER`). Entries require a trust expiration date, which ensures that
+the judgment is revisited periodically.
+
+The trust relationships are recorded in the `trusted` section of `audits.toml`:
+```
+[[trusted.serde]]
+criteria = "safe-to-deploy"
+user-id = 3618 // David Tolnay
+start = ...
+end = ...
+notes = "David is super-trustworthy."
+```
+
+When imported audits trust a publisher or you have existing trust entries for a publisher, `cargo
+vet suggest` will suggest that you consider adding trust entries for a new unaudited crate by the
+same publisher.
+
+Note that unlike wildcard entries, which are an explicit promise that a publisher audits their
+crates to meet the audit criteria, trust entries are a heuristic. The trusted publisher may or may
+not have personally authored or reviewed all the code. Thus it is important to assess the risk and
+potentially do some investigation before trusting an author.

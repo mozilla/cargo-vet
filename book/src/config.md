@@ -66,6 +66,14 @@ entries are specified as table arrays, i.e. `[[audits.foo]]`.
 The semantics of the various audit entries keys are described
 [here](audit-entries.md).
 
+### The `trusted` Table
+
+This table contains the trusted publisher entries, indexed by crate name. Because there may be
+multiple publishers per crate, trusted entries are specified as table arrays, i.e.
+`[[trusted.foo]]`.
+
+The semantics of the various trusted entries keys are described [here](trusted-entries.md).
+
 ## `config.toml`
 
 This file contains configuration information for this specific project. This
