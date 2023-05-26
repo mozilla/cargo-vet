@@ -15,6 +15,11 @@ insertions = 6554
 deletions = 0
 files_changed = 19
 
+[diffs.cfg-if."0.1.10"]
+insertions = 579
+deletions = 0
+files_changed = 9
+
 [diffs.cfg-if."1.0.0"]
 insertions = 582
 deletions = 0

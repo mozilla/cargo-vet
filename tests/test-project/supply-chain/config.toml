@@ -28,7 +28,7 @@ version = "1.0.73"
 criteria = "safe-to-deploy"
 
 [[exemptions.cfg-if]]
-version = "1.0.0"
+version = "0.1.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.core-foundation]]

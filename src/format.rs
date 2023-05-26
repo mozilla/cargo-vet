@@ -965,7 +965,7 @@ impl Default for DiffCache {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct DiffStat {
     pub insertions: u64,
     pub deletions: u64,

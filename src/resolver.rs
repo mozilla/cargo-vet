@@ -159,7 +159,7 @@ pub struct SuggestItem {
     pub registry_suggestion: Vec<RegistrySuggestion>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct DiffRecommendation {
     pub from: Option<VetVersion>,
     pub to: VetVersion,
@@ -1802,14 +1802,42 @@ impl<'a> ResolveReport<'a> {
             .flatten()
             .collect::<Vec<_>>();
 
+        // First sort by diff size (ascending), then package name, then version
+        // being certified, to have stable output ordering.
+        suggestions.sort_by_key(|item| {
+            (
+                item.suggested_diff.diffstat.count(),
+                self.graph.nodes[item.package].name,
+                item.suggested_diff.to.clone(),
+            )
+        });
+
+        // If we have duplicate suggestions in the output, e.g. due to multiple
+        // versions of the same crate requiring the same new audit, deduplicate
+        // them in the output to avoid clutter.
+        suggestions.dedup_by(|a, b| {
+            if self.graph.nodes[a.package].name == self.graph.nodes[b.package].name
+                && a.suggested_diff == b.suggested_diff
+            {
+                // Per the `dedup_by` documentation, if true is returned, `a`
+                // will be removed. Preserve its notable parents.
+                b.notable_parents.extend_from_slice(&a.notable_parents);
+                true
+            } else {
+                false
+            }
+        });
+
+        // Sort and remove any duplicate entries from `notable_parents`.
+        for s in &mut suggestions {
+            s.notable_parents.sort();
+            s.notable_parents.dedup();
+        }
+
         let total_lines = suggestions
             .iter()
             .map(|s| s.suggested_diff.diffstat.count())
             .sum();
-
-        suggestions.sort_by_key(|item| &self.graph.nodes[item.package].version);
-        suggestions.sort_by_key(|item| self.graph.nodes[item.package].name);
-        suggestions.sort_by_key(|item| item.suggested_diff.diffstat.count());
 
         let mut suggestions_by_criteria = SortedMap::<CriteriaName, Vec<SuggestItem>>::new();
         for s in suggestions.clone().into_iter() {
