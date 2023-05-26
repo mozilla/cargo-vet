@@ -1670,14 +1670,14 @@ impl<'a> ResolveReport<'a> {
                                 .unwrap_or_default();
                             let publisher_count = versions
                                 .iter()
-                                .flat_map(|(_, details)| &details.as_ref().unwrap().published_by)
+                                .flat_map(|(_, details)| &details.published_by)
                                 .collect::<FastSet<_>>()
                                 .len();
                             is_sole_publisher = publisher_count == 1;
                             versions
                                 .into_iter()
                                 .find(|(v, _)| v == &suggested_diff.to.semver)
-                                .and_then(|(_, d)| d.unwrap().published_by)
+                                .and_then(|(_, d)| d.published_by)
                         } else {
                             None
                         };
@@ -1702,9 +1702,7 @@ impl<'a> ResolveReport<'a> {
                                 .get_cached_publishers(package.name)
                                 .iter()
                                 .rev()
-                                .filter_map(|(_, details)| {
-                                    details.as_ref().and_then(|d| d.published_by)
-                                })
+                                .filter_map(|(_, details)| details.published_by)
                                 .find(|i| trusted_publishers.contains_key(i))
                         } else {
                             None
