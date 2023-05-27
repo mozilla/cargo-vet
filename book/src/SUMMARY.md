@@ -10,6 +10,7 @@
   - [Importing Audits](./importing-audits.md)
   - [Recording Audits](./recording-audits.md)
   - [Performing Audits](./performing-audits.md)
+  - [Trusting Publishers](./trusting-publishers.md)
   - [Specifying Policies](./specifying-policies.md)
   - [Multiple Repositories](./multiple-repositories.md)
   - [Configuring CI](./configuring-ci.md)
