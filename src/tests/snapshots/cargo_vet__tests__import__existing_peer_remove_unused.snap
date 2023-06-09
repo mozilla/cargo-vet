@@ -22,4 +22,8 @@ expression: output
 -[[audits.peer-company.audits.unused-package]]
 -criteria = "safe-to-deploy"
 -version = "10.0.0"
+-
+-[[audits.peer-company.audits.unused-violation]]
+-criteria = "safe-to-deploy"
+-violation = "1.*"
 

@@ -2721,21 +2721,22 @@ pub(crate) fn get_store_updates(
                             .iter()
                             .enumerate()
                             .filter(|&(audit_index, entry)| {
-                                // Always keep any violations.
-                                if matches!(entry.kind, AuditKind::Violation { .. }) {
-                                    return true;
-                                }
-
                                 // Keep existing if we're not pruning imports.
                                 if !prune_imports && !entry.is_fresh_import {
                                     return true;
                                 }
 
                                 if let Some(required_entries) = required_entries {
-                                    required_entries.contains_key(&RequiredEntry::Audit {
-                                        import_index,
-                                        audit_index,
-                                    })
+                                    if matches!(entry.kind, AuditKind::Violation { .. }) {
+                                        // Keep violations if there are any required entries for
+                                        // the package.
+                                        !required_entries.is_empty()
+                                    } else {
+                                        required_entries.contains_key(&RequiredEntry::Audit {
+                                            import_index,
+                                            audit_index,
+                                        })
+                                    }
                                 } else {
                                     !entry.is_fresh_import
                                 }
