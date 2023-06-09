@@ -728,6 +728,53 @@ fn existing_peer_add_violation() {
 }
 
 #[test]
+fn new_audit_needed_violation() {
+    // (Pass) If a peer provides a violation for a crate we use (even if there are no related
+    // audits), we should import it.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
+
+    let new_foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        wildcard_audits: SortedMap::new(),
+        audits: [(
+            "third-party2".to_owned(),
+            vec![violation(
+                VersionReq::parse("10.*").unwrap(),
+                SAFE_TO_DEPLOY,
+            )],
+        )]
+        .into_iter()
+        .collect(),
+        trusted: SortedMap::new(),
+    };
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: vec![FOREIGN_URL.to_owned()],
+            ..Default::default()
+        },
+    );
+
+    let cfg = mock_cfg(&metadata);
+
+    let mut network = Network::new_mock();
+    network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
+
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+
+    let output = get_imports_file_changes_prune(&metadata, &store);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn new_audit_unneeded_violation() {
     // (Pass) If a peer provides a violation for a crate we don't use, we should not import it.
 

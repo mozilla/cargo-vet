@@ -2712,9 +2712,11 @@ pub(crate) fn get_store_updates(
                 .iter()
                 .map(|(pkgname, audits)| {
                     let prune_imports = mode(&pkgname[..]).prune_imports;
-                    let required_entries = required_entries
-                        .get(&pkgname[..])
-                        .unwrap_or(&no_required_entries);
+                    let (uses_package, required_entries) = match required_entries.get(&pkgname[..])
+                    {
+                        Some(e) => (true, e),
+                        None => (false, &no_required_entries),
+                    };
                     (
                         pkgname,
                         audits
@@ -2726,17 +2728,16 @@ pub(crate) fn get_store_updates(
                                     return true;
                                 }
 
+                                // Keep violations if the package is used in the graph.
+                                if matches!(entry.kind, AuditKind::Violation { .. }) {
+                                    return uses_package;
+                                }
+
                                 if let Some(required_entries) = required_entries {
-                                    if matches!(entry.kind, AuditKind::Violation { .. }) {
-                                        // Keep violations if there are any required entries for
-                                        // the package.
-                                        !required_entries.is_empty()
-                                    } else {
-                                        required_entries.contains_key(&RequiredEntry::Audit {
-                                            import_index,
-                                            audit_index,
-                                        })
-                                    }
+                                    required_entries.contains_key(&RequiredEntry::Audit {
+                                        import_index,
+                                        audit_index,
+                                    })
                                 } else {
                                     !entry.is_fresh_import
                                 }
