@@ -2699,11 +2699,6 @@ async fn check_audit_as_crates_io(
     network: Option<&Network>,
     cache: &mut Cache,
 ) -> Result<(), AuditAsErrors> {
-    // If we don't have a registry, we can't check audit-as-crates-io.
-    if !cache.has_registry() {
-        return Ok(());
-    }
-
     let first_party_packages: Vec<_> =
         first_party_packages_strict(&cfg.metadata, &store.config).collect();
 
