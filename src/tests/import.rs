@@ -220,8 +220,9 @@ fn existing_peer_skip_import() {
 
 #[test]
 fn existing_peer_remove_unused() {
-    // (Pass) When pruning, we'll remove unused audits (including violations) when unlocked, even
-    // if our peer hasn't changed. These audits will be preserved when not pruning.
+    // (Pass) When pruning, we'll remove unused audits (including violations)
+    // when unlocked, even if our peer hasn't changed. These audits will be
+    // preserved when not pruning.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
