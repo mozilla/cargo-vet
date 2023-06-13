@@ -2712,23 +2712,25 @@ pub(crate) fn get_store_updates(
                 .iter()
                 .map(|(pkgname, audits)| {
                     let prune_imports = mode(&pkgname[..]).prune_imports;
-                    let required_entries = required_entries
-                        .get(&pkgname[..])
-                        .unwrap_or(&no_required_entries);
+                    let (uses_package, required_entries) = match required_entries.get(&pkgname[..])
+                    {
+                        Some(e) => (true, e),
+                        None => (false, &no_required_entries),
+                    };
                     (
                         pkgname,
                         audits
                             .iter()
                             .enumerate()
                             .filter(|&(audit_index, entry)| {
-                                // Always keep any violations.
-                                if matches!(entry.kind, AuditKind::Violation { .. }) {
-                                    return true;
-                                }
-
                                 // Keep existing if we're not pruning imports.
                                 if !prune_imports && !entry.is_fresh_import {
                                     return true;
+                                }
+
+                                // Keep violations if the package is used in the graph.
+                                if matches!(entry.kind, AuditKind::Violation { .. }) {
+                                    return uses_package;
                                 }
 
                                 if let Some(required_entries) = required_entries {
