@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     ffi::OsString,
     fmt, fs, io,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
@@ -13,9 +13,9 @@ use serde_json::{json, Value};
 use crate::{
     format::{
         AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesPublisher, CriteriaEntry, CriteriaMap,
-        CriteriaName, CriteriaStr, ExemptedDependency, FastMap, ImportsFile, MetaConfig,
-        PackageName, PackagePolicyEntry, PackageStr, PolicyEntry, SortedMap, SortedSet, TrustEntry,
-        VersionReq, VetVersion, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        CriteriaName, CriteriaStr, ExemptedDependency, ImportsFile, MetaConfig, PackageName,
+        PackagePolicyEntry, PackageStr, PolicyEntry, SortedMap, SortedSet, TrustEntry, VersionReq,
+        VetVersion, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     git_tool::Editor,
     network::Network,
@@ -167,81 +167,6 @@ struct MockPackage {
 struct MockDependency {
     name: &'static str,
     version: VetVersion,
-}
-
-pub struct MockIndex {
-    packages: FastMap<PackageStr<'static>, Vec<MockRegistryVersion>>,
-    path: PathBuf,
-}
-
-struct MockRegistryVersion {
-    _version: VetVersion,
-    /// Dependency info dummied out in case we ever want that
-    _deps: Vec<()>,
-}
-
-fn reg_ver(pub_ver: u64) -> MockRegistryVersion {
-    MockRegistryVersion {
-        _version: ver(pub_ver),
-        _deps: vec![],
-    }
-}
-
-// The `MockIndex` type should provide the same interface as the
-// `crates_index::Index` type, as it is used in place of that type in test
-// builds.
-impl MockIndex {
-    pub fn new_cargo_default() -> Result<Self, crates_index::Error> {
-        Ok(Self {
-            packages: [
-                ("root-package", vec![reg_ver(DEFAULT_VER)]),
-                ("third-party1", vec![reg_ver(DEFAULT_VER)]),
-                ("third-party2", vec![reg_ver(DEFAULT_VER)]),
-                ("transitive-third-party1", vec![reg_ver(DEFAULT_VER)]),
-                ("first-party", vec![reg_ver(DEFAULT_VER)]),
-                ("firstA", vec![reg_ver(DEFAULT_VER)]),
-                ("firstAB", vec![reg_ver(DEFAULT_VER)]),
-                ("firstB", vec![reg_ver(DEFAULT_VER)]),
-                ("firstB-nodeps", vec![reg_ver(DEFAULT_VER)]),
-                ("thirdA", vec![reg_ver(DEFAULT_VER)]),
-                ("thirdAB", vec![reg_ver(DEFAULT_VER)]),
-                ("third-core", vec![reg_ver(DEFAULT_VER), reg_ver(5)]),
-                ("normal", vec![reg_ver(DEFAULT_VER)]),
-                ("dev", vec![reg_ver(DEFAULT_VER)]),
-                ("build", vec![reg_ver(DEFAULT_VER)]),
-                ("proc-macro", vec![reg_ver(DEFAULT_VER)]),
-                ("dev-proc-macro", vec![reg_ver(DEFAULT_VER)]),
-                ("build-proc-macro", vec![reg_ver(DEFAULT_VER)]),
-                ("dev-cycle", vec![reg_ver(DEFAULT_VER)]),
-                ("both", vec![reg_ver(DEFAULT_VER)]),
-                ("simple-dev", vec![reg_ver(DEFAULT_VER)]),
-                ("simple-dev-indirect", vec![reg_ver(DEFAULT_VER)]),
-                ("dev-cycle-direct", vec![reg_ver(DEFAULT_VER)]),
-                ("dev-cycle-indirect", vec![reg_ver(DEFAULT_VER)]),
-                ("third-normal", vec![reg_ver(DEFAULT_VER)]),
-                ("third-dev", vec![reg_ver(DEFAULT_VER)]),
-                ("first", vec![reg_ver(1)]),
-            ]
-            .into_iter()
-            .collect(),
-            path: Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("/tests/mock-registry/index/testing-cinematic-universe"),
-        })
-    }
-    pub fn update(&mut self) -> Result<(), crates_index::Error> {
-        if self.packages.contains_key("new-package") {
-            return Ok(()); // already updated
-        }
-        self.packages.insert("root", vec![reg_ver(DEFAULT_VER)]);
-        self.packages
-            .get_mut("first")
-            .unwrap()
-            .push(reg_ver(DEFAULT_VER));
-        Ok(())
-    }
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
 }
 
 impl Default for MockPackage {

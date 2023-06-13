@@ -40,18 +40,10 @@ use crate::{
         VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
-    out::{indeterminate_spinner, progress_bar, IncProgressOnDrop},
+    out::{progress_bar, IncProgressOnDrop},
     serialization::{parse_from_value, spanned::Spanned, to_formatted_toml},
     Config, PackageExt, PartialConfig, CARGO_ENV,
 };
-
-/// The type to use for accessing information from crates.io.
-#[cfg(not(test))]
-type CratesIndex = crates_index::Index;
-
-/// When running tests, a mock index is used instead of the real one.
-#[cfg(test)]
-type CratesIndex = crate::tests::MockIndex;
 
 // tmp cache for various shenanigans
 const CACHE_DIFF_CACHE: &str = "diff-cache.toml";
@@ -75,8 +67,10 @@ const CACHE_ALLOWED_FILES: &[&str] = &[
 ];
 
 // Various cargo values
+const CARGO_REGISTRY: &str = "registry";
 const CARGO_REGISTRY_SRC: &str = "src";
-const CARGO_REGISTRY_CACHE: &str = "cache";
+const CARGO_REGISTRY_CRATES_IO_GIT: &str = "github.com-1ecc6299db9ec823";
+const CARGO_REGISTRY_CRATES_IO_HTTP: &str = "index.crates.io-6f17d22bba15001f";
 const CARGO_TOML_FILE: &str = "Cargo.toml";
 const CARGO_OK_FILE: &str = ".cargo-ok";
 const CARGO_OK_BODY: &str = "ok";
@@ -1534,32 +1528,6 @@ pub fn user_info_map(imports: &ImportsFile) -> FastMap<CratesUserId, CratesCache
     user_info
 }
 
-/// A Registry in CARGO_HOME (usually the crates.io one)
-pub struct CargoRegistry {
-    /// The queryable index
-    index: CratesIndex,
-    /// The base path all registries share (`$CARGO_HOME/registry`)
-    base_dir: PathBuf,
-    /// The name of the registry (`github.com-1ecc6299db9ec823`)
-    registry: OsString,
-    /// Whether or not the index is known to be up-to-date
-    index_up_to_date: bool,
-}
-
-impl CargoRegistry {
-    /// Get the src dir of this registry (unpacked fetches)
-    pub fn src(&self) -> PathBuf {
-        self.base_dir.join(CARGO_REGISTRY_SRC).join(&self.registry)
-    }
-    /// Get the cache dir of the registry (.crate packed fetches)
-    pub fn cache(&self) -> PathBuf {
-        self.base_dir
-            .join(CARGO_REGISTRY_CACHE)
-            .join(&self.registry)
-    }
-    // Could also include the index, not reason to do that yet
-}
-
 struct CacheState {
     /// The loaded DiffCache, will be written back on Drop
     diff_cache: DiffCache,
@@ -1581,8 +1549,6 @@ pub struct Cache {
     _lock: Option<FileLock>,
     /// Path to the root of the cache
     root: Option<PathBuf>,
-    /// Cargo's crates.io package registry (in CARGO_HOME) for us to query opportunistically
-    cargo_registry: Option<CargoRegistry>,
     /// Path to the DiffCache (for when we want to save it back)
     diff_cache_path: Option<PathBuf>,
     /// Path to the CommandHistory (for when we want to save it back)
@@ -1638,20 +1604,12 @@ impl Drop for Cache {
 impl Cache {
     /// Acquire the cache
     pub fn acquire(cfg: &PartialConfig) -> Result<Self, CacheAcquireError> {
-        // Try to get the cargo registry
-        let cargo_registry = find_cargo_registry();
-        if let Err(e) = &cargo_registry {
-            // ERRORS: this warning really rides the line, I'm not sure if the user can/should care
-            warn!("Couldn't find cargo registry: {e}");
-        }
-
         #[cfg(test)]
         if cfg.mock_cache {
             // We're in unit tests, everything should be mocked and not touch real caches
             return Ok(Cache {
                 _lock: None,
                 root: None,
-                cargo_registry: cargo_registry.ok(),
                 diff_cache_path: None,
                 command_history_path: None,
                 publisher_cache_path: None,
@@ -1721,7 +1679,6 @@ impl Cache {
             diff_cache_path: Some(diff_cache_path),
             command_history_path: Some(command_history_path),
             publisher_cache_path: Some(publisher_cache_path),
-            cargo_registry: cargo_registry.ok(),
             diff_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_DIFFS),
             now: cfg.now,
             state: Mutex::new(CacheState {
@@ -1732,36 +1689,6 @@ impl Cache {
                 diffed: FastMap::new(),
             }),
         })
-    }
-
-    /// Check if the Cache has access to the registry or information about the
-    /// crates.io index.
-    pub fn has_registry(&self) -> bool {
-        self.cargo_registry.is_some()
-    }
-
-    /// Ensures that the local copy of the crates.io index has the most
-    /// up-to-date information about what crates are available.
-    ///
-    /// Returns `true` if the state of the index may have been changed by this
-    /// call, and `false` if the index is already up-to-date.
-    pub fn ensure_index_up_to_date(&mut self) -> bool {
-        let reg = match &mut self.cargo_registry {
-            Some(reg) => reg,
-            None => return false,
-        };
-        if reg.index_up_to_date {
-            return false;
-        }
-        let _spinner = indeterminate_spinner("Updating", "registry index");
-        reg.index_up_to_date = true;
-        match reg.index.update() {
-            Ok(()) => true,
-            Err(e) => {
-                warn!("Couldn't update cargo index: {e}");
-                false
-            }
-        }
     }
 
     #[tracing::instrument(skip(self, metadata, network), err)]
@@ -1827,10 +1754,17 @@ impl Cache {
                 let dir_name = format!("{package}-{version}");
 
                 // First try to get a cached copy from cargo's registry.
-                if let Some(reg) = self.cargo_registry.as_ref() {
-                    let fetched_src = reg.src().join(&dir_name);
-                    if fetch_is_ok(&fetched_src).await {
-                        return Ok(fetched_src);
+                if let Ok(cargo_home) = home::cargo_home() {
+                    // Check both the sparse and git registry caches.
+                    for registry in [CARGO_REGISTRY_CRATES_IO_HTTP, CARGO_REGISTRY_CRATES_IO_GIT] {
+                        let fetched_src = cargo_home
+                            .join(CARGO_REGISTRY)
+                            .join(CARGO_REGISTRY_SRC)
+                            .join(registry)
+                            .join(&dir_name);
+                        if fetch_is_ok(&fetched_src).await {
+                            return Ok(fetched_src);
+                        }
                     }
                 }
 
@@ -2887,23 +2821,6 @@ async fn remove_dir_entry(entry: &tokio::fs::DirEntry) -> Result<(), io::Error> 
         tokio::fs::remove_file(entry.path()).await?;
     }
     Ok(())
-}
-
-fn find_cargo_registry() -> Result<CargoRegistry, crates_index::Error> {
-    // ERRORS: all of this is genuinely fallible internal workings
-    // but if these path adjustments don't work then something is very fundamentally wrong
-
-    let index = CratesIndex::new_cargo_default()?;
-
-    let base_dir = index.path().parent().unwrap().parent().unwrap().to_owned();
-    let registry = index.path().file_name().unwrap().to_owned();
-
-    Ok(CargoRegistry {
-        index,
-        base_dir,
-        registry,
-        index_up_to_date: false,
-    })
 }
 
 fn load_toml<T>(file_name: &str, reader: impl Read) -> Result<(SourceFile, T), LoadTomlError>
