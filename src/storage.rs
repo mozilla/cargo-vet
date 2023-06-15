@@ -37,7 +37,7 @@ use crate::{
         CriteriaName, CriteriaStr, Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand,
         ForeignAuditsFile, ImportName, ImportsFile, MetaConfig, PackageName, PackageStr,
         RegistryEntry, RegistryFile, SortedMap, StoreVersion, TrustEntry, TrustedPackages,
-        VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        UnpublishedEntry, VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{progress_bar, IncProgressOnDrop},
@@ -177,6 +177,7 @@ impl Store {
                 exemptions: SortedMap::new(),
             },
             imports: ImportsFile {
+                unpublished: SortedMap::new(),
                 publisher: SortedMap::new(),
                 audits: SortedMap::new(),
             },
@@ -284,6 +285,16 @@ impl Store {
             fetch_imported_audits(network, &local_criteria_mapper, &self.config).await?;
         let mut live_imports =
             process_imported_audits(fetched_audits, &self.imports, allow_criteria_changes)?;
+        import_unpublished_entries(
+            &cfg.metadata,
+            network,
+            cache,
+            &self.config,
+            &self.imports,
+            &mut live_imports,
+        )
+        .await
+        .map_err(Box::new)?;
         import_publisher_versions(
             &cfg.metadata,
             network,
@@ -339,6 +350,16 @@ impl Store {
         let mut live_imports =
             process_imported_audits(fetched_audits, &imports, allow_criteria_changes)?;
         let cache = Cache::acquire(cfg).map_err(Box::new)?;
+        tokio::runtime::Handle::current()
+            .block_on(import_unpublished_entries(
+                &cfg.metadata,
+                network,
+                &cache,
+                &config,
+                &imports,
+                &mut live_imports,
+            ))
+            .map_err(Box::new)?;
         tokio::runtime::Handle::current()
             .block_on(import_publisher_versions(
                 &cfg.metadata,
@@ -422,8 +443,16 @@ impl Store {
         };
         if clear_exemptions {
             // Delete all exemptions entries except those that are suggest=false
-            for versions in &mut clone.config.exemptions.values_mut() {
+            for versions in clone.config.exemptions.values_mut() {
                 versions.retain(|e| !e.suggest);
+            }
+
+            // If we have a live_imports, clear all stale unpublished entries so
+            // we suggest audits to replace them.
+            if let Some(live_imports) = &mut clone.live_imports {
+                for unpublished in live_imports.unpublished.values_mut() {
+                    unpublished.retain(|e| e.is_fresh_import);
+                }
             }
         }
         clone
@@ -450,6 +479,18 @@ impl Store {
         match &self.live_imports {
             Some(live_imports) => &live_imports.publisher,
             None => &self.imports.publisher,
+        }
+    }
+
+    /// Returns the set of unpublished information which should be operated upon.
+    ///
+    /// If the store was acquired unlocked, whis may include unpublished
+    /// information which is not stored in imports.lock, otherwise it will only
+    /// contain imports stored locally.
+    pub fn unpublished(&self) -> &SortedMap<PackageName, Vec<UnpublishedEntry>> {
+        match &self.live_imports {
+            Some(live_imports) => &live_imports.unpublished,
+            None => &self.imports.unpublished,
         }
     }
 
@@ -819,6 +860,7 @@ fn process_imported_audits(
     allow_criteria_changes: bool,
 ) -> Result<ImportsFile, CriteriaChangeErrors> {
     let mut new_imports = ImportsFile {
+        unpublished: SortedMap::new(),
         publisher: SortedMap::new(),
         audits: SortedMap::new(),
     };
@@ -1346,6 +1388,78 @@ fn parse_imported_trust_entry(
     }
 
     Some(audit)
+}
+
+async fn import_unpublished_entries(
+    metadata: &cargo_metadata::Metadata,
+    network: &Network,
+    cache: &Cache,
+    config_file: &ConfigFile,
+    imports_lock: &ImportsFile,
+    live_imports: &mut ImportsFile,
+) -> Result<(), CrateInfoError> {
+    // We always persist any unpublished entries from the imports.lock into
+    // live-imports, even if the version has since been published, as it may be
+    // necessary for `cargo vet` to pass.
+    live_imports.unpublished = imports_lock.unpublished.clone();
+
+    // Find all packages which are forced to be audit-as-crates-io, and check if
+    // they are actually published. We also skip git versions, as those can
+    // always be audit-as-crates-io.
+    let audit_as_packages = crate::first_party_packages_strict(metadata, config_file)
+        .filter(|package| package.is_third_party(&config_file.policy))
+        .filter(|package| package.git_rev().is_none());
+    for package in audit_as_packages {
+        // If we have no versions for the crate, it cannot be
+        // audit-as-crates-io, so treat it as an error.
+        // FIXME: better errors here?
+        let versions = cache.get_versions(Some(network), &package.name).await?;
+
+        // Pick which verison of the crate we'd audit as. We prefer the exact
+        // version of the crate, followed by the largest version below, and then
+        // finally the smallest version above.
+        let max_below = versions.iter().filter(|&v| v <= &package.version).max();
+        let audited_as = max_below
+            .or_else(|| versions.iter().filter(|&v| v > &package.version).min())
+            .expect("There must be at least one version");
+
+        // The exact version is published, no unpublished entries are required.
+        if audited_as == &package.version {
+            continue;
+        }
+
+        let unpublished = live_imports
+            .unpublished
+            .entry(package.name.clone())
+            .or_default();
+
+        // Mark each existing entry for this version as `still_unpublished`, as
+        // we now know this version is still unpublished.
+        for entry in &mut *unpublished {
+            if entry.version.equals_semver(&package.version) {
+                entry.still_unpublished = true;
+            }
+        }
+
+        // Push an entry for this audited_as marked as `is_fresh_import`.
+        //
+        // NOTE: We intentionally add a new entry even if there is an
+        // "identical" one already. This allows edge prioritization logic to
+        // prefer stale entries when not pruning, and fresh ones while pruning,
+        // to keep the unaudited delta as small as possible without unnecessary
+        // imports.lock churn. Only one of the two entries should ever appear in
+        // imports.lock.
+        unpublished.push(UnpublishedEntry {
+            version: package.vet_version(),
+            audited_as: VetVersion {
+                semver: audited_as.clone(),
+                git_rev: None,
+            },
+            still_unpublished: true,
+            is_fresh_import: true,
+        });
+    }
+    Ok(())
 }
 
 fn wildcard_audits_packages(

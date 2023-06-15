@@ -423,11 +423,20 @@ pub enum RegenerateSubcommands {
     #[clap(disable_version_flag = true)]
     Imports(RegenerateImportsArgs),
 
-    /// Regenerate you audit-as-crates-io entries to make `check` pass
+    /// Add `audit-as-crates-io` to the policy entry for all crates which require one.
     ///
-    /// This will just set any problematic entries to `audit-as-crates-io = false`.
+    /// Crates which have a matching `description` and `repository` entry to a
+    /// published crate on crates.io will be marked as `audit-as-crates-io = true`.
     #[clap(disable_version_flag = true)]
     AuditAsCratesIo(RegenerateAuditAsCratesIoArgs),
+
+    /// Remove all outdated `unpublished` entries for crates which have since
+    /// been published, or should now be audited as a more-recent version.
+    ///
+    /// Unlike `cargo vet prune`, this will remove outdated `unpublished`
+    /// entries even if it will cause `check` to start failing.
+    #[clap(disable_version_flag = true)]
+    Unpublished(RegenerateUnpublishedArgs),
 }
 
 #[derive(clap::Args)]
@@ -668,6 +677,9 @@ pub struct RegenerateImportsArgs {}
 
 #[derive(clap::Args)]
 pub struct RegenerateAuditAsCratesIoArgs {}
+
+#[derive(clap::Args)]
+pub struct RegenerateUnpublishedArgs {}
 
 #[derive(clap::Args)]
 pub struct AggregateArgs {

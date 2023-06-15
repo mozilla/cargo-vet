@@ -900,6 +900,7 @@ fn init_files(
         trusted: SortedMap::new(),
     };
     let imports = ImportsFile {
+        unpublished: SortedMap::new(),
         publisher: SortedMap::new(),
         audits: SortedMap::new(),
     };
