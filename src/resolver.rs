@@ -2662,6 +2662,7 @@ fn resolve_package_required_entries(
 }
 
 /// Per-package options to control store pruning.
+#[derive(Copy, Clone)]
 pub struct UpdateMode {
     pub search_mode: SearchMode,
     pub prune_exemptions: bool,

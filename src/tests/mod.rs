@@ -55,6 +55,7 @@ mod registry;
 mod renew;
 mod store_parsing;
 mod trusted;
+mod unpublished;
 mod vet;
 mod violations;
 mod wildcard;
@@ -298,6 +299,22 @@ fn publisher_entry(version: VetVersion, user_id: u64) -> CratesPublisher {
         user_id,
         user_login: format!("user{user_id}"),
         user_name: None,
+        is_fresh_import: false,
+    }
+}
+
+fn publisher_entry_named(
+    version: VetVersion,
+    user_id: u64,
+    login: &str,
+    name: &str,
+) -> CratesPublisher {
+    CratesPublisher {
+        version,
+        when: chrono::NaiveDate::from_ymd_opt(2022, 12, 15).unwrap(),
+        user_id,
+        user_login: login.to_owned(),
+        user_name: Some(name.to_owned()),
         is_fresh_import: false,
     }
 }
