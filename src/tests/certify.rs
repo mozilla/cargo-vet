@@ -252,37 +252,18 @@ fn mock_wildcard_certify_flow() {
     };
 
     let mut network = Network::new_mock();
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/third-party1",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "9.0.0",
-                    "published_by": {
-                        "id": 5,
-                        "login": "otheruser",
-                        "name": "Other User",
-                        "url": "https://github.com/otheruser"
-                    }
-                },
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 2,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(&mut network, "third-party1", &["9.0.0", "10.0.0"]);
+
+    MockRegistryBuilder::new()
+        .user(2, "testuser", "Test user")
+        .user(5, "otheruser", "Other User")
+        .package(
+            "third-party1",
+            &[
+                reg_published_by(ver(9), Some(5), "2022-10-12"),
+                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+            ],
+        )
+        .serve(&mut network);
 
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");
@@ -327,42 +308,17 @@ fn mock_trust_flow_simple() {
     };
 
     let mut network = Network::new_mock();
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/third-party1",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "1.0.0",
-                },
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "9.0.0",
-                    "published_by": {
-                        "id": 2,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 2,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(&mut network, "third-party1", &["1.0.0", "9.0.0", "10.0.0"]);
+    MockRegistryBuilder::new()
+        .user(2, "testuser", "Test user")
+        .package(
+            "third-party1",
+            &[
+                reg_published_by(ver(1), None, "2022-10-12"),
+                reg_published_by(ver(9), Some(2), "2022-10-12"),
+                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+            ],
+        )
+        .serve(&mut network);
 
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");
@@ -406,42 +362,18 @@ fn mock_trust_flow_ambiguous() {
     };
 
     let mut network = Network::new_mock();
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/third-party1",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "1.0.0",
-                },
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "9.0.0",
-                    "published_by": {
-                        "id": 5,
-                        "login": "otheruser",
-                        "name": "Other user",
-                        "url": "https://github.com/otheruser"
-                    }
-                },
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 2,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(&mut network, "third-party1", &["1.0.0", "9.0.0", "10.0.0"]);
+    MockRegistryBuilder::new()
+        .user(2, "testuser", "Test user")
+        .user(5, "otheruser", "Other user")
+        .package(
+            "third-party1",
+            &[
+                reg_published_by(ver(1), None, "2022-10-12"),
+                reg_published_by(ver(9), Some(5), "2022-10-12"),
+                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+            ],
+        )
+        .serve(&mut network);
 
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");
@@ -474,42 +406,18 @@ fn mock_trust_flow_explicit() {
     };
 
     let mut network = Network::new_mock();
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/third-party1",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "1.0.0",
-                },
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "9.0.0",
-                    "published_by": {
-                        "id": 5,
-                        "login": "otheruser",
-                        "name": "Other user",
-                        "url": "https://github.com/otheruser"
-                    }
-                },
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 2,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(&mut network, "third-party1", &["1.0.0", "9.0.0", "10.0.0"]);
+    MockRegistryBuilder::new()
+        .user(2, "testuser", "Test user")
+        .user(5, "otheruser", "Other user")
+        .package(
+            "third-party1",
+            &[
+                reg_published_by(ver(1), None, "2022-10-12"),
+                reg_published_by(ver(9), Some(5), "2022-10-12"),
+                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+            ],
+        )
+        .serve(&mut network);
 
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");
@@ -553,104 +461,30 @@ fn mock_trust_flow_all() {
     };
 
     let mut network = Network::new_mock();
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/third-party1",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "1.0.0",
-                },
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "9.0.0",
-                    "published_by": {
-                        "id": 5,
-                        "login": "otheruser",
-                        "name": "Other user",
-                        "url": "https://github.com/otheruser"
-                    }
-                },
-                {
-                    "crate": "third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 2,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(&mut network, "third-party1", &["1.0.0", "9.0.0", "10.0.0"]);
-
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/transitive-third-party1",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "transitive-third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "1.0.0",
-                },
-                {
-                    "crate": "transitive-third-party1",
-                    "created_at": "2022-10-12T04:51:37.251648+00:00",
-                    "num": "9.0.0",
-                    "published_by": {
-                        "id": 2,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-                {
-                    "crate": "transitive-third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 2,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(
-        &mut network,
-        "transitive-third-party1",
-        &["1.0.0", "9.0.0", "10.0.0"],
-    );
-
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/third-party2",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "third-party2",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 2,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(&mut network, "third-party2", &["10.0.0"]);
+    MockRegistryBuilder::new()
+        .user(2, "testuser", "Test user")
+        .user(5, "otheruser", "Other user")
+        .package(
+            "third-party1",
+            &[
+                reg_published_by(ver(1), None, "2022-10-12"),
+                reg_published_by(ver(9), Some(5), "2022-10-12"),
+                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+            ],
+        )
+        .package(
+            "transitive-third-party1",
+            &[
+                reg_published_by(ver(1), None, "2022-10-12"),
+                reg_published_by(ver(9), Some(2), "2022-10-12"),
+                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+            ],
+        )
+        .package(
+            "third-party2",
+            &[reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12")],
+        )
+        .serve(&mut network);
 
     let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
         .expect("store acquisition failed");

@@ -1,50 +1,47 @@
 use super::*;
 
+fn build_registry(network: &mut Network, extra_packages: &[&str]) {
+    let mut packages = vec![
+        "root-package",
+        "first-party",
+        "firstA",
+        "firstAB",
+        "firstB",
+        "firstB-nodeps",
+        "descriptive",
+    ];
+    packages.extend_from_slice(extra_packages);
+
+    let mut registry = MockRegistryBuilder::new();
+    registry.user(1, "user1", "User One");
+    for package in packages {
+        registry.package_m(
+            package,
+            CratesAPICrateMetadata {
+                description: Some(if package == "descriptive" {
+                    "descriptive".to_owned()
+                } else {
+                    "whatever".to_owned()
+                }),
+                repository: None,
+            },
+            &[reg_published_by(ver(DEFAULT_VER), Some(1), "2022-01-01")],
+        );
+    }
+    registry.serve(network);
+}
+
 fn get_audit_as_crates_io(cfg: &Config, store: &Store, add_packages_to_index: bool) -> String {
     let mut cache = crate::storage::Cache::acquire(cfg).unwrap();
     let mut network = crate::network::Network::new_mock();
-    if add_packages_to_index {
-        network.mock_serve_json(
-            "https://crates.io/api/v1/crates/first",
-            &serde_json::json!({
-                "crate": { "description": "whatever" },
-                "versions": [
-                    {
-                        "crate": "first",
-                        "created_at": "2022-01-01T00:00:00.000000+00:00",
-                        "num": "10.0.0",
-                        "published_by": {
-                            "id": 1,
-                            "login": "user1",
-                            "name": "User One",
-                            "url": "https://github.com/user1"
-                        }
-                    }
-                ]
-            }),
-        );
-        network_mock_index(&mut network, "first", &["10.0.0"]);
-        network.mock_serve_json(
-            "https://crates.io/api/v1/crates/root",
-            &serde_json::json!({
-                "crate": { "description": "whatever" },
-                "versions": [
-                    {
-                        "crate": "root",
-                        "created_at": "2022-01-01T00:00:00.000000+00:00",
-                        "num": "10.0.0",
-                        "published_by": {
-                            "id": 1,
-                            "login": "user1",
-                            "name": "User One",
-                            "url": "https://github.com/user1"
-                        }
-                    }
-                ]
-            }),
-        );
-        network_mock_index(&mut network, "root", &["10.0.0"]);
-    }
+    build_registry(
+        &mut network,
+        if add_packages_to_index {
+            &["first", "root"]
+        } else {
+            &[]
+        },
+    );
     let res = tokio::runtime::Handle::current().block_on(crate::check_audit_as_crates_io(
         cfg,
         store,
@@ -59,7 +56,8 @@ fn get_audit_as_crates_io(cfg: &Config, store: &Store, add_packages_to_index: bo
 
 fn get_audit_as_crates_io_json(cfg: &Config, store: &Store) -> String {
     let mut cache = crate::storage::Cache::acquire(cfg).unwrap();
-    let network = crate::network::Network::new_mock();
+    let mut network = crate::network::Network::new_mock();
+    build_registry(&mut network, &[]);
     let res = tokio::runtime::Handle::current().block_on(crate::check_audit_as_crates_io(
         cfg,
         store,

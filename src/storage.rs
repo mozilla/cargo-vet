@@ -1732,7 +1732,7 @@ impl Cache {
                 state: Mutex::new(CacheState {
                     diff_cache: DiffCache::default(),
                     command_history: CommandHistory::default(),
-                    crates_cache: crate::tests::mock_crates_cache(),
+                    crates_cache: CratesCache::default(),
                     fetched_packages: FastMap::new(),
                     diffed: FastMap::new(),
                 }),
