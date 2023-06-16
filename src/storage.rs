@@ -2557,6 +2557,8 @@ impl<'a> UpdateCratesCache<'a> {
             _ => write!(url, "{}/{}/{name}", &name[0..2], &name[2..4]),
         }
         .expect("writing to a String should not fail");
+        // Crate index always use lowercases, but crate name may contain uppercase characters.
+        url.make_ascii_lowercase();
         let url = Url::parse(&url).expect("invalid crate name");
 
         let response = self.try_download(network, url).await?;
