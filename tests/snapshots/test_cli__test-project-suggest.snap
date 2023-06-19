@@ -5,6 +5,8 @@ expression: format_outputs(&output)
 stdout:
 recommended audits for safe-to-deploy:
     Command                                               Publisher      Used By                                              Audit Size
+    cargo vet diff proc-macro2 1.0.37 1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9
+                                                          UNKNOWN        test-project                                         3 files changed, 63 insertions(+), 7 deletions(-)
     cargo vet inspect tinyvec_macros 0.1.0                Soveu          tinyvec                                              81 lines
     cargo vet inspect matches 0.1.9                       SimonSapin     url, idna, and form_urlencoded                       210 lines
     cargo vet inspect foreign-types-shared 0.1.1          UNKNOWN        foreign-types                                        302 lines
@@ -66,9 +68,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect schannel 0.1.19                     steffengy      native-tls                                           4601 lines
     cargo vet inspect textwrap 0.15.0                     mgeisler       clap                                                 5196 lines
     cargo vet inspect log 0.4.16                          KodrAus        mio, want, reqwest, native-tls, and 1 other          5625 lines
-    cargo vet inspect proc-macro2 1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9
-                                                          UNKNOWN        test-project                                         5691 lines
-    cargo vet inspect proc-macro2 1.0.37                  dtolnay        syn, quote, and 3 others                             5695 lines
+    cargo vet inspect proc-macro2 1.0.37                  dtolnay        syn, quote, test-project, and 3 others               5695 lines
     cargo vet inspect socket2 0.4.4                       Thomasdezeeuw  hyper and tokio                                      6011 lines
     cargo vet inspect pin-project-lite 0.2.8              taiki-e        hyper, tokio, reqwest, and 4 others                  6100 lines
     cargo vet inspect tracing-core 0.1.25                 hawkw          tracing                                              6156 lines
@@ -112,7 +112,7 @@ recommended audits for safe-to-run:
     Command                              Publisher  Used By  Audit Size
     cargo vet inspect hermit-abi 0.1.19  stlankes   atty     932 lines
 
-estimated audit backlog: 1712738 lines
+estimated audit backlog: 1707117 lines
 
 Use |cargo vet certify| to record the audits.
 

@@ -1686,17 +1686,18 @@ impl<'a> ResolveReport<'a> {
                         .expect("failed package without ResolveResults?");
 
                     // Precompute some "notable" parents
-                    let notable_parents = self.graph.nodes[failure_idx]
+                    let notable_parents: Vec<_> = self.graph.nodes[failure_idx]
                         .reverse_deps
                         .iter()
                         .map(|&parent| self.graph.nodes[parent].name.to_string())
                         .collect();
 
-                    let suggested_diff = suggest_delta(
+                    let Some((suggested_diff, extra_suggested_diff)) = suggest_delta(
                         &cfg.metadata,
                         network,
                         &cache,
-                        package,
+                        package.name,
+                        &package.version,
                         audit_failure
                             .criteria_failures
                             .indices()
@@ -1705,7 +1706,9 @@ impl<'a> ResolveReport<'a> {
                             }),
                         &warnings,
                     )
-                    .await?;
+                    .await else {
+                        return vec![];
+                    };
 
                     // Attempt to look up the publisher of the target version
                     // for the suggested diff, and also record whether the given
@@ -1788,6 +1791,11 @@ impl<'a> ResolveReport<'a> {
 
                     let mut registry_suggestion: Vec<_> = join_all(registry.iter().flatten().map(
                         |(name, entry, audits)| async {
+                            // Don't search for git deltas in the registry.
+                            if suggested_diff.to.git_rev.is_some() {
+                                return None;
+                            }
+
                             let audit_graph = AuditGraph::build(
                                 &store,
                                 &self.criteria_mapper,
@@ -1796,6 +1804,14 @@ impl<'a> ResolveReport<'a> {
                             )
                             .ok()?;
 
+                            // If we have an extra diff, only try to search for
+                            // a path to the "from" version in that diff, to
+                            // make the results more comparable.
+                            let target_version = extra_suggested_diff
+                                .as_ref()
+                                .and_then(|d| d.from.as_ref())
+                                .unwrap_or(&package.version);
+
                             let failures: Vec<_> = audit_failure
                                 .criteria_failures
                                 .indices()
@@ -1803,18 +1819,19 @@ impl<'a> ResolveReport<'a> {
                                     audit_graph
                                         .search(
                                             criteria_idx,
-                                            &package.version,
+                                            target_version,
                                             SearchMode::PreferExemptions,
                                         )
                                         .err()
                                 })
                                 .collect();
 
-                            let registry_suggested_diff = suggest_delta(
+                            let (registry_suggested_diff, _) = suggest_delta(
                                 &cfg.metadata,
                                 network,
                                 &cache,
-                                package,
+                                package.name,
+                                target_version,
                                 failures.iter(),
                                 &warnings,
                             )
@@ -1839,16 +1856,29 @@ impl<'a> ResolveReport<'a> {
                     .collect();
                     registry_suggestion.sort_by_key(|suggestion| suggestion.diff.diffstat.count());
 
-                    Some(SuggestItem {
-                        package: failure_idx,
-                        suggested_diff,
-                        suggested_criteria: audit_failure.criteria_failures.clone(),
-                        notable_parents,
-                        publisher_login,
-                        trust_hint,
-                        is_sole_publisher,
-                        registry_suggestion,
-                    })
+                    extra_suggested_diff
+                        .into_iter()
+                        .map(|suggested_diff| SuggestItem {
+                            package: failure_idx,
+                            suggested_diff,
+                            suggested_criteria: audit_failure.criteria_failures.clone(),
+                            notable_parents: notable_parents.clone(),
+                            publisher_login: None,
+                            trust_hint: None,
+                            is_sole_publisher: false,
+                            registry_suggestion: vec![],
+                        })
+                        .chain([SuggestItem {
+                            package: failure_idx,
+                            suggested_diff,
+                            suggested_criteria: audit_failure.criteria_failures.clone(),
+                            notable_parents: notable_parents.clone(),
+                            publisher_login,
+                            trust_hint,
+                            is_sole_publisher,
+                            registry_suggestion,
+                        }])
+                        .collect()
                 },
             )))
             .into_iter()
@@ -2446,13 +2476,14 @@ async fn suggest_delta(
     metadata: &cargo_metadata::Metadata,
     network: Option<&Network>,
     cache: &Cache,
-    package: &PackageNode<'_>,
+    package_name: PackageStr<'_>,
+    package_version: &VetVersion,
     failures: impl Iterator<Item = &SearchFailure>,
     warnings: &RefCell<Vec<String>>,
-) -> Option<DiffRecommendation> {
+) -> Option<(DiffRecommendation, Option<DiffRecommendation>)> {
     // Fetch the set of known versions from crates.io so we know which versions
     // we'll have sources for.
-    let known_versions = cache.get_versions(network, package.name).await.ok();
+    let known_versions = cache.get_versions(network, package_name).await.ok();
 
     // Collect up the details of how we failed
     struct Reachable<'a> {
@@ -2481,7 +2512,7 @@ async fn suggest_delta(
                 let Some(ver) = ver else { return true; };
                 // We only have git sources for the package itself.
                 if ver.git_rev.is_some() {
-                    return ver == &package.version;
+                    return ver == package_version;
                 }
                 // We have sources if the version has been published to crates.io.
                 //
@@ -2504,34 +2535,75 @@ async fn suggest_delta(
         }
     }
 
-    let Some(Reachable { from_root, from_target }) = &reachable else {
+    let Some(Reachable { from_root, from_target }) = &mut reachable else {
         // Nothing failed, return a dummy suggestion for an empty diff.
-        return Some(DiffRecommendation {
-            from: Some(package.version.clone()),
-            to: package.version.clone(),
-            diffstat: DiffStat { insertions: 0, deletions: 0, files_changed: 0 },
-        });
+        return Some((
+            DiffRecommendation {
+                from: Some(package_version.clone()),
+                to: package_version.clone(),
+                diffstat: DiffStat { insertions: 0, deletions: 0, files_changed: 0 },
+            },
+            None,
+        ));
     };
 
+    // If we have a git revision, we want to ensure the nearest published
+    // version has been audited before we suggest an audit for the git revision
+    // itself.
+    let published_version;
+    let mut extra_delta = None;
+    if package_version.git_rev.is_some() {
+        // Find the largest published revision with an equal or lower semver
+        // than the git revision. This will be the published version we
+        // encourage auditing first.
+        let closest_below = if let Some(known_versions) = &known_versions {
+            known_versions
+                .iter()
+                .filter(|&v| v <= &package_version.semver)
+                .max()
+        } else {
+            // For testing fallbacks, assume the bare version has been published
+            // to crates.io.
+            Some(&package_version.semver)
+        };
+        published_version = closest_below.map(|semver| VetVersion {
+            semver: semver.clone(),
+            git_rev: None,
+        });
+        // If the closest published version is not already audited, replace the
+        // target version with `published_version` in the reachable from target
+        // set, ensuring that a delta to that version is suggested rather than a
+        // full audit for the git revision.
+        if !from_root.contains(&published_version) {
+            from_target.remove(&Some(package_version.clone()));
+            if from_target.insert(&published_version) {
+                extra_delta = Some(Delta {
+                    from: published_version.clone(),
+                    to: package_version.clone(),
+                });
+            }
+        }
+    }
+
     // Now suggest solutions of those failures
-    let mut candidates = SortedSet::new();
-    for &dest in from_target {
+    let mut candidates = Vec::new();
+    for &dest in &*from_target {
         let closest_above = from_root.range::<&Option<VetVersion>, _>(dest..).next();
         let closest_below = from_root
             .range::<&Option<VetVersion>, _>(..dest)
             .next_back();
 
         for &closest in closest_below.into_iter().chain(closest_above) {
-            candidates.insert(Delta {
+            candidates.push(Delta {
                 from: closest.clone(),
                 to: dest.clone().unwrap(),
             });
         }
     }
 
-    let diffstats = join_all(candidates.iter().map(|delta| async {
+    let do_fetch_and_diffstat = |delta| async move {
         match cache
-            .fetch_and_diffstat_package(metadata, network, package.name, delta)
+            .fetch_and_diffstat_package(metadata, network, package_name, &delta)
             .await
         {
             Ok(diffstat) => Some(DiffRecommendation {
@@ -2542,20 +2614,30 @@ async fn suggest_delta(
             Err(err) => {
                 // We don't want to actually error out completely here,
                 // as other packages might still successfully diff!
-                warnings.borrow_mut().push(format!(
-                    "error diffing {}:{}: {}",
-                    package.name, package.version, err
-                ));
+                warnings
+                    .borrow_mut()
+                    .push(format!("error diffing {}:{}: {}", package_name, delta, err));
                 None
             }
         }
-    }))
-    .await;
+    };
 
-    diffstats
+    let diffstats = join_all(candidates.into_iter().map(do_fetch_and_diffstat)).await;
+
+    // If we need an "extra delta" due to a git revision, also get the diffstat
+    // for that entry.
+    let extra_diffstat = if let Some(delta) = extra_delta {
+        do_fetch_and_diffstat(delta).await
+    } else {
+        None
+    };
+
+    let recommendation = diffstats
         .into_iter()
         .flatten()
-        .min_by_key(|diff| diff.diffstat.count())
+        .min_by_key(|diff| diff.diffstat.count())?;
+
+    Some((recommendation, extra_diffstat))
 }
 
 /// Resolve which entries in the store and imports.lock are required to

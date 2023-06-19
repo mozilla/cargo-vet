@@ -381,6 +381,15 @@ impl Serialize for Delta {
     }
 }
 
+impl fmt::Display for Delta {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.from {
+            Some(from) => writeln!(f, "{} -> {}", from, self.to),
+            None => self.to.fmt(f),
+        }
+    }
+}
+
 /// An entry specifying a wildcard audit for a specific crate based on crates.io
 /// publication time and user-id.
 ///
