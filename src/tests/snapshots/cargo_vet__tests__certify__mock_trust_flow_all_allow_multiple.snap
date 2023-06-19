@@ -4,7 +4,7 @@ expression: result
 ---
 OUTPUT:
 <<<CLEAR SCREEN>>>
-choose trusted criteria for packages published by testuser (third-party2 and transitive-third-party1)
+choose trusted criteria for packages published by testuser (third-party1, third-party2, and 1 other)
   1. safe-to-run
   2. safe-to-deploy
   3. fuzzed
@@ -34,6 +34,12 @@ implies = "reviewed"
 description = "weakly reviewed"
 
 [audits]
+
+[[trusted.third-party1]]
+criteria = "reviewed"
+user-id = 2 # Test user (testuser)
+start = "2022-12-12"
+end = "2024-01-01"
 
 [[trusted.third-party2]]
 criteria = "reviewed"

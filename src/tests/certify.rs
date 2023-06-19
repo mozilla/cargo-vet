@@ -674,3 +674,154 @@ fn mock_trust_flow_all() {
 
     insta::assert_snapshot!(result);
 }
+
+#[test]
+fn mock_trust_flow_all_allow_multiple() {
+    let mock = MockMetadata::simple();
+
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = mock.metadata();
+
+    let (config, audits, imports) = files_inited(&metadata);
+
+    let output = BasicTestOutput::with_callbacks(|_| Ok("\n".to_owned()), |_| unimplemented!());
+
+    let cfg = mock_cfg_args(
+        &metadata,
+        [
+            "cargo",
+            "vet",
+            "trust",
+            "--all",
+            "testuser",
+            "--allow-multiple-publishers",
+        ],
+    );
+    let sub_args = if let Some(crate::cli::Commands::Trust(sub_args)) = &cfg.cli.command {
+        sub_args
+    } else {
+        unreachable!();
+    };
+
+    let mut network = Network::new_mock();
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/third-party1",
+        &serde_json::json!({
+            "crate": { "description": "description" },
+            "versions": [
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "1.0.0",
+                },
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "9.0.0",
+                    "published_by": {
+                        "id": 5,
+                        "login": "otheruser",
+                        "name": "Other user",
+                        "url": "https://github.com/otheruser"
+                    }
+                },
+                {
+                    "crate": "third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+            ]
+        }),
+    );
+    network_mock_index(&mut network, "third-party1", &["1.0.0", "9.0.0", "10.0.0"]);
+
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/transitive-third-party1",
+        &serde_json::json!({
+            "crate": { "description": "description" },
+            "versions": [
+                {
+                    "crate": "transitive-third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "1.0.0",
+                },
+                {
+                    "crate": "transitive-third-party1",
+                    "created_at": "2022-10-12T04:51:37.251648+00:00",
+                    "num": "9.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+                {
+                    "crate": "transitive-third-party1",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+            ]
+        }),
+    );
+    network_mock_index(
+        &mut network,
+        "transitive-third-party1",
+        &["1.0.0", "9.0.0", "10.0.0"],
+    );
+
+    network.mock_serve_json(
+        "https://crates.io/api/v1/crates/third-party2",
+        &serde_json::json!({
+            "crate": { "description": "description" },
+            "versions": [
+                {
+                    "crate": "third-party2",
+                    "created_at": "2022-12-12T04:51:37.251648+00:00",
+                    "num": "10.0.0",
+                    "published_by": {
+                        "id": 2,
+                        "login": "testuser",
+                        "name": "Test user",
+                        "url": "https://github.com/testuser"
+                    }
+                },
+            ]
+        }),
+    );
+    network_mock_index(&mut network, "third-party2", &["10.0.0"]);
+
+    let mut store = Store::mock_online(&cfg, config, audits, imports, &network, true)
+        .expect("store acquisition failed");
+
+    crate::do_cmd_trust(
+        &output.clone().as_dyn(),
+        &cfg,
+        sub_args,
+        &mut store,
+        Some(&network),
+    )
+    .expect("do_cmd_trust failed");
+
+    let audits = crate::serialization::to_formatted_toml(
+        &store.audits,
+        Some(&crate::storage::user_info_map(&store.imports)),
+    )
+    .unwrap();
+
+    let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
+
+    insta::assert_snapshot!(result);
+}

@@ -470,8 +470,12 @@ A free-form string to include with the new audit entry
 If not provided, there will be no notes.
 
 #### `--all <ALL>`
-If specified, trusts all packages with exemptions which are solely published by the
-given user
+If specified, trusts all packages with exemptions or failures which are solely published
+by the given user
+
+#### `--allow-multiple-publishers`
+If specified along with --all, also trusts packages with multiple publishers, so long as
+at least one version was published by the given user
 
 #### `-h, --help`
 Print help information

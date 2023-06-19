@@ -576,10 +576,15 @@ pub struct TrustArgs {
     /// If not provided, there will be no notes.
     #[clap(long, action)]
     pub notes: Option<String>,
-    /// If specified, trusts all packages with exemptions which are solely
-    /// published by the given user.
+    /// If specified, trusts all packages with exemptions or failures which are
+    /// solely published by the given user.
     #[clap(long, action, conflicts_with("package"))]
     pub all: Option<String>,
+    /// If specified along with --all, also trusts packages with multiple
+    /// publishers, so long as at least one version was published by the given
+    /// user.
+    #[clap(long, action, requires("all"))]
+    pub allow_multiple_publishers: bool,
 }
 
 /// Forbids the given version
