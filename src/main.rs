@@ -1273,7 +1273,7 @@ fn do_cmd_trust(
             } else {
                 return Err(miette!(
                     "The package '{}' has multiple known publishers, \
-                please explicitly specify which publisher to trust",
+                    please explicitly specify which publisher to trust",
                     package
                 ));
             }
@@ -1297,17 +1297,82 @@ fn do_cmd_trust(
             sub_args.notes.as_ref(),
         )
     } else if let Some(publisher_login) = &sub_args.all {
+        // Run the resolver against the store in "suggest" mode to discover the
+        // set of packages which either fail to audit or need exemptions.
+        let suggest_store = store.clone_for_suggest(true);
+        let report =
+            resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &suggest_store);
+        let resolver::Conclusion::FailForVet(fail) = &report.conclusion else {
+            return Err(miette!("No failing or exempted crates, trust --all will do nothing"));
+        };
+
+        // Enumerate the failed packages to collect the set of packages which
+        // will be trusted.
+        let mut failed_criteria = report.criteria_mapper.no_criteria();
+        let mut trust = Vec::new();
+        let mut skipped = Vec::new();
+        for (failure_idx, audit_failure) in &fail.failures {
+            let package = &report.graph.nodes[*failure_idx];
+
+            // Ensure the store has publisher information for this package. This
+            // is a no-op if called multiple times for the same package.
+            let publishers = store.ensure_publisher_versions(cfg, network, package.name)?;
+            let by_user = publishers
+                .iter()
+                .filter(|p| &p.user_login == publisher_login)
+                .count();
+            if by_user == 0 {
+                continue; // never published by this user
+            }
+
+            // Record if we're skipping this package due to multiple publishers.
+            if by_user != publishers.len() && !sub_args.allow_multiple_publishers {
+                skipped.push(package.name);
+            } else {
+                trust.push(package.name);
+                failed_criteria.unioned_with(&audit_failure.criteria_failures);
+            }
+        }
+        trust.sort();
+        trust.dedup();
+
+        // Delay warning about skipped entries until after `criteria_picker`, as
+        // that may clear the terminal.
+        let maybe_warn_skipped = || {
+            if !skipped.is_empty() {
+                skipped.sort();
+                skipped.dedup();
+                warn!(
+                    "Skipped {} due to multiple publishers",
+                    string_format::FormatShortList::new(skipped)
+                );
+                warn!("  Run with --allow-multiple-publishers to also trust these packages");
+            }
+        };
+
+        if trust.is_empty() {
+            maybe_warn_skipped();
+            return Err(miette!(
+                "No failing or exempted packages published by {published_login}"
+            ));
+        }
+
         let criteria_names = criteria_picker(
             out,
             &store.audits.criteria,
             if sub_args.criteria.is_empty() {
-                vec![format::SAFE_TO_DEPLOY.to_owned()]
+                report
+                    .criteria_mapper
+                    .criteria_names(&failed_criteria)
+                    .map(|s| s.to_owned())
+                    .collect()
             } else {
                 sub_args.criteria.clone()
             },
             if sub_args.criteria.is_empty() {
                 Some(format!(
-                    "choose trusted criteria for packages published by {publisher_login}"
+                    "choose trusted criteria for packages published by {publisher_login} ({})",
+                    string_format::FormatShortList::new(trust.clone())
                 ))
             } else {
                 None
@@ -1315,28 +1380,9 @@ fn do_cmd_trust(
             .as_ref(),
         )?;
 
-        let exemptions = store.config.exemptions.clone();
-        for package in exemptions.keys() {
-            let publishers = store.ensure_publisher_versions(cfg, network, package)?;
+        maybe_warn_skipped();
 
-            // Skip crates whose exempted versions were not published by this user.
-            if !exemptions[package]
-                .iter()
-                .map(|exemption| publishers.iter().find(|p| p.version == exemption.version))
-                .any(|publisher| publisher.map_or(false, |p| p.user_login == publisher_login[..]))
-            {
-                continue;
-            }
-
-            // Skip crates published partially but not exclusively but this user (with a note).
-            if publishers
-                .iter()
-                .any(|publisher| publisher.user_login != publisher_login[..])
-            {
-                warn!("Skipping {} because it has multiple publishers", package);
-                continue;
-            }
-
+        for package in &trust {
             apply_cmd_trust(
                 out,
                 cfg,
