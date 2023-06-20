@@ -132,6 +132,11 @@ impl CriteriaMapper {
         CriteriaSet::none(self.len())
     }
 
+    /// Get a CriteriaSet of the correct size for this CriteriaMap containing all criteria
+    pub fn all_criteria(&self) -> CriteriaSet {
+        CriteriaSet::all(self.len())
+    }
+
     /// Like [`CriteriaSet::indices`] but uses knowledge of things like
     /// `implies` relationships to remove redundant information. For
     /// instance, if safe-to-deploy is set, we don't also yield safe-to-run.
@@ -181,6 +186,13 @@ impl CriteriaSet {
             "{MAX_CRITERIA} was not Enough For Everyone ({count} criteria)"
         );
         CriteriaSet(0)
+    }
+    pub fn all(count: usize) -> Self {
+        assert!(
+            count <= MAX_CRITERIA,
+            "{MAX_CRITERIA} was not Enough For Everyone ({count} criteria)"
+        );
+        CriteriaSet((1u64 << count).wrapping_sub(1))
     }
     pub fn set_criteria(&mut self, idx: usize) {
         self.0 |= 1 << idx;

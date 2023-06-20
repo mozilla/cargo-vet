@@ -1,0 +1,28 @@
+---
+source: src/tests/unpublished.rs
+expression: output
+---
+audits.toml: (unchanged)
+config.toml:
+ 
+ # cargo-vet config file
+ 
+ [cargo-vet]
+ version = "1.0"
+ 
+ [policy.descriptive]
+ audit-as-crates-io = true
++
++[[exemptions.descriptive]]
++version = "9.0.0"
++criteria = "safe-to-deploy"
+
+imports.lock:
+ 
+ # cargo-vet imports lock
++
++[[unpublished.descriptive]]
++version = "10.0.0"
++audited_as = "9.0.0"
+
+

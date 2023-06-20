@@ -507,7 +507,9 @@ This subcommand accepts all the [global options](#global-options)
 ### SUBCOMMANDS
 * [exemptions](#cargo-vet-exemptions): Regenerate your exemptions to make `check` pass minimally
 * [imports](#cargo-vet-imports): Regenerate your imports and accept changes to criteria
-* [audit-as-crates-io](#cargo-vet-audit-as-crates-io): Regenerate you audit-as-crates-io entries to make `check` pass
+* [audit-as-crates-io](#cargo-vet-audit-as-crates-io): Add `audit-as-crates-io` to the policy entry for all crates which require one
+* [unpublished](#cargo-vet-unpublished): Remove all outdated `unpublished` entries for crates which have since been published, or
+should now be audited as a more-recent version
 * [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 
 <br><br><br>
@@ -555,13 +557,34 @@ This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet audit-as-crates-io
-Regenerate you audit-as-crates-io entries to make `check` pass
+Add `audit-as-crates-io` to the policy entry for all crates which require one.
 
-This will just set any problematic entries to `audit-as-crates-io = false`.
+Crates which have a matching `description` and `repository` entry to a published crate on crates.io
+will be marked as `audit-as-crates-io = true`.
 
 ### USAGE
 ```
 cargo vet regenerate audit-as-crates-io [OPTIONS]
+```
+
+### OPTIONS
+#### `-h, --help`
+Print help information
+
+### GLOBAL OPTIONS
+This subcommand accepts all the [global options](#global-options)
+
+<br><br><br>
+## cargo vet unpublished
+Remove all outdated `unpublished` entries for crates which have since been published, or should now
+be audited as a more-recent version.
+
+Unlike `cargo vet prune`, this will remove outdated `unpublished` entries even if it will cause
+`check` to start failing.
+
+### USAGE
+```
+cargo vet regenerate unpublished [OPTIONS]
 ```
 
 ### OPTIONS

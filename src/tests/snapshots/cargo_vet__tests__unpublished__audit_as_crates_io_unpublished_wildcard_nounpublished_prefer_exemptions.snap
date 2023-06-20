@@ -1,0 +1,29 @@
+---
+source: src/tests/unpublished.rs
+expression: output
+---
+audits.toml: (unchanged)
+config.toml: (unchanged)
+imports.lock:
+ 
+ # cargo-vet imports lock
+ 
++[[unpublished.descriptive]]
++version = "10.0.0"
++audited_as = "9.0.0"
++
+ [[publisher.descriptive]]
+ version = "8.0.0"
+ when = "2022-12-15"
+ user-id = 1
+ user-login = "user1"
+ user-name = "User One"
++
++[[publisher.descriptive]]
++version = "9.0.0"
++when = "2022-12-15"
++user-id = 1
++user-login = "user1"
++user-name = "User One"
+
+

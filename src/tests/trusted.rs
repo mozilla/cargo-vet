@@ -120,26 +120,13 @@ fn trusted_suggest_local() {
     );
 
     let mut network = Network::new_mock();
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/transitive-third-party1",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "transitive-third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 1,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(&mut network, "transitive-third-party1", &["10.0.0"]);
+    MockRegistryBuilder::new()
+        .user(1, "testuser", "Test user")
+        .package(
+            "transitive-third-party1",
+            &[reg_published_by(ver(DEFAULT_VER), Some(1), "2022-12-12")],
+        )
+        .serve(&mut network);
 
     let cfg = mock_cfg(&metadata);
 
@@ -179,26 +166,13 @@ fn trusted_suggest_import() {
 
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/transitive-third-party1",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "transitive-third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 1,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(&mut network, "transitive-third-party1", &["10.0.0"]);
+    MockRegistryBuilder::new()
+        .user(1, "testuser", "Test user")
+        .package(
+            "transitive-third-party1",
+            &[reg_published_by(ver(DEFAULT_VER), Some(1), "2022-12-12")],
+        )
+        .serve(&mut network);
 
     let cfg = mock_cfg(&metadata);
 
@@ -247,26 +221,13 @@ fn trusted_suggest_import_multiple() {
     let mut network = Network::new_mock();
     network.mock_serve_toml(FOREIGN_URL, &new_foreign_audits);
     network.mock_serve_toml(OTHER_FOREIGN_URL, &new_foreign_audits);
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/transitive-third-party1",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "transitive-third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 1,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(&mut network, "transitive-third-party1", &["10.0.0"]);
+    MockRegistryBuilder::new()
+        .user(1, "testuser", "Test user")
+        .package(
+            "transitive-third-party1",
+            &[reg_published_by(ver(DEFAULT_VER), Some(1), "2022-12-12")],
+        )
+        .serve(&mut network);
 
     let cfg = mock_cfg(&metadata);
 
@@ -294,41 +255,17 @@ fn trusted_suggest_local_ambiguous() {
     );
 
     let mut network = Network::new_mock();
-    network.mock_serve_json(
-        "https://crates.io/api/v1/crates/transitive-third-party1",
-        &serde_json::json!({
-            "crate": { "description": "description" },
-            "versions": [
-                {
-                    "crate": "transitive-third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "9.0.0",
-                    "published_by": {
-                        "id": 2,
-                        "login": "otheruser",
-                        "name": "Other user",
-                        "url": "https://github.com/otheruser"
-                    }
-                },
-                {
-                    "crate": "transitive-third-party1",
-                    "created_at": "2022-12-12T04:51:37.251648+00:00",
-                    "num": "10.0.0",
-                    "published_by": {
-                        "id": 1,
-                        "login": "testuser",
-                        "name": "Test user",
-                        "url": "https://github.com/testuser"
-                    }
-                },
-            ]
-        }),
-    );
-    network_mock_index(
-        &mut network,
-        "transitive-third-party1",
-        &["9.0.0", "10.0.0"],
-    );
+    MockRegistryBuilder::new()
+        .user(1, "testuser", "Test user")
+        .user(2, "otheruser", "Other user")
+        .package(
+            "transitive-third-party1",
+            &[
+                reg_published_by(ver(9), Some(2), "2022-12-12"),
+                reg_published_by(ver(DEFAULT_VER), Some(1), "2022-12-12"),
+            ],
+        )
+        .serve(&mut network);
 
     let cfg = mock_cfg(&metadata);
 

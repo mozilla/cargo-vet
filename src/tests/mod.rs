@@ -12,10 +12,11 @@ use serde_json::{json, Value};
 
 use crate::{
     format::{
-        AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesPublisher, CriteriaEntry, CriteriaMap,
-        CriteriaName, CriteriaStr, ExemptedDependency, ImportsFile, MetaConfig, PackageName,
-        PackagePolicyEntry, PackageStr, PolicyEntry, SortedMap, SortedSet, TrustEntry, VersionReq,
-        VetVersion, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesAPICrate, CratesAPICrateMetadata,
+        CratesAPIUser, CratesAPIVersion, CratesPublisher, CratesUserId, CriteriaEntry, CriteriaMap,
+        CriteriaName, CriteriaStr, ExemptedDependency, FastMap, ImportsFile, MetaConfig,
+        PackageName, PackagePolicyEntry, PackageStr, PolicyEntry, SortedMap, SortedSet, TrustEntry,
+        VersionReq, VetVersion, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     git_tool::Editor,
     network::Network,
@@ -54,6 +55,7 @@ mod registry;
 mod renew;
 mod store_parsing;
 mod trusted;
+mod unpublished;
 mod vet;
 mod violations;
 mod wildcard;
@@ -95,56 +97,6 @@ lazy_static::lazy_static! {
         tokio::runtime::Runtime::new().unwrap()
     };
 
-}
-
-pub fn mock_crates_cache() -> crate::format::CratesCache {
-    let now: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
-    let mut cache = crate::format::CratesCache::default();
-
-    for pkg_name in [
-        "root-package",
-        "first-party",
-        "firstA",
-        "firstAB",
-        "firstB",
-        "firstB-nodeps",
-        "descriptive",
-    ] {
-        cache.crates.insert(
-            pkg_name.into(),
-            crate::format::CratesCacheEntry {
-                last_fetched: now,
-                versions: [(
-                    semver::Version {
-                        major: DEFAULT_VER,
-                        minor: 0,
-                        patch: 0,
-                        pre: Default::default(),
-                        build: Default::default(),
-                    },
-                    Some(crate::format::CratesCacheVersionDetails {
-                        created_at: now,
-                        published_by: None,
-                    }),
-                )]
-                .into_iter()
-                .collect(),
-                metadata: Some(crate::format::CratesAPICrateMetadata {
-                    description: Some(
-                        if pkg_name == "descriptive" {
-                            "descriptive"
-                        } else {
-                            "whatever"
-                        }
-                        .into(),
-                    ),
-                    repository: None,
-                }),
-            },
-        );
-    }
-
-    cache
 }
 
 struct MockMetadata {
@@ -347,6 +299,22 @@ fn publisher_entry(version: VetVersion, user_id: u64) -> CratesPublisher {
         user_id,
         user_login: format!("user{user_id}"),
         user_name: None,
+        is_fresh_import: false,
+    }
+}
+
+fn publisher_entry_named(
+    version: VetVersion,
+    user_id: u64,
+    login: &str,
+    name: &str,
+) -> CratesPublisher {
+    CratesPublisher {
+        version,
+        when: chrono::NaiveDate::from_ymd_opt(2022, 12, 15).unwrap(),
+        user_id,
+        user_login: login.to_owned(),
+        user_name: Some(name.to_owned()),
         is_fresh_import: false,
     }
 }
@@ -900,6 +868,7 @@ fn init_files(
         trusted: SortedMap::new(),
     };
     let imports = ImportsFile {
+        unpublished: SortedMap::new(),
         publisher: SortedMap::new(),
         audits: SortedMap::new(),
     };
@@ -1217,31 +1186,148 @@ fn diff_store_commits(old: &SortedMap<String, String>, new: &SortedMap<String, S
     result
 }
 
-fn network_mock_index(network: &mut Network, package: &str, versions: &[&str]) {
-    // To keep things simple, only handle the URL for 4+ characters in package names.
-    assert!(package.len() >= 4);
-    network.mock_serve(
-        format!(
-            "https://index.crates.io/{}/{}/{package}",
-            &package[0..2],
-            &package[2..4]
-        ),
-        versions
-            .iter()
-            .map(|v| {
-                serde_json::to_string(&json!({
-                    "name": package,
-                    "vers": v,
-                    "deps": [],
-                    "cksum": "90527ab4abff2f0608cdb1a78e2349180e1d92059f59b5a65ce2a1a15a499b73",
-                    "features": {},
-                    "yanked": false
-                }))
-                .unwrap()
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
+#[derive(Clone)]
+struct MockRegistryVersion {
+    version: semver::Version,
+    published_by: Option<CratesUserId>,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+fn reg_published_by(
+    version: VetVersion,
+    published_by: Option<CratesUserId>,
+    when: &str,
+) -> MockRegistryVersion {
+    assert!(
+        version.git_rev.is_none(),
+        "cannot publish a git version to registry"
     );
+    MockRegistryVersion {
+        version: version.semver,
+        published_by,
+        created_at: chrono::DateTime::from_utc(
+            chrono::NaiveDateTime::new(
+                when.parse::<chrono::NaiveDate>().unwrap(),
+                chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+            ),
+            chrono::Utc,
+        ),
+    }
+}
+
+struct MockRegistryPackage {
+    versions: Vec<MockRegistryVersion>,
+    metadata: CratesAPICrateMetadata,
+}
+
+#[derive(Default)]
+struct MockRegistryBuilder {
+    users: FastMap<CratesUserId, CratesAPIUser>,
+    packages: FastMap<PackageName, MockRegistryPackage>,
+}
+
+impl MockRegistryBuilder {
+    fn new() -> Self {
+        Default::default()
+    }
+
+    fn user(&mut self, id: CratesUserId, login: &str, name: &str) -> &mut Self {
+        self.users.insert(
+            id,
+            CratesAPIUser {
+                id,
+                login: login.to_owned(),
+                name: Some(name.to_owned()),
+            },
+        );
+        self
+    }
+
+    fn package(&mut self, name: PackageStr<'_>, versions: &[MockRegistryVersion]) -> &mut Self {
+        self.package_m(
+            name,
+            CratesAPICrateMetadata {
+                description: None,
+                repository: None,
+            },
+            versions,
+        )
+    }
+
+    fn package_m(
+        &mut self,
+        name: PackageStr<'_>,
+        metadata: CratesAPICrateMetadata,
+        versions: &[MockRegistryVersion],
+    ) -> &mut Self {
+        // To keep things simple, only handle the URL for 4+ characters in package names for now.
+        assert!(name.len() >= 4);
+        self.packages.insert(
+            name.to_owned(),
+            MockRegistryPackage {
+                metadata,
+                versions: versions.to_owned(),
+            },
+        );
+        self
+    }
+
+    fn serve(&self, network: &mut Network) {
+        for (name, pkg) in &self.packages {
+            // Serve the index entry as part of the http index.
+            network.mock_serve(
+                format!(
+                    "https://index.crates.io/{}/{}/{name}",
+                    &name[0..2],
+                    &name[2..4]
+                ).to_ascii_lowercase(),
+               pkg.versions
+                    .iter()
+                    .map(|v| {
+                        serde_json::to_string(&json!({
+                            "name": name,
+                            "vers": &v.version,
+                            "deps": [],
+                            "cksum": "90527ab4abff2f0608cdb1a78e2349180e1d92059f59b5a65ce2a1a15a499b73",
+                            "features": {},
+                            "yanked": false
+                        }))
+                        .unwrap()
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
+
+            // Serve the crates.io API to match the http index and host extra metadata.
+            //
+            // NOTE: crates.io actually serves the API case-insensitively,
+            // unlike the http index, which is case-sensitive (and lowercase).
+            // Preserving case here matches how we currently construct the API
+            // url internally, but may need to be changed in the future.
+            network.mock_serve_json(
+                format!("https://crates.io/api/v1/crates/{name}"),
+                &CratesAPICrate {
+                    crate_data: pkg.metadata.clone(),
+                    versions: pkg
+                        .versions
+                        .iter()
+                        .map(|v| CratesAPIVersion {
+                            created_at: v.created_at,
+                            num: v.version.clone(),
+                            published_by: v.published_by.map(|id| {
+                                let user = &self.users[&id];
+                                CratesAPIUser {
+                                    id,
+                                    login: user.login.clone(),
+                                    name: user.name.clone(),
+                                }
+                            }),
+                        })
+                        .collect(),
+                },
+            )
+        }
+    }
 }
 
 // TESTING BACKLOG:

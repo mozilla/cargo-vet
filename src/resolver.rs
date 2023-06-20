@@ -58,7 +58,7 @@ use crate::format::{
     DiffStat, ExemptedDependency, FastMap, FastSet, ImportName, ImportsFile, JsonPackage,
     JsonReport, JsonReportConclusion, JsonReportFailForVet, JsonReportFailForViolationConflict,
     JsonReportSuccess, JsonSuggest, JsonSuggestItem, JsonVetFailure, PackageName, PackageStr,
-    Policy, VetVersion, WildcardEntry,
+    Policy, UnpublishedEntry, VetVersion, WildcardEntry,
 };
 use crate::format::{SortedMap, SortedSet};
 use crate::network::Network;
@@ -299,6 +299,8 @@ pub enum DeltaEdgeOrigin {
     Trusted { publisher_index: usize },
     /// This edge represents an exemption from the local config.toml.
     Exemption { exemption_index: usize },
+    /// This edge represents an unpublished entry in imports.lock.
+    Unpublished { unpublished_index: usize },
     /// This edge represents brand new exemption which didn't previously exist
     /// in the audit graph. Will only ever be produced from
     /// SearchMode::RegenerateExemptions.
@@ -322,6 +324,9 @@ pub enum RequiredEntry {
     },
     Exemption {
         exemption_index: usize,
+    },
+    Unpublished {
+        unpublished_index: usize,
     },
     // NOTE: This variant must come last, as code in `update_store` depends on
     // `FreshExemption` entries sorting after all other entries.
@@ -956,8 +961,15 @@ fn resolve_audits(
                         needed_exemptions |= path
                             .iter()
                             .any(|o| matches!(o, DeltaEdgeOrigin::Exemption { .. }));
-                        directly_exempted |=
-                            path.len() == 1 && matches!(path[0], DeltaEdgeOrigin::Exemption { .. });
+                        // Ignore `Unpublished` entries when deciding if a crate
+                        // is directly exempted.
+                        directly_exempted |= path.iter().all(|o| {
+                            matches!(
+                                o,
+                                DeltaEdgeOrigin::Exemption { .. }
+                                    | DeltaEdgeOrigin::Unpublished { .. }
+                            )
+                        });
                     }
                     Err(_) => criteria_failures.set_criteria(criteria_idx),
                 }
@@ -1096,6 +1108,12 @@ impl<'a> AuditGraph<'a> {
             .map(|v| &v[..])
             .unwrap_or(&[]);
 
+        let unpublished = store
+            .unpublished()
+            .get(package)
+            .map(|v| &v[..])
+            .unwrap_or(&[]);
+
         let exemptions = store.config.exemptions.get(package);
 
         let mut forward_audits = DirectedAuditGraph::new();
@@ -1191,6 +1209,28 @@ impl<'a> AuditGraph<'a> {
                     });
                 }
             }
+        }
+
+        // For each unpublished entry for the crate we're aware of, generate a delta audit for that edge.
+        for (unpublished_index, unpublished) in unpublished.iter().enumerate() {
+            let from_ver = Some(&unpublished.audited_as);
+            let to_ver = Some(&unpublished.version);
+            let criteria = criteria_mapper.all_criteria();
+            let origin = DeltaEdgeOrigin::Unpublished { unpublished_index };
+            let is_fresh_import = unpublished.is_fresh_import;
+
+            forward_audits.entry(from_ver).or_default().push(DeltaEdge {
+                version: to_ver,
+                criteria: criteria.clone(),
+                origin: origin.clone(),
+                is_fresh_import,
+            });
+            backward_audits.entry(to_ver).or_default().push(DeltaEdge {
+                version: from_ver,
+                criteria,
+                origin,
+                is_fresh_import,
+            });
         }
 
         // Exempted entries are equivalent to full-audits
@@ -1398,8 +1438,10 @@ fn search_for_path(
     enum CaveatLevel {
         None,
         PreferredExemption,
+        PreferredUnpublished,
         FreshImport,
         Exemption,
+        Unpublished,
         FreshExemption,
     }
 
@@ -1521,6 +1563,17 @@ fn search_for_path(
                 }
                 DeltaEdgeOrigin::Exemption { .. } => CaveatLevel::Exemption,
                 DeltaEdgeOrigin::FreshExemption { .. } => unreachable!(),
+                DeltaEdgeOrigin::Unpublished { .. } => match mode {
+                    // When preferring exemptions, prefer existing unpublished
+                    // entries to avoid imports.lock churn.
+                    SearchMode::PreferExemptions if !edge.is_fresh_import => {
+                        CaveatLevel::PreferredUnpublished
+                    }
+                    SearchMode::PreferExemptions => CaveatLevel::Unpublished,
+                    // Otherwise, prefer fresh to avoid outdated versions.
+                    _ if edge.is_fresh_import => CaveatLevel::PreferredUnpublished,
+                    _ => CaveatLevel::Unpublished,
+                },
                 _ if edge.is_fresh_import => CaveatLevel::FreshImport,
                 _ => CaveatLevel::None,
             };
@@ -2397,6 +2450,10 @@ async fn suggest_delta(
     failures: impl Iterator<Item = &SearchFailure>,
     warnings: &RefCell<Vec<String>>,
 ) -> Option<DiffRecommendation> {
+    // Fetch the set of known versions from crates.io so we know which versions
+    // we'll have sources for.
+    let known_versions = cache.get_versions(network, package.name).await.ok();
+
     // Collect up the details of how we failed
     struct Reachable<'a> {
         from_root: SortedSet<&'a Option<VetVersion>>,
@@ -2419,17 +2476,20 @@ async fn suggest_delta(
             from_root.retain(|ver| reachable_from_root.contains(ver));
             from_target.retain(|ver| reachable_from_target.contains(ver));
         } else {
-            // We only have sources available for the package itself, and any
-            // non-git versions.
             let version_has_sources = |ver: &&Option<VetVersion>| -> bool {
-                ver.as_ref() == Some(&package.version)
-                    || !matches!(
-                        ver,
-                        Some(VetVersion {
-                            git_rev: Some(_),
-                            ..
-                        })
-                    )
+                // We always have sources for an empty crate.
+                let Some(ver) = ver else { return true; };
+                // We only have git sources for the package itself.
+                if ver.git_rev.is_some() {
+                    return ver == &package.version;
+                }
+                // We have sources if the version has been published to crates.io.
+                //
+                // For testing fallbacks, assume we always have sources if the
+                // index is unavailable.
+                known_versions
+                    .as_ref()
+                    .map_or(true, |versions| versions.contains(&ver.semver))
             };
             reachable = Some(Reachable {
                 from_root: reachable_from_root
@@ -2588,6 +2648,9 @@ fn resolve_package_required_entries(
                     DeltaEdgeOrigin::Trusted { publisher_index } => {
                         add_entry(RequiredEntry::Publisher { publisher_index })
                     }
+                    DeltaEdgeOrigin::Unpublished { unpublished_index } => {
+                        add_entry(RequiredEntry::Unpublished { unpublished_index })
+                    }
                     DeltaEdgeOrigin::StoredLocalAudit { .. } => {}
                 }
             }
@@ -2599,6 +2662,7 @@ fn resolve_package_required_entries(
 }
 
 /// Per-package options to control store pruning.
+#[derive(Copy, Clone)]
 pub struct UpdateMode {
     pub search_mode: SearchMode,
     pub prune_exemptions: bool,
@@ -2654,6 +2718,7 @@ pub(crate) fn get_store_updates(
     let no_required_entries = Some(SortedMap::new());
 
     let mut new_imports = ImportsFile {
+        unpublished: SortedMap::new(),
         publisher: SortedMap::new(),
         audits: SortedMap::new(),
     };
@@ -2793,6 +2858,46 @@ pub(crate) fn get_store_updates(
         publishers.sort();
         if !publishers.is_empty() {
             new_imports.publisher.insert(pkgname.clone(), publishers);
+        }
+    }
+
+    // Determine which live publisher information to keep in the imports.lock file.
+    for (pkgname, unpublished) in store.unpublished() {
+        // Although `unpublished` entries are stored in imports.lock, they're
+        // more like automatically-managed delta-exemptions than imports, so
+        // we'll prune them when pruning exemptions.
+        let prune_exemptions = mode(&pkgname[..]).prune_exemptions;
+        let required_entries = required_entries
+            .get(&pkgname[..])
+            .unwrap_or(&no_required_entries);
+        let mut unpublished: Vec<_> = unpublished
+            .iter()
+            .enumerate()
+            .filter(|&(unpublished_index, entry)| {
+                // Keep existing if we're not pruning exemptions.
+                if !prune_exemptions && !entry.is_fresh_import {
+                    return true;
+                }
+
+                if let Some(required_entries) = required_entries {
+                    required_entries.contains_key(&RequiredEntry::Unpublished { unpublished_index })
+                } else {
+                    !entry.is_fresh_import
+                }
+            })
+            .map(|(_, entry)| UnpublishedEntry {
+                is_fresh_import: false,
+                ..entry.clone()
+            })
+            .collect();
+        unpublished.sort();
+        // Clean up any duplicate Unpublished entries now that `is_fresh_import`
+        // has been cleared.  This ensures that even if we end up using
+        // `PreferFreshImports` when not pruning exemptions, we won't end up
+        // with duplicate unpublished entries.
+        unpublished.dedup();
+        if !unpublished.is_empty() {
+            new_imports.unpublished.insert(pkgname.clone(), unpublished);
         }
     }
 

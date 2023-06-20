@@ -102,6 +102,7 @@ pub trait PackageExt {
     fn is_third_party(&self, policy: &Policy) -> bool;
     fn is_crates_io(&self) -> bool;
     fn policy_entry<'a>(&self, policy: &'a Policy) -> Option<&'a PolicyEntry>;
+    fn git_rev(&self) -> Option<String>;
     fn vet_version(&self) -> VetVersion;
 }
 
@@ -126,14 +127,18 @@ impl PackageExt for Package {
         policy.get(&self.name, &self.vet_version())
     }
 
+    fn git_rev(&self) -> Option<String> {
+        self.source.as_ref().and_then(|s| {
+            let git_source = s.repr.strip_prefix("git+")?;
+            let source_url = Url::parse(git_source).ok()?;
+            Some(source_url.fragment()?.to_owned())
+        })
+    }
+
     fn vet_version(&self) -> VetVersion {
         VetVersion {
             semver: self.version.clone(),
-            git_rev: self.source.as_ref().and_then(|s| {
-                let git_source = s.repr.strip_prefix("git+")?;
-                let source_url = Url::parse(git_source).ok()?;
-                Some(source_url.fragment()?.to_owned())
-            }),
+            git_rev: self.git_rev(),
         }
     }
 }
@@ -514,6 +519,7 @@ fn real_main() -> Result<(), miette::Report> {
         Some(Regenerate(AuditAsCratesIo(sub_args))) => {
             cmd_regenerate_audit_as(&out, &cfg, sub_args)
         }
+        Some(Regenerate(Unpublished(sub_args))) => cmd_regenerate_unpublished(&out, &cfg, sub_args),
         Some(Renew(sub_args)) => cmd_renew(&out, &cfg, sub_args),
         Some(Aggregate(_)) | Some(HelpMarkdown(_)) | Some(Gc(_)) => unreachable!("handled earlier"),
     }
@@ -1704,6 +1710,48 @@ fn cmd_regenerate_audit_as(
     Ok(())
 }
 
+fn cmd_regenerate_unpublished(
+    out: &Arc<dyn Out>,
+    cfg: &Config,
+    _sub_args: &RegenerateUnpublishedArgs,
+) -> Result<(), miette::Report> {
+    trace!("regenerating unpublished entries...");
+
+    if cfg.cli.locked {
+        // ERRORS: just a warning that you're holding it wrong, unclear if immediate or buffered,
+        // or if this should be a hard error, or if we should ignore the --locked flag and
+        // just do it anyway
+        writeln!(
+            out,
+            "warning: ran `regenerate unpublished` with --locked, this won't do anything!"
+        );
+        return Ok(());
+    }
+
+    let network = Network::acquire(cfg);
+    let mut store = Store::acquire(cfg, network.as_ref(), false)?;
+
+    // Strip all non-fresh entries from the unpublished table, marking the
+    // previously fresh entries as non-fresh.
+    if let Some(live_imports) = &mut store.live_imports {
+        for unpublished in live_imports.unpublished.values_mut() {
+            unpublished.retain_mut(|u| std::mem::replace(&mut u.is_fresh_import, false));
+        }
+    }
+
+    // Run a minimal store update to import new entries which would now be
+    // required for `check` to pass. Note that this won't ensure `check`
+    // actually passes after the change.
+    resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
+        search_mode: resolver::SearchMode::PreferExemptions,
+        prune_exemptions: false,
+        prune_imports: false,
+    });
+
+    store.commit()?;
+    Ok(())
+}
+
 fn cmd_renew(out: &Arc<dyn Out>, cfg: &Config, sub_args: &RenewArgs) -> Result<(), miette::Report> {
     trace!("renewing wildcard audits");
     let mut store = Store::acquire_offline(cfg)?;
@@ -1826,10 +1874,9 @@ async fn fix_audit_as(
             match error {
                 AuditAsError::NeedsAuditAs(NeedsAuditAsErrors { errors }) => {
                     for err in errors {
-                        // We'll default audit-as-crates-io to true if not only
-                        // a package with matching version exists on crates.io,
-                        // but the crate's description or repository matches as
-                        // well.
+                        // We'll default audit-as-crates-io to true if the
+                        // crate's description or repository matches an existing
+                        // package on crates.io.
                         //
                         // XXX: This is just indended to reduce the chance of
                         // false positives, but is certainly a bit of a loose
@@ -1849,26 +1896,8 @@ async fn fix_audit_as(
                                     }
                                 };
 
-                            let crates_io_versions =
-                                match cache.get_versions(network, &err.package).await {
-                                    Ok(v) => v,
-                                    Err(e) => {
-                                        warn!("crate versions error for {}: {e}", &err.package);
-                                        Default::default()
-                                    }
-                                };
-
                             cfg.metadata.packages.iter().any(|p| {
-                                p.name == err.package
-                                    && err
-                                        .version
-                                        .as_ref()
-                                        .map(|v| {
-                                            v == &p.vet_version()
-                                                && crates_io_versions.contains(&v.semver)
-                                        })
-                                        .unwrap_or(true)
-                                    && crates_api_metadata.consider_as_same(p)
+                                p.name == err.package && crates_api_metadata.consider_as_same(p)
                             })
                         } else {
                             false
@@ -2115,6 +2144,19 @@ fn cmd_check(
             } else if store.imports != pruned_imports {
                 warn!("Your supply-chain has unnecessary imports which could be pruned.");
                 warn!("  Consider running `cargo vet prune` to prune unnecessary imports.");
+            }
+
+            // Check if we have `unpublished` entries for crates which have since been published.
+            let since_published: Vec<_> = pruned_imports
+                .unpublished
+                .iter()
+                .filter(|(_, unpublished)| unpublished.iter().any(|u| !u.still_unpublished))
+                .map(|(package, _)| package)
+                .collect();
+            if !since_published.is_empty() {
+                let published = string_format::FormatShortList::new(since_published);
+                warn!("Your supply-chain depends on previously unpublished versions of {published} which have since been published.");
+                warn!("  Consider running `cargo vet regenerate unpublished` to remove these entries.");
             }
 
             // Warn about wildcard audits which will be expiring soon or have expired.
@@ -2812,12 +2854,9 @@ async fn check_audit_as_crates_io(
                 //
                 // The caching logic already does this for us as an optimization, but since we may
                 // need to look at the specific versions later, we fetch it anyway.
-                let versions = cache.get_versions(network, &package.name).await.ok();
                 let mut matches_crates_io_package = false;
-                if versions.is_some() {
-                    if let Ok(metadata) = cache.get_crate_metadata(network, &package.name).await {
-                        matches_crates_io_package = metadata.consider_as_same(package);
-                    }
+                if let Ok(metadata) = cache.get_crate_metadata(network, &package.name).await {
+                    matches_crates_io_package = metadata.consider_as_same(package);
                 }
 
                 if matches_crates_io_package && audit_policy.is_none() {
@@ -2825,16 +2864,8 @@ async fn check_audit_as_crates_io(
                     // on crates.io: having no policy is an error.
                     return Some((CheckAction::NeedAuditAs, package));
                 }
-                if audit_policy == Some(true) {
-                    // Check whether there is a matching version on crates.io. No matching
-                    // version is considered an error.
-                    if !matches_crates_io_package
-                        || !versions
-                            .expect("metadata implies versions")
-                            .contains(&package.version)
-                    {
-                        return Some((CheckAction::ShouldntBeAuditAs, package));
-                    }
+                if !matches_crates_io_package && audit_policy == Some(true) {
+                    return Some((CheckAction::ShouldntBeAuditAs, package));
                 }
                 None
             }

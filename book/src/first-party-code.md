@@ -42,6 +42,12 @@ and this is what you should review before certifying, since others in the
 ecosystem may rely on your audits when using the original crate without your
 particular modifications.
 
+If audit-as-crates-io is enabled for a path dependency with a version which has
+not been published on crates.io, cargo-vet will instead require an audit of the
+latest published version before the local version, ensuring all audits
+correspond to a crate on crates.io[^2]. If the local version is later published,
+`cargo vet` will warn you, allowing you to update your audits.
+
 ## Footnotes
 
 [^1]: To enable an easy setup experience, `cargo vet init` will attempt to guess the
@@ -51,3 +57,10 @@ present it will guess `true` if either the `description` or `repository` fields 
 `Cargo.toml` are non-empty and match the current values on crates.io. This behavior
 can also be triggered for newly-added dependencies with `cargo vet regenerate
 audit-as-crates-io`, but you should verify the results.
+
+[^2]: Which version is used for an unpublished crate will be recorded in
+imports.lock to ensure that `cargo vet` will continue to pass as new versions
+are published. Stale `unpublished` entries will be cleaned up by `prune` when
+they are no longer required for `cargo vet` to pass, and can also be regenerated
+using `cargo vet regenerate unpublished`, though this may cause `cargo vet` to
+start failing.

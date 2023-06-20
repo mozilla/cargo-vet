@@ -88,6 +88,12 @@ impl VetVersion {
             })
         }
     }
+
+    /// Check if this VetVersion exactly matches the given semver version with
+    /// no git revision metadata.
+    pub fn equals_semver(&self, semver: &semver::Version) -> bool {
+        self.git_rev.is_none() && &self.semver == semver
+    }
 }
 impl fmt::Display for VetVersion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -906,6 +912,9 @@ impl Default for CargoVetConfig {
 pub struct ImportsFile {
     #[serde(default)]
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
+    pub unpublished: SortedMap<PackageName, Vec<UnpublishedEntry>>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "SortedMap::is_empty")]
     pub publisher: SortedMap<PackageName, Vec<CratesPublisher>>,
     #[serde(default)]
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
@@ -927,6 +936,23 @@ pub struct CratesPublisher {
     pub user_login: String,
     #[serde(rename = "user-name")]
     pub user_name: Option<String>,
+    /// See `AuditEntry::is_fresh_import`.
+    #[serde(skip)]
+    pub is_fresh_import: bool,
+}
+
+// Information about a specific crate being unpublished
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct UnpublishedEntry {
+    // NOTE: This will only ever be a `semver::Version`, however the resolver
+    // code works on borrowed `VetVersion` instances, so we use one here so it
+    // is easier to use within the resolver.
+    pub version: VetVersion,
+    pub audited_as: VetVersion,
+    /// Set to `true` if `version` was not published when acquiring the Store.
+    /// Always set to `false` when locked.
+    #[serde(skip)]
+    pub still_unpublished: bool,
     /// See `AuditEntry::is_fresh_import`.
     #[serde(skip)]
     pub is_fresh_import: bool,
