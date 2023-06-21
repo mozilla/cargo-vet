@@ -696,6 +696,22 @@ stdout:
   "suggest": {
     "suggestions": [
       {
+        "name": "proc-macro2",
+        "notable_parents": "test-project",
+        "suggested_criteria": [
+          "safe-to-deploy"
+        ],
+        "suggested_diff": {
+          "from": "1.0.37",
+          "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+          "diffstat": {
+            "insertions": 63,
+            "deletions": 7,
+            "files_changed": 3
+          }
+        }
+      },
+      {
         "name": "tinyvec_macros",
         "notable_parents": "tinyvec",
         "suggested_criteria": [
@@ -1657,23 +1673,7 @@ stdout:
       },
       {
         "name": "proc-macro2",
-        "notable_parents": "test-project",
-        "suggested_criteria": [
-          "safe-to-deploy"
-        ],
-        "suggested_diff": {
-          "from": null,
-          "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
-          "diffstat": {
-            "insertions": 5691,
-            "deletions": 0,
-            "files_changed": 19
-          }
-        }
-      },
-      {
-        "name": "proc-macro2",
-        "notable_parents": "syn, quote, and 3 others",
+        "notable_parents": "syn, quote, test-project, and 3 others",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2250,6 +2250,22 @@ stdout:
     ],
     "suggest_by_criteria": {
       "safe-to-deploy": [
+        {
+          "name": "proc-macro2",
+          "notable_parents": "test-project",
+          "suggested_criteria": [
+            "safe-to-deploy"
+          ],
+          "suggested_diff": {
+            "from": "1.0.37",
+            "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+            "diffstat": {
+              "insertions": 63,
+              "deletions": 7,
+              "files_changed": 3
+            }
+          }
+        },
         {
           "name": "tinyvec_macros",
           "notable_parents": "tinyvec",
@@ -3196,23 +3212,7 @@ stdout:
         },
         {
           "name": "proc-macro2",
-          "notable_parents": "test-project",
-          "suggested_criteria": [
-            "safe-to-deploy"
-          ],
-          "suggested_diff": {
-            "from": null,
-            "to": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
-            "diffstat": {
-              "insertions": 5691,
-              "deletions": 0,
-              "files_changed": 19
-            }
-          }
-        },
-        {
-          "name": "proc-macro2",
-          "notable_parents": "syn, quote, and 3 others",
+          "notable_parents": "syn, quote, test-project, and 3 others",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3806,7 +3806,7 @@ stdout:
         }
       ]
     },
-    "total_lines": 1712738
+    "total_lines": 1707117
   }
 }
 stderr:
