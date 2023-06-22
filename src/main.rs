@@ -1359,7 +1359,7 @@ fn do_cmd_trust(
         if trust.is_empty() {
             maybe_warn_skipped();
             return Err(miette!(
-                "No failing or exempted packages published by {published_login}"
+                "No failing or exempted packages published by {publisher_login}"
             ));
         }
 
