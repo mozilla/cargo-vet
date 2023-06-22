@@ -2,11 +2,9 @@
 source: src/tests/store_parsing.rs
 expression: acquire_errors
 ---
-
   × Your cargo-vet store (supply-chain) has consistency errors
 
-Error: 
-  × A file in the store is not correctly formatted:
+Error:   × A file in the store is not correctly formatted:
   │ 
   │ --- old/config.toml
   │ +++ new/config.toml
@@ -30,8 +28,7 @@ Error:
   │  criteria = "safe-to-deploy"
   │ 
   help: run `cargo vet` without --locked to reformat files in the store
-Error: 
-  × A file in the store is not correctly formatted:
+Error:   × A file in the store is not correctly formatted:
   │ 
   │ --- old/audits.toml
   │ +++ new/audits.toml

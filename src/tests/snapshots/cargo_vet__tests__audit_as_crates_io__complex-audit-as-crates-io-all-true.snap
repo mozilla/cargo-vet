@@ -2,11 +2,9 @@
 source: src/tests/audit_as_crates_io.rs
 expression: output
 ---
-
   × There are some issues with your policy.audit-as-crates-io entries
 
-Error: 
-  × some audit-as-crates-io packages don't match published crates.io versions
+Error:   × some audit-as-crates-io packages don't match published crates.io versions
   │   rootA:10.0.0
   │   rootB:10.0.0
   help: Remove the audit-as-crates-io entries or make them `false`

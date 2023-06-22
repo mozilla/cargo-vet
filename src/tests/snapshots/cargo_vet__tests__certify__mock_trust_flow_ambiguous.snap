@@ -2,7 +2,6 @@
 source: src/tests/certify.rs
 expression: "format!(\"{error:?}\")"
 ---
-
   × The package 'third-party1' has multiple known publishers, please
   │ explicitly specify which publisher to trust
 

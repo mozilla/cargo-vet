@@ -1,12 +1,10 @@
 ---
 source: src/tests/import.rs
-expression: "format!(\"{:?}\", error)"
+expression: "format!(\"{error:?}\")"
 ---
-
   × Some of your imported audits changed their criteria descriptions
 
-Error: 
-  × peer-company's 'example' criteria changed:
+Error:   × peer-company's 'example' criteria changed:
   │ 
   │ @@ -1,4 +1,4 @@
   │  Example criteria description

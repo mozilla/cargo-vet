@@ -2,11 +2,9 @@
 source: src/tests/store_parsing.rs
 expression: acquire_errors
 ---
-
   × Your cargo-vet store (supply-chain) has consistency errors
 
-Error: 
-  × 'bad-imply' is not a valid criteria name
+Error:   × 'bad-imply' is not a valid criteria name
    ╭─[audits.toml:5:1]
  5 │ description = "great"
  6 │ implies = ["safe-to-deploy", "bad-imply"]
@@ -14,8 +12,7 @@ Error:
  7 │ 
    ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'bad' is not a valid criteria name
+Error:   × 'bad' is not a valid criteria name
     ╭─[audits.toml:8:1]
   8 │ [[audits.serde]]
   9 │ criteria = "bad"
@@ -23,8 +20,7 @@ Error:
  10 │ version = "1.0.0"
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'safe-to-jog' is not a valid criteria name
+Error:   × 'safe-to-jog' is not a valid criteria name
     ╭─[audits.toml:12:1]
  12 │ [[audits.serde]]
  13 │ criteria = "safe-to-jog"
@@ -32,8 +28,7 @@ Error:
  14 │ version = "2.0.0"
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'oops' is not a valid criteria name
+Error:   × 'oops' is not a valid criteria name
     ╭─[audits.toml:16:1]
  16 │ [[audits.serde]]
  17 │ criteria = "oops"
@@ -41,8 +36,7 @@ Error:
  18 │ delta = "1.0.0 -> 1.1.0"
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'dang' is not a valid criteria name
+Error:   × 'dang' is not a valid criteria name
     ╭─[audits.toml:20:1]
  20 │ [[audits.serde]]
  21 │ criteria = ["safe-to-run", "dang"]
@@ -50,8 +44,7 @@ Error:
  22 │ delta = "1.0.0 -> 1.1.0"
     ╰────
   help: the possible criteria are ["good", "safe-to-run", "safe-to-deploy"]
-Error: 
-  × 'no-good-bad-bad' is not a valid criteria name
+Error:   × 'no-good-bad-bad' is not a valid criteria name
     ╭─[audits.toml:24:1]
  24 │ [[audits.serde]]
  25 │ criteria = "no-good-bad-bad"
