@@ -2,11 +2,9 @@
 source: src/tests/audit_as_crates_io.rs
 expression: output
 ---
-
   × There are some issues with your policy.audit-as-crates-io entries
 
-Error: 
-  × Some non-crates.io-fetched packages match published crates.io versions
+Error:   × Some non-crates.io-fetched packages match published crates.io versions
   │   firstA:10.0.0
   │   firstAB:10.0.0
   │   firstB:10.0.0
