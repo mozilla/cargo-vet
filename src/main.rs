@@ -918,6 +918,7 @@ fn do_cmd_certify(
     let criteria = criteria_names.into_iter().map(|s| s.into()).collect();
     match kind {
         CertifyKind::Full { version } => {
+            let importable = version.git_rev.is_none();
             store
                 .audits
                 .audits
@@ -927,12 +928,14 @@ fn do_cmd_certify(
                     kind: AuditKind::Full { version },
                     criteria,
                     who,
+                    importable,
                     notes,
                     aggregated_from: vec![],
                     is_fresh_import: false,
                 });
         }
         CertifyKind::Delta { from, to } => {
+            let importable = from.git_rev.is_none() && to.git_rev.is_none();
             store
                 .audits
                 .audits
@@ -942,6 +945,7 @@ fn do_cmd_certify(
                     kind: AuditKind::Delta { from, to },
                     criteria,
                     who,
+                    importable,
                     notes,
                     aggregated_from: vec![],
                     is_fresh_import: false,
@@ -1561,6 +1565,7 @@ fn cmd_record_violation(
         kind,
         criteria,
         who,
+        importable: true,
         notes,
         aggregated_from: vec![],
         is_fresh_import: false,
@@ -2431,14 +2436,15 @@ fn do_aggregate_audits(sources: Vec<(String, AuditsFile)>) -> Result<AuditsFile,
             }
         }
         for (package_name, entries) in audit_file.audits {
-            aggregate
-                .audits
-                .entry(package_name)
-                .or_default()
-                .extend(entries.into_iter().map(|mut audit_entry| {
-                    audit_entry.aggregated_from.push(source.clone().into());
-                    audit_entry
-                }));
+            aggregate.audits.entry(package_name).or_default().extend(
+                entries
+                    .into_iter()
+                    .filter(|audit_entry| audit_entry.importable)
+                    .map(|mut audit_entry| {
+                        audit_entry.aggregated_from.push(source.clone().into());
+                        audit_entry
+                    }),
+            );
         }
         for (package_name, entries) in audit_file.wildcard_audits {
             aggregate

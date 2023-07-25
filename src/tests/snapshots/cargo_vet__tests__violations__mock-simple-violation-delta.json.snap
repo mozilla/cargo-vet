@@ -14,6 +14,7 @@ expression: json
             "version": null,
             "delta": null,
             "violation": "=5.0.0",
+            "importable": null,
             "notes": null
           },
           "audit_source": null,
@@ -22,6 +23,7 @@ expression: json
             "version": null,
             "delta": "3.0.0 -> 5.0.0",
             "violation": null,
+            "importable": null,
             "notes": null
           }
         }
@@ -34,6 +36,7 @@ expression: json
             "version": null,
             "delta": null,
             "violation": "=5.0.0",
+            "importable": null,
             "notes": null
           },
           "audit_source": null,
@@ -42,6 +45,7 @@ expression: json
             "version": null,
             "delta": "5.0.0 -> 10.0.0",
             "violation": null,
+            "importable": null,
             "notes": null
           }
         }

@@ -281,6 +281,7 @@ pub struct AuditEntry {
     pub who: Vec<Spanned<String>>,
     pub criteria: Vec<Spanned<CriteriaName>>,
     pub kind: AuditKind,
+    pub importable: bool,
     pub notes: Option<String>,
     /// Chain of sources this audit was aggregated from, most recent last.
     pub aggregated_from: Vec<Spanned<String>>,
