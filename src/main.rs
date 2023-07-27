@@ -2054,6 +2054,7 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
             })
             .arg("--no-index")
             .arg("--ignore-cr-at-eol")
+            .arg("--abbrev=7")
             .arg(&from)
             .arg(&to)
             .stdout(Stdio::piped())
