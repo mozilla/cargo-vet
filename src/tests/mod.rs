@@ -184,6 +184,7 @@ fn delta_audit(from: VetVersion, to: VetVersion, criteria: CriteriaStr) -> Audit
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Delta { from, to },
+        importable: true,
         aggregated_from: vec![],
         is_fresh_import: false,
     }
@@ -195,6 +196,7 @@ fn full_audit(version: VetVersion, criteria: CriteriaStr) -> AuditEntry {
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Full { version },
+        importable: true,
         aggregated_from: vec![],
         is_fresh_import: false,
     }
@@ -209,6 +211,7 @@ fn full_audit_m(
         notes: None,
         criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         kind: AuditKind::Full { version },
+        importable: true,
         aggregated_from: vec![],
         is_fresh_import: false,
     }
@@ -220,6 +223,7 @@ fn violation_hard(version: VersionReq) -> AuditEntry {
         notes: None,
         criteria: vec![SAFE_TO_RUN.to_string().into()],
         kind: AuditKind::Violation { violation: version },
+        importable: true,
         aggregated_from: vec![],
         is_fresh_import: false,
     }
@@ -231,6 +235,7 @@ fn violation(version: VersionReq, criteria: CriteriaStr) -> AuditEntry {
         notes: None,
         criteria: vec![criteria.to_string().into()],
         kind: AuditKind::Violation { violation: version },
+        importable: true,
         aggregated_from: vec![],
         is_fresh_import: false,
     }
@@ -245,6 +250,7 @@ fn violation_m(
         notes: None,
         criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         kind: AuditKind::Violation { violation: version },
+        importable: true,
         aggregated_from: vec![],
         is_fresh_import: false,
     }

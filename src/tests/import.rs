@@ -1510,6 +1510,12 @@ fn foreign_audit_file_to_local() {
                         version = "20.0.0"
                         unknown = "invalid unknown field"
                     },
+                    toml::toml! {
+                        criteria = "safe-to-deploy"
+                        version = "10.0.0"
+                        importable = false
+                        notes = "parses correctly, but will be ignored"
+                    },
                 ],
             ),
             (
@@ -1544,6 +1550,15 @@ fn foreign_audit_file_to_local() {
                         notes = "will not be removed"
                     },
                 ],
+            ),
+            (
+                "crate-d".to_string(),
+                vec![toml::toml! {
+                    criteria = "safe-to-deploy"
+                    version = "10.0.0"
+                    importable = false
+                    notes = "parses correctly, but will be ignored, along with the entire crate"
+                }],
             ),
         ]
         .into_iter()

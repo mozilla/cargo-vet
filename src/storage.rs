@@ -1271,6 +1271,8 @@ pub(crate) fn foreign_audit_file_to_local(
                         None
                     }
                 })
+                // Filter out non-importable audits
+                .filter(|value| value.importable)
                 .collect();
             (package, parsed)
         })

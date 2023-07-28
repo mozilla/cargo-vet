@@ -303,6 +303,7 @@ pub mod audit {
         version: Option<VetVersion>,
         delta: Option<Delta>,
         violation: Option<VersionReq>,
+        importable: Option<bool>,
         notes: Option<String>,
         #[serde(rename = "aggregated-from")]
         #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -334,6 +335,7 @@ pub mod audit {
                 notes: val.notes,
                 criteria: val.criteria,
                 kind: kind?,
+                importable: val.importable.unwrap_or(true),
                 aggregated_from: val.aggregated_from,
                 // By default, always read entries as non-fresh. The import code
                 // will set this flag to true for imported entries.
@@ -363,6 +365,7 @@ pub mod audit {
                 version,
                 delta,
                 violation,
+                importable: if val.importable { None } else { Some(false) },
                 aggregated_from: val.aggregated_from,
             }
         }
