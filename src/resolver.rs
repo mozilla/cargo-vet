@@ -187,6 +187,10 @@ pub struct PackageNode<'a> {
     pub package_id: &'a PackageId,
     /// The name of the package
     pub name: PackageStr<'a>,
+    /// list of enabled optional dependencies
+    pub enabled_deps: Vec<&'a PackageId>,
+    /// list of optional dependency names
+    pub optional_deps: Vec<&'a PackageId>,
     /// The version of this package
     pub version: VetVersion,
     /// All normal deps (shipped in the project or a proc-macro it uses)
@@ -388,6 +392,10 @@ impl<'a> DepGraph<'a> {
             .enumerate()
             .map(|(idx, pkg)| (&pkg.id, idx))
             .collect();
+        let pkgid_by_name = package_list
+            .iter()
+            .map(|pkg| (pkg.name.as_str(), &pkg.id))
+            .collect::<SortedMap<_, _>>();
 
         // Do a first-pass where we populate skeletons of the primary nodes
         // and setup the interners, which will only ever refer to these nodes
@@ -397,9 +405,36 @@ impl<'a> DepGraph<'a> {
         // Stub out the initial state of all the nodes
         for resolve_node in resolve_list {
             let package = &package_list[package_index_by_pkgid[&resolve_node.id]];
+            let enabled_deps = resolve_node
+                .features
+                .iter()
+                .flat_map(|feature| {
+                    package
+                        .features
+                        .get(feature)
+                        .map(Vec::as_slice)
+                        .unwrap_or_default()
+                        .iter()
+                })
+                // there are some internal dependencies like "rustc-std-workspace-core" which are not
+                // part of cargo metadata. They show up in the dependencies, but we just ignore them.
+                .filter(|child| child.starts_with("dep:"))
+                .filter_map(|child| pkgid_by_name.get(&child[4..]).cloned())
+                .collect();
+            let optional_deps = package
+                .dependencies
+                .iter()
+                .filter(|dep| dep.optional)
+                // there are some internal dependencies like "rustc-std-workspace-core" which are not
+                // part of cargo metadata. They show up in the dependencies, but we just ignore them.
+                .filter_map(|dep| pkgid_by_name.get(dep.name.as_str()).copied())
+                .collect();
+
             nodes.push(PackageNode {
                 package_id: &resolve_node.id,
                 name: &package.name,
+                enabled_deps,
+                optional_deps,
                 version: package.vet_version(),
                 is_third_party: package.is_third_party(policy),
                 // These will get (re)computed later
@@ -467,8 +502,11 @@ impl<'a> DepGraph<'a> {
             for pkgid in &metadata.workspace_members {
                 let node_idx = interner_by_pkgid[pkgid];
                 let resolve_node = &resolve_list[resolve_index_by_pkgid[pkgid]];
+                let node = &nodes[node_idx];
+
                 let dev_deps = deps(
                     resolve_node,
+                    node,
                     &[DependencyKind::Development],
                     &interner_by_pkgid,
                 );
@@ -506,6 +544,7 @@ impl<'a> DepGraph<'a> {
                     query.or_insert(());
                     let resolve_node =
                         &resolve_list[resolve_index_by_pkgid[nodes[normal_idx].package_id]];
+                    let node = &nodes[normal_idx];
 
                     // Compute the different kinds of dependencies
                     let all_deps = resolve_node
@@ -513,12 +552,21 @@ impl<'a> DepGraph<'a> {
                         .iter()
                         .map(|pkgid| interner_by_pkgid[pkgid])
                         .collect::<Vec<_>>();
-                    let build_deps =
-                        deps(resolve_node, &[DependencyKind::Build], interner_by_pkgid);
-                    let normal_deps =
-                        deps(resolve_node, &[DependencyKind::Normal], interner_by_pkgid);
+                    let build_deps = deps(
+                        resolve_node,
+                        node,
+                        &[DependencyKind::Build],
+                        interner_by_pkgid,
+                    );
+                    let normal_deps = deps(
+                        resolve_node,
+                        node,
+                        &[DependencyKind::Normal],
+                        interner_by_pkgid,
+                    );
                     let normal_and_build_deps = deps(
                         resolve_node,
+                        node,
                         &[DependencyKind::Normal, DependencyKind::Build],
                         interner_by_pkgid,
                     );
@@ -552,6 +600,7 @@ impl<'a> DepGraph<'a> {
             }
             fn deps(
                 resolve_node: &Node,
+                package: &PackageNode,
                 kinds: &[DependencyKind],
                 interner_by_pkgid: &SortedMap<&PackageId, PackageIdx>,
             ) -> Vec<PackageIdx> {
@@ -562,9 +611,16 @@ impl<'a> DepGraph<'a> {
                     .deps
                     .iter()
                     .filter(|dep| {
-                        dep.dep_kinds
+                        let is_optional =
+                            package.optional_deps.iter().any(|pkgid| *pkgid == &dep.pkg);
+                        let is_enabled = !is_optional
+                            || package.enabled_deps.iter().any(|pkgid| *pkgid == &dep.pkg);
+                        let has_matching_kind = dep
+                            .dep_kinds
                             .iter()
-                            .any(|dep_kind| kinds.contains(&dep_kind.kind))
+                            .any(|dep_kind| kinds.contains(&dep_kind.kind));
+
+                        is_enabled && has_matching_kind
                     })
                     .map(|dep| interner_by_pkgid[&dep.pkg])
                     .collect()
@@ -668,6 +724,8 @@ impl<'a> DepGraph<'a> {
                 package_id: package.package_id,
                 name: package.name,
                 version: package.version.clone(),
+                optional_deps: package.optional_deps.clone(),
+                enabled_deps: package.enabled_deps.clone(),
                 normal_deps: vec![],
                 build_deps: vec![],
                 dev_deps: vec![],
