@@ -53,7 +53,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect miow 0.3.7                          faern          mio                                                  3129 lines
     cargo vet inspect unicode-bidi 0.3.7                  mbrubeck       idna                                                 3217 lines
     cargo vet inspect wasi 0.11.0+wasi-snapshot-preview1  alexcrichton   mio                                                  3302 lines
-    cargo vet inspect native-tls 0.2.10                   sfackler       reqwest, hyper-tls, and tokio-native-tls             3715 lines
+    cargo vet inspect native-tls 0.2.10                   sfackler       hyper-tls and tokio-native-tls                       3715 lines
     cargo vet inspect once_cell 1.10.0                    matklad        openssl                                              3766 lines
     cargo vet inspect quote 1.0.18                        dtolnay        syn, tracing-attributes, and 3 others                3838 lines
     cargo vet inspect redox_syscall 0.2.13                jackpot51      tempfile                                             3890 lines
@@ -92,7 +92,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect reqwest 0.11.10                     seanmonstar    test-project                                         19797 lines
     cargo vet inspect wasm-bindgen 0.2.80                 alexcrichton   js-sys, reqwest, web-sys, and 1 other                20977 lines
     cargo vet inspect ntapi 0.3.7                         MSxDOS         mio                                                  21227 lines
-    cargo vet inspect serde_json 1.0.79                   dtolnay        reqwest and test-project                             22848 lines
+    cargo vet inspect serde_json 1.0.79                   dtolnay        test-project                                         22848 lines
     cargo vet inspect hyper 0.14.18                       seanmonstar    reqwest and hyper-tls                                24841 lines
     cargo vet inspect futures-util 0.3.21                 taiki-e        h2, hyper, and reqwest                               25067 lines
     cargo vet inspect h2 0.3.13                           seanmonstar    hyper and reqwest                                    25417 lines

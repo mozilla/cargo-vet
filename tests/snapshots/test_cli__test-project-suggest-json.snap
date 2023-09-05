@@ -1449,7 +1449,7 @@ stdout:
       },
       {
         "name": "native-tls",
-        "notable_parents": "reqwest, hyper-tls, and tokio-native-tls",
+        "notable_parents": "hyper-tls and tokio-native-tls",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2025,7 +2025,7 @@ stdout:
       },
       {
         "name": "serde_json",
-        "notable_parents": "reqwest and test-project",
+        "notable_parents": "test-project",
         "suggested_criteria": [
           "safe-to-deploy"
         ],
@@ -2988,7 +2988,7 @@ stdout:
         },
         {
           "name": "native-tls",
-          "notable_parents": "reqwest, hyper-tls, and tokio-native-tls",
+          "notable_parents": "hyper-tls and tokio-native-tls",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
@@ -3564,7 +3564,7 @@ stdout:
         },
         {
           "name": "serde_json",
-          "notable_parents": "reqwest and test-project",
+          "notable_parents": "test-project",
           "suggested_criteria": [
             "safe-to-deploy"
           ],
