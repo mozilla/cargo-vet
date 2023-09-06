@@ -188,9 +188,9 @@ pub struct PackageNode<'a> {
     /// The name of the package
     pub name: PackageStr<'a>,
     /// list of enabled optional dependencies
-    pub enabled_deps: Vec<&'a PackageId>,
+    pub enabled_deps: SortedSet<&'a PackageId>,
     /// list of optional dependency names
-    pub optional_deps: Vec<&'a PackageId>,
+    pub optional_deps: SortedSet<&'a PackageId>,
     /// The version of this package
     pub version: VetVersion,
     /// All normal deps (shipped in the project or a proc-macro it uses)
@@ -611,10 +611,8 @@ impl<'a> DepGraph<'a> {
                     .deps
                     .iter()
                     .filter(|dep| {
-                        let is_optional =
-                            package.optional_deps.iter().any(|pkgid| *pkgid == &dep.pkg);
-                        let is_enabled = !is_optional
-                            || package.enabled_deps.iter().any(|pkgid| *pkgid == &dep.pkg);
+                        let is_optional = package.optional_deps.contains(&dep.pkg);
+                        let is_enabled = !is_optional || package.enabled_deps.contains(&dep.pkg);
                         let has_matching_kind = dep
                             .dep_kinds
                             .iter()
