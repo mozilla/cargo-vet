@@ -8,6 +8,8 @@ use std::path::PathBuf;
 pub struct Config {
     #[serde(default)]
     pub inspect: Inspect,
+    #[serde(default)]
+    pub(crate) user: Option<crate::UserInfo>,
 }
 
 // Can't use types from `errors` because this may error before `miette` is
