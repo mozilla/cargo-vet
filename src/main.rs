@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 use std::{fs::File, io, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package};
-use clap::{CommandFactory, Parser};
+use clap::CommandFactory;
 use console::Term;
 use errors::{
     AggregateCriteriaDescription, AggregateCriteriaDescriptionMismatchError,
@@ -239,7 +239,7 @@ fn real_main() -> Result<(), miette::Report> {
         Ok(config) => (config, None),
         Err(err) => (cli::Config::default(), Some(err)),
     };
-    let fake_cli = cli::FakeCli::parse();
+    let fake_cli = cli::FakeCli::parse_with_config(&config);
     let cli::FakeCli::Vet(cli) = fake_cli;
 
     //////////////////////////////////////////////////////

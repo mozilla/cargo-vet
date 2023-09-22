@@ -5,7 +5,10 @@ use std::path::PathBuf;
 
 #[derive(serde::Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct Config {}
+pub struct Config {
+    #[serde(default)]
+    pub inspect: Inspect,
+}
 
 // Can't use types from `errors` because this may error before `miette` is
 // configured. We need to collect the data here then transform it into a report
@@ -73,4 +76,11 @@ impl Config {
             Err(error) => Err(LoadConfigError::IoError { path, error }),
         }
     }
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct Inspect {
+    #[serde(default)]
+    pub mode: Option<super::FetchMode>,
 }
