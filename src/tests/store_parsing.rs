@@ -1,9 +1,9 @@
-const EMPTY_CONFIG: &str = r##"
+const EMPTY_CONFIG: &str = r#"
 # cargo-vet config file
 
 [cargo-vet]
 version = "1.0"
-"##;
+"#;
 const EMPTY_AUDITS: &str = r##"
 # cargo-vet audits file
 
@@ -36,13 +36,13 @@ fn test_all_min() {
 
 #[test]
 fn test_simple_bad_audit() {
-    let audits = r##"
+    let audits = r#"
 # cargo-vet audits file
 
 [[audits.serde]]
 criteria = "bad"
 version = "1.0.0"
-"##;
+"#;
 
     let acquire_errors = get_valid_store(EMPTY_CONFIG, audits, EMPTY_IMPORTS);
     insta::assert_snapshot!(acquire_errors);
@@ -50,7 +50,7 @@ version = "1.0.0"
 
 #[test]
 fn test_many_bad_audits() {
-    let audits = r##"
+    let audits = r#"
 # cargo-vet audits file
 
 [criteria.good]
@@ -76,7 +76,7 @@ delta = "1.0.0 -> 1.1.0"
 [[audits.serde]]
 criteria = "no-good-bad-bad"
 violation = "^5.0.0"
-"##;
+"#;
 
     let acquire_errors = get_valid_store(EMPTY_CONFIG, audits, EMPTY_IMPORTS);
     insta::assert_snapshot!(acquire_errors);
@@ -84,7 +84,7 @@ violation = "^5.0.0"
 
 #[test]
 fn test_many_bad_config() {
-    let config = r##"
+    let config = r#"
 # cargo-vet config file
 
 [cargo-vet]
@@ -110,9 +110,9 @@ criteria = "oops"
 [[exemptions.clap_derive]]
 version = "1.0.0"
 criteria = "safe-to-run"
-"##;
+"#;
 
-    let audits = r##"
+    let audits = r#"
 # cargo-vet audits file
 
 [criteria.good]
@@ -120,7 +120,7 @@ description = "great"
 implies = "safe-to-deploy"
 
 [audits]
-"##;
+"#;
 
     let acquire_errors = get_valid_store(config, audits, EMPTY_IMPORTS);
     insta::assert_snapshot!(acquire_errors);
@@ -128,7 +128,7 @@ implies = "safe-to-deploy"
 
 #[test]
 fn test_outdated_imports_lock_extra_peer() {
-    let config = r##"
+    let config = r#"
 # cargo-vet config file
 
 [cargo-vet]
@@ -136,9 +136,9 @@ version = "1.0"
 
 [imports.peer1]
 url = "https://peer1.com"
-"##;
+"#;
 
-    let imports = r##"
+    let imports = r#"
 # cargo-vet imports lock
 
 [[audits.peer1.audits.third-party1]]
@@ -148,7 +148,7 @@ version = "10.0.0"
 [[audits.peer2.audits.third-party2]]
 criteria = "safe-to-deploy"
 version = "10.0.0"
-"##;
+"#;
 
     let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
     insta::assert_snapshot!(acquire_errors);
@@ -156,7 +156,7 @@ version = "10.0.0"
 
 #[test]
 fn test_outdated_imports_lock_missing_peer() {
-    let config = r##"
+    let config = r#"
 # cargo-vet config file
 
 [cargo-vet]
@@ -167,15 +167,15 @@ url = "https://peer1.com"
 
 [imports.peer2]
 url = "https://peer2.com"
-"##;
+"#;
 
-    let imports = r##"
+    let imports = r#"
 # cargo-vet imports lock
 
 [[audits.peer1.audits.third-party1]]
 criteria = "safe-to-deploy"
 version = "10.0.0"
-"##;
+"#;
 
     let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
     insta::assert_snapshot!(acquire_errors);
@@ -183,7 +183,7 @@ version = "10.0.0"
 
 #[test]
 fn test_outdated_imports_lock_excluded_crate() {
-    let config = r##"
+    let config = r#"
 # cargo-vet config file
 
 [cargo-vet]
@@ -192,9 +192,9 @@ version = "1.0"
 [imports.peer1]
 url = "https://peer1.com"
 exclude = ["third-party1"]
-"##;
+"#;
 
-    let imports = r##"
+    let imports = r#"
 # cargo-vet imports lock
 
 [[audits.peer1.audits.third-party1]]
@@ -204,7 +204,7 @@ version = "10.0.0"
 [[audits.peer1.audits.third-party2]]
 criteria = "safe-to-deploy"
 version = "10.0.0"
-"##;
+"#;
 
     let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
     insta::assert_snapshot!(acquire_errors);
@@ -212,7 +212,7 @@ version = "10.0.0"
 
 #[test]
 fn test_outdated_imports_lock_ok() {
-    let config = r##"
+    let config = r#"
 # cargo-vet config file
 
 [cargo-vet]
@@ -224,9 +224,9 @@ exclude = ["third-party2"]
 
 [imports.peer2]
 url = "https://peer1.com"
-"##;
+"#;
 
-    let imports = r##"
+    let imports = r#"
 # cargo-vet imports lock
 
 [[audits.peer1.audits.third-party1]]
@@ -236,7 +236,7 @@ version = "10.0.0"
 [[audits.peer2.audits.third-party2]]
 criteria = "safe-to-deploy"
 version = "10.0.0"
-"##;
+"#;
 
     let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
     insta::assert_snapshot!(acquire_errors);
@@ -244,7 +244,7 @@ version = "10.0.0"
 
 #[test]
 fn test_unknown_field_config() {
-    let config = r##"
+    let config = r#"
 # cargo-vet config file
 
 [cargo-vet]
@@ -259,15 +259,15 @@ unknown-field = "hi"
 version = "1.0.0"
 criteria = "safe-to-deploy"
 unknown-field = "hi"
-"##;
+"#;
 
-    let imports = r##"
+    let imports = r#"
 # cargo-vet imports lock
 
 [[audits.peer1.audits.third-party1]]
 criteria = "safe-to-deploy"
 version = "10.0.0"
-"##;
+"#;
 
     let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
     insta::assert_snapshot!(acquire_errors);
@@ -275,7 +275,7 @@ version = "10.0.0"
 
 #[test]
 fn test_unknown_field_criteria() {
-    let audits = r##"
+    let audits = r#"
 # cargo-vet audits file
 
 [criteria.good]
@@ -284,7 +284,7 @@ implies = "safe-to-deploy"
 unknown-field = "invalid"
 
 [audits]
-"##;
+"#;
 
     let acquire_errors = get_valid_store(EMPTY_CONFIG, audits, EMPTY_IMPORTS);
     insta::assert_snapshot!(acquire_errors);
@@ -292,14 +292,14 @@ unknown-field = "invalid"
 
 #[test]
 fn test_unknown_field_audit() {
-    let audits = r##"
+    let audits = r#"
 # cargo-vet audits file
 
 [[audits.zzz]]
 criteria = "safe-to-deploy"
 version = "2.0.0"
 unknown-field = "invalid"
-"##;
+"#;
 
     let acquire_errors = get_valid_store(EMPTY_CONFIG, audits, EMPTY_IMPORTS);
     insta::assert_snapshot!(acquire_errors);
@@ -309,7 +309,7 @@ unknown-field = "invalid"
 fn test_distant_future_end_date() {
     // NOTE: `get_valid_store` pretends that "today" is 2023-01-01, so this will
     // always be over a year in the future.
-    let audits = r##"
+    let audits = r#"
 # cargo-vet audits file
 
 [[wildcard-audits.zzz]]
@@ -319,7 +319,7 @@ start = "2015-05-15"
 end = "2024-05-15"
 
 [audits]
-"##;
+"#;
 
     let acquire_errors = get_valid_store(EMPTY_CONFIG, audits, EMPTY_IMPORTS);
     insta::assert_snapshot!(acquire_errors);
@@ -329,7 +329,7 @@ end = "2024-05-15"
 fn test_distant_future_end_date_leap_year() {
     // Make sure that we handle the day being on Feb. 29th. We'll treat 1 year
     // in the future as Feb. 28th, as it won't be a leap-year.
-    let audits = r##"
+    let audits = r#"
 # cargo-vet audits file
 
 [[wildcard-audits.zzz]]
@@ -339,7 +339,7 @@ start = "2015-05-15"
 end = "2021-03-01"
 
 [audits]
-"##;
+"#;
 
     let today = chrono::NaiveDate::from_ymd_opt(2020, 2, 29).unwrap();
     let acquire_errors =
@@ -352,7 +352,7 @@ end = "2021-03-01"
 
 #[test]
 fn test_invalid_formatting() {
-    let config = r##"
+    let config = r#"
 # cargo-vet config file
 
 [cargo-vet]
@@ -376,9 +376,9 @@ version = "1.0.0"
 [[exemptions.aaa]]
 version = "1.0.0"
 criteria = "safe-to-deploy"
-"##;
+"#;
 
-    let audits = r##"
+    let audits = r#"
 # cargo-vet audits file
 
 [criteria.good]
@@ -393,9 +393,9 @@ version = "2.0.0"
 criteria = ["safe-to-deploy", "good"]
 version = "1.0.0"
 notes = "valid field"
-"##;
+"#;
 
-    let imports = r##"
+    let imports = r#"
 # cargo-vet imports lock
 
 [[audits.peer1.audits.third-party1]]
@@ -405,7 +405,7 @@ version = "10.0.0"
 [[audits.peer2.audits.third-party2]]
 criteria = "safe-to-deploy"
 version = "10.0.0"
-"##;
+"#;
 
     let acquire_errors = get_valid_store(config, audits, imports);
     insta::assert_snapshot!(acquire_errors);
@@ -413,7 +413,7 @@ version = "10.0.0"
 
 #[test]
 fn parse_criteria_map() {
-    let config = r##"
+    let config = r#"
 # cargo-vet config file
 
 [cargo-vet]
@@ -425,16 +425,16 @@ url = "https://peer1.com"
 [imports.peer1.criteria-map]
 fuzzed = "safe-to-run"
 safe-to-deploy = "safe-to-run"
-"##;
+"#;
 
-    let imports = r##"
+    let imports = r#"
 # cargo-vet imports lock
 
 [audits.peer1.criteria.fuzzed]
 description = "fuzzed"
 
 [audits.peer1.audits]
-"##;
+"#;
 
     let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
     insta::assert_snapshot!(acquire_errors);
