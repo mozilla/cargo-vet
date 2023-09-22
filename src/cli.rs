@@ -5,6 +5,10 @@ use tracing::level_filters::LevelFilter;
 
 use crate::format::{CriteriaName, ImportName, PackageName, VersionReq, VetVersion};
 
+pub use self::config::Config;
+
+mod config;
+
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
 #[clap(propagate_version = true)]

@@ -76,6 +76,8 @@ pub struct Config {
 pub struct PartialConfig {
     /// Details of the CLI invocation (args)
     pub cli: Cli,
+    /// Global config file
+    pub config: cli::Config,
     /// The date and time to use as the current time.
     pub now: chrono::DateTime<chrono::Utc>,
     /// Path to the cache directory we're using
@@ -230,6 +232,13 @@ fn main() -> Result<(), ()> {
 fn real_main() -> Result<(), miette::Report> {
     use cli::Commands::*;
 
+    let config = cli::Config::load();
+    // We can't return if this errored here as error logging isn't configured
+    // yet, instead use a default and then check the error later
+    let (config, config_err) = match config {
+        Ok(config) => (config, None),
+        Err(err) => (cli::Config::default(), Some(err)),
+    };
     let fake_cli = cli::FakeCli::parse();
     let cli::FakeCli::Vet(cli) = fake_cli;
 
@@ -327,6 +336,10 @@ fn real_main() -> Result<(), miette::Report> {
         set_report_errors_as_json(out.clone());
     }
 
+    if let Some(err) = config_err {
+        return Err(miette::Report::from(err).context("failed to load global config"));
+    }
+
     ////////////////////////////////////////////////////
     // Potentially handle freestanding commands
     ////////////////////////////////////////////////////
@@ -341,6 +354,7 @@ fn real_main() -> Result<(), miette::Report> {
         .unwrap_or_else(|| chrono::DateTime::from(SystemTime::now()));
     let partial_cfg = PartialConfig {
         cli,
+        config,
         now,
         cache_dir,
         mock_cache: false,
