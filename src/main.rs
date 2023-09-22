@@ -1313,7 +1313,9 @@ fn do_cmd_trust(
         let report =
             resolver::resolve(&cfg.metadata, cfg.cli.filter_graph.as_ref(), &suggest_store);
         let resolver::Conclusion::FailForVet(fail) = &report.conclusion else {
-            return Err(miette!("No failing or exempted crates, trust --all will do nothing"));
+            return Err(miette!(
+                "No failing or exempted crates, trust --all will do nothing"
+            ));
         };
 
         // Enumerate the failed packages to collect the set of packages which

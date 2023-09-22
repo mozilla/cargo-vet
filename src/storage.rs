@@ -2481,7 +2481,11 @@ impl<'a> UpdateCratesCache<'a> {
             let guard = self.cache.state.lock().unwrap();
             match guard.crates_cache.crates.get(self.crate_name) {
                 Some(entry) if entry.exists() => return Ok(guard),
-                _ => return Err(CrateInfoError::DoesNotExist { name: self.crate_name.to_owned() }),
+                _ => {
+                    return Err(CrateInfoError::DoesNotExist {
+                        name: self.crate_name.to_owned(),
+                    })
+                }
             }
         };
         // Use the cached response if possible.

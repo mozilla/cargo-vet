@@ -1706,7 +1706,8 @@ impl<'a> ResolveReport<'a> {
                             }),
                         &warnings,
                     )
-                    .await else {
+                    .await
+                    else {
                         return vec![];
                     };
 
@@ -2509,7 +2510,9 @@ async fn suggest_delta(
         } else {
             let version_has_sources = |ver: &&Option<VetVersion>| -> bool {
                 // We always have sources for an empty crate.
-                let Some(ver) = ver else { return true; };
+                let Some(ver) = ver else {
+                    return true;
+                };
                 // We only have git sources for the package itself.
                 if ver.git_rev.is_some() {
                     return ver == package_version;
@@ -2535,13 +2538,21 @@ async fn suggest_delta(
         }
     }
 
-    let Some(Reachable { from_root, from_target }) = &mut reachable else {
+    let Some(Reachable {
+        from_root,
+        from_target,
+    }) = &mut reachable
+    else {
         // Nothing failed, return a dummy suggestion for an empty diff.
         return Some((
             DiffRecommendation {
                 from: Some(package_version.clone()),
                 to: package_version.clone(),
-                diffstat: DiffStat { insertions: 0, deletions: 0, files_changed: 0 },
+                diffstat: DiffStat {
+                    insertions: 0,
+                    deletions: 0,
+                    files_changed: 0,
+                },
             },
             None,
         ));
@@ -3054,7 +3065,9 @@ pub(crate) fn get_store_updates(
     // Check if we have any FreshExemption entries which should be converted
     // into new exemptions.
     for (&pkgname, required_entries) in &required_entries {
-        let Some(required_entries) = required_entries else { continue };
+        let Some(required_entries) = required_entries else {
+            continue;
+        };
 
         for (entry, criteria) in required_entries.iter().rev() {
             let RequiredEntry::FreshExemption { version } = entry else {

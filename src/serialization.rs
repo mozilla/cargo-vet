@@ -426,10 +426,16 @@ where
     }
     impl TomlFormatter<'_> {
         fn add_user_login_comments(&self, v: &mut toml_edit::Item) {
-            let Some(user_info) = &self.user_info else { return };
+            let Some(user_info) = &self.user_info else {
+                return;
+            };
             let Some(v) = v.as_value_mut() else { return };
-            let Some(user_id) = v.as_integer() else { return };
-            let Some(info) = user_info.get(&(user_id as u64)) else { return };
+            let Some(user_id) = v.as_integer() else {
+                return;
+            };
+            let Some(info) = user_info.get(&(user_id as u64)) else {
+                return;
+            };
             v.decor_mut().set_suffix(format!(" # {}", info));
         }
     }
