@@ -24,6 +24,15 @@ who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"
 delta = "0.14.2 -> 0.15.2"
 
+[[audits.cool_faces]]
+who = "Rob Ede <robjtede@icloud.com>"
+criteria = "safe-to-deploy"
+version = "0.1.4"
+notes = """
+I have checked that there are no unexpected control characters in the
+embedded strings. Though, there are a few RTL Arabic characters.
+"""
+
 [[audits.doc-comment]]
 who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"

@@ -52,7 +52,7 @@ criteria = "safe-to-run"
 
 [[audits.foo]]
 version = "0.2.1 -> 0.3.1"
-who = "Bob Bar <bobbar@example.com>""
+who = "Bob Bar <bobbar@example.com>"
 criteria = "safe-to-deploy"
 
 [[audits.malicious_crate]]
@@ -62,7 +62,7 @@ criteria = "safe-to-run"
 
 [[audits.partially_vulnerable_crate]]
 violation = ">=2.0, <2.3"
-who = "Bob Bar <bobbar@example.com>""
+who = "Bob Bar <bobbar@example.com>"
 criteria = "safe-to-deploy"
 ```
 
