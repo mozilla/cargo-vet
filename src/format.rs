@@ -49,7 +49,12 @@ impl core::ops::Deref for VersionReq {
 }
 impl cmp::PartialOrd for VersionReq {
     fn partial_cmp(&self, other: &VersionReq) -> Option<cmp::Ordering> {
-        format!("{self}").partial_cmp(&format!("{other}"))
+        Some(self.cmp(other))
+    }
+}
+impl cmp::Ord for VersionReq {
+    fn cmp(&self, other: &VersionReq) -> cmp::Ordering {
+        format!("{self}").cmp(&format!("{other}"))
     }
 }
 impl VersionReq {
@@ -309,18 +314,18 @@ impl AuditEntry {
 /// different than the order we want for serialization.
 impl cmp::PartialOrd for AuditEntry {
     fn partial_cmp<'a>(&'a self, other: &'a AuditEntry) -> Option<cmp::Ordering> {
-        let tuple = |x: &'a AuditEntry| (&x.kind, &x.criteria, &x.who, &x.notes);
-        tuple(self).partial_cmp(&tuple(other))
+        Some(self.cmp(other))
     }
 }
 
 impl cmp::Ord for AuditEntry {
-    fn cmp(&self, other: &AuditEntry) -> cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+    fn cmp<'a>(&'a self, other: &'a AuditEntry) -> cmp::Ordering {
+        let tuple = |x: &'a AuditEntry| (&x.kind, &x.criteria, &x.who, &x.notes);
+        tuple(self).cmp(&tuple(other))
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AuditKind {
     Full { version: VetVersion },
     Delta { from: VetVersion, to: VetVersion },

@@ -1168,10 +1168,13 @@ impl Out for BasicTestOutput {
 
 /// Format a diff between the old and new strings for reporting.
 fn generate_diff(old: &str, new: &str) -> String {
+    use fmt::Write;
     similar::utils::diff_lines(similar::Algorithm::Myers, old, new)
         .into_iter()
-        .map(|(tag, line)| format!("{tag}{line}"))
-        .collect()
+        .fold(String::new(), |mut s, (tag, line)| {
+            write!(&mut s, "{tag}{line}").unwrap();
+            s
+        })
 }
 
 /// Generate a diff between two values returned from `Store::mock_commit`.
