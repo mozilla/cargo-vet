@@ -1,7 +1,9 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    fmt, fs, io,
+    fmt,
+    fmt::Write,
+    fs, io,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -1170,13 +1172,14 @@ impl Out for BasicTestOutput {
 fn generate_diff(old: &str, new: &str) -> String {
     similar::utils::diff_lines(similar::Algorithm::Myers, old, new)
         .into_iter()
-        .map(|(tag, line)| format!("{tag}{line}"))
-        .collect()
+        .fold(String::new(), |mut out, (tag, line)| {
+            let _ = write!(out, "{tag}{line}");
+            out
+        })
 }
 
 /// Generate a diff between two values returned from `Store::mock_commit`.
 fn diff_store_commits(old: &SortedMap<String, String>, new: &SortedMap<String, String>) -> String {
-    use std::fmt::Write;
     let mut result = String::new();
     let keys = old.keys().chain(new.keys()).collect::<SortedSet<&String>>();
     for key in keys {
