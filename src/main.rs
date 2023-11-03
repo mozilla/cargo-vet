@@ -1862,7 +1862,8 @@ async fn fix_audit_as(
                 cfg.metadata
                     .packages
                     .iter()
-                    .filter_map(|p| (p.name == error.package).then(|| p.vet_version()))
+                    .filter(|&p| (p.name == error.package))
+                    .map(|p| p.vet_version())
                     .collect()
             };
             // This can only fail if there's a logical error in `check_audit_as_crates_io`.

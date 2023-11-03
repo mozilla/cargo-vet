@@ -307,6 +307,11 @@ impl AuditEntry {
 
 /// Implement PartialOrd manually because the order we want for sorting is
 /// different than the order we want for serialization.
+///
+/// Strictly speaking Ord and PartialOrd implementations are supposed to agree,
+/// and clippy recently started complaining about this. We should consider whether
+/// there's another solution to this problem.
+#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
 impl cmp::PartialOrd for AuditEntry {
     fn partial_cmp<'a>(&'a self, other: &'a AuditEntry) -> Option<cmp::Ordering> {
         let tuple = |x: &'a AuditEntry| (&x.kind, &x.criteria, &x.who, &x.notes);
