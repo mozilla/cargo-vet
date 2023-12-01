@@ -1,5 +1,6 @@
 ---
 source: tests/test-cli.rs
+assertion_line: 119
 expression: format_outputs(&output)
 ---
 stdout:
@@ -62,6 +63,10 @@ GLOBAL OPTIONS:
 
         --filter-graph <FILTER_GRAPH>
             Filter out different parts of the build graph and pretend that's the true graph
+
+        --cargo-arg <CARGO_ARG>
+            Arguments to pass through to cargo. It can be specified multiple times for multiple
+            arguments
 
 SUBCOMMANDS:
     check               \[default\] Check that the current project has been vetted

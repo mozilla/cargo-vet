@@ -1,5 +1,6 @@
 ---
 source: tests/test-cli.rs
+assertion_line: 134
 expression: format_outputs(&output)
 ---
 stdout:
@@ -133,6 +134,14 @@ tested)
 * `is_third_party($bool)`: whether the package is considered third-party by vet
 * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original
 graph
+
+#### `--cargo-arg <CARGO_ARG>`
+Arguments to pass through to cargo. It can be specified multiple times for multiple
+arguments.
+
+Example: `--cargo-arg=-Zbindeps`
+
+This allows using unstable options in Cargo if a project's Cargo.toml requires them.
 
 ### SUBCOMMANDS
 * [check](#cargo-vet-check): \[default\] Check that the current project has been vetted

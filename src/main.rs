@@ -390,6 +390,7 @@ fn real_main() -> Result<(), miette::Report> {
     {
         other_options.push("--color=always".to_string());
     }
+    other_options.extend(cli.cargo_arg.iter().cloned());
     cmd.other_options(other_options);
 
     info!("Running: {:#?}", cmd.cargo_command());

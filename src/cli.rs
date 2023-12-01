@@ -166,6 +166,16 @@ pub struct Cli {
     #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
     pub filter_graph: Option<Vec<GraphFilter>>,
 
+    /// Arguments to pass through to cargo. It can be specified multiple times for
+    /// multiple arguments.
+    ///
+    /// Example: `--cargo-arg=-Zbindeps`
+    ///
+    /// This allows using unstable options in Cargo if a project's Cargo.toml requires them.
+    #[clap(long, action)]
+    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    pub cargo_arg: Vec<String>,
+
     // Args for `Check` when the subcommand is not explicitly specified.
     //
     // These are exclusive with specifying a subcommand due to
