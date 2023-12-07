@@ -2055,7 +2055,7 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
         let output = std::process::Command::new("git")
             .arg("-c")
             .arg("core.safecrlf=false")
-            .arg("diff")
+            .arg(&sub_args.diffcmd)
             .arg(if pager.use_color() {
                 "--color=always"
             } else {

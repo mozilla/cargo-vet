@@ -484,6 +484,9 @@ pub struct DiffArgs {
     /// How to inspect the source
     #[clap(long, action, default_value = "sourcegraph")]
     pub mode: FetchMode,
+    /// The local git diff command
+    #[clap(long, action, default_value = "diff")]
+    pub diffcmd: String,
 }
 
 /// Certifies a package as audited
