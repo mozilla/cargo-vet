@@ -212,12 +212,16 @@ fn mock_delta_certify_flow() {
 
 #[test]
 fn mock_delta_git_certify_flow() {
-    let mock = MockMetadata::simple();
+    let mock = MockMetadata::simple_local_git();
 
     let _enter = TEST_RUNTIME.enter();
     let metadata = mock.metadata();
 
-    let (config, audits, imports) = files_inited(&metadata);
+    let (mut config, audits, imports) = files_inited(&metadata);
+
+    config
+        .policy
+        .insert("third-party1".to_string(), audit_as_policy(Some(true)));
 
     let mut store = Store::mock(config, audits, imports);
 
@@ -270,6 +274,95 @@ fn mock_delta_git_certify_flow() {
     let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
 
     insta::assert_snapshot!("mock-delta-git-certify-flow", result);
+}
+
+#[test]
+fn mock_prune_non_importable_audit() {
+    let mock = MockMetadata::simple();
+
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = mock.metadata();
+
+    let (config, mut audits, imports) = files_inited(&metadata);
+
+    audits.audits.insert(
+        "third-party1".to_owned(),
+        vec![
+            {
+                let mut entry = delta_audit(
+                    ver(10),
+                    "10.0.0@git:00112233445566778899aabbccddeeff00112233"
+                        .parse()
+                        .unwrap(),
+                    "safe-to-deploy",
+                );
+                entry.importable = false;
+                entry
+            },
+            {
+                let mut entry = delta_audit(
+                    ver(10),
+                    "10.0.0@git:ffeeddccbbaa99887766554433221100ffeeddcc"
+                        .parse()
+                        .unwrap(),
+                    "safe-to-deploy",
+                );
+                entry.notes = Some("This entry intentionally left importable.".into());
+                entry
+            },
+        ],
+    );
+
+    let mut store = Store::mock(config, audits, imports);
+
+    let output = BasicTestOutput::with_callbacks(
+        |_| Ok("\n".to_owned()),
+        |_| {
+            Ok("\
+            I, testing, certify that I have audited version 10.0.0 of third-party1 in accordance with the above criteria.\n\
+            \n\
+            These are testing notes. They contain some\n\
+            newlines. Trailing whitespace        \n    \
+            and leading whitespace\n\
+            \n".to_owned())
+        },
+    );
+
+    let cfg = mock_cfg_args(
+        &metadata,
+        [
+            "cargo",
+            "vet",
+            "certify",
+            "third-party1",
+            "10.0.0",
+            "--who",
+            "testing",
+            "--criteria",
+            "safe-to-deploy",
+        ],
+    );
+    let sub_args = if let Some(crate::cli::Commands::Certify(sub_args)) = &cfg.cli.command {
+        sub_args
+    } else {
+        unreachable!();
+    };
+
+    crate::do_cmd_certify(
+        &output.clone().as_dyn(),
+        &cfg,
+        sub_args,
+        &mut store,
+        None,
+        None,
+    )
+    .expect("do_cmd_certify failed");
+
+    let audits = crate::serialization::to_formatted_toml(&store.audits, None).unwrap();
+
+    let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
+
+    insta::assert_snapshot!("mock-prune-non-importable-audit", result);
 }
 
 #[test]

@@ -451,6 +451,49 @@ impl MockMetadata {
         ])
     }
 
+    fn simple_local_git() -> Self {
+        // Identical to `simple` except that `third-party1` is a local git version.
+        MockMetadata::new(vec![
+            MockPackage {
+                name: "root-package",
+                is_workspace: true,
+                is_first_party: true,
+                deps: vec![dep("first-party")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "first-party",
+                is_first_party: true,
+                deps: vec![
+                    MockDependency {
+                        name: "third-party1",
+                        version: "10.0.0@git:00112233445566778899aabbccddeeff00112233"
+                            .parse()
+                            .unwrap(),
+                    },
+                    dep("third-party2"),
+                ],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "third-party1",
+                version: "10.0.0@git:00112233445566778899aabbccddeeff00112233"
+                    .parse()
+                    .unwrap(),
+                deps: vec![dep("transitive-third-party1")],
+                ..Default::default()
+            },
+            MockPackage {
+                name: "third-party2",
+                ..Default::default()
+            },
+            MockPackage {
+                name: "transitive-third-party1",
+                ..Default::default()
+            },
+        ])
+    }
+
     fn complex() -> Self {
         // A Complex dependency tree to test more weird interactions and corner cases:
         //
@@ -716,6 +759,11 @@ impl MockMetadata {
                     "{} {} (path+file:///C:/FAKE/{})",
                     package.name, package.version, package.name
                 )
+            } else if let Some(git_rev) = &package.version.git_rev {
+                format!(
+                    "{} {} (git+https://github.com/owner/{}#{})",
+                    package.name, package.version.semver, package.name, git_rev
+                )
             } else {
                 format!(
                     "{} {} (registry+https://github.com/rust-lang/crates.io-index)",
@@ -757,6 +805,8 @@ impl MockMetadata {
     fn source(&self, package: &MockPackage) -> Value {
         if package.is_first_party {
             json!(null)
+        } else if let Some(git_rev) = &package.version.git_rev {
+            format!("git+https://github.com/owner/{}#{}", package.name, git_rev).into()
         } else {
             json!("registry+https://github.com/rust-lang/crates.io-index")
         }
@@ -766,7 +816,7 @@ impl MockMetadata {
         let meta_json = json!({
             "packages": self.packages.iter().map(|package| json!({
                 "name": package.name,
-                "version": package.version.to_string(),
+                "version": package.version.semver.to_string(),
                 "id": self.pkgid(package),
                 "license": "MIT",
                 "license_file": null,
@@ -775,7 +825,7 @@ impl MockMetadata {
                 "dependencies": package.deps.iter().chain(&package.dev_deps).chain(&package.build_deps).map(|dep| json!({
                     "name": dep.name,
                     "source": self.source(self.package_by(dep.name, &dep.version)),
-                    "req": format!("={}", dep.version),
+                    "req": format!("={}", dep.version.semver),
                     "kind": null,
                     "rename": null,
                     "optional": false,
@@ -909,6 +959,7 @@ fn init_files(
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::RegenerateExemptions,
             prune_exemptions: true,
+            prune_non_importable_audits: true,
             prune_imports: true,
         }
     });

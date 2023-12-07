@@ -15,6 +15,7 @@ fn basic_regenerate(cfg: &Config, store: &mut Store) {
     crate::resolver::update_store(cfg, store, |_| crate::resolver::UpdateMode {
         search_mode: crate::resolver::SearchMode::RegenerateExemptions,
         prune_exemptions: true,
+        prune_non_importable_audits: true,
         prune_imports: true,
     });
 }
@@ -23,6 +24,7 @@ fn basic_minimize(cfg: &Config, store: &mut Store) {
     crate::resolver::update_store(cfg, store, |_| crate::resolver::UpdateMode {
         search_mode: crate::resolver::SearchMode::PreferFreshImports,
         prune_exemptions: true,
+        prune_non_importable_audits: true,
         prune_imports: true,
     });
 }
