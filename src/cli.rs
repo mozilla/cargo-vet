@@ -682,6 +682,9 @@ pub struct PruneArgs {
     /// Don't prune unused exemptions
     #[clap(long, action)]
     pub no_exemptions: bool,
+    /// Don't prune unused non-importable audits.
+    #[clap(long, action)]
+    pub no_audits: bool,
 }
 
 #[derive(clap::Args)]

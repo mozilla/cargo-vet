@@ -7,8 +7,7 @@ fn get_imports_file_changes(
     store: &Store,
     mode: impl FnMut(PackageStr<'_>) -> crate::resolver::UpdateMode,
 ) -> String {
-    let (new_imports, _new_exemptions) =
-        crate::resolver::get_store_updates(&mock_cfg(metadata), store, mode);
+    let updates = crate::resolver::get_store_updates(&mock_cfg(metadata), store, mode);
 
     // Format the old and new files as TOML, and write out a diff using `similar`.
     let old_imports = crate::serialization::to_formatted_toml(
@@ -18,8 +17,8 @@ fn get_imports_file_changes(
     .unwrap()
     .to_string();
     let new_imports = crate::serialization::to_formatted_toml(
-        &new_imports,
-        Some(&crate::storage::user_info_map(&new_imports)),
+        &updates.imports,
+        Some(&crate::storage::user_info_map(&updates.imports)),
     )
     .unwrap()
     .to_string();
@@ -31,6 +30,7 @@ fn get_imports_file_changes_prune(metadata: &Metadata, store: &Store) -> String 
     get_imports_file_changes(metadata, store, |_| crate::resolver::UpdateMode {
         search_mode: crate::resolver::SearchMode::PreferExemptions,
         prune_exemptions: false,
+        prune_non_importable_audits: false,
         prune_imports: true,
     })
 }
@@ -39,6 +39,7 @@ fn get_imports_file_changes_noprune(metadata: &Metadata, store: &Store) -> Strin
     get_imports_file_changes(metadata, store, |_| crate::resolver::UpdateMode {
         search_mode: crate::resolver::SearchMode::PreferExemptions,
         prune_exemptions: false,
+        prune_non_importable_audits: false,
         prune_imports: false,
     })
 }
@@ -948,6 +949,7 @@ fn peer_audits_exemption_minimize() {
         ("prune", |_| crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::PreferFreshImports,
             prune_exemptions: true,
+            prune_non_importable_audits: true,
             prune_imports: true,
         }),
         ("certify", |name| {
@@ -955,12 +957,14 @@ fn peer_audits_exemption_minimize() {
                 crate::resolver::UpdateMode {
                     search_mode: crate::resolver::SearchMode::PreferFreshImports,
                     prune_exemptions: true,
+                    prune_non_importable_audits: true,
                     prune_imports: false,
                 }
             } else {
                 crate::resolver::UpdateMode {
                     search_mode: crate::resolver::SearchMode::PreferExemptions,
                     prune_exemptions: false,
+                    prune_non_importable_audits: false,
                     prune_imports: false,
                 }
             }
@@ -968,6 +972,7 @@ fn peer_audits_exemption_minimize() {
         ("vet", |_| crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::PreferExemptions,
             prune_exemptions: false,
+            prune_non_importable_audits: false,
             prune_imports: false,
         }),
     ];

@@ -94,6 +94,7 @@ fn audit_as_crates_io_unpublished_blank_regenerate_exemptions() {
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::RegenerateExemptions,
             prune_exemptions: true,
+            prune_non_importable_audits: true,
             prune_imports: true,
         },
     );
@@ -107,6 +108,7 @@ fn audit_as_crates_io_unpublished_full_regenerate_exemptions() {
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::RegenerateExemptions,
             prune_exemptions: true,
+            prune_non_importable_audits: true,
             prune_imports: true,
         },
     );
@@ -120,6 +122,7 @@ fn audit_as_crates_io_unpublished_full_prune() {
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::PreferFreshImports,
             prune_exemptions: true,
+            prune_non_importable_audits: true,
             prune_imports: true,
         },
     );
@@ -133,6 +136,7 @@ fn audit_as_crates_io_unpublished_full_prefer_exemptions() {
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::PreferExemptions,
             prune_exemptions: false,
+            prune_non_importable_audits: false,
             prune_imports: false,
         },
     );
@@ -146,6 +150,7 @@ fn audit_as_crates_io_unpublished_wildcard_regenerate_exemptions() {
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::RegenerateExemptions,
             prune_exemptions: true,
+            prune_non_importable_audits: true,
             prune_imports: true,
         },
     );
@@ -159,6 +164,7 @@ fn audit_as_crates_io_unpublished_wildcard_prune() {
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::PreferFreshImports,
             prune_exemptions: true,
+            prune_non_importable_audits: true,
             prune_imports: true,
         },
     );
@@ -172,6 +178,7 @@ fn audit_as_crates_io_unpublished_wildcard_prefer_exemptions() {
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::PreferExemptions,
             prune_exemptions: false,
+            prune_non_importable_audits: false,
             prune_imports: false,
         },
     );
@@ -185,6 +192,7 @@ fn audit_as_crates_io_unpublished_wildcard_nounpublished_regenerate_exemptions()
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::RegenerateExemptions,
             prune_exemptions: true,
+            prune_non_importable_audits: true,
             prune_imports: true,
         },
     );
@@ -198,6 +206,7 @@ fn audit_as_crates_io_unpublished_wildcard_nounpublished_prune() {
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::PreferFreshImports,
             prune_exemptions: true,
+            prune_non_importable_audits: true,
             prune_imports: true,
         },
     );
@@ -211,6 +220,7 @@ fn audit_as_crates_io_unpublished_wildcard_nounpublished_prefer_exemptions() {
         crate::resolver::UpdateMode {
             search_mode: crate::resolver::SearchMode::PreferExemptions,
             prune_exemptions: false,
+            prune_non_importable_audits: false,
             prune_imports: false,
         },
     );

@@ -282,7 +282,10 @@ pub struct AuditGraph<'a> {
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum DeltaEdgeOrigin {
     /// This edge represents an audit from the local audits.toml.
-    StoredLocalAudit { audit_index: usize },
+    StoredLocalAudit {
+        audit_index: usize,
+        importable: bool,
+    },
     /// This edge represents an audit imported from a peer, potentially stored
     /// in the local imports.lock.
     ImportedAudit {
@@ -307,10 +310,13 @@ pub enum DeltaEdgeOrigin {
     FreshExemption { version: VetVersion },
 }
 
-/// An indication of a required imported entry or exemption. Used to compute the
-/// minimal set of possible imports for imports.lock.
+/// An indication of a required local audit, imported entry, or exemption. Used to compute the
+/// minimal set of possible imports for imports.lock and for pruning unused audits and exemptions.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum RequiredEntry {
+    LocalAudit {
+        audit_index: usize,
+    },
     Audit {
         import_index: usize,
         audit_index: usize,
@@ -1070,7 +1076,10 @@ impl<'a> AuditGraph<'a> {
                                         import_index,
                                         audit_index,
                                     },
-                                    None => DeltaEdgeOrigin::StoredLocalAudit { audit_index },
+                                    None => DeltaEdgeOrigin::StoredLocalAudit {
+                                        audit_index,
+                                        importable: audit.importable,
+                                    },
                                 },
                                 audit,
                             )
@@ -1437,6 +1446,7 @@ fn search_for_path(
     #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
     enum CaveatLevel {
         None,
+        NonImportableAudit,
         PreferredExemption,
         PreferredUnpublished,
         FreshImport,
@@ -1558,6 +1568,9 @@ fn search_for_path(
 
             // Compute the level of caveats which are being added by the current edge
             let edge_caveat_level = match &edge.origin {
+                DeltaEdgeOrigin::StoredLocalAudit { importable, .. } if !importable => {
+                    CaveatLevel::NonImportableAudit
+                }
                 DeltaEdgeOrigin::Exemption { .. } if mode == SearchMode::PreferExemptions => {
                     CaveatLevel::PreferredExemption
                 }
@@ -2670,8 +2683,7 @@ fn resolve_package_required_entries(
 ) -> Option<SortedMap<RequiredEntry, CriteriaSet>> {
     assert_eq!(graph.nodes.len(), requirements.len());
 
-    // Collect the list of third-party packages with the given name, along with
-    // their requirements.
+    // Collect the list of third-party packages with the given name, along with their requirements.
     let packages: Vec<_> = graph
         .nodes
         .iter()
@@ -2679,8 +2691,7 @@ fn resolve_package_required_entries(
         .filter(|(package, _)| package.name == package_name && package.is_third_party)
         .collect();
 
-    // If there are no third-party packages with the name, we definitely don't
-    // need any entries.
+    // If there are no third-party packages with the name, we definitely don't need any entries.
     if packages.is_empty() {
         return Some(SortedMap::new());
     }
@@ -2744,7 +2755,9 @@ fn resolve_package_required_entries(
                     DeltaEdgeOrigin::Unpublished { unpublished_index } => {
                         add_entry(RequiredEntry::Unpublished { unpublished_index })
                     }
-                    DeltaEdgeOrigin::StoredLocalAudit { .. } => {}
+                    DeltaEdgeOrigin::StoredLocalAudit { audit_index, .. } => {
+                        add_entry(RequiredEntry::LocalAudit { audit_index })
+                    }
                 }
             }
         }
@@ -2759,21 +2772,32 @@ fn resolve_package_required_entries(
 pub struct UpdateMode {
     pub search_mode: SearchMode,
     pub prune_exemptions: bool,
+    pub prune_non_importable_audits: bool,
     pub prune_imports: bool,
 }
 
+pub(crate) struct StoreUpdates {
+    pub audits: SortedMap<String, Vec<AuditEntry>>,
+    pub imports: ImportsFile,
+    pub exemptions: SortedMap<PackageName, Vec<ExemptedDependency>>,
+}
+
+impl StoreUpdates {
+    pub fn apply(self, store: &mut Store) {
+        store.audits.audits = self.audits;
+        store.imports = self.imports;
+        store.config.exemptions = self.exemptions;
+    }
+}
+
 /// Refresh the state of the store, importing required audits, and optionally
-/// pruning unnecessary exemptions and/or imports.
+/// pruning unnecessary exemptions, audits, and/or imports.
 pub fn update_store(
     cfg: &Config,
     store: &mut Store,
     mode: impl FnMut(PackageStr<'_>) -> UpdateMode,
 ) {
-    let (new_imports, new_exemptions) = get_store_updates(cfg, store, mode);
-
-    // Update the store to reflect the new imports and exemptions files.
-    store.imports = new_imports;
-    store.config.exemptions = new_exemptions;
+    get_store_updates(cfg, store, mode).apply(store);
 }
 
 /// The non-mutating core of `update_store` for use in non-mutating situations.
@@ -2781,7 +2805,7 @@ pub(crate) fn get_store_updates(
     cfg: &Config,
     store: &Store,
     mut mode: impl FnMut(PackageStr<'_>) -> UpdateMode,
-) -> (ImportsFile, SortedMap<PackageName, Vec<ExemptedDependency>>) {
+) -> StoreUpdates {
     // Compute the set of required entries from the store for all packages in
     // the dependency graph.
     let graph = DepGraph::new(
@@ -2804,6 +2828,29 @@ pub(crate) fn get_store_updates(
                 mode(package.name).search_mode,
             )
         });
+    }
+
+    // Remove unused non-importable audits.
+    let mut new_audits = store.audits.audits.clone();
+    for (pkg, entries) in &required_entries {
+        if !mode(pkg).prune_non_importable_audits {
+            continue;
+        }
+        let Some(entries) = entries else { continue };
+
+        if let Some(audit_entries) = new_audits.get_mut(*pkg) {
+            *audit_entries = std::mem::take(audit_entries)
+                .into_iter()
+                .enumerate()
+                .filter(|&(audit_index, ref entry)| {
+                    // Keep the entry if it's importable (i.e. it could be used externally) or it's
+                    // used locally.
+                    entry.importable
+                        || entries.contains_key(&RequiredEntry::LocalAudit { audit_index })
+                })
+                .map(|(_, entry)| entry)
+                .collect();
+        }
     }
 
     // Dummy value to use if a package isn't found in `required_entries` - no
@@ -3096,5 +3143,9 @@ pub(crate) fn get_store_updates(
         exemptions.sort();
     }
 
-    (new_imports, all_new_exemptions)
+    StoreUpdates {
+        audits: new_audits,
+        imports: new_imports,
+        exemptions: all_new_exemptions,
+    }
 }

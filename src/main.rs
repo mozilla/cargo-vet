@@ -541,6 +541,7 @@ fn cmd_init(_out: &Arc<dyn Out>, cfg: &Config, _sub_args: &InitArgs) -> Result<(
     resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
         search_mode: resolver::SearchMode::RegenerateExemptions,
         prune_exemptions: true,
+        prune_non_importable_audits: true,
         prune_imports: true,
     });
 
@@ -982,10 +983,10 @@ fn do_cmd_certify(
         .validate(cfg.today(), false)
         .expect("the new audit entry made the store invalid?");
 
-    // Minimize exemptions after adding the new audit. This will be used to
-    // potentially update imports, and remove now-unnecessary exemptions for the
-    // target package. We only prefer fresh imports and prune exemptions for the
-    // package we certified, to avoid unrelated changes.
+    // Minimize exemptions after adding the new audit. This will be used to potentially update
+    // imports, and remove now-unnecessary exemptions and audits for the target package. We only
+    // prefer fresh imports and prune exemptions for the package we certified, to avoid unrelated
+    // changes.
     resolver::update_store(cfg, store, |name| resolver::UpdateMode {
         search_mode: if name == &package[..] {
             resolver::SearchMode::PreferFreshImports
@@ -993,6 +994,7 @@ fn do_cmd_certify(
             resolver::SearchMode::PreferExemptions
         },
         prune_exemptions: name == &package[..],
+        prune_non_importable_audits: name == &package[..],
         prune_imports: false,
     });
 
@@ -1237,11 +1239,11 @@ fn cmd_import(
     let cache = Cache::acquire(cfg)?;
     tokio::runtime::Handle::current().block_on(store.go_online(cfg, &network, &cache, false))?;
 
-    // Update the store state, pruning unnecessary exemptions, and cleaning out
-    // unnecessary old imports.
+    // Update the store state, pruning unnecessary exemptions, audits, and imports.
     resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
         search_mode: resolver::SearchMode::PreferFreshImports,
         prune_exemptions: true,
+        prune_non_importable_audits: true,
         prune_imports: true,
     });
 
@@ -1493,10 +1495,10 @@ fn apply_cmd_trust(
         .validate(cfg.today(), false)
         .expect("the new trusted entry made the store invalid?");
 
-    // Minimize exemptions after adding the new trust entry. This will be used
-    // to potentially update imports, and remove now-unnecessary exemptions for
-    // the target package. We only prefer fresh imports and prune exemptions for
-    // the package we trusted, to avoid unrelated changes.
+    // Minimize exemptions and audits after adding the new trust entry. This will be used to
+    // potentially update imports, and remove now-unnecessary exemptions for the target package. We
+    // only prefer fresh imports and prune exemptions for the package we trusted, to avoid
+    // unrelated changes.
     resolver::update_store(cfg, store, |name| resolver::UpdateMode {
         search_mode: if name == package {
             resolver::SearchMode::PreferFreshImports
@@ -1504,6 +1506,7 @@ fn apply_cmd_trust(
             resolver::SearchMode::PreferExemptions
         },
         prune_exemptions: name == package,
+        prune_non_importable_audits: name == package,
         prune_imports: false,
     });
     Ok(())
@@ -1689,11 +1692,11 @@ fn cmd_regenerate_imports(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), true)?;
 
-    // Update the store state, pruning unnecessary exemptions, and cleaning out
-    // unnecessary old imports.
+    // Update the store state, pruning unnecessary exemptions, audits, and imports.
     resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
         search_mode: resolver::SearchMode::PreferFreshImports,
         prune_exemptions: true,
+        prune_non_importable_audits: true,
         prune_imports: true,
     });
 
@@ -1753,6 +1756,7 @@ fn cmd_regenerate_unpublished(
     resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
         search_mode: resolver::SearchMode::PreferExemptions,
         prune_exemptions: false,
+        prune_non_importable_audits: false,
         prune_imports: false,
     });
 
@@ -1954,6 +1958,7 @@ fn cmd_regenerate_exemptions(
     resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
         search_mode: resolver::SearchMode::RegenerateExemptions,
         prune_exemptions: true,
+        prune_non_importable_audits: true,
         prune_imports: true,
     });
 
@@ -2130,33 +2135,38 @@ fn cmd_check(
         if !cfg.cli.locked {
             // Simulate a full `fetch-imports` run, and record the potential
             // pruned imports and exemptions.
-            let (pruned_imports, pruned_exemptions) =
-                resolver::get_store_updates(cfg, &store, |_| resolver::UpdateMode {
-                    search_mode: resolver::SearchMode::PreferFreshImports,
-                    prune_exemptions: true,
-                    prune_imports: true,
-                });
+            let updates = resolver::get_store_updates(cfg, &store, |_| resolver::UpdateMode {
+                search_mode: resolver::SearchMode::PreferFreshImports,
+                prune_exemptions: true,
+                prune_non_importable_audits: true,
+                prune_imports: true,
+            });
 
             // Perform a minimal store update to pull in necessary imports,
             // while avoiding any other changes to exemptions or imports.
             resolver::update_store(cfg, &mut store, |_| resolver::UpdateMode {
                 search_mode: resolver::SearchMode::PreferExemptions,
                 prune_exemptions: false,
+                prune_non_importable_audits: false,
                 prune_imports: false,
             });
 
             // XXX: Consider trying to be more precise here? Would require some
             // more clever comparisons.
-            if store.config.exemptions != pruned_exemptions {
+            if store.config.exemptions != updates.exemptions {
                 warn!("Your supply-chain has unnecessary exemptions which could be relaxed or pruned.");
                 warn!("  Consider running `cargo vet prune` to prune unnecessary exemptions and imports.");
-            } else if store.imports != pruned_imports {
+            } else if store.imports != updates.imports {
                 warn!("Your supply-chain has unnecessary imports which could be pruned.");
+                warn!("  Consider running `cargo vet prune` to prune unnecessary imports.");
+            } else if store.audits.audits != updates.audits {
+                warn!("Your supply-chain has unnecessary audits which could be pruned.");
                 warn!("  Consider running `cargo vet prune` to prune unnecessary imports.");
             }
 
             // Check if we have `unpublished` entries for crates which have since been published.
-            let since_published: Vec<_> = pruned_imports
+            let since_published: Vec<_> = updates
+                .imports
                 .unpublished
                 .iter()
                 .filter(|(_, unpublished)| unpublished.iter().any(|u| !u.still_unpublished))
@@ -2293,6 +2303,7 @@ fn cmd_prune(
             resolver::SearchMode::PreferFreshImports
         },
         prune_exemptions: !sub_args.no_exemptions,
+        prune_non_importable_audits: !sub_args.no_audits,
         prune_imports: !sub_args.no_imports,
     });
 

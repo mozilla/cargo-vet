@@ -1,6 +1,5 @@
 ---
 source: tests/test-cli.rs
-assertion_line: 134
 expression: format_outputs(&output)
 ---
 stdout:
@@ -771,6 +770,9 @@ Don't prune unused imports
 
 #### `--no-exemptions`
 Don't prune unused exemptions
+
+#### `--no-audits`
+Don't prune unused non-importable audits
 
 #### `-h, --help`
 Print help information
