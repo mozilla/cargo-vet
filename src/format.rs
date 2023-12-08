@@ -303,6 +303,71 @@ impl AuditEntry {
         // semantically and might have been updated uneventfully.
         self.kind == other.kind && self.criteria == other.criteria
     }
+
+    /// Try to collapse this (delta) entry with the given entry, which must be just prior to it
+    /// (whether a delta or a full audit).
+    ///
+    /// If the entry can be collapsed, the new entry is returned. The new entry will merge the
+    /// `who`, `notes`, and `kind` fields appropriately, and will derive `importable` based on
+    /// `kind`.
+    pub fn try_collapse_with_prior(&self, other: &AuditEntry) -> Option<Self> {
+        let AuditKind::Delta {
+            from: self_from,
+            to: self_to,
+        } = &self.kind
+        else {
+            return None;
+        };
+        let (other_from, other_to) = match &other.kind {
+            AuditKind::Full { version } => (None, version),
+            AuditKind::Delta { from, to } => (Some(from), to),
+            AuditKind::Violation { .. } => return None,
+        };
+
+        if other_to != self_from {
+            return None;
+        }
+
+        // TODO should this use a criteria mapper to avoid different orderings?
+        if other.criteria != self.criteria {
+            return None;
+        }
+
+        // Consume the existing audit's `from`, `who`, and `notes`.
+        let mut new_entry = self.clone();
+        new_entry.kind = match other_from {
+            Some(version) => AuditKind::Delta {
+                from: version.clone(),
+                to: self_to.clone(),
+            },
+            None => AuditKind::Full {
+                version: self_to.clone(),
+            },
+        };
+
+        let unique_who: Vec<_> = other
+            .who
+            .iter()
+            .filter(|s| !new_entry.who.contains(s))
+            .cloned()
+            .collect();
+        // Precede with the `who` from the audit which aren't in this
+        // ceritification, to retain a temporal ordering of auditors.
+        new_entry.who.splice(..0, unique_who);
+
+        // Precede the certification notes with the notes from the audit.
+        if let Some(prior_notes) = &other.notes {
+            new_entry.notes = Some(match new_entry.notes {
+                None => prior_notes.clone(),
+                Some(new_notes) => format!("{prior_notes}\n{new_notes}"),
+            });
+        }
+
+        // Rederive `importable` based on the versions.
+        new_entry.importable = new_entry.kind.default_importable();
+
+        Some(new_entry)
+    }
 }
 
 /// Implement PartialOrd manually because the order we want for sorting is
@@ -330,6 +395,16 @@ pub enum AuditKind {
     Full { version: VetVersion },
     Delta { from: VetVersion, to: VetVersion },
     Violation { violation: VersionReq },
+}
+
+impl AuditKind {
+    pub fn default_importable(&self) -> bool {
+        match self {
+            Self::Full { version } => version.git_rev.is_none(),
+            Self::Delta { from, to } => from.git_rev.is_none() && to.git_rev.is_none(),
+            Self::Violation { .. } => false,
+        }
+    }
 }
 
 /// A "VERSION" or "VERSION -> VERSION"

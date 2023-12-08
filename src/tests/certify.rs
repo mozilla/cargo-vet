@@ -294,7 +294,7 @@ fn mock_prune_non_importable_audit() {
                     "10.0.0@git:00112233445566778899aabbccddeeff00112233"
                         .parse()
                         .unwrap(),
-                    "safe-to-deploy",
+                    "reviewed",
                 );
                 entry.importable = false;
                 entry
@@ -305,7 +305,7 @@ fn mock_prune_non_importable_audit() {
                     "10.0.0@git:ffeeddccbbaa99887766554433221100ffeeddcc"
                         .parse()
                         .unwrap(),
-                    "safe-to-deploy",
+                    "reviewed",
                 );
                 entry.notes = Some("This entry intentionally left importable.".into());
                 entry
@@ -339,7 +339,7 @@ fn mock_prune_non_importable_audit() {
             "--who",
             "testing",
             "--criteria",
-            "safe-to-deploy",
+            "reviewed",
         ],
     );
     let sub_args = if let Some(crate::cli::Commands::Certify(sub_args)) = &cfg.cli.command {
@@ -363,6 +363,247 @@ fn mock_prune_non_importable_audit() {
     let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
 
     insta::assert_snapshot!("mock-prune-non-importable-audit", result);
+}
+
+#[test]
+fn mock_collapse_non_importable_audits() {
+    let mock = MockMetadata::simple_local_git();
+
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = mock.metadata();
+
+    let (mut config, mut audits, imports) = files_inited(&metadata);
+
+    config
+        .policy
+        .insert("third-party1".to_string(), audit_as_policy(Some(true)));
+
+    audits.audits.insert(
+        "third-party1".to_owned(),
+        vec![full_audit(ver(10), "reviewed"), {
+            let mut entry = delta_audit(
+                ver(10),
+                "10.0.0@git:00112233445566778899aabbccddeeff00112244"
+                    .parse()
+                    .unwrap(),
+                "reviewed",
+            );
+            entry.importable = false;
+            entry.notes = Some("Old notes".into());
+            entry.who = vec!["testing".to_owned().into(), "other".to_owned().into()];
+
+            entry
+        }],
+    );
+
+    let mut store = Store::mock(config, audits, imports);
+
+    let output = BasicTestOutput::with_callbacks(
+        |_| Ok("\n".to_owned()),
+        |_| {
+            Ok("\
+            I, testing, certify that I have audited the changes from version 10.0.0@git:00112233445566778899aabbccddeeff00112244 to 10.0.0@git:00112233445566778899aabbccddeeff00112233 of third-party1 in accordance with the above criteria.\n\
+            \n\
+            New notes\n\
+            \n".to_owned())
+        },
+    );
+
+    let cfg = mock_cfg_args(
+        &metadata,
+        [
+            "cargo",
+            "vet",
+            "certify",
+            "third-party1",
+            "10.0.0@git:00112233445566778899aabbccddeeff00112244",
+            "10.0.0@git:00112233445566778899aabbccddeeff00112233",
+            "--who",
+            "testing",
+            "--criteria",
+            "reviewed",
+        ],
+    );
+    let sub_args = if let Some(crate::cli::Commands::Certify(sub_args)) = &cfg.cli.command {
+        sub_args
+    } else {
+        unreachable!();
+    };
+
+    crate::do_cmd_certify(
+        &output.clone().as_dyn(),
+        &cfg,
+        sub_args,
+        &mut store,
+        None,
+        None,
+    )
+    .expect("do_cmd_certify failed");
+
+    let audits = crate::serialization::to_formatted_toml(&store.audits, None).unwrap();
+
+    let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
+
+    insta::assert_snapshot!("mock-collapse-non-importable-audits", result);
+}
+
+#[test]
+fn mock_collapse_with_full_audit() {
+    let mock = MockMetadata::simple();
+
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = mock.metadata();
+
+    let (config, mut audits, imports) = files_inited(&metadata);
+
+    audits.audits.insert(
+        "third-party1".to_owned(),
+        vec![{
+            let mut audit = full_audit(
+                "10.0.0@git:00112233445566778899aabbccddeeff00112233"
+                    .parse()
+                    .unwrap(),
+                "reviewed",
+            );
+            audit.importable = false;
+            audit
+        }],
+    );
+
+    let mut store = Store::mock(config, audits, imports);
+
+    let output = BasicTestOutput::with_callbacks(
+        |_| Ok("\n".to_owned()),
+        |_| {
+            Ok("\
+            I, testing, certify that I have audited the changes from version 10.0.0@git:00112233445566778899aabbccddeeff00112233 to 10.0.0 of third-party1 in accordance with the above criteria.\n\
+            \n\
+            New notes\n\
+            \n".to_owned())
+        },
+    );
+
+    let cfg = mock_cfg_args(
+        &metadata,
+        [
+            "cargo",
+            "vet",
+            "certify",
+            "third-party1",
+            "10.0.0@git:00112233445566778899aabbccddeeff00112233",
+            "10.0.0",
+            "--who",
+            "testing",
+            "--criteria",
+            "reviewed",
+        ],
+    );
+    let sub_args = if let Some(crate::cli::Commands::Certify(sub_args)) = &cfg.cli.command {
+        sub_args
+    } else {
+        unreachable!();
+    };
+
+    crate::do_cmd_certify(
+        &output.clone().as_dyn(),
+        &cfg,
+        sub_args,
+        &mut store,
+        None,
+        None,
+    )
+    .expect("do_cmd_certify failed");
+
+    let audits = crate::serialization::to_formatted_toml(&store.audits, None).unwrap();
+
+    let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
+
+    insta::assert_snapshot!("mock-collapse-with-full-audit", result);
+}
+
+#[test]
+fn mock_dont_collapse_incompatible_criteria_non_importable_audits() {
+    let mock = MockMetadata::simple_local_git();
+
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = mock.metadata();
+
+    let (mut config, mut audits, imports) = files_inited(&metadata);
+
+    config
+        .policy
+        .insert("third-party1".to_string(), audit_as_policy(Some(true)));
+
+    audits.audits.insert(
+        "third-party1".to_owned(),
+        vec![full_audit(ver(10), "reviewed"), {
+            let mut entry = delta_audit(
+                ver(10),
+                "10.0.0@git:00112233445566778899aabbccddeeff00112244"
+                    .parse()
+                    .unwrap(),
+                "reviewed",
+            );
+            entry.importable = false;
+            entry.notes = Some("Old notes".into());
+            entry.who = vec!["testing".to_owned().into(), "other".to_owned().into()];
+
+            entry
+        }],
+    );
+
+    let mut store = Store::mock(config, audits, imports);
+
+    let output = BasicTestOutput::with_callbacks(
+        |_| Ok("\n".to_owned()),
+        |_| {
+            Ok("\
+            I, testing, certify that I have audited the changes from version 10.0.0@git:00112233445566778899aabbccddeeff00112244 to 10.0.0@git:00112233445566778899aabbccddeeff00112233 of third-party1 in accordance with the above criteria.\n\
+            \n\
+            New notes\n\
+            \n".to_owned())
+        },
+    );
+
+    let cfg = mock_cfg_args(
+        &metadata,
+        [
+            "cargo",
+            "vet",
+            "certify",
+            "third-party1",
+            "10.0.0@git:00112233445566778899aabbccddeeff00112244",
+            "10.0.0@git:00112233445566778899aabbccddeeff00112233",
+            "--who",
+            "testing",
+            "--criteria",
+            "strong-reviewed",
+        ],
+    );
+    let sub_args = if let Some(crate::cli::Commands::Certify(sub_args)) = &cfg.cli.command {
+        sub_args
+    } else {
+        unreachable!();
+    };
+
+    crate::do_cmd_certify(
+        &output.clone().as_dyn(),
+        &cfg,
+        sub_args,
+        &mut store,
+        None,
+        None,
+    )
+    .expect("do_cmd_certify failed");
+
+    let audits = crate::serialization::to_formatted_toml(&store.audits, None).unwrap();
+
+    let result = format!("OUTPUT:\n{output}\nAUDITS:\n{audits}");
+
+    insta::assert_snapshot!(
+        "mock-dont-collapse-incompatible-criteria-non-importable-audits",
+        result
+    );
 }
 
 #[test]
