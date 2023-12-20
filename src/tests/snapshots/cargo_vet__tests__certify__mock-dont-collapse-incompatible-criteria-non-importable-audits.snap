@@ -1,0 +1,63 @@
+---
+source: src/tests/certify.rs
+expression: result
+---
+OUTPUT:
+<<<EDITING VET_CERTIFY>>>
+# Please read the following criteria and then follow the instructions below:
+
+# === BEGIN CRITERIA "strong-reviewed" ===
+#
+# strongly reviewed
+#
+# === END CRITERIA ===
+#
+# Uncomment the following statement:
+
+# I, testing, certify that I have audited the changes from version 10.0.0@git:00112233445566778899aabbccddeeff00112244 to 10.0.0@git:00112233445566778899aabbccddeeff00112233 of third-party1 in accordance with the above criteria.
+
+# Add any notes about your audit below this line:
+
+
+<<<EDIT OK>>>
+I, testing, certify that I have audited the changes from version 10.0.0@git:00112233445566778899aabbccddeeff00112244 to 10.0.0@git:00112233445566778899aabbccddeeff00112233 of third-party1 in accordance with the above criteria.
+
+New notes
+
+
+<<<END EDIT>>>
+
+AUDITS:
+
+[criteria.fuzzed]
+description = "fuzzed"
+
+[criteria.reviewed]
+description = "reviewed"
+implies = "weak-reviewed"
+
+[criteria.strong-reviewed]
+description = "strongly reviewed"
+implies = "reviewed"
+
+[criteria.weak-reviewed]
+description = "weakly reviewed"
+
+[[audits.third-party1]]
+criteria = "reviewed"
+version = "10.0.0"
+
+[[audits.third-party1]]
+who = ["testing", "other"]
+criteria = "reviewed"
+delta = "10.0.0 -> 10.0.0@git:00112233445566778899aabbccddeeff00112244"
+importable = false
+notes = "Old notes"
+
+[[audits.third-party1]]
+who = "testing"
+criteria = "strong-reviewed"
+delta = "10.0.0@git:00112233445566778899aabbccddeeff00112244 -> 10.0.0@git:00112233445566778899aabbccddeeff00112233"
+importable = false
+notes = "New notes"
+

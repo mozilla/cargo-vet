@@ -920,14 +920,15 @@ fn do_cmd_certify(
     let criteria = criteria_names.into_iter().map(|s| s.into()).collect();
     match kind {
         CertifyKind::Full { version } => {
-            let importable = version.git_rev.is_none();
+            let kind = AuditKind::Full { version };
+            let importable = kind.default_importable();
             store
                 .audits
                 .audits
                 .entry(package.clone())
                 .or_default()
                 .push(AuditEntry {
-                    kind: AuditKind::Full { version },
+                    kind,
                     criteria,
                     who,
                     importable,
@@ -937,21 +938,87 @@ fn do_cmd_certify(
                 });
         }
         CertifyKind::Delta { from, to } => {
-            let importable = from.git_rev.is_none() && to.git_rev.is_none();
+            let from_is_git_version = from.git_rev.is_some();
+            let kind = AuditKind::Delta { from, to };
+            let importable = kind.default_importable();
+
+            let mut entry = AuditEntry {
+                kind,
+                criteria,
+                who,
+                importable,
+                notes,
+                aggregated_from: vec![],
+                is_fresh_import: false,
+            };
+
+            // Collapse a delta audit with a git `from` version with a prior audit that is
+            // non-importable and has identical and satisfied criteria.
+            //
+            // We merge an adjacent audit for a prior version with the new audit (updating the new
+            // audit). The later `update_store` call will remove the now-unused prior audit.
+            if from_is_git_version && !sub_args.no_collapse {
+                // A closure which returns whether the given audit entry satisfies the criteria
+                // being certified.
+                let is_rooted_for_criteria = {
+                    let mapper = CriteriaMapper::new(&store.audits.criteria);
+                    let criteria = mapper.criteria_from_list(&entry.criteria);
+                    // If the audit graph fails to load, we always return `false` and thus don't
+                    // make any changes.
+                    let audit_graph = match resolver::AuditGraph::build(
+                        store, &mapper, &package, None,
+                    ) {
+                        Ok(graph) => Some(graph),
+                        Err(_) => {
+                            warn!(
+                                "failed to build audit graph to determine audit collapse validity, so not collapsing any audits"
+                            );
+                            None
+                        }
+                    };
+
+                    move |audit: &AuditEntry| {
+                        let Some(audit_graph) = &audit_graph else {
+                            return false;
+                        };
+                        let version = match &audit.kind {
+                            AuditKind::Delta { from, .. } => from,
+                            AuditKind::Full { .. } => return true,
+                            AuditKind::Violation { .. } => return false,
+                        };
+
+                        // NOTE we use `criteria` of the certification rather than the target audit
+                        // to check root accessibility, which is okay since later in
+                        // `try_collapse_with_prior` we verify that the criteria of the audit is
+                        // identical to that of the certification.
+                        mapper.minimal_indices(&criteria).all(|idx| {
+                            audit_graph
+                                .search(idx, version, resolver::SearchMode::PreferExemptions)
+                                .is_ok()
+                        })
+                    }
+                };
+                for audit in store
+                    .audits
+                    .audits
+                    .get(&package)
+                    .into_iter()
+                    .flatten()
+                    .filter(|a| !a.importable && is_rooted_for_criteria(a))
+                {
+                    if let Some(new_entry) = entry.try_collapse_with_prior(audit) {
+                        entry = new_entry;
+                        break;
+                    }
+                }
+            }
+
             store
                 .audits
                 .audits
                 .entry(package.clone())
                 .or_default()
-                .push(AuditEntry {
-                    kind: AuditKind::Delta { from, to },
-                    criteria,
-                    who,
-                    importable,
-                    notes,
-                    aggregated_from: vec![],
-                    is_fresh_import: false,
-                });
+                .push(entry);
         }
         CertifyKind::Wildcard {
             user_id,

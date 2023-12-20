@@ -14,17 +14,15 @@ OUTPUT:
 #
 # Uncomment the following statement:
 
-# I, testing, certify that I have audited version 10.0.0 of third-party1 in accordance with the above criteria.
+# I, testing, certify that I have audited the changes from version 10.0.0@git:00112233445566778899aabbccddeeff00112244 to 10.0.0@git:00112233445566778899aabbccddeeff00112233 of third-party1 in accordance with the above criteria.
 
 # Add any notes about your audit below this line:
 
 
 <<<EDIT OK>>>
-I, testing, certify that I have audited version 10.0.0 of third-party1 in accordance with the above criteria.
+I, testing, certify that I have audited the changes from version 10.0.0@git:00112233445566778899aabbccddeeff00112244 to 10.0.0@git:00112233445566778899aabbccddeeff00112233 of third-party1 in accordance with the above criteria.
 
-These are testing notes. They contain some
-newlines. Trailing whitespace        
-    and leading whitespace
+New notes
 
 
 <<<END EDIT>>>
@@ -47,16 +45,14 @@ description = "weakly reviewed"
 
 [[audits.third-party1]]
 criteria = "reviewed"
-delta = "10.0.0 -> 10.0.0@git:ffeeddccbbaa99887766554433221100ffeeddcc"
-notes = "This entry intentionally left importable."
+version = "10.0.0"
 
 [[audits.third-party1]]
-who = "testing"
+who = ["other", "testing"]
 criteria = "reviewed"
-version = "10.0.0"
+delta = "10.0.0 -> 10.0.0@git:00112233445566778899aabbccddeeff00112233"
+importable = false
 notes = """
-These are testing notes. They contain some
-newlines. Trailing whitespace
-    and leading whitespace
-"""
+Old notes
+New notes"""
 

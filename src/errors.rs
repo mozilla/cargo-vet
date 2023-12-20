@@ -296,6 +296,9 @@ pub enum CertifyError {
     #[error("end date of {0} is too far in the future")]
     #[diagnostic(help("wildcard audit end dates may be at most 1 year in the future"))]
     BadWildcardEndDate(chrono::NaiveDate),
+    #[error("couldn't build an audit graph to determine audit collapse validity")]
+    #[diagnostic(help("use --no-collapse to disable audit collapsing"))]
+    BadAuditGraph,
     #[error(transparent)]
     IoError(#[from] std::io::Error),
     #[error(transparent)]

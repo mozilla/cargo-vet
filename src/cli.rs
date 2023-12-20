@@ -543,6 +543,15 @@ pub struct CertifyArgs {
     /// talk about is part of your current build, but this flag disables that.
     #[clap(long, action)]
     pub force: bool,
+    /// Prevent combination of the audit with a prior adjacent non-importable git audit, if any.
+    ///
+    /// This will only have an effect if the supplied `from` version is a git version.
+    ///
+    /// For example, normally an existing audit from `1.0.0->1.0.0@git:1111111` and a new certified
+    /// audit from `1.0.0@git:1111111->1.0.0@git:2222222` would result in a single audit from
+    /// `1.0.0->1.0.0@git:2222222`. Passing this flag would prevent this.
+    #[clap(long, action, requires("version2"))]
+    pub no_collapse: bool,
 }
 
 /// Import a new peer
