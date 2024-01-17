@@ -1934,3 +1934,147 @@ fn import_criteria_map_aggregated_error() {
 
     insta::assert_snapshot!(output);
 }
+
+#[test]
+fn import_subsumed_by_local_wildcard_audit() {
+    // (Pass) If a local wildcard audit accounts for a crate, an (non-fresh) imported audit should
+    // be pruned (the local wildcard audit is preferred).
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, mut imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
+
+    audits.wildcard_audits.insert(
+        "third-party2".to_owned(),
+        vec![{
+            let mut audit = wildcard_audit(1, SAFE_TO_DEPLOY);
+            audit.is_fresh_import = true;
+            audit
+        }],
+    );
+
+    let foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: [(
+            "third-party2".to_owned(),
+            vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        )]
+        .into(),
+        // This isn't necessary (and overlaps with the imported audit), but we have it to also test
+        // against foreign wildcard audits.
+        wildcard_audits: [(
+            "third-party2".to_owned(),
+            vec![wildcard_audit(1, SAFE_TO_DEPLOY)],
+        )]
+        .into(),
+        trusted: SortedMap::new(),
+    };
+
+    imports
+        .audits
+        .insert(FOREIGN.to_owned(), foreign_audits.clone());
+
+    imports.publisher.insert(
+        "third-party2".to_owned(),
+        vec![publisher_entry_named(
+            ver(DEFAULT_VER),
+            1,
+            "user1",
+            "User One",
+        )],
+    );
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: vec![FOREIGN_URL.to_owned()],
+            ..Default::default()
+        },
+    );
+
+    let cfg = mock_cfg(&metadata);
+
+    let mut network = Network::new_mock();
+    MockRegistryBuilder::new()
+        .user(1, "user1", "User One")
+        .package(
+            "third-party2",
+            &[reg_published_by(ver(DEFAULT_VER), Some(1), "2022-12-15")],
+        )
+        .serve(&mut network);
+    network.mock_serve_toml(FOREIGN_URL, &foreign_audits);
+
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+
+    let output = get_imports_file_changes_prune(&metadata, &store);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn fresh_import_not_preferred_to_local_wildcard_audit() {
+    // (Pass) If a local wildcard audit accounts for a crate, a freshly imported audit should not
+    // be preferred.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (mut config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
+
+    audits.wildcard_audits.insert(
+        "third-party2".to_owned(),
+        vec![{
+            let mut audit = wildcard_audit(1, SAFE_TO_DEPLOY);
+            audit.is_fresh_import = true;
+            audit
+        }],
+    );
+
+    let foreign_audits = AuditsFile {
+        criteria: SortedMap::new(),
+        audits: [(
+            "third-party2".to_owned(),
+            vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
+        )]
+        .into(),
+        // This isn't necessary (and overlaps with the imported audit), but we have it to also test
+        // against foreign wildcard audits.
+        wildcard_audits: [(
+            "third-party2".to_owned(),
+            vec![wildcard_audit(1, SAFE_TO_DEPLOY)],
+        )]
+        .into(),
+        trusted: SortedMap::new(),
+    };
+
+    config.imports.insert(
+        FOREIGN.to_owned(),
+        crate::format::RemoteImport {
+            url: vec![FOREIGN_URL.to_owned()],
+            ..Default::default()
+        },
+    );
+
+    let cfg = mock_cfg(&metadata);
+
+    let mut network = Network::new_mock();
+    MockRegistryBuilder::new()
+        .user(1, "user1", "User One")
+        .package(
+            "third-party2",
+            &[reg_published_by(ver(DEFAULT_VER), Some(1), "2022-12-15")],
+        )
+        .serve(&mut network);
+    network.mock_serve_toml(FOREIGN_URL, &foreign_audits);
+
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+
+    let output = get_imports_file_changes_noprune(&metadata, &store);
+    insta::assert_snapshot!(output);
+}

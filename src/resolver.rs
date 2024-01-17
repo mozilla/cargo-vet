@@ -1177,7 +1177,8 @@ impl<'a> AuditGraph<'a> {
                         audit_index,
                         publisher_index,
                     };
-                    let is_fresh_import = entry.is_fresh_import || publisher.is_fresh_import;
+                    let is_fresh_import = import_index.is_some()
+                        && (entry.is_fresh_import || publisher.is_fresh_import);
 
                     forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                         version: to_ver,
@@ -1446,6 +1447,7 @@ fn search_for_path(
     #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
     enum CaveatLevel {
         None,
+        Import,
         NonImportableAudit,
         PreferredExemption,
         PreferredUnpublished,
@@ -1588,6 +1590,11 @@ fn search_for_path(
                     _ => CaveatLevel::Unpublished,
                 },
                 _ if edge.is_fresh_import => CaveatLevel::FreshImport,
+                DeltaEdgeOrigin::ImportedAudit { .. }
+                | DeltaEdgeOrigin::WildcardAudit {
+                    import_index: Some(_),
+                    ..
+                } => CaveatLevel::Import,
                 _ => CaveatLevel::None,
             };
 
