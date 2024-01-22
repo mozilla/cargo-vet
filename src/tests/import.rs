@@ -1936,9 +1936,9 @@ fn import_criteria_map_aggregated_error() {
 }
 
 #[test]
-fn import_subsumed_by_local_wildcard_audit() {
-    // (Pass) If a local wildcard audit accounts for a crate, an (non-fresh) imported audit should
-    // be pruned (the local wildcard audit is preferred).
+fn existing_import_kept_despite_local_wildcard_audit() {
+    // (Pass) An existing imported audit is still kept if a local wildcard audit accounts for a
+    // crate.
 
     let _enter = TEST_RUNTIME.enter();
     let mock = MockMetadata::simple();
@@ -1950,11 +1950,7 @@ fn import_subsumed_by_local_wildcard_audit() {
 
     audits.wildcard_audits.insert(
         "third-party2".to_owned(),
-        vec![{
-            let mut audit = wildcard_audit(1, SAFE_TO_DEPLOY);
-            audit.is_fresh_import = true;
-            audit
-        }],
+        vec![wildcard_audit(1, SAFE_TO_DEPLOY)],
     );
 
     let foreign_audits = AuditsFile {
@@ -1964,29 +1960,13 @@ fn import_subsumed_by_local_wildcard_audit() {
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
         )]
         .into(),
-        // This isn't necessary (and overlaps with the imported audit), but we have it to also test
-        // against foreign wildcard audits.
-        wildcard_audits: [(
-            "third-party2".to_owned(),
-            vec![wildcard_audit(1, SAFE_TO_DEPLOY)],
-        )]
-        .into(),
+        wildcard_audits: SortedMap::new(),
         trusted: SortedMap::new(),
     };
 
     imports
         .audits
         .insert(FOREIGN.to_owned(), foreign_audits.clone());
-
-    imports.publisher.insert(
-        "third-party2".to_owned(),
-        vec![publisher_entry_named(
-            ver(DEFAULT_VER),
-            1,
-            "user1",
-            "User One",
-        )],
-    );
 
     config.imports.insert(
         FOREIGN.to_owned(),
@@ -2015,7 +1995,7 @@ fn import_subsumed_by_local_wildcard_audit() {
 }
 
 #[test]
-fn fresh_import_not_preferred_to_local_wildcard_audit() {
+fn local_wildcard_audit_preferred_to_fresh_import() {
     // (Pass) If a local wildcard audit accounts for a crate, a freshly imported audit should not
     // be preferred.
 
@@ -2029,11 +2009,7 @@ fn fresh_import_not_preferred_to_local_wildcard_audit() {
 
     audits.wildcard_audits.insert(
         "third-party2".to_owned(),
-        vec![{
-            let mut audit = wildcard_audit(1, SAFE_TO_DEPLOY);
-            audit.is_fresh_import = true;
-            audit
-        }],
+        vec![wildcard_audit(1, SAFE_TO_DEPLOY)],
     );
 
     let foreign_audits = AuditsFile {
@@ -2043,8 +2019,8 @@ fn fresh_import_not_preferred_to_local_wildcard_audit() {
             vec![full_audit(ver(DEFAULT_VER), SAFE_TO_DEPLOY)],
         )]
         .into(),
-        // This isn't necessary (and overlaps with the imported audit), but we have it to also test
-        // against foreign wildcard audits.
+        // This isn't necessary (and overlaps with the imported audit), but we have it to also show
+        // that local wildcard audits are preferred to remote ones.
         wildcard_audits: [(
             "third-party2".to_owned(),
             vec![wildcard_audit(1, SAFE_TO_DEPLOY)],
