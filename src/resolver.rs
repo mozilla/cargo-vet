@@ -341,6 +341,34 @@ pub enum RequiredEntry {
     },
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum DeltaEdgeFreshness {
+    // All information requried for this delta edge is already stored within the store's
+    // supply-chain. Using this edge will require no changes to imports.lock.
+    Stale,
+    // This edge originates from an already-imported or local wildcard audit, however will require
+    // importing fresh publisher information into imports.lock.
+    FreshPublisher,
+    // This edge is fully fresh, and will require adding the audit entry to imports.lock to use.
+    Fresh,
+}
+
+impl DeltaEdgeFreshness {
+    fn new(is_fresh_audit: bool, is_fresh_publisher: bool) -> Self {
+        if is_fresh_audit {
+            DeltaEdgeFreshness::Fresh
+        } else if is_fresh_publisher {
+            DeltaEdgeFreshness::FreshPublisher
+        } else {
+            DeltaEdgeFreshness::Stale
+        }
+    }
+
+    fn is_fresh(&self) -> bool {
+        self != &DeltaEdgeFreshness::Stale
+    }
+}
+
 /// A directed edge in the graph of audits. This may be forward or backwards,
 /// depending on if we're searching from "roots" (forward) or the target (backward).
 /// The source isn't included because that's implicit in the Node.
@@ -355,7 +383,7 @@ struct DeltaEdge<'a> {
     origin: DeltaEdgeOrigin,
     /// Whether or not the edge is a "fresh import", and should be
     /// de-prioritized to avoid unnecessary imports.lock updates.
-    is_fresh_import: bool,
+    freshness: DeltaEdgeFreshness,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -1142,12 +1170,13 @@ impl<'a> AuditGraph<'a> {
             };
 
             let criteria = criteria_mapper.criteria_from_list(&entry.criteria);
+            let freshness = DeltaEdgeFreshness::new(entry.is_fresh_import, false);
 
             forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: Some(to_ver),
                 criteria: criteria.clone(),
                 origin: origin.clone(),
-                is_fresh_import: entry.is_fresh_import,
+                freshness,
             });
             backward_audits
                 .entry(Some(to_ver))
@@ -1156,7 +1185,7 @@ impl<'a> AuditGraph<'a> {
                     version: from_ver,
                     criteria,
                     origin,
-                    is_fresh_import: entry.is_fresh_import,
+                    freshness,
                 });
         }
 
@@ -1177,19 +1206,20 @@ impl<'a> AuditGraph<'a> {
                         audit_index,
                         publisher_index,
                     };
-                    let is_fresh_import = entry.is_fresh_import || publisher.is_fresh_import;
+                    let freshness =
+                        DeltaEdgeFreshness::new(entry.is_fresh_import, publisher.is_fresh_import);
 
                     forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                         version: to_ver,
                         criteria: criteria.clone(),
                         origin: origin.clone(),
-                        is_fresh_import,
+                        freshness,
                     });
                     backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                         version: from_ver,
                         criteria,
                         origin,
-                        is_fresh_import,
+                        freshness,
                     });
                 }
             }
@@ -1203,18 +1233,23 @@ impl<'a> AuditGraph<'a> {
                     let to_ver = Some(&publisher.version);
                     let criteria = criteria_mapper.criteria_from_list(&entry.criteria);
                     let origin = DeltaEdgeOrigin::Trusted { publisher_index };
+                    // While the import freshness is technically based on the publisher being a
+                    // fresh import, we use this as the _audit_ freshness here because a trusted
+                    // entry should be put at the same caveat level ordering as other audits (which
+                    // is determined from freshness later on).
+                    let freshness = DeltaEdgeFreshness::new(publisher.is_fresh_import, false);
 
                     forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                         version: to_ver,
                         criteria: criteria.clone(),
                         origin: origin.clone(),
-                        is_fresh_import: publisher.is_fresh_import,
+                        freshness,
                     });
                     backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                         version: from_ver,
                         criteria,
                         origin,
-                        is_fresh_import: publisher.is_fresh_import,
+                        freshness,
                     });
                 }
             }
@@ -1226,19 +1261,19 @@ impl<'a> AuditGraph<'a> {
             let to_ver = Some(&unpublished.version);
             let criteria = criteria_mapper.all_criteria();
             let origin = DeltaEdgeOrigin::Unpublished { unpublished_index };
-            let is_fresh_import = unpublished.is_fresh_import;
+            let freshness = DeltaEdgeFreshness::new(unpublished.is_fresh_import, false);
 
             forward_audits.entry(from_ver).or_default().push(DeltaEdge {
                 version: to_ver,
                 criteria: criteria.clone(),
                 origin: origin.clone(),
-                is_fresh_import,
+                freshness,
             });
             backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                 version: from_ver,
                 criteria,
                 origin,
-                is_fresh_import,
+                freshness,
             });
         }
 
@@ -1255,13 +1290,13 @@ impl<'a> AuditGraph<'a> {
                     version: to_ver,
                     criteria: criteria.clone(),
                     origin: origin.clone(),
-                    is_fresh_import: false,
+                    freshness: DeltaEdgeFreshness::Stale,
                 });
                 backward_audits.entry(to_ver).or_default().push(DeltaEdge {
                     version: from_ver,
                     criteria,
                     origin,
-                    is_fresh_import: false,
+                    freshness: DeltaEdgeFreshness::Stale,
                 });
             }
         }
@@ -1449,6 +1484,7 @@ fn search_for_path(
         NonImportableAudit,
         PreferredExemption,
         PreferredUnpublished,
+        FreshPublisher,
         FreshImport,
         Exemption,
         Unpublished,
@@ -1579,16 +1615,19 @@ fn search_for_path(
                 DeltaEdgeOrigin::Unpublished { .. } => match mode {
                     // When preferring exemptions, prefer existing unpublished
                     // entries to avoid imports.lock churn.
-                    SearchMode::PreferExemptions if !edge.is_fresh_import => {
+                    SearchMode::PreferExemptions if !edge.freshness.is_fresh() => {
                         CaveatLevel::PreferredUnpublished
                     }
                     SearchMode::PreferExemptions => CaveatLevel::Unpublished,
                     // Otherwise, prefer fresh to avoid outdated versions.
-                    _ if edge.is_fresh_import => CaveatLevel::PreferredUnpublished,
+                    _ if edge.freshness.is_fresh() => CaveatLevel::PreferredUnpublished,
                     _ => CaveatLevel::Unpublished,
                 },
-                _ if edge.is_fresh_import => CaveatLevel::FreshImport,
-                _ => CaveatLevel::None,
+                _ => match edge.freshness {
+                    DeltaEdgeFreshness::Stale => CaveatLevel::None,
+                    DeltaEdgeFreshness::FreshPublisher => CaveatLevel::FreshPublisher,
+                    DeltaEdgeFreshness::Fresh => CaveatLevel::FreshImport,
+                },
             };
 
             queue.push(Node {
