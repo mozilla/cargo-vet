@@ -1074,7 +1074,7 @@ async fn fetch_single_imported_audit(
         mut audit_file,
         ignored_criteria,
         ignored_audits,
-    } = foreign_audit_file_to_local(foreign_audit_file);
+    } = foreign_audit_file_to_local(name, foreign_audit_file);
     if !ignored_criteria.is_empty() {
         warn!(
             "Ignored {} invalid criteria entries when importing from '{}'\n\
@@ -1090,7 +1090,8 @@ async fn fetch_single_imported_audit(
     if !ignored_audits.is_empty() {
         warn!(
             "Ignored {} invalid audits when importing from '{}'\n\
-            These audits may have been made with a more recent version of cargo-vet",
+            These audits may have been made with a more recent version of cargo-vet \
+            or may refer to undefined or unrecognized audit criteria",
             ignored_audits.len(),
             name
         );
@@ -1233,21 +1234,33 @@ fn is_known_criteria(valid_criteria: &[CriteriaName], criteria_name: &CriteriaNa
 /// which could not be interpreted, due to issues such as being created with a
 /// newer version of cargo-vet.
 pub(crate) fn foreign_audit_file_to_local(
+    name: &str,
     foreign_audit_file: ForeignAuditsFile,
 ) -> ForeignAuditFileToLocalResult {
     let mut ignored_criteria = Vec::new();
-    let mut criteria: SortedMap<CriteriaName, CriteriaEntry> = foreign_audit_file
-        .criteria
-        .into_iter()
-        .filter_map(|(criteria, value)| match parse_imported_criteria(value) {
-            Some(entry) => Some((criteria, entry)),
-            None => {
-                ignored_criteria.push(criteria);
-                None
-            }
-        })
-        .collect();
-    let valid_criteria: Vec<CriteriaName> = criteria.keys().cloned().collect();
+    let valid_criteria: Vec<CriteriaName>;
+    let mut criteria: SortedMap<CriteriaName, CriteriaEntry>;
+    if foreign_audit_file.criteria.is_empty() {
+        warn!("No criteria definitions found when importing from `{name}`");
+        criteria = SortedMap::new();
+        valid_criteria = vec![];
+    } else {
+        criteria = foreign_audit_file
+            .criteria
+            .into_iter()
+            .filter_map(|(criteria, value)| match parse_imported_criteria(value) {
+                Some(entry) => Some((criteria, entry)),
+                None => {
+                    ignored_criteria.push(criteria);
+                    None
+                }
+            })
+            .collect();
+        valid_criteria = criteria.keys().cloned().collect();
+        if valid_criteria.is_empty() {
+            warn!("All criteria definitions failed to parse when importing from `{name}`");
+        }
+    }
 
     // Remove any unknown criteria from implies sets, to ensure we don't run
     // into errors later on in the resolver.
@@ -1332,24 +1345,41 @@ fn parse_imported_criteria(value: toml::Value) -> Option<CriteriaEntry> {
         .ok()
 }
 
-/// Parse an unparsed audit entry, validating and returning it.
-fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> Option<AuditEntry> {
-    let mut audit: AuditEntry = parse_from_value(value)
-        .map_err(|err| info!("imported audit parsing failed due to {err}"))
-        .ok()?;
-
+fn retain_only_known_criteria(
+    audit_criteria: &mut Vec<Spanned<CriteriaName>>,
+    valid_criteria: &[CriteriaName],
+) -> Result<(), String> {
     // Remove any unrecognized criteria to avoid later errors caused by being
     // unable to find criteria, and ignore the entry if it names no known
     // criteria.
-    audit
-        .criteria
-        .retain(|criteria_name| is_known_criteria(valid_criteria, criteria_name));
-    if audit.criteria.is_empty() {
-        info!("imported audit parsing failed due to no known criteria");
-        return None;
+    if audit_criteria
+        .iter()
+        .any(|criteria_name| is_known_criteria(valid_criteria, criteria_name))
+    {
+        audit_criteria.retain(|criteria_name| is_known_criteria(valid_criteria, criteria_name));
+        Ok(())
+    } else {
+        Err(format!(
+            "no known criteria: {}",
+            audit_criteria
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        ))
     }
+}
 
-    Some(audit)
+/// Parse an unparsed audit entry, validating and returning it.
+fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> Option<AuditEntry> {
+    parse_from_value::<AuditEntry>(value)
+        .map_err(|err| err.to_string())
+        .and_then(|mut audit| {
+            retain_only_known_criteria(&mut audit.criteria, valid_criteria)?;
+            Ok(audit)
+        })
+        .map_err(|err| info!("imported audit parsing failed due to {err}"))
+        .ok()
 }
 
 /// Parse an unparsed wildcard audit entry, validating and returning it.
@@ -1357,19 +1387,14 @@ fn parse_imported_wildcard_audit(
     valid_criteria: &[CriteriaName],
     value: toml::Value,
 ) -> Option<WildcardEntry> {
-    let mut audit: WildcardEntry = parse_from_value(value)
+    parse_from_value::<WildcardEntry>(value)
+        .map_err(|err| err.to_string())
+        .and_then(|mut audit| {
+            retain_only_known_criteria(&mut audit.criteria, valid_criteria)?;
+            Ok(audit)
+        })
         .map_err(|err| info!("imported wildcard audit parsing failed due to {err}"))
-        .ok()?;
-
-    audit
-        .criteria
-        .retain(|criteria_name| is_known_criteria(valid_criteria, criteria_name));
-    if audit.criteria.is_empty() {
-        info!("imported wildcard audit parsing failed due to no known criteria");
-        return None;
-    }
-
-    Some(audit)
+        .ok()
 }
 
 /// Parse an unparsed wildcard audit entry, validating and returning it.
