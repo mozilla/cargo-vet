@@ -29,3 +29,8 @@ gradually as time permits.
 > **Note**: `cargo vet` is under active development. If you're interested in
 > deploying it, [get in touch](mailto:bholley@mozilla.com).
 
+## Contributing
+
+`cargo-vet` is free and open source.
+You can find the source code on [GitHub](https://github.com/mozilla/cargo-vet)
+and issues and feature requests can be posted on the [GitHub issue tracker](https://github.com/mozilla/cargo-vet/issues).
