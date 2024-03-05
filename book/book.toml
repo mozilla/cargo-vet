@@ -6,3 +6,4 @@ title = "Cargo Vet"
 
 [output.html]
 additional-css = ["src/custom.css"]
+git-repository-url = "https://github.com/mozilla/cargo-vet"
