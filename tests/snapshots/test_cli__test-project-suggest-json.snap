@@ -7,6 +7,13 @@ stdout:
   "conclusion": "fail (vetting)",
   "failures": [
     {
+      "name": "proc-macro2",
+      "version": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+      "missing_criteria": [
+        "safe-to-deploy"
+      ]
+    },
+    {
       "name": "bumpalo",
       "version": "3.9.1",
       "missing_criteria": [
@@ -42,15 +49,15 @@ stdout:
       ]
     },
     {
-      "name": "core-foundation",
-      "version": "0.9.3",
+      "name": "core-foundation-sys",
+      "version": "0.8.3",
       "missing_criteria": [
         "safe-to-deploy"
       ]
     },
     {
-      "name": "core-foundation-sys",
-      "version": "0.8.3",
+      "name": "core-foundation",
+      "version": "0.9.3",
       "missing_criteria": [
         "safe-to-deploy"
       ]
@@ -77,15 +84,15 @@ stdout:
       ]
     },
     {
-      "name": "foreign-types",
-      "version": "0.3.2",
+      "name": "foreign-types-shared",
+      "version": "0.1.1",
       "missing_criteria": [
         "safe-to-deploy"
       ]
     },
     {
-      "name": "foreign-types-shared",
-      "version": "0.1.1",
+      "name": "foreign-types",
+      "version": "0.3.2",
       "missing_criteria": [
         "safe-to-deploy"
       ]
@@ -154,15 +161,15 @@ stdout:
       ]
     },
     {
-      "name": "http",
-      "version": "0.2.6",
+      "name": "http-body",
+      "version": "0.4.4",
       "missing_criteria": [
         "safe-to-deploy"
       ]
     },
     {
-      "name": "http-body",
-      "version": "0.4.4",
+      "name": "http",
+      "version": "0.2.6",
       "missing_criteria": [
         "safe-to-deploy"
       ]
@@ -182,15 +189,15 @@ stdout:
       ]
     },
     {
-      "name": "hyper",
-      "version": "0.14.18",
+      "name": "hyper-tls",
+      "version": "0.5.0",
       "missing_criteria": [
         "safe-to-deploy"
       ]
     },
     {
-      "name": "hyper-tls",
-      "version": "0.5.0",
+      "name": "hyper",
+      "version": "0.14.18",
       "missing_criteria": [
         "safe-to-deploy"
       ]
@@ -315,13 +322,6 @@ stdout:
       ]
     },
     {
-      "name": "openssl",
-      "version": "0.10.38",
-      "missing_criteria": [
-        "safe-to-deploy"
-      ]
-    },
-    {
       "name": "openssl-probe",
       "version": "0.1.5",
       "missing_criteria": [
@@ -331,6 +331,13 @@ stdout:
     {
       "name": "openssl-sys",
       "version": "0.9.72",
+      "missing_criteria": [
+        "safe-to-deploy"
+      ]
+    },
+    {
+      "name": "openssl",
+      "version": "0.10.38",
       "missing_criteria": [
         "safe-to-deploy"
       ]
@@ -366,13 +373,6 @@ stdout:
     {
       "name": "pkg-config",
       "version": "0.3.25",
-      "missing_criteria": [
-        "safe-to-deploy"
-      ]
-    },
-    {
-      "name": "proc-macro2",
-      "version": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
       "missing_criteria": [
         "safe-to-deploy"
       ]
@@ -427,14 +427,14 @@ stdout:
       ]
     },
     {
-      "name": "security-framework",
+      "name": "security-framework-sys",
       "version": "2.6.1",
       "missing_criteria": [
         "safe-to-deploy"
       ]
     },
     {
-      "name": "security-framework-sys",
+      "name": "security-framework",
       "version": "2.6.1",
       "missing_criteria": [
         "safe-to-deploy"
@@ -511,13 +511,6 @@ stdout:
       ]
     },
     {
-      "name": "tokio",
-      "version": "1.17.0",
-      "missing_criteria": [
-        "safe-to-deploy"
-      ]
-    },
-    {
       "name": "tokio-native-tls",
       "version": "0.3.0",
       "missing_criteria": [
@@ -527,6 +520,13 @@ stdout:
     {
       "name": "tokio-util",
       "version": "0.7.1",
+      "missing_criteria": [
+        "safe-to-deploy"
+      ]
+    },
+    {
+      "name": "tokio",
+      "version": "1.17.0",
       "missing_criteria": [
         "safe-to-deploy"
       ]
@@ -609,13 +609,6 @@ stdout:
       ]
     },
     {
-      "name": "wasm-bindgen",
-      "version": "0.2.80",
-      "missing_criteria": [
-        "safe-to-deploy"
-      ]
-    },
-    {
       "name": "wasm-bindgen-backend",
       "version": "0.2.80",
       "missing_criteria": [
@@ -630,14 +623,14 @@ stdout:
       ]
     },
     {
-      "name": "wasm-bindgen-macro",
+      "name": "wasm-bindgen-macro-support",
       "version": "0.2.80",
       "missing_criteria": [
         "safe-to-deploy"
       ]
     },
     {
-      "name": "wasm-bindgen-macro-support",
+      "name": "wasm-bindgen-macro",
       "version": "0.2.80",
       "missing_criteria": [
         "safe-to-deploy"
@@ -651,15 +644,15 @@ stdout:
       ]
     },
     {
-      "name": "web-sys",
-      "version": "0.3.57",
+      "name": "wasm-bindgen",
+      "version": "0.2.80",
       "missing_criteria": [
         "safe-to-deploy"
       ]
     },
     {
-      "name": "winapi",
-      "version": "0.3.9",
+      "name": "web-sys",
+      "version": "0.3.57",
       "missing_criteria": [
         "safe-to-deploy"
       ]
@@ -681,6 +674,13 @@ stdout:
     {
       "name": "winapi-x86_64-pc-windows-gnu",
       "version": "0.4.0",
+      "missing_criteria": [
+        "safe-to-deploy"
+      ]
+    },
+    {
+      "name": "winapi",
+      "version": "0.3.9",
       "missing_criteria": [
         "safe-to-deploy"
       ]
@@ -3810,4 +3810,3 @@ stdout:
   }
 }
 stderr:
-

@@ -47,6 +47,10 @@ stdout:
   ],
   "vetted_with_exemptions": [
     {
+      "name": "proc-macro2",
+      "version": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9"
+    },
+    {
       "name": "bumpalo",
       "version": "3.9.1"
     },
@@ -63,12 +67,12 @@ stdout:
       "version": "0.1.10"
     },
     {
-      "name": "core-foundation",
-      "version": "0.9.3"
-    },
-    {
       "name": "core-foundation-sys",
       "version": "0.8.3"
+    },
+    {
+      "name": "core-foundation",
+      "version": "0.9.3"
     },
     {
       "name": "encoding_rs",
@@ -83,12 +87,12 @@ stdout:
       "version": "1.0.7"
     },
     {
-      "name": "foreign-types",
-      "version": "0.3.2"
-    },
-    {
       "name": "foreign-types-shared",
       "version": "0.1.1"
+    },
+    {
+      "name": "foreign-types",
+      "version": "0.3.2"
     },
     {
       "name": "form_urlencoded",
@@ -127,12 +131,12 @@ stdout:
       "version": "0.1.19"
     },
     {
-      "name": "http",
-      "version": "0.2.6"
-    },
-    {
       "name": "http-body",
       "version": "0.4.4"
+    },
+    {
+      "name": "http",
+      "version": "0.2.6"
     },
     {
       "name": "httparse",
@@ -143,12 +147,12 @@ stdout:
       "version": "1.0.2"
     },
     {
-      "name": "hyper",
-      "version": "0.14.18"
-    },
-    {
       "name": "hyper-tls",
       "version": "0.5.0"
+    },
+    {
+      "name": "hyper",
+      "version": "0.14.18"
     },
     {
       "name": "idna",
@@ -219,16 +223,16 @@ stdout:
       "version": "1.10.0"
     },
     {
-      "name": "openssl",
-      "version": "0.10.38"
-    },
-    {
       "name": "openssl-probe",
       "version": "0.1.5"
     },
     {
       "name": "openssl-sys",
       "version": "0.9.72"
+    },
+    {
+      "name": "openssl",
+      "version": "0.10.38"
     },
     {
       "name": "os_str_bytes",
@@ -249,10 +253,6 @@ stdout:
     {
       "name": "pkg-config",
       "version": "0.3.25"
-    },
-    {
-      "name": "proc-macro2",
-      "version": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9"
     },
     {
       "name": "proc-macro2",
@@ -283,11 +283,11 @@ stdout:
       "version": "0.1.19"
     },
     {
-      "name": "security-framework",
+      "name": "security-framework-sys",
       "version": "2.6.1"
     },
     {
-      "name": "security-framework-sys",
+      "name": "security-framework",
       "version": "2.6.1"
     },
     {
@@ -335,16 +335,16 @@ stdout:
       "version": "0.1.0"
     },
     {
-      "name": "tokio",
-      "version": "1.17.0"
-    },
-    {
       "name": "tokio-native-tls",
       "version": "0.3.0"
     },
     {
       "name": "tokio-util",
       "version": "0.7.1"
+    },
+    {
+      "name": "tokio",
+      "version": "1.17.0"
     },
     {
       "name": "tower-service",
@@ -387,10 +387,6 @@ stdout:
       "version": "0.11.0+wasi-snapshot-preview1"
     },
     {
-      "name": "wasm-bindgen",
-      "version": "0.2.80"
-    },
-    {
       "name": "wasm-bindgen-backend",
       "version": "0.2.80"
     },
@@ -399,11 +395,11 @@ stdout:
       "version": "0.4.30"
     },
     {
-      "name": "wasm-bindgen-macro",
+      "name": "wasm-bindgen-macro-support",
       "version": "0.2.80"
     },
     {
-      "name": "wasm-bindgen-macro-support",
+      "name": "wasm-bindgen-macro",
       "version": "0.2.80"
     },
     {
@@ -411,12 +407,12 @@ stdout:
       "version": "0.2.80"
     },
     {
-      "name": "web-sys",
-      "version": "0.3.57"
+      "name": "wasm-bindgen",
+      "version": "0.2.80"
     },
     {
-      "name": "winapi",
-      "version": "0.3.9"
+      "name": "web-sys",
+      "version": "0.3.57"
     },
     {
       "name": "winapi-i686-pc-windows-gnu",
@@ -431,10 +427,13 @@ stdout:
       "version": "0.4.0"
     },
     {
+      "name": "winapi",
+      "version": "0.3.9"
+    },
+    {
       "name": "winreg",
       "version": "0.10.1"
     }
   ]
 }
 stderr:
-

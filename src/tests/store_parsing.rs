@@ -269,8 +269,8 @@ criteria = "safe-to-deploy"
 version = "10.0.0"
 "#;
 
-    let acquire_errors = get_valid_store(config, EMPTY_AUDITS, imports);
-    insta::assert_snapshot!(acquire_errors);
+    let no_errors = get_valid_store(config, EMPTY_AUDITS, imports);
+    assert_eq!("", no_errors);
 }
 
 #[test]
@@ -407,8 +407,8 @@ criteria = "safe-to-deploy"
 version = "10.0.0"
 "#;
 
-    let acquire_errors = get_valid_store(config, audits, imports);
-    insta::assert_snapshot!(acquire_errors);
+    let no_errors = get_valid_store(config, audits, imports);
+    insta::assert_snapshot!(no_errors);
 }
 
 #[test]
