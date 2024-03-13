@@ -21,13 +21,13 @@ use tracing::{error, info, log::warn, trace};
 use crate::{
     criteria::CriteriaMapper,
     errors::{
-        AggregateError, BadFormatError, BadWildcardEndDateError, CacheAcquireError,
-        CacheCommitError, CertifyError, CommandError, CrateInfoError, CriteriaChangeError,
-        CriteriaChangeErrors, DiffError, DownloadError, FetchAndDiffError,
-        FetchAuditAggregateError, FetchAuditError, FetchError, FetchRegistryError, FlockError,
-        InvalidCriteriaError, JsonParseError, LoadJsonError, LoadTomlError, SourceFile,
-        StoreAcquireError, StoreCommitError, StoreCreateError, StoreJsonError, StoreTomlError,
-        StoreValidateError, StoreValidateErrors, TomlParseError, UnpackCheckoutError, UnpackError,
+        AggregateError, BadWildcardEndDateError, CacheAcquireError, CacheCommitError, CertifyError,
+        CommandError, CrateInfoError, CriteriaChangeError, CriteriaChangeErrors, DiffError,
+        DownloadError, FetchAndDiffError, FetchAuditAggregateError, FetchAuditError, FetchError,
+        FetchRegistryError, FlockError, InvalidCriteriaError, JsonParseError, LoadJsonError,
+        LoadTomlError, SourceFile, StoreAcquireError, StoreCommitError, StoreCreateError,
+        StoreJsonError, StoreTomlError, StoreValidateError, StoreValidateErrors, TomlParseError,
+        UnpackCheckoutError, UnpackError,
     },
     flock::{FileLock, Filesystem},
     format::{
@@ -496,16 +496,43 @@ impl Store {
 
     /// Commit the store's contents back to disk
     pub fn commit(self) -> Result<(), StoreCommitError> {
+        fn has_diffs<T: for<'a> Deserialize<'a> + Eq>(
+            old_source: &SourceFile,
+            new_content: &T,
+        ) -> bool {
+            toml::from_str(old_source.source())
+                .ok()
+                .map(|old_content: T| old_content != *new_content)
+                .unwrap_or(true)
+        }
         // TODO: make this truly transactional?
         // (With a dir rename? Does that work with the lock? Fine because it's already closed?)
         if let Some(lock) = self.lock {
-            let mut audits = lock.write_audits()?;
-            let mut config = lock.write_config()?;
-            let mut imports = lock.write_imports()?;
+            let audits = if has_diffs(&self.audits_src, &self.audits) {
+                Some(lock.write_audits()?)
+            } else {
+                None
+            };
+            let config = if has_diffs(&self.config_src, &self.config) {
+                Some(lock.write_config()?)
+            } else {
+                None
+            };
+            let imports = if has_diffs(&self.imports_src, &self.imports) {
+                Some(lock.write_imports()?)
+            } else {
+                None
+            };
             let user_info = user_info_map(&self.imports);
-            audits.write_all(store_audits(self.audits, &user_info)?.as_bytes())?;
-            config.write_all(store_config(self.config)?.as_bytes())?;
-            imports.write_all(store_imports(self.imports, &user_info)?.as_bytes())?;
+            if let Some(mut audits) = audits {
+                audits.write_all(store_audits(self.audits, &user_info)?.as_bytes())?;
+            }
+            if let Some(mut config) = config {
+                config.write_all(store_config(self.config)?.as_bytes())?;
+            }
+            if let Some(mut imports) = imports {
+                imports.write_all(store_imports(self.imports, &user_info)?.as_bytes())?;
+            }
         }
         Ok(())
     }
@@ -657,46 +684,6 @@ impl Store {
                             max: max_end_date,
                         },
                     ))
-                }
-            }
-        }
-
-        // If requested, verify that files in the store are correctly formatted
-        // and have no unrecognized fields. We don't want to be reformatting
-        // them or dropping unused fields while in CI, as those changes will be
-        // ignored.
-        if check_file_formatting {
-            let user_info = user_info_map(&self.imports);
-            for (name, old, new) in [
-                (
-                    CONFIG_TOML,
-                    self.config_src.source(),
-                    store_config(self.config.clone())
-                        .unwrap_or_else(|_| self.config_src.source().to_owned()),
-                ),
-                (
-                    AUDITS_TOML,
-                    self.audits_src.source(),
-                    store_audits(self.audits.clone(), &user_info)
-                        .unwrap_or_else(|_| self.audits_src.source().to_owned()),
-                ),
-                (
-                    IMPORTS_LOCK,
-                    self.imports_src.source(),
-                    store_imports(self.imports.clone(), &user_info)
-                        .unwrap_or_else(|_| self.imports_src.source().to_owned()),
-                ),
-            ] {
-                if old.trim_end() != new.trim_end() {
-                    errors.push(StoreValidateError::BadFormat(BadFormatError {
-                        unified_diff: unified_diff(
-                            Algorithm::Myers,
-                            old,
-                            &new,
-                            3,
-                            Some((&format!("old/{name}"), &format!("new/{name}"))),
-                        ),
-                    }));
                 }
             }
         }

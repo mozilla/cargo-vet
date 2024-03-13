@@ -551,7 +551,7 @@ pub struct TrustEntry {
 ////////////////////////////////////////////////////////////////////////////////////
 
 /// config.toml
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct ConfigFile {
     #[serde(rename = "cargo-vet")]
     #[serde(default = "CargoVetConfig::missing")]
@@ -595,7 +595,7 @@ fn is_default_criteria(val: &CriteriaName) -> bool {
 }
 
 /// The table of crate policies.
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Eq)]
 #[serde(try_from = "serialization::policy::AllPolicies")]
 #[serde(into = "serialization::policy::AllPolicies")]
 pub struct Policy {
@@ -734,7 +734,7 @@ impl<'a> IntoIterator for &'a Policy {
 /// If the crate exists as a third-party crate anywhere in the dependency tree, crate versions for
 /// _all_ and _only_ the versions present in the dependency tree must be provided to set policies.
 /// Otherwise, versions may be omitted.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 // We have to use a slightly different serialization than than `serde(untagged)`, because toml only
 // parses `Spanned` elements (as contained in `PolicyEntry`) through their own Deseralizer, and
 // `serde(untagged)` deserializes everything into a buffer first to try different deserialization
@@ -759,7 +759,7 @@ pub enum PackagePolicyEntry {
 /// If this sounds overwhelming, don't worry, everything defaults to "nothing special"
 /// and an empty PolicyTable basically just means "everything should satisfy the
 /// default criteria in audits.toml".
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct PolicyEntry {
     /// Whether this nominally-first-party crate should actually be subject to audits
     /// as-if it was third-party, based on matches to crates.io packages with the same
@@ -831,7 +831,7 @@ pub static DEFAULT_POLICY_CRITERIA: CriteriaStr = SAFE_TO_DEPLOY;
 pub static DEFAULT_POLICY_DEV_CRITERIA: CriteriaStr = SAFE_TO_RUN;
 
 /// A remote audits.toml that we trust the contents of (by virtue of trusting the maintainer).
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct RemoteImport {
     /// URL(s) of the foreign audits.toml
     #[serde(with = "serialization::string_or_vec")]
@@ -965,7 +965,7 @@ impl<'de> Deserialize<'de> for StoreVersion {
 }
 
 /// Cargo vet config metadata field for the store's config file.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct CargoVetConfig {
     pub version: StoreVersion,
 }

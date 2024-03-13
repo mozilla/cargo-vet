@@ -448,9 +448,6 @@ pub enum StoreValidateError {
     InvalidCriteria(InvalidCriteriaError),
     #[diagnostic(transparent)]
     #[error(transparent)]
-    BadFormat(BadFormatError),
-    #[diagnostic(transparent)]
-    #[error(transparent)]
     BadWildcardEndDate(BadWildcardEndDateError),
     #[error("imports.lock is out-of-date with respect to configuration")]
     #[diagnostic(help("run `cargo vet` without --locked to update imports"))]
@@ -467,13 +464,6 @@ pub struct InvalidCriteriaError {
     pub span: SourceSpan,
     pub invalid: String,
     pub valid_names: Arc<Vec<String>>,
-}
-
-#[derive(Debug, Error, Diagnostic)]
-#[error("A file in the store is not correctly formatted:\n\n{unified_diff}")]
-#[diagnostic(help("run `cargo vet` without --locked to reformat files in the store"))]
-pub struct BadFormatError {
-    pub unified_diff: String,
 }
 
 #[derive(Debug, Error, Diagnostic)]
