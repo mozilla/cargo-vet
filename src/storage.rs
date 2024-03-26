@@ -1238,29 +1238,18 @@ pub(crate) fn foreign_audit_file_to_local(
     foreign_audit_file: ForeignAuditsFile,
 ) -> ForeignAuditFileToLocalResult {
     let mut ignored_criteria = Vec::new();
-    let valid_criteria: Vec<CriteriaName>;
-    let mut criteria: SortedMap<CriteriaName, CriteriaEntry>;
-    if foreign_audit_file.criteria.is_empty() {
-        warn!("No criteria definitions found when importing from `{name}`");
-        criteria = SortedMap::new();
-        valid_criteria = vec![];
-    } else {
-        criteria = foreign_audit_file
-            .criteria
-            .into_iter()
-            .filter_map(|(criteria, value)| match parse_imported_criteria(value) {
-                Some(entry) => Some((criteria, entry)),
-                None => {
-                    ignored_criteria.push(criteria);
-                    None
-                }
-            })
-            .collect();
-        valid_criteria = criteria.keys().cloned().collect();
-        if valid_criteria.is_empty() {
-            warn!("All criteria definitions failed to parse when importing from `{name}`");
-        }
-    }
+    let mut criteria: SortedMap<CriteriaName, CriteriaEntry> = foreign_audit_file
+        .criteria
+        .into_iter()
+        .filter_map(|(criteria, value)| match parse_imported_criteria(value) {
+            Some(entry) => Some((criteria, entry)),
+            None => {
+                ignored_criteria.push(criteria);
+                None
+            }
+        })
+        .collect();
+    let valid_criteria: Vec<CriteriaName> = criteria.keys().cloned().collect();
 
     // Remove any unknown criteria from implies sets, to ensure we don't run
     // into errors later on in the resolver.
