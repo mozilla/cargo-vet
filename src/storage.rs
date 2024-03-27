@@ -1333,14 +1333,16 @@ fn parse_imported_criteria(value: toml::Value) -> Option<CriteriaEntry> {
         .ok()
 }
 
-fn retain_only_known_criteria(
-    audit_criteria: &mut Vec<Spanned<CriteriaName>>,
-    valid_criteria: &[CriteriaName],
-) {
+/// Parse an unparsed audit entry, validating and returning it.
+fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> Option<AuditEntry> {
+    let mut audit: AuditEntry = parse_from_value(value)
+        .map_err(|err| info!("imported audit parsing failed due to {err}"))
+        .ok()?;
+
     // Remove any unrecognized criteria to avoid later errors caused by being
     // unable to find criteria, and ignore the entry if it names no known
     // criteria.
-    audit_criteria.retain(|criteria_name| {
+    audit.criteria.retain(|criteria_name| {
         if !is_known_criteria(valid_criteria, criteria_name) {
             info!("discarding unknown criteria in imported audit: {criteria_name}");
             return false;
@@ -1348,23 +1350,12 @@ fn retain_only_known_criteria(
         true
     });
 
-    if audit_criteria.is_empty() {
+    if audit.criteria.is_empty() {
         info!("imported audit parsing failed due to no known criteria");
+        return None;
     }
-}
 
-/// Parse an unparsed audit entry, validating and returning it.
-fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> Option<AuditEntry> {
-    let mut audit: AuditEntry = parse_from_value(value)
-        .map_err(|err| info!("imported audit parsing failed due to {err}"))
-        .ok()?;
-
-    retain_only_known_criteria(&mut audit_entry.criteria, valid_criteria);
-    if audit_entry.criteria.is_empty() {
-        None
-    } else {
-        Some(audit_entry)
-    }
+    Some(audit)
 }
 
 /// Parse an unparsed wildcard audit entry, validating and returning it.
@@ -1376,12 +1367,23 @@ fn parse_imported_wildcard_audit(
         .map_err(|err| info!("imported wildcard audit parsing failed due to {err}"))
         .ok()?;
 
-    retain_only_known_criteria(&mut wildcard_entry.criteria, valid_criteria);
-    if wildcard_entry.criteria.is_empty() {
-        None
-    } else {
-        Some(wildcard_entry)
+    // Remove any unrecognized criteria to avoid later errors caused by being
+    // unable to find criteria, and ignore the entry if it names no known
+    // criteria.
+    audit.criteria.retain(|criteria_name| {
+        if !is_known_criteria(valid_criteria, criteria_name) {
+            info!("discarding unknown criteria in imported wildcard audit: {criteria_name}");
+            return false;
+        }
+        true
+    });
+
+    if audit.criteria.is_empty() {
+        info!("imported wildcard audit parsing failed due to no known criteria");
+        return None;
     }
+
+    Some(audit)
 }
 
 /// Parse an unparsed wildcard audit entry, validating and returning it.
