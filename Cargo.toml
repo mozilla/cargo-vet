@@ -4,8 +4,8 @@ version = "0.9.1"
 edition = "2021"
 authors = ["Bobby Holley <bobbyholley@gmail.com>"]
 license = "Apache-2.0/MIT"
-repository = "https://github.com/bholley/cargo-vet"
-homepage = "https://bholley.net/cargo-vet"
+repository = "https://github.com/mozilla/cargo-vet"
+homepage = "https://mozilla.github.io/cargo-vet/"
 description = "Supply-chain security for Rust"
 exclude = [
   "book/*",
