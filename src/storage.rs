@@ -1372,7 +1372,9 @@ fn parse_imported_wildcard_audit(
     valid_criteria: &[CriteriaName],
     value: toml::Value,
 ) -> Option<WildcardEntry> {
-    let mut wildcard_entry = parse_from_value::<WildcardEntry>(value).ok()?;
+    let mut audit: WildcardEntry = parse_from_value(value)
+        .map_err(|err| info!("imported wildcard audit parsing failed due to {err}"))
+        .ok()?;
 
     retain_only_known_criteria(&mut wildcard_entry.criteria, valid_criteria);
     if wildcard_entry.criteria.is_empty() {
