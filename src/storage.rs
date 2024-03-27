@@ -1355,7 +1355,9 @@ fn retain_only_known_criteria(
 
 /// Parse an unparsed audit entry, validating and returning it.
 fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> Option<AuditEntry> {
-    let mut audit_entry = parse_from_value::<AuditEntry>(value).ok()?;
+    let mut audit: AuditEntry = parse_from_value(value)
+        .map_err(|err| info!("imported audit parsing failed due to {err}"))
+        .ok()?;
 
     retain_only_known_criteria(&mut audit_entry.criteria, valid_criteria);
     if audit_entry.criteria.is_empty() {
