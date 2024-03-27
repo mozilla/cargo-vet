@@ -2828,6 +2828,7 @@ fn create_unpack_lock(unpack_dir: &Path) -> Result<(), io::Error> {
     // which may have been extracted from the package.
     let mut ok = OpenOptions::new()
         .create(true)
+        .truncate(true)
         .read(true)
         .write(true)
         .open(lockfile)?;
