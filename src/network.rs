@@ -28,6 +28,7 @@ use crate::{
 /// Wrapper for the pair of a `reqwest::Response` and the `SemaphorePermit` used
 /// to limit concurrent connections, with a test-only variant for mocking.
 enum Response<'a> {
+    #[allow(dead_code)] // It's ok that `SemaphorePermit` is never read.
     Real(reqwest::Response, tokio::sync::SemaphorePermit<'a>),
     #[cfg(test)]
     Mock(Option<Bytes>),

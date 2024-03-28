@@ -518,7 +518,7 @@ pub mod spanned {
     thread_local! {
         /// Hack to work around `toml::Spanned` failing to be deserialized when
         /// used with the `toml::Value` deserializer.
-        pub(super) static DISABLE_SPANNED_DESERIALIZATION: Cell<bool> = Cell::new(false);
+        pub(super) static DISABLE_SPANNED_DESERIALIZATION: Cell<bool> = const { Cell::new(false) };
     }
 
     /// A spanned value, indicating the range at which it is defined in the source.
