@@ -7,14 +7,14 @@ expression: json
   "failures": [
     {
       "name": "third-core",
-      "version": "10.0.0",
+      "version": "5.0.0",
       "missing_criteria": [
         "safe-to-deploy"
       ]
     },
     {
       "name": "third-core",
-      "version": "5.0.0",
+      "version": "10.0.0",
       "missing_criteria": [
         "safe-to-deploy"
       ]

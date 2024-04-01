@@ -372,14 +372,14 @@ stdout:
     },
     {
       "name": "proc-macro2",
-      "version": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
+      "version": "1.0.37",
       "missing_criteria": [
         "safe-to-deploy"
       ]
     },
     {
       "name": "proc-macro2",
-      "version": "1.0.37",
+      "version": "1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9",
       "missing_criteria": [
         "safe-to-deploy"
       ]
