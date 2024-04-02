@@ -180,8 +180,11 @@ pub type PackageIdx = usize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PackageNode<'a> {
-    #[serde(skip_serializing_if = "pkgid_unstable")]
+    #[serde(skip)]
     /// The PackageId that cargo uses to uniquely identify this package
+    ///
+    /// This ID is not guaranteed to be stable across cargo versions, so is not
+    /// serialized into graph JSON.
     ///
     /// Prefer using a [`DepGraph`] and its memoized [`PackageIdx`]'s.
     pub package_id: &'a PackageId,
@@ -209,11 +212,6 @@ pub struct PackageNode<'a> {
     pub is_root: bool,
     /// Whether this package only shows up in dev (test/bench) builds
     pub is_dev_only: bool,
-}
-
-/// Don't serialize path package ids, not stable across systems
-fn pkgid_unstable(pkgid: &PackageId) -> bool {
-    pkgid.repr.contains("(path+file:/")
 }
 
 /// The dependency graph in a form we can use more easily.
@@ -449,9 +447,13 @@ impl<'a> DepGraph<'a> {
             });
         }
 
-        // Sort the nodes by package_id to make the graph more stable and to make
-        // anything sorted by package_idx to also be approximately sorted by name and version.
-        nodes.sort_by_key(|k| k.package_id);
+        // Sort the nodes by package name and version to make the graph as
+        // stable as possible.  We avoid sorting by the package_id if possible,
+        // as for some packages it may not be stable (e.g. file:///), and the
+        // package_id format can also vary between cargo versions.
+        nodes.sort_by(|a, b| {
+            (a.name, &a.version, &a.package_id).cmp(&(b.name, &b.version, &b.package_id))
+        });
 
         // Populate the interners based on the new ordering
         for (idx, node) in nodes.iter_mut().enumerate() {

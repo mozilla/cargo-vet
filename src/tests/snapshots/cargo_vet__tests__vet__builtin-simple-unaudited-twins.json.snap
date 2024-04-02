@@ -18,11 +18,11 @@ expression: json
   "vetted_with_exemptions": [
     {
       "name": "third-core",
-      "version": "10.0.0"
+      "version": "5.0.0"
     },
     {
       "name": "third-core",
-      "version": "5.0.0"
+      "version": "10.0.0"
     }
   ]
 }
