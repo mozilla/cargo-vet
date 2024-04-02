@@ -1090,7 +1090,8 @@ async fn fetch_single_imported_audit(
     if !ignored_audits.is_empty() {
         warn!(
             "Ignored {} invalid audits when importing from '{}'\n\
-            These audits may have been made with a more recent version of cargo-vet",
+            These audits may have been made with a more recent version of cargo-vet \
+            or may refer to undefined or unrecognized audit criteria",
             ignored_audits.len(),
             name
         );
@@ -1341,9 +1342,14 @@ fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> 
     // Remove any unrecognized criteria to avoid later errors caused by being
     // unable to find criteria, and ignore the entry if it names no known
     // criteria.
-    audit
-        .criteria
-        .retain(|criteria_name| is_known_criteria(valid_criteria, criteria_name));
+    audit.criteria.retain(|criteria_name| {
+        if !is_known_criteria(valid_criteria, criteria_name) {
+            info!("discarding unknown criteria in imported audit: {criteria_name}");
+            return false;
+        }
+        true
+    });
+
     if audit.criteria.is_empty() {
         info!("imported audit parsing failed due to no known criteria");
         return None;
@@ -1361,9 +1367,17 @@ fn parse_imported_wildcard_audit(
         .map_err(|err| info!("imported wildcard audit parsing failed due to {err}"))
         .ok()?;
 
-    audit
-        .criteria
-        .retain(|criteria_name| is_known_criteria(valid_criteria, criteria_name));
+    // Remove any unrecognized criteria to avoid later errors caused by being
+    // unable to find criteria, and ignore the entry if it names no known
+    // criteria.
+    audit.criteria.retain(|criteria_name| {
+        if !is_known_criteria(valid_criteria, criteria_name) {
+            info!("discarding unknown criteria in imported wildcard audit: {criteria_name}");
+            return false;
+        }
+        true
+    });
+
     if audit.criteria.is_empty() {
         info!("imported wildcard audit parsing failed due to no known criteria");
         return None;
