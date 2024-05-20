@@ -967,7 +967,7 @@ impl FromStr for GraphFilter {
             })?;
             Ok((rest, val))
         }
-        fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(
+        fn ws<'a, F, O, E: ParseError<&'a str>>(
             inner: F,
         ) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
         where
