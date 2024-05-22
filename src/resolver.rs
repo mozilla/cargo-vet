@@ -1808,7 +1808,7 @@ impl<'a> ResolveReport<'a> {
                         {
                             exact_version = true;
                             publisher_id
-                        } else if store.audits.trusted.get(package.name).is_none() {
+                        } else if !store.audits.trusted.contains_key(package.name) {
                             cache
                                 .get_cached_publishers(package.name)
                                 .iter()
