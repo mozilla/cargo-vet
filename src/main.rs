@@ -15,14 +15,14 @@ use errors::{
     AggregateCriteriaImplies, AggregateError, AggregateErrors, AggregateImpliesMismatchError,
     AuditAsError, AuditAsErrors, CacheAcquireError, CertifyError, CratePolicyError,
     CratePolicyErrors, FetchAuditError, LoadTomlError, NeedsAuditAsErrors,
-    NeedsPolicyVersionErrors, PackageError, ShouldntBeAuditAsErrors, TomlParseError,
-    UnusedAuditAsErrors, UnusedPolicyVersionErrors, UserInfoError,
+    NeedsPolicyVersionErrors, PackageError, ShouldntBeAuditAsErrors, UnusedAuditAsErrors,
+    UnusedPolicyVersionErrors, UserInfoError,
 };
 use format::{CriteriaName, CriteriaStr, PackageName, Policy, PolicyEntry, SortedSet, VetVersion};
 use futures_util::future::{join_all, try_join_all};
 use indicatif::ProgressDrawTarget;
 use lazy_static::lazy_static;
-use miette::{miette, Context, Diagnostic, IntoDiagnostic, SourceOffset};
+use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use network::Network;
 use out::{progress_bar, IncProgressOnDrop};
 use reqwest::Url;
@@ -2418,17 +2418,13 @@ fn cmd_aggregate(
             let url_string = url.to_string();
             let audit_bytes = network.download(url).await?;
             let audit_string = String::from_utf8(audit_bytes).map_err(LoadTomlError::from)?;
-            let audit_source = SourceFile::new(&url_string, audit_string.clone());
-            let audit_file: AuditsFile = toml::de::from_str(&audit_string)
-                .map_err(|error| {
-                    let (line, col) = error.line_col().unwrap_or((0, 0));
-                    TomlParseError {
-                        source_code: audit_source,
-                        span: SourceOffset::from_location(&audit_string, line + 1, col + 1),
-                        error,
-                    }
-                })
-                .map_err(LoadTomlError::from)?;
+            let audit_source = SourceFile::new(&url_string, audit_string);
+
+            // We use foreign audit file parsing when loading sources to
+            // aggregate, so that we catch and emit warnings when aggregation
+            // fails, and don't generate invalid aggregated audit files.
+            let audit_file =
+                storage::foreign_audit_source_to_local_warn(&url_string, audit_source)?;
             Ok::<_, FetchAuditError>((url_string, audit_file))
         })))
         .into_diagnostic()?;

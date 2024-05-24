@@ -1055,51 +1055,7 @@ async fn fetch_single_imported_audit(
     })?;
     let audit_source = network.download_source_file_cached(parsed_url).await?;
 
-    // Attempt to parse each criteria and audit independently, to allow
-    // recovering from parsing or validation errors on a per-entry basis when
-    // importing audits. This reduces the risk of an upstream vendor adopting a
-    // new cargo-vet feature breaking projects still using an older version of
-    // cargo-vet.
-    let foreign_audit_file: ForeignAuditsFile = toml::de::from_str(audit_source.source())
-        .map_err(|error| {
-            let (line, col) = error.line_col().unwrap_or((0, 0));
-            TomlParseError {
-                span: SourceOffset::from_location(audit_source.source(), line + 1, col + 1),
-                source_code: audit_source,
-                error,
-            }
-        })
-        .map_err(LoadTomlError::from)?;
-    let ForeignAuditFileToLocalResult {
-        mut audit_file,
-        ignored_criteria,
-        ignored_audits,
-    } = foreign_audit_file_to_local(foreign_audit_file);
-    if !ignored_criteria.is_empty() {
-        warn!(
-            "Ignored {} invalid criteria entries when importing from '{}'\n\
-            These criteria may have been made with a more recent version of cargo-vet",
-            ignored_criteria.len(),
-            name
-        );
-        info!(
-            "The following criteria were ignored when importing from '{}': {:?}",
-            name, ignored_criteria
-        );
-    }
-    if !ignored_audits.is_empty() {
-        warn!(
-            "Ignored {} invalid audits when importing from '{}'\n\
-            These audits may have been made with a more recent version of cargo-vet \
-            or may refer to undefined or unrecognized audit criteria",
-            ignored_audits.len(),
-            name
-        );
-        info!(
-            "Audits for the following packages were ignored when importing from '{}': {:?}",
-            name, ignored_audits
-        );
-    }
+    let mut audit_file = foreign_audit_source_to_local_warn(name, audit_source)?;
 
     // Remove any excluded audits from the live copy. We'll effectively
     // pretend they don't exist upstream.
@@ -1324,6 +1280,57 @@ pub(crate) fn foreign_audit_file_to_local(
         ignored_criteria,
         ignored_audits,
     }
+}
+
+/// Attempt to parse each criteria and audit independently, to allow
+/// recovering from parsing or validation errors on a per-entry basis when
+/// importing audits. This reduces the risk of an upstream vendor adopting a
+/// new cargo-vet feature breaking projects still using an older version of
+/// cargo-vet.
+pub(crate) fn foreign_audit_source_to_local_warn(
+    name: &str,
+    audit_source: SourceFile,
+) -> Result<AuditsFile, LoadTomlError> {
+    let foreign_audit_file: ForeignAuditsFile = toml::de::from_str(audit_source.source())
+        .map_err(|error| {
+            let (line, col) = error.line_col().unwrap_or((0, 0));
+            TomlParseError {
+                span: SourceOffset::from_location(audit_source.source(), line + 1, col + 1),
+                source_code: audit_source,
+                error,
+            }
+        })
+        .map_err(LoadTomlError::from)?;
+    let ForeignAuditFileToLocalResult {
+        audit_file,
+        ignored_criteria,
+        ignored_audits,
+    } = foreign_audit_file_to_local(foreign_audit_file);
+    if !ignored_criteria.is_empty() {
+        warn!(
+            "Ignored {} invalid criteria entries when importing from '{}'\n\
+            These criteria may have been made with a more recent version of cargo-vet",
+            ignored_criteria.len(),
+            name
+        );
+        info!(
+            "The following criteria were ignored when importing from '{}': {:?}",
+            name, ignored_criteria
+        );
+    }
+    if !ignored_audits.is_empty() {
+        warn!(
+            "Ignored {} invalid audits when importing from '{}'\n\
+            These audits may have been made with a more recent version of cargo-vet",
+            ignored_audits.len(),
+            name
+        );
+        info!(
+            "Audits for the following packages were ignored when importing from '{}': {:?}",
+            name, ignored_audits
+        );
+    }
+    Ok(audit_file)
 }
 
 /// Parse an unparsed criteria entry, validating and returning it.
