@@ -8,7 +8,7 @@ Vetting Failed!
   third-party2:10.0.0 missing ["reviewed"]
   transitive-third-party1:10.0.0 missing ["reviewed"]
 
-recommended audits for reviewed:
+recommended audits for reviewed (or strong-reviewed):
     Command                                           Publisher  Used By       Audit Size
     cargo vet inspect third-party2 10.0.0             UNKNOWN    first-party   100 lines
     cargo vet inspect transitive-third-party1 10.0.0  UNKNOWN    third-party1  100 lines

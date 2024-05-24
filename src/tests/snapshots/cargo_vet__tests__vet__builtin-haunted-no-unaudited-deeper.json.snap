@@ -74,7 +74,7 @@ expression: json
           }
         }
       ],
-      "safe-to-run": [
+      "safe-to-run (or safe-to-deploy)": [
         {
           "name": "third-dev",
           "notable_parents": "first",

@@ -7,7 +7,7 @@ Vetting Failed!
 1 unvetted dependencies:
   third-party1:10.0.0 missing ["reviewed"]
 
-recommended audits for reviewed:
+recommended audits for reviewed (or strong-reviewed):
     Command                                    Publisher  Used By      Audit Size
     cargo vet diff third-party1 11.0.0 10.0.0  UNKNOWN    first-party  1 files changed, 21 deletions(-)
 

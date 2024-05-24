@@ -12,7 +12,7 @@ recommended audits for safe-to-deploy:
     Command                                Publisher  Used By  Audit Size
     cargo vet inspect third-normal 10.0.0  UNKNOWN    first    100 lines
 
-recommended audits for safe-to-run:
+recommended audits for safe-to-run (or safe-to-deploy):
     Command                             Publisher  Used By  Audit Size
     cargo vet inspect third-dev 10.0.0  UNKNOWN    first    100 lines
 

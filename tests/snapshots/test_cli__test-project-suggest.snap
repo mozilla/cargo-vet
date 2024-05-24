@@ -3,7 +3,7 @@ source: tests/test-cli.rs
 expression: format_outputs(&output)
 ---
 stdout:
-recommended audits for safe-to-deploy:
+recommended audits for safe-to-deploy (or audited):
     Command                                               Publisher      Used By                                              Audit Size
     cargo vet diff proc-macro2 1.0.37 1.0.37@git:4445659b0f753a928059244c875a58bb12f791e9
                                                           UNKNOWN        test-project                                         3 files changed, 63 insertions(+), 7 deletions(-)
@@ -108,7 +108,7 @@ recommended audits for safe-to-deploy:
     cargo vet inspect web-sys 0.3.57                      alexcrichton   reqwest and wasm-bindgen-futures                     197013 lines
     cargo vet inspect encoding_rs 0.8.31                  hsivonen       reqwest                                              507245 lines
 
-recommended audits for safe-to-run:
+recommended audits for safe-to-run (or safe-to-deploy, or audited):
     Command                              Publisher  Used By  Audit Size
     cargo vet inspect hermit-abi 0.1.19  stlankes   atty     932 lines
 
