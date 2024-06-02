@@ -24,6 +24,7 @@ use crate::{
     errors::{DownloadError, SourceFile},
     PartialConfig,
 };
+use std::io::Read;
 
 /// Wrapper for the pair of a `reqwest::Response` and the `SemaphorePermit` used
 /// to limit concurrent connections, with a test-only variant for mocking.
@@ -137,9 +138,22 @@ impl Network {
             // TODO: make this configurable on the CLI or something
             let timeout = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
             // TODO: make this configurable on the CLI or something
-            let client = Client::builder()
-                .user_agent(USER_AGENT)
-                .timeout(timeout)
+            let mut client_builder = Client::builder().user_agent(USER_AGENT).timeout(timeout);
+
+            if let Ok(config) = cargo::util::config::Config::default() {
+                if let Ok(http) = config.http_config() {
+                    // Add the cargo `http.cainfo` to the reqwest client if it is set
+                    if let Some(cainfo) = &http.cainfo {
+                        match Network::parse_ca_file(cainfo.raw_value()) {
+                            Ok(cert) => client_builder = client_builder.add_root_certificate(cert),
+                            Err(e) => println!(
+                                "failed to load certificate from Cargo http.cainfo `{}`, attempting to download without it. Error: {e:?}", cainfo.raw_value()
+                            ),
+                        }
+                    }
+                }
+            }
+            let client = client_builder
                 .build()
                 .expect("Couldn't construct HTTP Client?");
             Some(Self {
@@ -150,6 +164,13 @@ impl Network {
                 mock_network: None,
             })
         }
+    }
+
+    fn parse_ca_file(path: &str) -> Result<reqwest::Certificate, Box<dyn std::error::Error>> {
+        let mut buf = Vec::new();
+        std::fs::File::open(path)?.read_to_end(&mut buf)?;
+        let cert = reqwest::Certificate::from_pem(&buf)?;
+        Ok(cert)
     }
 
     /// Download a file and persist it to disk

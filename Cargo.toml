@@ -50,6 +50,7 @@ thiserror = "1.0.31"
 url = "2.2.2"
 toml = "0.5.9"
 open = "3.0.2"
+cargo = "0.70.0"
 
 [target.'cfg(windows)'.dependencies.winapi]
 version = "0.3"
