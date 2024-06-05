@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 use std::{fs::File, io, panic, path::PathBuf};
 
 use cargo_metadata::{Metadata, Package};
-use clap::{CommandFactory, Parser};
+use clap::CommandFactory;
 use console::Term;
 use errors::{
     AggregateCriteriaDescription, AggregateCriteriaDescriptionMismatchError,
@@ -76,6 +76,8 @@ pub struct Config {
 pub struct PartialConfig {
     /// Details of the CLI invocation (args)
     pub cli: Cli,
+    /// Global config file
+    pub config: cli::Config,
     /// The date and time to use as the current time.
     pub now: chrono::DateTime<chrono::Utc>,
     /// Path to the cache directory we're using
@@ -230,7 +232,14 @@ fn main() -> Result<(), ()> {
 fn real_main() -> Result<(), miette::Report> {
     use cli::Commands::*;
 
-    let fake_cli = cli::FakeCli::parse();
+    let config = cli::Config::load();
+    // We can't return if this errored here as error logging isn't configured
+    // yet, instead use a default and then check the error later
+    let (config, config_err) = match config {
+        Ok(config) => (config, None),
+        Err(err) => (cli::Config::default(), Some(err)),
+    };
+    let fake_cli = cli::FakeCli::parse_with_config(&config);
     let cli::FakeCli::Vet(cli) = fake_cli;
 
     //////////////////////////////////////////////////////
@@ -327,6 +336,10 @@ fn real_main() -> Result<(), miette::Report> {
         set_report_errors_as_json(out.clone());
     }
 
+    if let Some(err) = config_err {
+        return Err(miette::Report::from(err).context("failed to load global config"));
+    }
+
     ////////////////////////////////////////////////////
     // Potentially handle freestanding commands
     ////////////////////////////////////////////////////
@@ -341,6 +354,7 @@ fn real_main() -> Result<(), miette::Report> {
         .unwrap_or_else(|| chrono::DateTime::from(SystemTime::now()));
     let partial_cfg = PartialConfig {
         cli,
+        config,
         now,
         cache_dir,
         mock_cache: false,
@@ -773,9 +787,9 @@ fn do_cmd_certify(
     };
 
     let (username, who) = if sub_args.who.is_empty() {
-        let user_info = get_user_info()?;
-        let who = format!("{} <{}>", user_info.username, user_info.email);
-        (user_info.username, vec![Spanned::from(who)])
+        let user_info = get_user_info(&cfg)?;
+        let who = format!("{} <{}>", user_info.name, user_info.email);
+        (user_info.name, vec![Spanned::from(who)])
     } else {
         (
             sub_args.who.join(", "),
@@ -1592,9 +1606,9 @@ fn cmd_record_violation(
     };
 
     let (_username, who) = if sub_args.who.is_empty() {
-        let user_info = get_user_info()?;
-        let who = format!("{} <{}>", user_info.username, user_info.email);
-        (user_info.username, vec![Spanned::from(who)])
+        let user_info = get_user_info(&cfg)?;
+        let who = format!("{} <{}>", user_info.name, user_info.email);
+        (user_info.name, vec![Spanned::from(who)])
     } else {
         (
             sub_args.who.join(", "),
@@ -2740,12 +2754,14 @@ fn cmd_gc(
 
 // Utils
 
+#[derive(Clone, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 struct UserInfo {
-    username: String,
+    name: String,
     email: String,
 }
 
-fn get_user_info() -> Result<UserInfo, UserInfoError> {
+fn get_user_info(cfg: &Config) -> Result<UserInfo, UserInfoError> {
     fn get_git_config(value_name: &str) -> Result<String, CommandError> {
         let out = std::process::Command::new("git")
             .arg("config")
@@ -2762,10 +2778,14 @@ fn get_user_info() -> Result<UserInfo, UserInfoError> {
             .map_err(CommandError::BadOutput)
     }
 
-    let username = get_git_config("user.name").map_err(UserInfoError::UserCommandFailed)?;
+    if let Some(user_info) = &cfg.config.user {
+        return Ok(user_info.clone());
+    }
+
+    let name = get_git_config("user.name").map_err(UserInfoError::UserCommandFailed)?;
     let email = get_git_config("user.email").map_err(UserInfoError::EmailCommandFailed)?;
 
-    Ok(UserInfo { username, email })
+    Ok(UserInfo { name, email })
 }
 
 async fn eula_for_criteria(

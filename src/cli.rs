@@ -1,9 +1,13 @@
 use std::{path::PathBuf, str::FromStr};
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use tracing::level_filters::LevelFilter;
 
 use crate::format::{CriteriaName, ImportName, PackageName, VersionReq, VetVersion};
+
+pub use self::config::Config;
+
+mod config;
 
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
@@ -11,6 +15,33 @@ use crate::format::{CriteriaName, ImportName, PackageName, VersionReq, VetVersio
 #[clap(bin_name = "cargo")]
 pub enum FakeCli {
     Vet(Cli),
+}
+
+impl FakeCli {
+    pub fn parse_with_config(config: &Config) -> Self {
+        let mut command = Self::command_for_update().mut_subcommand("vet", |vet| {
+            vet.mut_subcommand("inspect", |inspect| {
+                inspect.mut_arg("mode", |mode| {
+                    if let Some(default_mode) = config.inspect.mode {
+                        // TODO: clap v4 doesn't require leaking here
+                        mode.default_value(String::leak(
+                            default_mode
+                                .to_possible_value()
+                                .unwrap()
+                                .get_name()
+                                .to_owned(),
+                        ))
+                    } else {
+                        mode
+                    }
+                })
+            })
+        });
+        match Self::from_arg_matches_mut(&mut command.get_matches_mut()) {
+            Ok(cli) => cli,
+            Err(err) => err.format(&mut command).exit(),
+        }
+    }
 }
 
 #[derive(clap::Args)]
@@ -811,7 +842,8 @@ impl FromStr for DependencyCriteriaArg {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum FetchMode {
     Local,
     Sourcegraph,
