@@ -74,7 +74,7 @@ expression: json
           }
         }
       ],
-      "safe-to-run": [
+      "safe-to-run (or safe-to-deploy)": [
         {
           "name": "dev-cycle",
           "notable_parents": "root",
