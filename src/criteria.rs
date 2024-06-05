@@ -178,7 +178,7 @@ impl CriteriaMapper {
         self.index[criteria_name]
     }
 
-    /// Yields the indicies for all criteria which imply the the given criteria.
+    /// Yields the indices for all criteria which imply the given criteria.
     pub fn implied_by_indices(&self, criteria_idx: usize) -> impl Iterator<Item = usize> + '_ {
         self.all_criteria_iter()
             .enumerate()
