@@ -1,0 +1,827 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Commands - Cargo Vet</title>
+        <!-- Custom HTML head -->
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="src/custom.css">
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="index.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="motivation.html"><strong aria-hidden="true">1.1.</strong> Motivation</a></li><li class="chapter-item expanded "><a href="how-it-works.html"><strong aria-hidden="true">1.2.</strong> How it Works</a></li></ol></li><li class="chapter-item expanded "><a href="tutorial.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="setup.html"><strong aria-hidden="true">2.2.</strong> Setup</a></li><li class="chapter-item expanded "><a href="audit-criteria.html"><strong aria-hidden="true">2.3.</strong> Audit Criteria</a></li><li class="chapter-item expanded "><a href="importing-audits.html"><strong aria-hidden="true">2.4.</strong> Importing Audits</a></li><li class="chapter-item expanded "><a href="recording-audits.html"><strong aria-hidden="true">2.5.</strong> Recording Audits</a></li><li class="chapter-item expanded "><a href="performing-audits.html"><strong aria-hidden="true">2.6.</strong> Performing Audits</a></li><li class="chapter-item expanded "><a href="trusting-publishers.html"><strong aria-hidden="true">2.7.</strong> Trusting Publishers</a></li><li class="chapter-item expanded "><a href="specifying-policies.html"><strong aria-hidden="true">2.8.</strong> Specifying Policies</a></li><li class="chapter-item expanded "><a href="multiple-repositories.html"><strong aria-hidden="true">2.9.</strong> Multiple Repositories</a></li><li class="chapter-item expanded "><a href="configuring-ci.html"><strong aria-hidden="true">2.10.</strong> Configuring CI</a></li><li class="chapter-item expanded "><a href="curating-your-audit-set.html"><strong aria-hidden="true">2.11.</strong> Curating Your Audit Set</a></li></ol></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">3.</strong> Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="config.html"><strong aria-hidden="true">3.1.</strong> Configuration</a></li><li class="chapter-item expanded "><a href="audit-entries.html"><strong aria-hidden="true">3.2.</strong> Audit Entries</a></li><li class="chapter-item expanded "><a href="wildcard-audit-entries.html"><strong aria-hidden="true">3.3.</strong> Wildcard Audit Entries</a></li><li class="chapter-item expanded "><a href="trusted-entries.html"><strong aria-hidden="true">3.4.</strong> Trusted Entries</a></li><li class="chapter-item expanded "><a href="built-in-criteria.html"><strong aria-hidden="true">3.5.</strong> Built-In Criteria</a></li><li class="chapter-item expanded "><a href="first-party-code.html"><strong aria-hidden="true">3.6.</strong> First-Party Code</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.7.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="commands.html" class="active"><strong aria-hidden="true">3.8.</strong> Commands</a></li><li class="chapter-item expanded "><a href="algorithm.html"><strong aria-hidden="true">3.9.</strong> The Algorithm</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Cargo Vet</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/mozilla/cargo-vet" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="commands"><a class="header" href="#commands">Commands</a></h1>
+<p>This section documents the command-line interface of <code>cargo vet</code>. The
+documentation is automatically generated from the implementation, and
+so it may be incomplete in some areas where the code remains under
+development.</p>
+<p>When run without a subcommand, <code>cargo vet</code> will invoke the <code>check</code> subcommand. See <code>cargo vet help check</code> for more details.</p>
+<h3 id="usage"><a class="header" href="#usage">USAGE</a></h3>
+<pre><code>cargo vet [OPTIONS]
+</code></pre>
+<pre><code>cargo vet &lt;SUBCOMMAND&gt;
+</code></pre>
+<h3 id="options"><a class="header" href="#options">OPTIONS</a></h3>
+<h4 id="-h---help"><a class="header" href="#-h---help"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h4 id="-v---version"><a class="header" href="#-v---version"><code>-V, --version</code></a></h4>
+<p>Print version information</p>
+<h3 id="global-options"><a class="header" href="#global-options">GLOBAL OPTIONS</a></h3>
+<h4 id="--manifest-path-path"><a class="header" href="#--manifest-path-path"><code>--manifest-path &lt;PATH&gt;</code></a></h4>
+<p>Path to Cargo.toml</p>
+<h4 id="--store-path-store_path"><a class="header" href="#--store-path-store_path"><code>--store-path &lt;STORE_PATH&gt;</code></a></h4>
+<p>Path to the supply-chain directory</p>
+<h4 id="--no-all-features"><a class="header" href="#--no-all-features"><code>--no-all-features</code></a></h4>
+<p>Don't use --all-features</p>
+<p>We default to passing --all-features to <code>cargo metadata</code> because we want to analyze your
+full dependency tree</p>
+<h4 id="--no-default-features"><a class="header" href="#--no-default-features"><code>--no-default-features</code></a></h4>
+<p>Do not activate the <code>default</code> feature</p>
+<h4 id="--features-features"><a class="header" href="#--features-features"><code>--features &lt;FEATURES&gt;</code></a></h4>
+<p>Space-separated list of features to activate</p>
+<h4 id="--locked"><a class="header" href="#--locked"><code>--locked</code></a></h4>
+<p>Do not fetch new imported audits</p>
+<h4 id="--frozen"><a class="header" href="#--frozen"><code>--frozen</code></a></h4>
+<p>Avoid the network entirely, requiring either that the cargo cache is populated or the
+dependencies are vendored. Requires --locked</p>
+<h4 id="--no-minimize-exemptions"><a class="header" href="#--no-minimize-exemptions"><code>--no-minimize-exemptions</code></a></h4>
+<p>Prevent commands such as <code>check</code> and <code>certify</code> from automatically cleaning up unused
+exemptions</p>
+<h4 id="--no-registry-suggestions"><a class="header" href="#--no-registry-suggestions"><code>--no-registry-suggestions</code></a></h4>
+<p>Prevent commands such as <code>check</code> and <code>suggest</code> from suggesting registry imports</p>
+<h4 id="--verbose-verbose"><a class="header" href="#--verbose-verbose"><code>--verbose &lt;VERBOSE&gt;</code></a></h4>
+<p>How verbose logging should be (log level)</p>
+<p>[default: warn]<br />
+[possible values: off, error, warn, info, debug, trace]</p>
+<h4 id="--output-file-output_file"><a class="header" href="#--output-file-output_file"><code>--output-file &lt;OUTPUT_FILE&gt;</code></a></h4>
+<p>Instead of stdout, write output to this file</p>
+<h4 id="--log-file-log_file"><a class="header" href="#--log-file-log_file"><code>--log-file &lt;LOG_FILE&gt;</code></a></h4>
+<p>Instead of stderr, write logs to this file (only used after successful CLI parsing)</p>
+<h4 id="--output-format-output_format"><a class="header" href="#--output-format-output_format"><code>--output-format &lt;OUTPUT_FORMAT&gt;</code></a></h4>
+<p>The format of the output</p>
+<p>[default: human]<br />
+[possible values: human, json]</p>
+<h4 id="--cache-dir-cache_dir"><a class="header" href="#--cache-dir-cache_dir"><code>--cache-dir &lt;CACHE_DIR&gt;</code></a></h4>
+<p>Use the following path instead of the global cache directory</p>
+<p>The cache stores information such as the summary results used by vet's suggestion
+machinery, cached results from crates.io APIs, and checkouts of crates from crates.io in
+some cases. This is generally automatically managed in the system cache directory.</p>
+<p>This mostly exists for testing vet itself.</p>
+<h4 id="--filter-graph-filter_graph"><a class="header" href="#--filter-graph-filter_graph"><code>--filter-graph &lt;FILTER_GRAPH&gt;</code></a></h4>
+<p>Filter out different parts of the build graph and pretend that's the true graph</p>
+<p>Example: <code>--filter-graph=&quot;exclude(any(eq(is_dev_only(true)),eq(name(serde_derive))))&quot;</code></p>
+<p>This mostly exists to debug or reduce projects that cargo-vet is mishandling.
+Combining this with <code>cargo vet --output-format=json dump-graph</code> can produce an
+input that can be added to vet's test suite.</p>
+<p>The resulting graph is computed as follows:</p>
+<ol>
+<li>First compute the original graph</li>
+<li>Then apply the filters to find the new set of nodes</li>
+<li>Create a new empty graph</li>
+<li>For each workspace member that still exists, recursively add it and its dependencies</li>
+</ol>
+<p>This means that any non-workspace package that becomes &quot;orphaned&quot; by the filters will
+be implicitly discarded even if it passes the filters.</p>
+<p>Possible filters:</p>
+<ul>
+<li><code>include($query)</code>: only include packages that match this filter</li>
+<li><code>exclude($query)</code>: exclude packages that match this filter</li>
+</ul>
+<p>Possible queries:</p>
+<ul>
+<li><code>any($query1, $query2, ...)</code>: true if any of the listed queries are true</li>
+<li><code>all($query1, $query2, ...)</code>: true if all of the listed queries are true</li>
+<li><code>not($query)</code>: true if the query is false</li>
+<li><code>$property</code>: true if the package has this property</li>
+</ul>
+<p>Possible properties:</p>
+<ul>
+<li><code>name($string)</code>: the package's name (i.e. <code>serde</code>)</li>
+<li><code>version($version)</code>: the package's version (i.e. <code>1.2.0</code>)</li>
+<li><code>is_root($bool)</code>: whether it's a root in the original graph (ignoring dev-deps)</li>
+<li><code>is_workspace_member($bool)</code>: whether the package is a workspace-member (can be
+tested)</li>
+<li><code>is_third_party($bool)</code>: whether the package is considered third-party by vet</li>
+<li><code>is_dev_only($bool)</code>: whether it's only used by dev (test) builds in the original
+graph</li>
+</ul>
+<h4 id="--cargo-arg-cargo_arg"><a class="header" href="#--cargo-arg-cargo_arg"><code>--cargo-arg &lt;CARGO_ARG&gt;</code></a></h4>
+<p>Arguments to pass through to cargo. It can be specified multiple times for multiple
+arguments.</p>
+<p>Example: <code>--cargo-arg=-Zbindeps</code></p>
+<p>This allows using unstable options in Cargo if a project's Cargo.toml requires them.</p>
+<h3 id="subcommands"><a class="header" href="#subcommands">SUBCOMMANDS</a></h3>
+<ul>
+<li><a href="#cargo-vet-check">check</a>: [default] Check that the current project has been vetted</li>
+<li><a href="#cargo-vet-suggest">suggest</a>: Suggest some low-hanging fruit to review</li>
+<li><a href="#cargo-vet-init">init</a>: Initialize cargo-vet for your project</li>
+<li><a href="#cargo-vet-inspect">inspect</a>: Fetch the source of a package</li>
+<li><a href="#cargo-vet-diff">diff</a>: Yield a diff against the last reviewed version</li>
+<li><a href="#cargo-vet-certify">certify</a>: Mark a package as audited</li>
+<li><a href="#cargo-vet-import">import</a>: Import a new peer's imports</li>
+<li><a href="#cargo-vet-trust">trust</a>: Trust a given crate and publisher</li>
+<li><a href="#cargo-vet-regenerate">regenerate</a>: Explicitly regenerate various pieces of information</li>
+<li><a href="#cargo-vet-add-exemption">add-exemption</a>: Mark a package as exempted from review</li>
+<li><a href="#cargo-vet-record-violation">record-violation</a>: Declare that some versions of a package violate certain audit criteria</li>
+<li><a href="#cargo-vet-fmt">fmt</a>: Reformat all of vet's files (in case you hand-edited them)</li>
+<li><a href="#cargo-vet-prune">prune</a>: Prune unnecessary imports and exemptions</li>
+<li><a href="#cargo-vet-aggregate">aggregate</a>: Fetch and merge audits from multiple sources into a single <code>audits.toml</code> file</li>
+<li><a href="#cargo-vet-dump-graph">dump-graph</a>: Print the cargo build graph as understood by <code>cargo vet</code></li>
+<li><a href="#cargo-vet-gc">gc</a>: Clean up old packages from the vet cache</li>
+<li><a href="#cargo-vet-renew">renew</a>: Renew wildcard audit expirations</li>
+<li><a href="#cargo-vet-help">help</a>: Print this message or the help of the given subcommand(s)</li>
+</ul>
+<p><br><br><br></p>
+<h2 id="cargo-vet-check"><a class="header" href="#cargo-vet-check">cargo vet check</a></h2>
+<p>[default] Check that the current project has been vetted</p>
+<p>This is the default behaviour if no subcommand is specified.</p>
+<p>If the check fails due to lack of audits, we will do our best to explain why vetting failed, and
+what should be done to fix it. This can involve a certain amount of guesswork, as there are many
+possible solutions and we only want to recommend the &quot;best&quot; one to keep things simple.</p>
+<p>Failures and suggestions can either be &quot;Certain&quot; or &quot;Speculative&quot;. Speculative items are greyed
+out and sorted lower to indicate that the Certain entries should be looked at first. Speculative
+items are for packages that probably need audits too, but only appear as transitive dependencies of
+Certain items.</p>
+<p>During review of Certain issues you may take various actions that change what's needed for the
+Speculative ones. For instance you may discover you're enabling a feature you don't need, and
+that's the only reason the Speculative package is in your tree. Or you may determine that the
+Certain package only needs to be safe-to-run, which may make the Speculative requirements weaker or
+completely resolved. For these reasons we recommend fixing problems &quot;top down&quot;, and Certain items
+are The Top.</p>
+<p>Suggested fixes are grouped by the criteria they should be reviewed for and sorted by how easy the
+review should be (in terms of lines of code). We only ever suggest audits (and provide the command
+you need to run to do it), but there are other possible fixes like an <code>exemption</code> or <code>policy</code>
+change.</p>
+<p>The most aggressive solution is to run <code>cargo vet regenerate exemptions</code> which will add whatever
+exemptions necessary to make <code>check</code> pass (and remove uneeded ones). Ideally you should avoid doing
+this and prefer adding audits, but if you've done all the audits you plan on doing, that's the way
+to finish the job.</p>
+<h3 id="usage-1"><a class="header" href="#usage-1">USAGE</a></h3>
+<pre><code>cargo vet check [OPTIONS]
+</code></pre>
+<h3 id="options-1"><a class="header" href="#options-1">OPTIONS</a></h3>
+<h4 id="-h---help-1"><a class="header" href="#-h---help-1"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-1"><a class="header" href="#global-options-1">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-suggest"><a class="header" href="#cargo-vet-suggest">cargo vet suggest</a></h2>
+<p>Suggest some low-hanging fruit to review</p>
+<p>This is essentially the same as <code>check</code> but with all your <code>exemptions</code> temporarily removed as a way
+to inspect your &quot;review backlog&quot;. As such, we recommend against running this command while <code>check</code>
+is failing, because this will just give you worse information.</p>
+<p>If you don't consider an exemption to be &quot;backlog&quot;, add <code>suggest = false</code> to its entry and we won't
+remove it while suggesting.</p>
+<p>See also <code>regenerate exemptions</code>, which can be used to &quot;garbage collect&quot; your backlog (if you run it
+while <code>check</code> is passing).</p>
+<h3 id="usage-2"><a class="header" href="#usage-2">USAGE</a></h3>
+<pre><code>cargo vet suggest [OPTIONS]
+</code></pre>
+<h3 id="options-2"><a class="header" href="#options-2">OPTIONS</a></h3>
+<h4 id="-h---help-2"><a class="header" href="#-h---help-2"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-2"><a class="header" href="#global-options-2">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-init"><a class="header" href="#cargo-vet-init">cargo vet init</a></h2>
+<p>Initialize cargo-vet for your project</p>
+<p>This will add <code>exemptions</code> and <code>audit-as-crates-io = false</code> for all packages that need it to make
+<code>check</code> pass immediately and make it easy to start using vet with your project.</p>
+<p>At this point you can either configure your project further or start working on your review backlog
+with <code>suggest</code>.</p>
+<h3 id="usage-3"><a class="header" href="#usage-3">USAGE</a></h3>
+<pre><code>cargo vet init [OPTIONS]
+</code></pre>
+<h3 id="options-3"><a class="header" href="#options-3">OPTIONS</a></h3>
+<h4 id="-h---help-3"><a class="header" href="#-h---help-3"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-3"><a class="header" href="#global-options-3">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-inspect"><a class="header" href="#cargo-vet-inspect">cargo vet inspect</a></h2>
+<p>Fetch the source of a package</p>
+<p>We will attempt to guess what criteria you want to audit the package for based on the current check/
+suggest status, and show you the meaning of those criteria ahead of time.</p>
+<h3 id="usage-4"><a class="header" href="#usage-4">USAGE</a></h3>
+<pre><code>cargo vet inspect [OPTIONS] &lt;PACKAGE&gt; &lt;VERSION&gt;
+</code></pre>
+<h3 id="args"><a class="header" href="#args">ARGS</a></h3>
+<h4 id="package"><a class="header" href="#package"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to inspect</p>
+<h4 id="version"><a class="header" href="#version"><code>&lt;VERSION&gt;</code></a></h4>
+<p>The version to inspect</p>
+<h3 id="options-4"><a class="header" href="#options-4">OPTIONS</a></h3>
+<h4 id="--mode-mode"><a class="header" href="#--mode-mode"><code>--mode &lt;MODE&gt;</code></a></h4>
+<p>How to inspect the source</p>
+<p>[default: sourcegraph]<br />
+[possible values: local, sourcegraph]</p>
+<h4 id="-h---help-4"><a class="header" href="#-h---help-4"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-4"><a class="header" href="#global-options-4">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-diff"><a class="header" href="#cargo-vet-diff">cargo vet diff</a></h2>
+<p>Yield a diff against the last reviewed version</p>
+<p>We will attempt to guess what criteria you want to audit the package for based on the current check/
+suggest status, and show you the meaning of those criteria ahead of time.</p>
+<h3 id="usage-5"><a class="header" href="#usage-5">USAGE</a></h3>
+<pre><code>cargo vet diff [OPTIONS] &lt;PACKAGE&gt; &lt;VERSION1&gt; &lt;VERSION2&gt;
+</code></pre>
+<h3 id="args-1"><a class="header" href="#args-1">ARGS</a></h3>
+<h4 id="package-1"><a class="header" href="#package-1"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to diff</p>
+<h4 id="version1"><a class="header" href="#version1"><code>&lt;VERSION1&gt;</code></a></h4>
+<p>The base version to diff</p>
+<h4 id="version2"><a class="header" href="#version2"><code>&lt;VERSION2&gt;</code></a></h4>
+<p>The target version to diff</p>
+<h3 id="options-5"><a class="header" href="#options-5">OPTIONS</a></h3>
+<h4 id="--mode-mode-1"><a class="header" href="#--mode-mode-1"><code>--mode &lt;MODE&gt;</code></a></h4>
+<p>How to inspect the source</p>
+<p>[default: sourcegraph]<br />
+[possible values: local, sourcegraph]</p>
+<h4 id="-h---help-5"><a class="header" href="#-h---help-5"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-5"><a class="header" href="#global-options-5">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-certify"><a class="header" href="#cargo-vet-certify">cargo vet certify</a></h2>
+<p>Mark a package as audited</p>
+<p>This command will do its best to guess what you want to be certifying.</p>
+<p>If invoked with no args, it will try to certify the last thing you looked at with <code>inspect</code> or
+<code>diff</code>. Otherwise you must either supply the package name and one version (for a full audit) or two
+versions (for a delta audit).</p>
+<p>Once the package+version(s) have been selected, we will try to guess what criteria to certify it
+for. First we will <code>check</code>, and if the check fails and your audit would seemingly fix this package,
+we will use the criteria recommended for that fix. If <code>check</code> passes, we will assume you are working
+on your backlog and instead use the recommendations of <code>suggest</code>.</p>
+<p>If this removes the need for an <code>exemption</code> will we automatically remove it.</p>
+<h3 id="usage-6"><a class="header" href="#usage-6">USAGE</a></h3>
+<pre><code>cargo vet certify [OPTIONS] [ARGS]
+</code></pre>
+<h3 id="args-2"><a class="header" href="#args-2">ARGS</a></h3>
+<h4 id="package-2"><a class="header" href="#package-2"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to certify as audited</p>
+<h4 id="version1-1"><a class="header" href="#version1-1"><code>&lt;VERSION1&gt;</code></a></h4>
+<p>The version to certify as audited</p>
+<h4 id="version2-1"><a class="header" href="#version2-1"><code>&lt;VERSION2&gt;</code></a></h4>
+<p>If present, instead certify a diff from version1-&gt;version2</p>
+<h3 id="options-6"><a class="header" href="#options-6">OPTIONS</a></h3>
+<h4 id="--wildcard-wildcard"><a class="header" href="#--wildcard-wildcard"><code>--wildcard &lt;WILDCARD&gt;</code></a></h4>
+<p>If present, certify a wildcard audit for the user with the given username.</p>
+<p>Use the --start-date and --end-date options to specify the date range to certify for.</p>
+<h4 id="--criteria-criteria"><a class="header" href="#--criteria-criteria"><code>--criteria &lt;CRITERIA&gt;</code></a></h4>
+<p>The criteria to certify for this audit</p>
+<p>If not provided, we will prompt you for this information.</p>
+<h4 id="--who-who"><a class="header" href="#--who-who"><code>--who &lt;WHO&gt;</code></a></h4>
+<p>Who to name as the auditor</p>
+<p>If not provided, we will collect this information from the local git.</p>
+<h4 id="--notes-notes"><a class="header" href="#--notes-notes"><code>--notes &lt;NOTES&gt;</code></a></h4>
+<p>A free-form string to include with the new audit entry</p>
+<p>If not provided, there will be no notes.</p>
+<h4 id="--start-date-start_date"><a class="header" href="#--start-date-start_date"><code>--start-date &lt;START_DATE&gt;</code></a></h4>
+<p>Start date to create a wildcard audit from.</p>
+<p>Only valid with <code>--wildcard</code>.</p>
+<p>If not provided, will be the publication date of the first version published by the
+given user.</p>
+<h4 id="--end-date-end_date"><a class="header" href="#--end-date-end_date"><code>--end-date &lt;END_DATE&gt;</code></a></h4>
+<p>End date to create a wildcard audit from. May be at most 1 year in the future.</p>
+<p>Only valid with <code>--wildcard</code>.</p>
+<p>If not provided, will be 1 year from the current date.</p>
+<h4 id="--accept-all"><a class="header" href="#--accept-all"><code>--accept-all</code></a></h4>
+<p>Accept all criteria without an interactive prompt</p>
+<h4 id="--force"><a class="header" href="#--force"><code>--force</code></a></h4>
+<p>Force the command to ignore whether the package/version makes sense</p>
+<p>To catch typos/mistakes, we check if the thing you're trying to talk about is part of
+your current build, but this flag disables that.</p>
+<h4 id="--no-collapse"><a class="header" href="#--no-collapse"><code>--no-collapse</code></a></h4>
+<p>Prevent combination of the audit with a prior adjacent non-importable git audit, if any.</p>
+<p>This will only have an effect if the supplied <code>from</code> version is a git version.</p>
+<p>For example, normally an existing audit from <code>1.0.0-&gt;1.0.0@git:1111111</code> and a new
+certified audit from <code>1.0.0@git:1111111-&gt;1.0.0@git:2222222</code> would result in a single
+audit from <code>1.0.0-&gt;1.0.0@git:2222222</code>. Passing this flag would prevent this.</p>
+<h4 id="-h---help-6"><a class="header" href="#-h---help-6"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-6"><a class="header" href="#global-options-6">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-import"><a class="header" href="#cargo-vet-import">cargo vet import</a></h2>
+<p>Import a new peer's imports</p>
+<p>If invoked without a URL parameter, it will look up the named peer in the cargo-vet registry, and
+import that peer.</p>
+<h3 id="usage-7"><a class="header" href="#usage-7">USAGE</a></h3>
+<pre><code>cargo vet import [OPTIONS] &lt;NAME&gt; [URL]...
+</code></pre>
+<h3 id="args-3"><a class="header" href="#args-3">ARGS</a></h3>
+<h4 id="name"><a class="header" href="#name"><code>&lt;NAME&gt;</code></a></h4>
+<p>The name of the peer to import</p>
+<h4 id="url"><a class="header" href="#url"><code>&lt;URL&gt;...</code></a></h4>
+<p>The URL(s) of the peer's audits.toml file(s).</p>
+<p>If a URL is not provided, a peer with the given name will be looked up in the cargo-vet
+registry to determine the import URL(s).</p>
+<h3 id="options-7"><a class="header" href="#options-7">OPTIONS</a></h3>
+<h4 id="-h---help-7"><a class="header" href="#-h---help-7"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-7"><a class="header" href="#global-options-7">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-trust"><a class="header" href="#cargo-vet-trust">cargo vet trust</a></h2>
+<p>Trust a given crate and publisher</p>
+<h3 id="usage-8"><a class="header" href="#usage-8">USAGE</a></h3>
+<pre><code>cargo vet trust [OPTIONS] [ARGS]
+</code></pre>
+<h3 id="args-4"><a class="header" href="#args-4">ARGS</a></h3>
+<h4 id="package-3"><a class="header" href="#package-3"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to trust</p>
+<p>Must be specified unless --all has been specified.</p>
+<h4 id="publisher_login"><a class="header" href="#publisher_login"><code>&lt;PUBLISHER_LOGIN&gt;</code></a></h4>
+<p>The username of the publisher to trust</p>
+<p>If not provided, will be inferred to be the sole known publisher of the given crate.
+If there is more than one publisher for the given crate, the login must be provided
+explicitly.</p>
+<h3 id="options-8"><a class="header" href="#options-8">OPTIONS</a></h3>
+<h4 id="--criteria-criteria-1"><a class="header" href="#--criteria-criteria-1"><code>--criteria &lt;CRITERIA&gt;</code></a></h4>
+<p>The criteria to certify for this trust entry</p>
+<p>If not provided, we will prompt you for this information.</p>
+<h4 id="--start-date-start_date-1"><a class="header" href="#--start-date-start_date-1"><code>--start-date &lt;START_DATE&gt;</code></a></h4>
+<p>Start date to create the trust entry from.</p>
+<p>If not provided, will be the publication date of the first version published by the
+given user.</p>
+<h4 id="--end-date-end_date-1"><a class="header" href="#--end-date-end_date-1"><code>--end-date &lt;END_DATE&gt;</code></a></h4>
+<p>End date to create the trust entry from. May be at most 1 year in the future.</p>
+<p>If not provided, will be 1 year from the current date.</p>
+<h4 id="--notes-notes-1"><a class="header" href="#--notes-notes-1"><code>--notes &lt;NOTES&gt;</code></a></h4>
+<p>A free-form string to include with the new audit entry</p>
+<p>If not provided, there will be no notes.</p>
+<h4 id="--all-all"><a class="header" href="#--all-all"><code>--all &lt;ALL&gt;</code></a></h4>
+<p>If specified, trusts all packages with exemptions or failures which are solely published
+by the given user</p>
+<h4 id="--allow-multiple-publishers"><a class="header" href="#--allow-multiple-publishers"><code>--allow-multiple-publishers</code></a></h4>
+<p>If specified along with --all, also trusts packages with multiple publishers, so long as
+at least one version was published by the given user</p>
+<h4 id="-h---help-8"><a class="header" href="#-h---help-8"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-8"><a class="header" href="#global-options-8">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-regenerate"><a class="header" href="#cargo-vet-regenerate">cargo vet regenerate</a></h2>
+<p>Explicitly regenerate various pieces of information</p>
+<p>There are several things that <code>cargo vet</code> <em>can</em> do for you automatically but we choose to make
+manual just to keep a human in the loop of those decisions. Some of these might one day become
+automatic if we agree they're boring/reliable enough.</p>
+<p>See the subcommands for specifics.</p>
+<h3 id="usage-9"><a class="header" href="#usage-9">USAGE</a></h3>
+<pre><code>cargo vet regenerate [OPTIONS] &lt;SUBCOMMAND&gt;
+</code></pre>
+<h3 id="options-9"><a class="header" href="#options-9">OPTIONS</a></h3>
+<h4 id="-h---help-9"><a class="header" href="#-h---help-9"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-9"><a class="header" href="#global-options-9">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<h3 id="subcommands-1"><a class="header" href="#subcommands-1">SUBCOMMANDS</a></h3>
+<ul>
+<li><a href="#cargo-vet-exemptions">exemptions</a>: Regenerate your exemptions to make <code>check</code> pass minimally</li>
+<li><a href="#cargo-vet-imports">imports</a>: Regenerate your imports and accept changes to criteria</li>
+<li><a href="#cargo-vet-audit-as-crates-io">audit-as-crates-io</a>: Add <code>audit-as-crates-io</code> to the policy entry for all crates which require one</li>
+<li><a href="#cargo-vet-unpublished">unpublished</a>: Remove all outdated <code>unpublished</code> entries for crates which have since been published, or
+should now be audited as a more-recent version</li>
+<li><a href="#cargo-vet-help">help</a>: Print this message or the help of the given subcommand(s)</li>
+</ul>
+<p><br><br><br></p>
+<h2 id="cargo-vet-exemptions"><a class="header" href="#cargo-vet-exemptions">cargo vet exemptions</a></h2>
+<p>Regenerate your exemptions to make <code>check</code> pass minimally</p>
+<p>This command can be used for two purposes: to force your supply-chain to pass <code>check</code> when it's
+currently failing, or to minimize/garbage-collect your exemptions when it's already passing. These
+are ultimately the same operation.</p>
+<p>We will try our best to preserve existing exemptions, removing only those that aren't needed,
+and adding only those that are needed. Exemptions that are overbroad may also be weakened (i.e.
+safe-to-deploy may be reduced to safe-to-run).</p>
+<h3 id="usage-10"><a class="header" href="#usage-10">USAGE</a></h3>
+<pre><code>cargo vet regenerate exemptions [OPTIONS]
+</code></pre>
+<h3 id="options-10"><a class="header" href="#options-10">OPTIONS</a></h3>
+<h4 id="-h---help-10"><a class="header" href="#-h---help-10"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-10"><a class="header" href="#global-options-10">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-imports"><a class="header" href="#cargo-vet-imports">cargo vet imports</a></h2>
+<p>Regenerate your imports and accept changes to criteria</p>
+<p>This is equivalent to <code>cargo vet fetch-imports</code> but it won't produce an error if the descriptions of
+foreign criteria change.</p>
+<h3 id="usage-11"><a class="header" href="#usage-11">USAGE</a></h3>
+<pre><code>cargo vet regenerate imports [OPTIONS]
+</code></pre>
+<h3 id="options-11"><a class="header" href="#options-11">OPTIONS</a></h3>
+<h4 id="-h---help-11"><a class="header" href="#-h---help-11"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-11"><a class="header" href="#global-options-11">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-audit-as-crates-io"><a class="header" href="#cargo-vet-audit-as-crates-io">cargo vet audit-as-crates-io</a></h2>
+<p>Add <code>audit-as-crates-io</code> to the policy entry for all crates which require one.</p>
+<p>Crates which have a matching <code>description</code> and <code>repository</code> entry to a published crate on crates.io
+will be marked as <code>audit-as-crates-io = true</code>.</p>
+<h3 id="usage-12"><a class="header" href="#usage-12">USAGE</a></h3>
+<pre><code>cargo vet regenerate audit-as-crates-io [OPTIONS]
+</code></pre>
+<h3 id="options-12"><a class="header" href="#options-12">OPTIONS</a></h3>
+<h4 id="-h---help-12"><a class="header" href="#-h---help-12"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-12"><a class="header" href="#global-options-12">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-unpublished"><a class="header" href="#cargo-vet-unpublished">cargo vet unpublished</a></h2>
+<p>Remove all outdated <code>unpublished</code> entries for crates which have since been published, or should now
+be audited as a more-recent version.</p>
+<p>Unlike <code>cargo vet prune</code>, this will remove outdated <code>unpublished</code> entries even if it will cause
+<code>check</code> to start failing.</p>
+<h3 id="usage-13"><a class="header" href="#usage-13">USAGE</a></h3>
+<pre><code>cargo vet regenerate unpublished [OPTIONS]
+</code></pre>
+<h3 id="options-13"><a class="header" href="#options-13">OPTIONS</a></h3>
+<h4 id="-h---help-13"><a class="header" href="#-h---help-13"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-13"><a class="header" href="#global-options-13">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-help"><a class="header" href="#cargo-vet-help">cargo vet help</a></h2>
+<p>Print this message or the help of the given subcommand(s)</p>
+<h3 id="usage-14"><a class="header" href="#usage-14">USAGE</a></h3>
+<pre><code>cargo vet regenerate help [OPTIONS] [SUBCOMMAND]...
+</code></pre>
+<h3 id="args-5"><a class="header" href="#args-5">ARGS</a></h3>
+<h4 id="subcommand"><a class="header" href="#subcommand"><code>&lt;SUBCOMMAND&gt;...</code></a></h4>
+<p>The subcommand whose help message to display</p>
+<h3 id="global-options-14"><a class="header" href="#global-options-14">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-add-exemption"><a class="header" href="#cargo-vet-add-exemption">cargo vet add-exemption</a></h2>
+<p>Mark a package as exempted from review</p>
+<p>Exemptions are <em>usually</em> just &quot;backlog&quot; and the expectation is that you will review them
+&quot;eventually&quot;. You should usually only be trying to remove them, but sometimes additions are
+necessary to make progress.</p>
+<p><code>regenerate exemptions</code> will do this for your automatically to make <code>check</code> pass (and remove any
+unnecessary ones), so we recommend using that over <code>add-exemption</code>. This command mostly exists as
+&quot;plumbing&quot; for building tools on top of <code>cargo vet</code>.</p>
+<h3 id="usage-15"><a class="header" href="#usage-15">USAGE</a></h3>
+<pre><code>cargo vet add-exemption [OPTIONS] &lt;PACKAGE&gt; &lt;VERSION&gt;
+</code></pre>
+<h3 id="args-6"><a class="header" href="#args-6">ARGS</a></h3>
+<h4 id="package-4"><a class="header" href="#package-4"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to mark as exempted</p>
+<h4 id="version-1"><a class="header" href="#version-1"><code>&lt;VERSION&gt;</code></a></h4>
+<p>The version to mark as exempted</p>
+<h3 id="options-14"><a class="header" href="#options-14">OPTIONS</a></h3>
+<h4 id="--criteria-criteria-2"><a class="header" href="#--criteria-criteria-2"><code>--criteria &lt;CRITERIA&gt;</code></a></h4>
+<p>The criteria to assume (trust)</p>
+<p>If not provided, we will prompt you for this information.</p>
+<h4 id="--notes-notes-2"><a class="header" href="#--notes-notes-2"><code>--notes &lt;NOTES&gt;</code></a></h4>
+<p>A free-form string to include with the new forbid entry</p>
+<p>If not provided, there will be no notes.</p>
+<h4 id="--no-suggest"><a class="header" href="#--no-suggest"><code>--no-suggest</code></a></h4>
+<p>Suppress suggesting this exemption for review</p>
+<h4 id="--force-1"><a class="header" href="#--force-1"><code>--force</code></a></h4>
+<p>Force the command to ignore whether the package/version makes sense</p>
+<p>To catch typos/mistakes, we check if the thing you're trying to talk about is part of
+your current build, but this flag disables that.</p>
+<h4 id="-h---help-14"><a class="header" href="#-h---help-14"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-15"><a class="header" href="#global-options-15">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-record-violation"><a class="header" href="#cargo-vet-record-violation">cargo vet record-violation</a></h2>
+<p>Declare that some versions of a package violate certain audit criteria</p>
+<p><strong>IMPORTANT</strong>: violations take <em>VersionReqs</em> not <em>Versions</em>. This is the same syntax used by
+Cargo.toml when specifying dependencies. A bare <code>1.0.0</code> actually means <code>^1.0.0</code>. If you want to
+forbid a <em>specific</em> version, use <code>=1.0.0</code>. This command can be a bit awkward because syntax like <code>*</code>
+has special meaning in scripts and terminals. It's probably easier to just manually add the entry to
+your audits.toml, but the command's here in case you want it.</p>
+<p>Violations are essentially treated as integrity constraints on your supply-chain, and will only
+result in errors if you have <code>exemptions</code> or <code>audits</code> (including imported ones) that claim criteria
+that are contradicted by the <code>violation</code>. It is not inherently an error to depend on a package with
+a <code>violation</code>.</p>
+<p>For instance, someone may review a package and determine that it's horribly unsound in the face of
+untrusted inputs, and therefore <em>un</em>safe-to-deploy. They would then add a &quot;safe-to-deploy&quot; violation
+for whatever versions of that package seem to have that problem. But if the package basically works
+fine on trusted inputs, it might still be safe-to-run. So if you use it in your tests and have an
+audit that only claims safe-to-run, we won't mention it.</p>
+<p>When a violation <em>does</em> cause an integrity error, it's up to you and your peers to figure out what
+to do about it. There isn't yet a mechanism for dealing with disagreements with a peer's published
+violations.</p>
+<h3 id="usage-16"><a class="header" href="#usage-16">USAGE</a></h3>
+<pre><code>cargo vet record-violation [OPTIONS] &lt;PACKAGE&gt; &lt;VERSIONS&gt;
+</code></pre>
+<h3 id="args-7"><a class="header" href="#args-7">ARGS</a></h3>
+<h4 id="package-5"><a class="header" href="#package-5"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to forbid</p>
+<h4 id="versions"><a class="header" href="#versions"><code>&lt;VERSIONS&gt;</code></a></h4>
+<p>The versions to forbid</p>
+<h3 id="options-15"><a class="header" href="#options-15">OPTIONS</a></h3>
+<h4 id="--criteria-criteria-3"><a class="header" href="#--criteria-criteria-3"><code>--criteria &lt;CRITERIA&gt;</code></a></h4>
+<p>The criteria that have failed to be satisfied.</p>
+<p>If not provided, we will prompt you for this information(?)</p>
+<h4 id="--who-who-1"><a class="header" href="#--who-who-1"><code>--who &lt;WHO&gt;</code></a></h4>
+<p>Who to name as the auditor</p>
+<p>If not provided, we will collect this information from the local git.</p>
+<h4 id="--notes-notes-3"><a class="header" href="#--notes-notes-3"><code>--notes &lt;NOTES&gt;</code></a></h4>
+<p>A free-form string to include with the new forbid entry</p>
+<p>If not provided, there will be no notes.</p>
+<h4 id="--force-2"><a class="header" href="#--force-2"><code>--force</code></a></h4>
+<p>Force the command to ignore whether the package/version makes sense</p>
+<p>To catch typos/mistakes, we check if the thing you're trying to talk about is part of
+your current build, but this flag disables that.</p>
+<h4 id="-h---help-15"><a class="header" href="#-h---help-15"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-16"><a class="header" href="#global-options-16">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-fmt"><a class="header" href="#cargo-vet-fmt">cargo vet fmt</a></h2>
+<p>Reformat all of vet's files (in case you hand-edited them)</p>
+<p>Most commands will implicitly do this, so this mostly exists as &quot;plumbing&quot; for building tools on top
+of vet, or in case you don't want to run another command.</p>
+<h3 id="usage-17"><a class="header" href="#usage-17">USAGE</a></h3>
+<pre><code>cargo vet fmt [OPTIONS]
+</code></pre>
+<h3 id="options-16"><a class="header" href="#options-16">OPTIONS</a></h3>
+<h4 id="-h---help-16"><a class="header" href="#-h---help-16"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-17"><a class="header" href="#global-options-17">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-prune"><a class="header" href="#cargo-vet-prune">cargo vet prune</a></h2>
+<p>Prune unnecessary imports and exemptions</p>
+<p>This will fetch the updated state of imports, and attempt to remove any now-unnecessary imports or
+exemptions from the supply-chain.</p>
+<h3 id="usage-18"><a class="header" href="#usage-18">USAGE</a></h3>
+<pre><code>cargo vet prune [OPTIONS]
+</code></pre>
+<h3 id="options-17"><a class="header" href="#options-17">OPTIONS</a></h3>
+<h4 id="--no-imports"><a class="header" href="#--no-imports"><code>--no-imports</code></a></h4>
+<p>Don't prune unused imports</p>
+<h4 id="--no-exemptions"><a class="header" href="#--no-exemptions"><code>--no-exemptions</code></a></h4>
+<p>Don't prune unused exemptions</p>
+<h4 id="--no-audits"><a class="header" href="#--no-audits"><code>--no-audits</code></a></h4>
+<p>Don't prune unused non-importable audits</p>
+<h4 id="-h---help-17"><a class="header" href="#-h---help-17"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-18"><a class="header" href="#global-options-18">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-aggregate"><a class="header" href="#cargo-vet-aggregate">cargo vet aggregate</a></h2>
+<p>Fetch and merge audits from multiple sources into a single <code>audits.toml</code> file.</p>
+<p>Will fetch the audits from each URL in the provided file, combining them into a single file. Custom
+criteria will be merged by-name, and must have identical descriptions in each source audit file.</p>
+<h3 id="usage-19"><a class="header" href="#usage-19">USAGE</a></h3>
+<pre><code>cargo vet aggregate [OPTIONS] &lt;SOURCES&gt;
+</code></pre>
+<h3 id="args-8"><a class="header" href="#args-8">ARGS</a></h3>
+<h4 id="sources"><a class="header" href="#sources"><code>&lt;SOURCES&gt;</code></a></h4>
+<p>Path to a file containing a list of URLs to aggregate the audits from</p>
+<h3 id="options-18"><a class="header" href="#options-18">OPTIONS</a></h3>
+<h4 id="-h---help-18"><a class="header" href="#-h---help-18"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-19"><a class="header" href="#global-options-19">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-dump-graph"><a class="header" href="#cargo-vet-dump-graph">cargo vet dump-graph</a></h2>
+<p>Print the cargo build graph as understood by <code>cargo vet</code></p>
+<p>This is a debugging command, the output's format is not guaranteed. Use <code>cargo metadata</code> to get a
+stable version of what <em>cargo</em> thinks the build graph is. Our graph is based on that result.</p>
+<p>With <code>--output-format=human</code> (the default) this will print out mermaid-js diagrams, which things
+like github natively support rendering of.</p>
+<p>With <code>--output-format=json</code> we will print out more raw statistics for you to search/analyze.</p>
+<p>Most projects will have unreadably complex build graphs, so you may want to use the global
+<code>--filter-graph</code> argument to narrow your focus on an interesting subgraph. <code>--filter-graph</code> is
+applied <em>before</em> doing any semantic analysis, so if you filter out a package and it was the problem,
+the problem will disappear. This can be used to bisect a problem if you get ambitious enough with
+your filters.</p>
+<h3 id="usage-20"><a class="header" href="#usage-20">USAGE</a></h3>
+<pre><code>cargo vet dump-graph [OPTIONS]
+</code></pre>
+<h3 id="options-19"><a class="header" href="#options-19">OPTIONS</a></h3>
+<h4 id="--depth-depth"><a class="header" href="#--depth-depth"><code>--depth &lt;DEPTH&gt;</code></a></h4>
+<p>The depth of the graph to print (for a large project, the full graph is a HUGE MESS)</p>
+<p>[default: first-party]<br />
+[possible values: roots, workspace, first-party, first-party-and-directs, full]</p>
+<h4 id="-h---help-19"><a class="header" href="#-h---help-19"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-20"><a class="header" href="#global-options-20">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-gc"><a class="header" href="#cargo-vet-gc">cargo vet gc</a></h2>
+<p>Clean up old packages from the vet cache</p>
+<p>Removes packages which haven't been accessed in a while, and deletes any extra files which aren't
+recognized by cargo-vet.</p>
+<p>In the future, many cargo-vet subcommands will implicitly do this.</p>
+<h3 id="usage-21"><a class="header" href="#usage-21">USAGE</a></h3>
+<pre><code>cargo vet gc [OPTIONS]
+</code></pre>
+<h3 id="options-20"><a class="header" href="#options-20">OPTIONS</a></h3>
+<h4 id="--max-package-age-days-max_package_age_days"><a class="header" href="#--max-package-age-days-max_package_age_days"><code>--max-package-age-days &lt;MAX_PACKAGE_AGE_DAYS&gt;</code></a></h4>
+<p>Packages in the vet cache which haven't been used for this many days will be removed</p>
+<p>[default: 30]</p>
+<h4 id="--clean"><a class="header" href="#--clean"><code>--clean</code></a></h4>
+<p>Remove the entire cache directory, forcing it to be regenerated next time you use cargo
+vet</p>
+<h4 id="-h---help-20"><a class="header" href="#-h---help-20"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-21"><a class="header" href="#global-options-21">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-renew"><a class="header" href="#cargo-vet-renew">cargo vet renew</a></h2>
+<p>Renew wildcard audit expirations</p>
+<p>This will set a wildcard audit expiration to be one year in the future from when it is run. It can
+optionally do this for all audits which are expiring soon.</p>
+<h3 id="usage-22"><a class="header" href="#usage-22">USAGE</a></h3>
+<pre><code>cargo vet renew [OPTIONS] [CRATE]
+</code></pre>
+<h3 id="args-9"><a class="header" href="#args-9">ARGS</a></h3>
+<h4 id="crate"><a class="header" href="#crate"><code>&lt;CRATE&gt;</code></a></h4>
+<p>The name of a crate to renew</p>
+<h3 id="options-21"><a class="header" href="#options-21">OPTIONS</a></h3>
+<h4 id="--expiring"><a class="header" href="#--expiring"><code>--expiring</code></a></h4>
+<p>Renew all wildcard audits which will have expired six weeks from now</p>
+<h4 id="-h---help-21"><a class="header" href="#-h---help-21"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-22"><a class="header" href="#global-options-22">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-help-1"><a class="header" href="#cargo-vet-help-1">cargo vet help</a></h2>
+<p>Print this message or the help of the given subcommand(s)</p>
+<h3 id="usage-23"><a class="header" href="#usage-23">USAGE</a></h3>
+<pre><code>cargo vet help [OPTIONS] [SUBCOMMAND]...
+</code></pre>
+<h3 id="args-10"><a class="header" href="#args-10">ARGS</a></h3>
+<h4 id="subcommand-1"><a class="header" href="#subcommand-1"><code>&lt;SUBCOMMAND&gt;...</code></a></h4>
+<p>The subcommand whose help message to display</p>
+<h3 id="global-options-23"><a class="header" href="#global-options-23">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="#global-options">global options</a></p>
+<p>stderr:</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="faq.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                            <a rel="next" href="algorithm.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="faq.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                    <a rel="next" href="algorithm.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+    </body>
+</html>

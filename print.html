@@ -1,0 +1,2367 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Cargo Vet</title>
+        <meta name="robots" content="noindex" />
+        <!-- Custom HTML head -->
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="src/custom.css">
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="index.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="motivation.html"><strong aria-hidden="true">1.1.</strong> Motivation</a></li><li class="chapter-item expanded "><a href="how-it-works.html"><strong aria-hidden="true">1.2.</strong> How it Works</a></li></ol></li><li class="chapter-item expanded "><a href="tutorial.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="setup.html"><strong aria-hidden="true">2.2.</strong> Setup</a></li><li class="chapter-item expanded "><a href="audit-criteria.html"><strong aria-hidden="true">2.3.</strong> Audit Criteria</a></li><li class="chapter-item expanded "><a href="importing-audits.html"><strong aria-hidden="true">2.4.</strong> Importing Audits</a></li><li class="chapter-item expanded "><a href="recording-audits.html"><strong aria-hidden="true">2.5.</strong> Recording Audits</a></li><li class="chapter-item expanded "><a href="performing-audits.html"><strong aria-hidden="true">2.6.</strong> Performing Audits</a></li><li class="chapter-item expanded "><a href="trusting-publishers.html"><strong aria-hidden="true">2.7.</strong> Trusting Publishers</a></li><li class="chapter-item expanded "><a href="specifying-policies.html"><strong aria-hidden="true">2.8.</strong> Specifying Policies</a></li><li class="chapter-item expanded "><a href="multiple-repositories.html"><strong aria-hidden="true">2.9.</strong> Multiple Repositories</a></li><li class="chapter-item expanded "><a href="configuring-ci.html"><strong aria-hidden="true">2.10.</strong> Configuring CI</a></li><li class="chapter-item expanded "><a href="curating-your-audit-set.html"><strong aria-hidden="true">2.11.</strong> Curating Your Audit Set</a></li></ol></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">3.</strong> Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="config.html"><strong aria-hidden="true">3.1.</strong> Configuration</a></li><li class="chapter-item expanded "><a href="audit-entries.html"><strong aria-hidden="true">3.2.</strong> Audit Entries</a></li><li class="chapter-item expanded "><a href="wildcard-audit-entries.html"><strong aria-hidden="true">3.3.</strong> Wildcard Audit Entries</a></li><li class="chapter-item expanded "><a href="trusted-entries.html"><strong aria-hidden="true">3.4.</strong> Trusted Entries</a></li><li class="chapter-item expanded "><a href="built-in-criteria.html"><strong aria-hidden="true">3.5.</strong> Built-In Criteria</a></li><li class="chapter-item expanded "><a href="first-party-code.html"><strong aria-hidden="true">3.6.</strong> First-Party Code</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.7.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="commands.html"><strong aria-hidden="true">3.8.</strong> Commands</a></li><li class="chapter-item expanded "><a href="algorithm.html"><strong aria-hidden="true">3.9.</strong> The Algorithm</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Cargo Vet</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/mozilla/cargo-vet" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="cargo-vet"><a class="header" href="#cargo-vet">Cargo Vet</a></h1>
+<p>The <code>cargo vet</code> subcommand is a tool to help projects ensure that third-party
+Rust dependencies have been audited by a trusted entity. It strives to be
+lightweight and easy to integrate.</p>
+<p>When run, <code>cargo vet</code> matches all of a project's third-party dependencies
+against a set of audits performed by the project authors or entities they trust.
+If there are any gaps, the tool provides mechanical assistance in performing and
+documenting the audit.</p>
+<p>The primary reason that people do not ordinarily audit open-source dependencies
+is that it is too much work. There are a few key ways that <code>cargo vet</code> aims to
+reduce developer effort to a manageable level:</p>
+<ul>
+<li>
+<p><strong>Sharing</strong>: Public crates are often used by many projects. These projects can
+share their findings with each other to avoid duplicating work.</p>
+</li>
+<li>
+<p><strong>Relative Audits</strong>: Different versions of the same crate are often quite similar
+to each other. Developers can inspect the difference between two versions, and record
+that if the first version was vetted, the second can be considered vetted as well.</p>
+</li>
+<li>
+<p><strong>Deferred Audits</strong>: It is not always practical to achieve full coverage.
+Dependencies can be added to a list of exceptions which can be ratcheted down
+over time. This makes it trivial to introduce <code>cargo vet</code> to a new project and
+guard against future vulnerabilities while vetting the pre-existing code
+gradually as time permits.</p>
+</li>
+</ul>
+<blockquote>
+<p><strong>Note</strong>: <code>cargo vet</code> is under active development. If you're interested in
+deploying it, <a href="mailto:bholley@mozilla.com">get in touch</a>.</p>
+</blockquote>
+<h2 id="contributing"><a class="header" href="#contributing">Contributing</a></h2>
+<p><code>cargo-vet</code> is free and open source.
+You can find the source code on <a href="https://github.com/mozilla/cargo-vet">GitHub</a>
+and issues and feature requests can be posted on the <a href="https://github.com/mozilla/cargo-vet/issues">GitHub issue tracker</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="motivation"><a class="header" href="#motivation">Motivation</a></h1>
+<p>The discussion below covers the high-level motivation for building this system. If
+you're just interested in how it works, you can skip to the next section.</p>
+<h3 id="security-risks-of-third-party-code"><a class="header" href="#security-risks-of-third-party-code">Security Risks of Third-Party Code</a></h3>
+<p>Low-friction reuse of third-party components — via systems like crates.io or npm — is
+an essential element of modern software development. Unfortunately, it also
+widens the set of actors who can introduce a security vulnerability into the final
+product.</p>
+<p>These defects can be honest mistakes, or intentional supply-chain attacks. They
+can exist in the initial version, or be introduced later as an update. They can
+be introduced by the original author, or by a new maintainer
+who acquires control over the release of subsequent versions.
+Taken together, these avenues constitute a demonstrated and growing
+risk to software security.</p>
+<p>Ideally, the composition model would include technical guarantees to isolate
+components from each other and prevent a defect in one component from compromising
+the security of the entire program (e.g. <a href="https://bytecodealliance.org/articles/announcing-the-bytecode-alliance">WebAssembly nanoprocesses</a>).
+However, that is often not a realistic solution for many projects today. In the absence
+of technical guarantees, the responsibility for ensuring software integrity falls to
+humans. But reviewing every line of third-party code can be very time-consuming and
+difficult, and undermines the original premise of low-friction code reuse. Practically
+speaking, it often just doesn't happen — even at large well-resourced companies.</p>
+<h3 id="tackling-this-in-rust"><a class="header" href="#tackling-this-in-rust">Tackling This in Rust</a></h3>
+<p>There are two properties of Rust that make this problem easier to solve.</p>
+<p>First, it's relatively easy to audit Rust code. Unlike C/C++, Rust code is
+memory-safe by default, and unlike JavaScript, there is no highly-dynamic shared
+global environment. This means that you can often reason at a high level about
+the range of a module's potential behavior without carefully studying all of its
+internal invariants. For example, a complicated string parser with a narrow
+interface, no unsafe code, and no powerful imports has limited means to
+compromise the rest of the program. This also makes it easier to conclude that a
+new version is safe based on a diff from a prior trusted version.</p>
+<p>Second, nearly everyone in the Rust ecosystem relies on the same set of basic tooling
+— Cargo and crates.io — to import and manage third-party components, and there is high
+overlap in the dependency sets. For example, at the time of writing,
+<a href="https://hg.mozilla.org/mozilla-central/file/add572d6012047244d022436e0b5c578b3dd7cf7/Cargo.lock">Firefox</a>,
+<a href="https://github.com/bytecodealliance/wasmtime/blob/49c2b1e60a87623796046176500bed6afa956d2f/Cargo.lock">wasmtime</a>,
+and <a href="https://github.com/rust-lang/rust/blob/532d3cda90b8a729cd982548649d32803d265052/Cargo.lock">the Rust compiler</a>
+specified 406, 310, and 357 crates.io dependencies respectively<sup class="footnote-reference"><a href="#1">1</a></sup>. Ignoring
+version, each project shares about half of its dependencies with at least one of
+the other two projects, and 107 dependencies are common across all three.</p>
+<p>This creates opportunities to share the analysis burden in an systematic way. If you're able to
+discover that a trusted party has already audited the exact crate release you're using,
+you can gain quite a bit of confidence in its integrity with no additional effort. If
+that party has audited a different version, you could consider either switching to it, or
+merely auditing the diff between the two. Not every organization
+and project share the same level of risk tolerance, but there is a lot of common
+ground, and substantial room for improvement beyond no sharing at all.</p>
+<h2 id="footnotes"><a class="header" href="#footnotes">Footnotes</a></h2>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>The following command string computes the names of the crates.io packages
+specified in <code>Cargo.lock</code>. Note the filtering for path and git dependencies,
+along with removing duplicates due to different versions of the same crate:</p>
+</div>
+<pre><code>grep -e &quot;name = &quot; -e &quot;source = \&quot;registry&quot; Cargo.lock | awk '/source =/ { print prv_line; next } { prv_line = $0 }' | sort -u
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="how-it-works"><a class="header" href="#how-it-works">How it Works</a></h1>
+<p>Most developers are busy people with limited energy to devote to supply-chain
+integrity. Therefore, the driving principle behind cargo-vet is to minimize
+friction and make it as easy as possible to do the right thing. It aims to be
+trivial to set up, fit unobtrusively into existing workflows, guide people
+through each step, and allow the entire ecosystem to share the work of auditing
+widely-used packages.</p>
+<p>This section provides a high-level overview of how the system operates to
+achieve these goals.</p>
+<h2 id="setup"><a class="header" href="#setup">Setup</a></h2>
+<!-- diagrams: https://docs.google.com/presentation/d/18svkEsm9K5gLQeJLfILGdMUTsujiDgzecrswcOAdceQ/edit -->
+<p>Cargo-vet is easy to set up. Most users will already have a repository with some
+pre-existing third-party dependencies:</p>
+<p><img src="images/existing_repo.png" alt="Existing Repository" /></p>
+<p>Cargo-vet can be enabled by adding the tool as a linter and running <code>cargo vet init</code>, which creates some metadata in the repository:</p>
+<p><img src="images/with_metadata.png" alt="Repository with Metadata" /></p>
+<p>This takes about five minutes, and crucially, does not require auditing the
+existing dependencies. These are automatically added to the exemptions list:</p>
+<p><img src="images/exemptions.png" alt="Exemptions" /></p>
+<p>This makes it low-effort to get started, and facilitates tackling the backlog
+incrementally from an approved state.</p>
+<h2 id="adding-new-third-party-code"><a class="header" href="#adding-new-third-party-code">Adding New Third-Party Code</a></h2>
+<p>Sometime later, a developer attempts to pull new third-party code into the
+project. This might be a new dependency, or an update to an existing one:</p>
+<p><img src="images/changeset.png" alt="Changeset" /></p>
+<p>As part of continuous integration, cargo-vet analyzes the updated build graph to
+verify that the new code has been audited by a trusted organization. If not, the
+patch is refused:</p>
+<p><img src="images/refusal.png" alt="Refusal" /></p>
+<p>Next, cargo-vet assists the developer in resolving the situation.  First, it
+scans the registry to see if any well-known organizations have audited that
+package before:</p>
+<p><img src="images/potential_imports.png" alt="Potential Imports" /></p>
+<p>If there’s a match, cargo-vet informs the developer and offers the option to add
+that organization to the project’s trusted imports:</p>
+<p><img src="images/import.png" alt="Import" /></p>
+<p>This enables projects to lazily build up an increasingly wide set of approved
+crates. Approval of both import and audit submissions automatically falls to the
+code owners of the <code>supply-chain/</code> directory, which should consist of either
+project leadership or a dedicated security team.</p>
+<h2 id="auditing-workflow"><a class="header" href="#auditing-workflow">Auditing Workflow</a></h2>
+<p>It may of course be the case that the developer needs to perform the audit
+themselves, and cargo-vet streamlines this process. Often someone will have
+already audited a different version of the same crate, in which case cargo-vet
+computes the relevant diffs and identifies the smallest one<sup class="footnote-reference"><a href="#1">1</a></sup>. After walking
+the developer through the process of determining what to audit, it then presents
+the relevant artifacts for inspection, either locally or on
+<a href="https://sourcegraph.com">Sourcegraph</a>.</p>
+<p>Cargo-vet minimizes developer friction by storing audits in-tree. This means
+that developers don’t need to navigate or authenticate with an external system.
+Interactions with cargo-vet are generally triggered when a developer creates a
+changeset adding new third-party code, and this design allows them to simply
+submit the relevant audits as part of that changeset:</p>
+<p><img src="images/audit_submission.png" alt="Audit Submission" /></p>
+<h2 id="sharing-the-work"><a class="header" href="#sharing-the-work">Sharing the Work</a></h2>
+<p>Cargo-vet’s mechanisms for sharing and discovery are built on top of this
+decentralized storage. Imports are implemented by pointing directly to the
+audit files in external repositories, and the registry is merely an index of
+such files from well-known organizations:</p>
+<p><img src="images/registry.png" alt="Registry" /></p>
+<p>This also means there’s no central infrastructure for an attacker to compromise.
+Imports used to vet the dependency graph are always fetched directly from the
+relevant organization, and only after explicitly adding that organization to the
+trusted set.</p>
+<p>Audit sharing is a key force-multiplier behind <code>cargo vet</code>, but it is not
+essential. Projects can of course decline to add any imports and perform all
+audits themselves.</p>
+<h2 id="additional-features"><a class="header" href="#additional-features">Additional Features</a></h2>
+<p>Cargo-vet has a number of advanced features under the hood — it supports custom
+audit criteria, configurable policies for different subtrees in the build graph,
+and filtering out platform-specific code. These features are all completely
+optional, and the baseline experience is designed to be simple and require
+minimal onboarding. You can learn more about them in the subsequent chapters of
+this book.</p>
+<h2 id="footnotes-1"><a class="header" href="#footnotes-1">Footnotes</a></h2>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>Differential audits work even for crates in the exemptions list. While it
+might seem counter-intuitive to perform a relative security audit against an
+unknown base, doing so still provides meaningful protection against future
+supply-chain attacks.</p>
+</div>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tutorial"><a class="header" href="#tutorial">Tutorial</a></h1>
+<p>This chapter walks through the steps of deploying and using <code>cargo vet</code>, with
+a survey of its key features.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
+<p>Installing <code>cargo vet</code> can be done through Cargo:</p>
+<pre><code class="language-sh">cargo install --locked cargo-vet
+</code></pre>
+<p>Afterwards you can confirm that it's installed via:</p>
+<pre><code class="language-sh">cargo vet --version
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="setup-1"><a class="header" href="#setup-1">Setup</a></h1>
+<p>Now that you've installed <code>cargo vet</code>, you're ready to set it up for your project. Move
+into the top-level project directory and execute the following:</p>
+<pre><code>$ cargo vet
+  error: cargo vet is not configured
+</code></pre>
+<p>To be useful, <code>cargo vet</code> needs to know which audits have been performed and
+what policy should be enforced. By default, this information is stored next to
+<code>Cargo.lock</code> in a directory called <code>supply-chain</code>. This location is
+<a href="./config.html">configurable</a>.</p>
+<p>To get started, you can invoke:</p>
+<pre><code>$ cargo vet init
+</code></pre>
+<p>This creates and populates the <code>supply-chain</code> directory. It contains two files:
+<code>audits.toml</code> and <code>config.toml</code>. The <code>exemptions</code> table of <code>config.toml</code> is
+populated with the full list of third-party crates currently used by the
+project. The files in this directory should be added to version control along
+with <code>Cargo.lock</code>.</p>
+<p>Now, try vetting again:</p>
+<pre><code>$ cargo vet
+  Vetting Succeeded (X exempted)
+</code></pre>
+<p>You're now up and running, though with an empty audit set: vetting only succeeds
+because your list of exceptions contains the exact set of current dependencies
+used in your project. Generally speaking, you should try to avoid more
+exceptions, and ideally seek to shrink the list over time.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="audit-criteria"><a class="header" href="#audit-criteria">Audit Criteria</a></h1>
+<p>Before you can go about auditing code, you need to decide what you want the
+audits to entail. This is expressed with &quot;audit criteria&quot;, which are just labels
+corresponding to human-readable descriptions of what to check for.</p>
+<p><code>cargo vet</code> comes pre-equipped with two built-in criteria:
+<a href="built-in-criteria.html#safe-to-run">safe-to-run</a> and
+<a href="built-in-criteria.html#safe-to-deploy">safe-to-deploy</a>. You can use these without
+any additional configuration.</p>
+<h2 id="custom-criteria"><a class="header" href="#custom-criteria">Custom Criteria</a></h2>
+<p>You can also specify arbitrary custom criteria in <code>audits.toml</code>. For example:</p>
+<pre><code>[criteria.crypto-reviewed]
+description = '''
+The cryptographic code in this crate has been reviewed for correctness by a
+member of a designated set of cryptography experts within the project.
+'''
+</code></pre>
+<p>The full feature set is documented <a href="config.html#the-criteria-table">here</a>.</p>
+<h2 id="multiple-sets-of-criteria"><a class="header" href="#multiple-sets-of-criteria">Multiple Sets of Criteria</a></h2>
+<p>There are a number of reasons you might wish to operate with multiple sets of
+criteria:</p>
+<ul>
+<li><strong>Applying extra checks to some crates:</strong> For example, you might define
+<code>crypto-reviewed</code> criteria and require them for audits of crates which
+implement cryptographic algorithms that your application depends on.</li>
+<li><strong>Relaxing your audit requirements for some crates:</strong> For example, you might
+decide that crates not exposed in production can just be <code>safe-to-run</code>
+rather than <code>safe-to-deploy</code>, since they don't need to be audited for handling
+adversarial input.</li>
+<li><strong>Improving Sharing:</strong> If one project wants to audit for issues A and B, and
+another project wants to audit for B and C, defining separate sets of criteria
+for A, B, and C allows the two projects to partially share work.</li>
+</ul>
+<p>You can define and use as many separate sets of criteria as you like.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="importing-audits"><a class="header" href="#importing-audits">Importing Audits</a></h1>
+<p>The fastest way to shrink the <code>exemptions</code> list is to pull in the audit sets from
+other projects that you trust via <code>imports</code> directives in <code>config.toml</code>.  This
+directive allows you to virtually merge audit lists from other projects into
+your own:</p>
+<pre><code>[imports.foo]
+url = &quot;https://raw.githubusercontent.com/foo-team/foo/main/supply-chain/audits.toml&quot;
+
+[imports.bar]
+url = &quot;https://hg.bar.org/repo/raw-file/tip/supply-chain/audits.toml&quot;
+</code></pre>
+<p>Upon invocation, <code>cargo vet</code> will fetch each url, extract the relevant data, and
+store the information in <code>imports.lock</code>. Similar to <code>cargo vendor</code>, passing
+<code>--locked</code> will skip the fetch.</p>
+<p>Note that this mechanism is not transitive — you can't directly import someone
+else's list of imports. This is an intentional limitation which keeps trust
+relationships direct and easy to reason about. That said, you can always inspect
+the <code>config.toml</code> of other projects for inspiration, and explicitly adopt any
+<code>imports</code> entries that meet your requirements.</p>
+<p>The <a href="built-in-criteria.html">built-in criteria</a> have the same meaning across all
+projects, so importing an audit for <code>safe-to-run</code> has the same effect as
+appending that same audit to your own <code>audits.toml</code>. By default, custom criteria
+defined in a foreign audit file exist in a private namespace and have no meaning
+in the local project. However, they can be <a href="config.html#criteria-map">mapped</a> as
+desired to locally-defined criteria.</p>
+<h2 id="the-registry"><a class="header" href="#the-registry">The Registry</a></h2>
+<p>To ease discovery, <code>cargo vet</code> maintains a central registry of the audit sets
+published by well-known organizations. This information is stored in the
+<a href="https://raw.githubusercontent.com/bholley/cargo-vet/main/registry.toml"><code>registry.toml</code></a>
+file alongside the source code in the <code>cargo vet</code>
+<a href="https://github.com/bholley/cargo-vet">repository</a>. You can request the
+inclusion of your audit set in the registry by submitting a pull request.</p>
+<p>You can inspect the registry directly to find audit sets you wish to import.
+Moreover, when suggesting audits, <code>cargo vet</code> will fetch the sets listed in the
+registry and surface any entries that could be imported to address the
+identified gaps. This is described later <a href="performing-audits.html#suggestions-from-the-registry">in more
+detail</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="recording-audits"><a class="header" href="#recording-audits">Recording Audits</a></h1>
+<p>Audits of your project's dependencies performed by you or your teammates are
+recorded in <code>audits.toml</code>. Note that these dependencies may have their own
+<code>audits.toml</code> files if they also happen to use <code>cargo vet</code>, but these have no
+effect on your project unless you explicitly import them in <code>config.toml</code>.</p>
+<h2 id="auditstoml"><a class="header" href="#auditstoml"><code>audits.toml</code></a></h2>
+<p>Listing a crate in <code>audits.toml</code> means that the you've inspected it and
+determined that it meets the specified criteria.</p>
+<p>Each crate can have one or more audit entries, which support various fields.
+Specifying a <code>version</code> means that the owner has audited that version in its
+entirety. Specifying a <code>delta</code> means that the owner has audited the diff between
+the two versions, and determined that the changes preserve the relevant
+properties.</p>
+<p>If, in the course of your auditing, you find a crate that does <em>not</em> meet the
+criteria, you can note this as well with <code>violation</code>.</p>
+<p>A sample <code>audits.toml</code> looks like this:</p>
+<pre><code>[criteria]
+
+...
+
+[[audits.bar]]
+version = &quot;1.2.3&quot;
+who = &quot;Alice Foo &lt;alicefoo@example.com&gt;&quot;
+criteria = &quot;safe-to-deploy&quot;
+
+[[audits.bar]]
+delta = &quot;1.2.3 -&gt; 1.2.4&quot;
+who = &quot;Bob Bar &lt;bobbar@example.com&gt;&quot;&quot;
+criteria = &quot;safe-to-deploy&quot;
+
+[[audits.bar]]
+version = &quot;2.1.3&quot;
+who = &quot;Alice Foo &lt;alicefoo@example.com&gt;&quot;
+criteria = &quot;safe-to-deploy&quot;
+
+[[audits.bar]]
+delta = &quot;2.1.3 -&gt; 2.1.1&quot;
+who = &quot;Alice Foo &lt;alicefoo@example.com&gt;&quot;
+criteria = &quot;safe-to-deploy&quot;
+
+[[audits.baz]]
+version = &quot;0.2&quot;
+who = &quot;Alice Foo &lt;alicefoo@example.com&gt;&quot;
+criteria = &quot;safe-to-run&quot;
+
+[[audits.foo]]
+version = &quot;0.2.1 -&gt; 0.3.1&quot;
+who = &quot;Bob Bar &lt;bobbar@example.com&gt;&quot;&quot;
+criteria = &quot;safe-to-deploy&quot;
+
+[[audits.malicious_crate]]
+violation = &quot;*&quot;
+who = &quot;Bob Bar &lt;bobbar@example.com&gt;&quot;&quot;
+criteria = &quot;safe-to-run&quot;
+
+[[audits.partially_vulnerable_crate]]
+violation = &quot;&gt;=2.0, &lt;2.3&quot;
+who = &quot;Bob Bar &lt;bobbar@example.com&gt;&quot;&quot;
+criteria = &quot;safe-to-deploy&quot;
+</code></pre>
+<p>Exactly one of <code>version</code>, <code>delta</code>, or <code>violation</code> must be specified for each
+entry.</p>
+<p>The expectation is that this file should never be pruned unless a
+previously-recorded entry is determined to have been erroneous. Even if the
+owner no longer uses the specified crates, the audit records can still prove
+useful to others in the ecosystem.</p>
+<h2 id="the-exemptions-table-in-configtoml"><a class="header" href="#the-exemptions-table-in-configtoml">The <code>exemptions</code> table in <code>config.toml</code></a></h2>
+<p>This table enumerates the dependencies that have not been audited, but which the
+project is nonetheless using. The structure is generally the same as the
+<code>audits</code> table, with a <a href="config.html#the-exemptions-table">few differences</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="performing-audits"><a class="header" href="#performing-audits">Performing Audits</a></h1>
+<p>Human attention is a precious resource, so <code>cargo vet</code> provides several features
+to spend that attention as efficiently as possible.</p>
+<h2 id="managing-dependency-changes"><a class="header" href="#managing-dependency-changes">Managing Dependency Changes</a></h2>
+<p>When you run <code>cargo update</code>, you generally pull in new crates or new versions of
+existing crates, which may cause <code>cargo vet</code> to fail. In this situation,
+<code>cargo vet</code> identifies the relevant crates and recommends how to audit them:</p>
+<pre><code>$ cargo update
+  ....
+
+$ cargo vet
+  Vetting Failed!
+
+  3 unvetted dependencies:
+      bar:1.5 missing [&quot;safe-to-deploy&quot;]
+      baz:1.3 missing [&quot;safe-to-deploy&quot;]
+      foo:1.2.1 missing [&quot;safe-to-deploy&quot;]
+
+  recommended audits for safe-to-deploy:
+      cargo vet diff foo 1.2 1.2.1  (10 lines)
+      cargo vet diff bar 2.1.1 1.5  (253 lines)
+      cargo vet inspect baz 1.3     (2033 lines)
+
+  estimated audit backlog: 2296 lines
+
+  Use |cargo vet certify| to record the audits.
+</code></pre>
+<p>Note that if other versions of a given crate have already been verified, there
+will be multiple ways to perform the review: either from scratch, or relative to
+one or more already-audited versions. In these cases, <code>cargo vet</code>
+computes all the possible approaches and selects the smallest one.</p>
+<p>You can, of course, choose to add one or more unvetted dependencies to the
+<code>exemptions</code> list instead of auditing them. This may be expedient in some
+situations, though doing so frequently undermines the value provided by the
+tool.</p>
+<h2 id="inspecting-crates"><a class="header" href="#inspecting-crates">Inspecting Crates</a></h2>
+<p>Once you've identified the audit you wish to perform, the next step is to
+produce the artifacts for inspection. This is less trivial than it might sound:
+even if the project is hosted somewhere like GitHub, there's no guarantee that
+the code in the repository matches the bits submitted to crates.io. And the
+packages on crates.io aren't easy to download manually.</p>
+<p>To make this easy, the <code>cargo vet inspect</code> subcommand will give you a link to
+the exact version of the crate hosted on <a href="https://about.sourcegraph.com/">Sourcegraph</a>.</p>
+<p>When you finish the audit, you can use <code>cargo vet certify</code> to add the entry to
+<code>audits.toml</code>:</p>
+<pre><code>$ cargo vet inspect baz 1.3
+You are about to inspect version 1.3 of 'baz', likely to certify it for &quot;safe-to-deploy&quot;, which means:
+
+   ...
+
+You can inspect the crate here: https://sourcegraph.com/crates/baz@v1.3
+
+(press ENTER to open in your browser, or re-run with --mode=local)
+
+$ cargo vet certify baz 1.3
+
+  I, Alice, certify that I have audited version 1.3 of baz in accordance with
+  the following criteria:
+
+  ...
+
+ (type &quot;yes&quot; to certify): yes
+
+  Recorded full audit of baz version 1.3
+</code></pre>
+<p>You can also use the <code>--mode=local</code> flag to have <code>inspect</code> download the crate
+source code and drop you into a nested shell to inspect it.</p>
+<p>Similarly, <code>cargo vet diff</code> will give you a <a href="https://about.sourcegraph.com/">Sourcegraph</a>
+link that will display the diff between the two versions.</p>
+<pre><code>$ cargo vet diff foo 1.2 1.2.1
+
+You are about to diff versions 1.2 and 1.2.1 of 'foo', likely to certify it for &quot;safe-to-deploy&quot;, which means:
+
+   ...
+
+You can inspect the diff here: https://sourcegraph.com/crates/foo/-/compare/v1.2...v1.2.1
+
+$ cargo vet certify foo 1.2 1.2.1
+
+  I, Alice, certify that I have audited the changes between versions 1.2 and
+  1.2.1 of baz in accordance with the following criteria:
+
+  ...
+
+  (type &quot;yes&quot; to certify): yes
+
+  Recorded relative audit between foo versions 1.2 and 1.2.1
+</code></pre>
+<p>You can also use <code>--mode=local</code> flag to have <code>diff</code> download the two crates and display a
+git-compatible diff between the two.</p>
+<h2 id="shrinking-the-exemptions-table"><a class="header" href="#shrinking-the-exemptions-table">Shrinking the <code>exemptions</code> Table</a></h2>
+<p>Even when your project is passing <code>cargo vet</code>, lingering entries in <code>exemptions</code>
+could still leave you vulnerable. As such, shrinking it is a worthwhile endeavor.</p>
+<p>Any malicious crate can compromise your program, but not every crate requires
+the same amount of effort to verify. Some crates are larger than others, and
+different versions of the same crate are usually quite similar. To take
+advantage of this, <code>cargo vet suggest</code> can estimate the lowest-effort audits
+you can perform to reduce the number of entries in <code>exemptions</code>, and
+consequently, your attack surface.</p>
+<p>More precisely, <code>cargo vet suggest</code> computes the number of lines that would need
+to be reviewed for each exemptions dependency, and displays them in order. This
+is the same information you'd get if you emptied out <code>exemptions</code> and re-ran
+<code>cargo vet</code>.</p>
+<h2 id="suggestions-from-the-registry"><a class="header" href="#suggestions-from-the-registry">Suggestions from the Registry</a></h2>
+<p>When <code>cargo vet</code> suggests audits — either after a failed vet or during <code>cargo vet suggest</code> — it also fetches the contents of the
+<a href="importing-audits.html#the-registry">registry</a> and checks whether any of the
+available sets contain audits which would fill some or all of the gap. If so, it
+enumerates them so that the developer can consider importing them in lieu of
+performing the entire audit themselves:</p>
+<pre><code>$ cargo vet suggest
+  recommended audits for safe-to-deploy:
+      cargo vet inspect baz 1.3   (used by mycrate)  (2033 lines)
+        NOTE: cargo vet import mozilla would reduce this to a 17-line diff
+      cargo vet inspect quxx 2.0  (used by baz)      (1000 lines)
+        NOTE: cargo vet import mozilla would eliminate this
+
+  estimated audit backlog: 3033 lines
+
+  Use |cargo vet certify| to record the audits.
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h2 id="trusting-publishers"><a class="header" href="#trusting-publishers">Trusting Publishers</a></h2>
+<p>In addition to audits, <code>cargo vet</code> also supports trusting releases of a given
+crate by a specific publisher.</p>
+<h3 id="motivation-1"><a class="header" href="#motivation-1">Motivation</a></h3>
+<p>The core purpose of <code>cargo vet</code> is to assign trust to the contents of each crate
+you use. The tool is audit-oriented because the crates in the ecosystem are very
+heterogeneous in origin: it's usually impractical to require that every
+dependency was <em>developed</em> by a trusted source, so the next best thing is to
+ensure that everything has been <em>audited</em> by a trusted source.</p>
+<p>However, there are cases where you do trust the developer.  Rather than
+requiring an additional audit record for these crates, <code>cargo vet</code> allows you to
+declare that you trust the developer of a given crate to always release code
+which meets the desired criteria.</p>
+<h3 id="mechanics"><a class="header" href="#mechanics">Mechanics</a></h3>
+<p>Trusted publishers may be added with <code>cargo vet trust</code>. Entries require a trust
+expiration date, which ensures that the judgment is revisited periodically.</p>
+<p>The trust relationships are recorded in the <code>trusted</code> section of <code>audits.toml</code>:</p>
+<pre><code>[[trusted.baz]]
+criteria = &quot;safe-to-deploy&quot;
+user-id = 5555 // Alice Jones
+start = ...
+end = ...
+notes = &quot;Alice is an excellent developer and super-trustworthy.&quot;
+</code></pre>
+<h3 id="suggestions"><a class="header" href="#suggestions">Suggestions</a></h3>
+<p>When there is an existing trust entry for a given publisher in your audit set or
+that of your imports, <code>cargo vet suggest</code> will suggest that you consider adding
+trust entries for a new unaudited crate by the same publisher:</p>
+<pre><code>$ cargo vet suggest
+  recommended audits for safe-to-deploy:
+      cargo vet inspect baz 1.3   (used by mycrate)  (2033 lines)
+        NOTE: mozilla trusts Alice Jones (ajones) - consider cargo vet trust baz or cargo vet trust --all ajones
+</code></pre>
+<p>Trust entries are fundamentally a heuristic. The trusted publisher is not
+consulted and may or may not have personally authored or reviewed all the code.
+Thus it is important to assess the risk and potentially do some investigation on
+the development and release process before trusting a crate.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="specifying-policies"><a class="header" href="#specifying-policies">Specifying Policies</a></h1>
+<p>By default, <code>cargo vet</code> checks all transitive dependencies of all top-level
+crates against the following criteria on all-platforms:</p>
+<ul>
+<li>For regular dependencies: <code>safe-to-deploy</code></li>
+<li>For dev-dependencies: <code>safe-to-run</code></li>
+<li>For build-dependencies<sup class="footnote-reference"><a href="#1">1</a></sup>: <code>safe-to-deploy</code></li>
+</ul>
+<p>In some situations, you may be able to reduce your workload by encoding your
+requirements more precisely. For example, your workspace might contain both a
+production product and an internal tool, and you might decide that the
+dependencies of the latter need only be <code>safe-to-run</code>.</p>
+<p>If the default behavior works for you, there's no need to specify anything. If
+you wish to encode policies such as the above, you can do so in
+<a href="config.html#the-policy-table">config.toml</a>.</p>
+<h2 id="footnotes-2"><a class="header" href="#footnotes-2">Footnotes</a></h2>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>Strictly speaking, we want the build-dependencies themselves to be <code>safe-to-run</code>
+and their contribution to the build (e.g., generated code) to be safe-to-deploy.
+Rather than introduce separate criteria to handle this nuance explicitly,
+cargo-vet bundles it into the <a href="built-in-criteria.html#safe-to-deploy">definition</a>
+of <code>safe-to-deploy</code>. This keeps things more simple and intuitive without
+sacrificing much precision, since in practice it's generally quite clear whether
+a crate is intended to operate at build time or at run time.</p>
+</div>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="multiple-repositories"><a class="header" href="#multiple-repositories">Multiple Repositories</a></h1>
+<p>The discussion thus far assumes the project exists in a single repository, but
+it's common for organizations to manage code across multiple repositories. At
+first glance this presents a dilemma as to whether to centralize or distribute
+the audit records. Putting them all in one place makes them easier to consume,
+but more cumbersome to produce, since updating a package in one repository may
+require a developer to record a new audit in another repository.</p>
+<p>The <code>cargo vet aggregate</code> subcommand resolves this tension. The command itself
+simply takes a list of audit file URLs, and produces a single merged file<sup class="footnote-reference"><a href="#1">1</a></sup>.
+The recommended workflow is as follows:</p>
+<ol>
+<li>Create a dedicated repository to host the merged audits (<a href="https://github.com/mozilla/supply-chain">example</a>).</li>
+<li>Add a file called <code>sources.list</code> to this repository, which contains a plain
+list of URLs for the audit files in each project.</li>
+<li>Create a recurring task on that repository to invoke <code>cargo vet aggregate sources.list &gt; audits.toml</code> and commit the result if changed<sup class="footnote-reference"><a href="#2">2</a></sup>.</li>
+<li>Add the aggregated audit file to the <code>imports</code> table of each individual
+repository.</li>
+</ol>
+<p>Beyond streamlining the workflow within the project, this approach also makes it
+easy for others to import the full audit set without needing to navigate the
+details of various source repositories.</p>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>The entries in the new file have an additional <code>aggregated-from</code> field
+which points to their original location.</p>
+</div>
+<div class="footnote-definition" id="2"><sup class="footnote-definition-label">2</sup>
+<p>On GitHub, this can be accomplished by adding the following to
+<code>.github/workflows/aggregate.yml</code>:</p>
+<pre><code class="language-yml">name: CI
+on:
+  schedule:
+    # Every five minutes (maximum frequency allowed by GitHub)
+    - cron:  '*/5 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  aggregate:
+    name: Aggregate Dependencies
+    runs-on: ubuntu-latest
+    env:
+      CARGO_VET_VERSION: X.Y.Z
+    steps:
+    - uses: actions/checkout@master
+    - name: Install Rust
+      run: rustup update stable &amp;&amp; rustup default stable
+    - uses: actions/cache@v2
+      with:
+        path: ${{ runner.tool_cache }}/cargo-vet
+        key: cargo-vet-bin-${{ env.CARGO_VET_VERSION }}
+    - name: Add the tool cache directory to the search path
+      run: echo &quot;${{ runner.tool_cache }}/cargo-vet/bin&quot; &gt;&gt; $GITHUB_PATH
+    - name: Ensure that the tool cache is populated with the cargo-vet binary
+      run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ env.CARGO_VET_VERSION }} cargo-vet
+    - name: Invoke cargo-vet aggregate
+      run: cargo vet aggregate --output-file audits.toml sources.list
+    - name: Commit changes (if any)
+      run: |
+        git config --global user.name &quot;cargo-vet[bot]&quot;
+        git config --global user.email &quot;cargo-vet-aggregate@invalid&quot;
+        git add audits.toml
+        git commit -m &quot;Aggregate new audits&quot; || true
+    - name: Push changes (if any)
+      run: git push origin main
+</code></pre>
+</div>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="configuring-ci"><a class="header" href="#configuring-ci">Configuring CI</a></h1>
+<p>As a final step in setting up a project, you should enable verification to run
+as part of your project's continuous integration system.</p>
+<p>If your project is hosted on GitHub, you can accomplish this by adding the
+following to a new or existing <code>.yml</code> file in <code>.github/workflows</code> (with <code>X.Y.Z</code>
+replaced with your desired version):</p>
+<pre><code class="language-yml">name: CI
+on: [push, pull_request]
+jobs:
+  cargo-vet:
+    name: Vet Dependencies
+    runs-on: ubuntu-latest
+    env:
+      CARGO_VET_VERSION: X.Y.Z
+    steps:
+    - uses: actions/checkout@master
+    - name: Install Rust
+      run: rustup update stable &amp;&amp; rustup default stable
+    - uses: actions/cache@v2
+      with:
+        path: ${{ runner.tool_cache }}/cargo-vet
+        key: cargo-vet-bin-${{ env.CARGO_VET_VERSION }}
+    - name: Add the tool cache directory to the search path
+      run: echo &quot;${{ runner.tool_cache }}/cargo-vet/bin&quot; &gt;&gt; $GITHUB_PATH
+    - name: Ensure that the tool cache is populated with the cargo-vet binary
+      run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ env.CARGO_VET_VERSION }} cargo-vet
+    - name: Invoke cargo-vet
+      run: cargo vet --locked
+</code></pre>
+<p>This will ensure that that all changes made to your repository, either via a PR
+or a direct push, have a fully-vetted dependency set. The extra logic around the
+tool cache allows GitHub to persist a copy of the cargo-vet binary rather than
+compiling it from scratch each time, enabling results to be displayed within a
+few seconds rather than several minutes.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="curating-your-audit-set"><a class="header" href="#curating-your-audit-set">Curating Your Audit Set</a></h1>
+<p>Each entry in your <code>audits.toml</code> represents your organization's seal of
+approval. What that means is ultimately up to you, but you should be mindful of
+the trust that others may be placing in you and the consequences for your brand
+if that trust is broken.</p>
+<p>This section outlines some norms and best-practices for responsible
+participation in the cargo-vet ecosystem.</p>
+<h2 id="oversight-and-enforcement"><a class="header" href="#oversight-and-enforcement">Oversight and Enforcement</a></h2>
+<p>The most essential step is to ensure that you have adequate access controls on
+your <code>supply-chain</code> directory (specifically <code>audits.toml</code>). For small projects
+where a handful of maintainers review every change, the repository's ordinary
+controls may be sufficient. But as the set of maintainers grows, there is an
+increasing risk that someone unfamiliar with the significance of <code>audits.toml</code>
+will approve an audit without appropriate scrutiny.</p>
+<p>For projects where more than five individuals can approve changes, we recommend
+designating a small group of individuals to oversee the audit set and ensure
+that all submissions meet the organization's standards
+(<a href="https://groups.google.com/a/mozilla.org/g/governance/c/wMWBqkCnR34">example</a>).
+GitHub-hosted projects can use the
+<a href="https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners">CODEOWNERS</a>
+file to ensure that all submissions are approved by a member of that group.</p>
+<h2 id="evaluating-submissions"><a class="header" href="#evaluating-submissions">Evaluating Submissions</a></h2>
+<p>When someone submits an audit, there is no real way to check their work. So
+while code submissions from anonymous contributors can often be quite valuable,
+audits need to come from a known individual who you trust to represent your
+organization. Such a person should have the technical proficiency to reliably
+identify problems, the professionalism to do a good job, and the integrity to be
+truthful about their findings.</p>
+<p>A good litmus test is whether you would permit this individual to single-handedly
+review and accept a patch from an anonymous contributor. The simplest approach
+is just to restrict audit submissions to that set of people. However, there may
+be situations where you find it reasonable to widen the set — such as former
+maintainers who depart on good terms, or individuals at other organizations with
+whom you have extensive relationships and wouldn't hesitate to bring on board if
+the opportunity arose.</p>
+<h2 id="self-certification"><a class="header" href="#self-certification">Self-Certification</a></h2>
+<p>A natural consequence of the above is that there is no general prohibition
+against organizations certifying crates that they themselves published. The
+purpose of auditing is to extend an organization's seal of approval to code they
+didn't write. The purpose is not to add additional layers of review to code that
+they did write, which carries that seal by default.</p>
+<p>Self-certified crates should meet an organization's own standards for first-party
+code, which generally involves every line having undergone proper code review.
+This &quot;second set of eyes&quot; principle is important, it's just not one that
+cargo-vet can mechanically enforce in this context. In the future, cargo-vet may
+add support for requiring that crates have been audited by N organizations,
+which would provide stronger guarantees about independent review.</p>
+<p>For crates with frequent updates, self-certifying each individual release can be
+a chore. The <a href="./wildcard-audit-entries.html">wildcard audit</a> feature is designed
+to address this by allowing organizations to self-certify any release of a crate
+published by a given account within a specified time interval.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="reference"><a class="header" href="#reference">Reference</a></h1>
+<p>This chapter of the book provides more detail and documentation about specific
+aspects of <code>cargo vet</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="configuration"><a class="header" href="#configuration">Configuration</a></h1>
+<p>This section describes the structure and semantics of the various configuration
+files used by <code>cargo vet</code>.</p>
+<h2 id="location"><a class="header" href="#location">Location</a></h2>
+<p>By default, <code>cargo vet</code> data lives in a <code>supply-chain</code> directory next to
+<code>Cargo.lock</code>. This location is configurable via the <code>[package.metadata.vet]</code>
+directive in Cargo.toml, as well as via <code>[workspace.metadata.vet]</code> when using a
+workspace with a virtual root.</p>
+<p>The default configuration is equivalent to the following:</p>
+<pre><code class="language-toml">[package.metadata.vet]
+store = { path = './supply-chain' }
+</code></pre>
+<h2 id="auditstoml-1"><a class="header" href="#auditstoml-1"><code>audits.toml</code></a></h2>
+<p>This file contains the audits performed by the project members and descriptions
+of the audit criteria. The information in this file can be imported by other
+projects.</p>
+<h3 id="the-criteria-table"><a class="header" href="#the-criteria-table">The <code>criteria</code> Table</a></h3>
+<p>This table defines different sets of custom criteria. Entries have several
+potential fields:</p>
+<h4 id="description"><a class="header" href="#description"><code>description</code></a></h4>
+<p>A concise description of the criteria. This field (or <code>description-url</code>) is
+required.</p>
+<h4 id="description-url"><a class="header" href="#description-url"><code>description-url</code></a></h4>
+<p>An alternative to <code>description</code> which locates the criteria text at a
+publicly-accessible URL. This can be useful for sharing criteria descriptions
+across multiple repositories.</p>
+<h4 id="implies"><a class="header" href="#implies"><code>implies</code></a></h4>
+<p>An optional string or array of other criteria that are subsumed by this entry.
+Audit entries that are certified with these criteria are also implicitly
+certified with any implied criteria.</p>
+<p>For example, specifying the <a href="built-in-criteria.html">built-in criteria</a> as custom
+criteria would look like this:</p>
+<pre><code>[criteria.safe-to-run]
+description = '...'
+
+[criteria.safe-to-deploy]
+description = '...'
+implies = 'safe-to-run'
+</code></pre>
+<h3 id="the-audits-table"><a class="header" href="#the-audits-table">The <code>audits</code> Table</a></h3>
+<p>This table contains the audit entries, indexed by crate name. Because there are
+often multiple audits per crate (different versions, delta audits, etc), audit
+entries are specified as table arrays, i.e. <code>[[audits.foo]]</code>.</p>
+<p>The semantics of the various audit entries keys are described
+<a href="audit-entries.html">here</a>.</p>
+<h3 id="the-trusted-table"><a class="header" href="#the-trusted-table">The <code>trusted</code> Table</a></h3>
+<p>This table contains the trusted publisher entries, indexed by crate name. Because there may be
+multiple publishers per crate, trusted entries are specified as table arrays, i.e.
+<code>[[trusted.foo]]</code>.</p>
+<p>The semantics of the various trusted entries keys are described <a href="trusted-entries.html">here</a>.</p>
+<h2 id="configtoml"><a class="header" href="#configtoml"><code>config.toml</code></a></h2>
+<p>This file contains configuration information for this specific project. This
+file cannot be imported by other projects.</p>
+<h3 id="default-criteria"><a class="header" href="#default-criteria"><code>default-criteria</code></a></h3>
+<p>This top-level key specifies the default criteria that <code>cargo vet certify</code> will
+use when recording audits. If unspecified, this defaults to <code>safe-to-deploy</code>.</p>
+<h3 id="the-cargo-vet-table"><a class="header" href="#the-cargo-vet-table">The <code>cargo-vet</code> Table</a></h3>
+<p>This table contains metadata used to track the version of cargo-vet used to
+create the store, and may be used in the future to allow other global
+configuration details to be specified.</p>
+<h3 id="the-imports-table"><a class="header" href="#the-imports-table">The <code>imports</code> Table</a></h3>
+<p>This table enumerates the external audit sets that are imported into this
+project. The key is a user-defined nickname, so entries are specified as
+<code>[imports.foo]</code>.</p>
+<h4 id="url"><a class="header" href="#url"><code>url</code></a></h4>
+<p>Specifies an HTTPS url from which the remote <code>audits.toml</code> can be fetched. This
+field is required.</p>
+<h4 id="criteria-map"><a class="header" href="#criteria-map"><code>criteria-map</code></a></h4>
+<p>A table specifying mappings from the imported audit set to local criteria. Each
+imported audit's criteria is mapped through these import maps, considering the
+peer's <code>implies</code> relationships, and transformed into a set of local criteria
+when importing.</p>
+<pre><code>[imports.peer.criteria-map]
+peer-criteria = &quot;local-criteria&quot;
+their-super-audited = [&quot;safe-to-deploy&quot;, &quot;audited&quot;]
+</code></pre>
+<p>Unless otherwise specified, the peer's <code>safe-to-run</code> and <code>safe-to-deploy</code>
+criteria will be implicitly mapped to the local <code>safe-to-run</code> and
+<code>safe-to-deploy</code> criteria. This can be overridden by specifying the mapping for
+<code>safe-to-run</code> or <code>safe-to-deploy</code> in the criteria map.</p>
+<pre><code>[imports.peer.criteria-map]
+safe-to-run = []
+safe-to-deploy = &quot;safe-to-run&quot;
+</code></pre>
+<p>Other unmapped criteria will be discarded when importing.</p>
+<h4 id="exclude"><a class="header" href="#exclude"><code>exclude</code></a></h4>
+<p>A list of crates whose audit entries should not be imported from this source.
+This can be used as a last resort to resolve disagreements over the suitability
+of a given crate.</p>
+<h3 id="the-policy-table"><a class="header" href="#the-policy-table">The <code>policy</code> Table</a></h3>
+<p>This table allows projects to configure the audit requirements that <code>cargo vet</code>
+should enforce on various dependencies. When unspecified, non-top-level crates
+inherit most policy attributes from their parents, whereas top-level crates get
+the defaults described below.</p>
+<p>In this context, &quot;top-level&quot; generally refers to crates with no
+reverse-dependencies — except when evaluating dev-dependencies, in which case
+every workspace member is considered a root.</p>
+<p>Keys of this table can be crate names (in which case the policy is applied to
+<em>all</em> versions of the crate) or strings of the form <code>&quot;CRATE:VERSION&quot;</code> (you'll
+more than likely need to add quotes in TOML because the version string will have
+periods). If you specify versions, they may only refer to crate versions which
+are in the graph.</p>
+<h4 id="criteria"><a class="header" href="#criteria"><code>criteria</code></a></h4>
+<p>A string or array of strings specifying the criteria that should be enforced for
+this crate and its dependency subtree.</p>
+<p>This may only be specified for first-party crates. Requirements for third-party
+crates should be applied via inheritance or <code>dependency-criteria</code>.</p>
+<p>For top-level crates, defaults to <code>safe-to-deploy</code>.</p>
+<h4 id="dev-criteria"><a class="header" href="#dev-criteria"><code>dev-criteria</code></a></h4>
+<p>Same as the above, but applied to dev-dependencies.</p>
+<p>For top-level crates, defaults to <code>safe-to-run</code>.</p>
+<h4 id="dependency-criteria"><a class="header" href="#dependency-criteria"><code>dependency-criteria</code></a></h4>
+<p>Allows overriding the above values on a per-dependency basis.</p>
+<pre><code>[policy.foo]
+dependency-criteria = { bar = [] }
+notes = &quot;bar is only used to implement a foo feature we never plan to enable.&quot;
+</code></pre>
+<p>Unlike <code>criteria</code> and <code>dev-criteria</code>, <code>dependency-criteria</code> may apply directly
+to third-party crates (both <code>foo</code> and <code>bar</code> may be third-party in the above
+example). Specifying <code>criteria</code> is disallowed for third-party crates because a
+given third-party crate can often be used in multiple unrelated places in a
+project's dependency graph. So in the above example, we want to exempt <code>bar</code>
+from auditing insofar as it's used by <code>foo</code>, but not necessarily if it crops up
+somewhere else.</p>
+<p>Third-party crates with <code>dependency-criteria</code> must be associated with specific
+versions in the policy table (see the description of policy table keys above).
+Additionally, if a crate has any <code>dependency-criteria</code> specified and any version
+exists as a third-party crate in the graph, all versions of the crate must be
+explicitly specified in the policy table keys.</p>
+<p>Defaults to the empty set and is not inherited.</p>
+<h4 id="audit-as-crates-io"><a class="header" href="#audit-as-crates-io"><code>audit-as-crates-io</code></a></h4>
+<p>Specifies whether first-party packages with this crate name should receive audit
+enforcement as if they were fetched from crates.io. See <a href="first-party-code.html">First-Party
+Code</a> for more details.</p>
+<h4 id="notes"><a class="header" href="#notes"><code>notes</code></a></h4>
+<p>Free-form string for recording rationale or other relevant information.</p>
+<h3 id="the-exemptions-table"><a class="header" href="#the-exemptions-table">The <code>exemptions</code> Table</a></h3>
+<p>This table enumerates the set of crates which are being used despite missing the
+required audits. It has a similar structure to the <code>audits</code> table in
+<code>audits.toml</code>, but each entry has fewer supported fields.</p>
+<h4 id="version"><a class="header" href="#version"><code>version</code></a></h4>
+<p>Specifies the exact version which should be exempted.</p>
+<h4 id="criteria-1"><a class="header" href="#criteria-1"><code>criteria</code></a></h4>
+<p>Specifies the criteria covered by the exemption.</p>
+<h4 id="notes-1"><a class="header" href="#notes-1"><code>notes</code></a></h4>
+<p>Free-form string for recording rationale or other relevant information.</p>
+<h4 id="suggest"><a class="header" href="#suggest"><code>suggest</code></a></h4>
+<p>A boolean indicating whether this entry is eligible to be surfaced by <code>cargo vet suggest</code>.</p>
+<p>Defaults to true. This exists to allow you silence certain suggestions that, for
+whatever reason, you don't plan to act on in the immediate future.</p>
+<h2 id="importslock"><a class="header" href="#importslock"><code>imports.lock</code></a></h2>
+<p>This file is auto-generated by <code>cargo vet</code> and its format should be treated as
+an implementation detail.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="audit-entries"><a class="header" href="#audit-entries">Audit Entries</a></h1>
+<p>This section defines the semantics of the various keys that may be specified in
+audit table entries.</p>
+<h2 id="version-1"><a class="header" href="#version-1"><code>version</code></a></h2>
+<p>Specifies that this audit entry corresponds to an absolute version that was
+audited for the relevant criteria in its entirety.</p>
+<h2 id="delta"><a class="header" href="#delta"><code>delta</code></a></h2>
+<p>Specifies that this audit entry certifies that the delta between two absolute
+versions preserves the relevant criteria. Deltas can go both forward and
+backward in the version sequence.</p>
+<p>The syntax is <code>version_a -&gt; version_b</code>, where the diff between version_a and
+version_b was audited.</p>
+<p>Note that it's not always possible to conclude that a diff preserves certain
+properties without also inspecting some portion of the base version. The
+standard here is that the properties are actually preserved, not merely that
+that the diff doesn't obviously violate them. It is the responsibility of the
+auditor to acquire sufficient context to certify the former.</p>
+<h2 id="violation"><a class="header" href="#violation"><code>violation</code></a></h2>
+<p>Specifies that the given versions do not meet the associated criteria. Because a
+range of versions is usually required, this field uses Cargo's standard
+<a href="https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html">VersionReq</a>
+syntax.</p>
+<p>If a <code>violation</code> entry exists for a given crate version, <code>cargo vet</code> will reject
+the dependency even if it's listed in the <code>exemptions</code> table.</p>
+<h2 id="criteria-2"><a class="header" href="#criteria-2"><code>criteria</code></a></h2>
+<p>Specifies the relevant criteria for this audit. This field is required.</p>
+<h2 id="who"><a class="header" href="#who"><code>who</code></a></h2>
+<p>A string identifying the auditor. When invoking <code>cargo vet certify</code>, the
+value is auto-populated from the git config.</p>
+<p>This field is optional, but encouraged for two reasons:</p>
+<ul>
+<li>It makes it easier to attribute audits at a glance, particularly for
+remotely-hosted audit files.</li>
+<li>It emphasizes to the author that they are signing off on having performed the
+audit.</li>
+</ul>
+<h2 id="notes-2"><a class="header" href="#notes-2"><code>notes</code></a></h2>
+<p>An optional free-form string containing any information the auditor may wish to
+record.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="wildcard-audit-entries"><a class="header" href="#wildcard-audit-entries">Wildcard Audit Entries</a></h1>
+<p>Wildcard audits are a special type of audit intended as a convenience mechanism
+for organizations that
+<a href="curating-your-audit-set.html#self-certification">self-certify</a> their own crates.
+Using this feature, an organization can publish an audit which applies to all
+versions published by a given account, avoiding the need to add a new entry to
+<code>audits.toml</code> for each new version of the package.</p>
+<p>Wildcard audits live at the top of <code>audits.toml</code> and look like this:</p>
+<pre><code>[[wildcard-audits.foo]]
+who = ...
+criteria = ...
+user-id = ...
+start = ...
+end = ...
+renew = ...
+notes = ...
+</code></pre>
+<p>Whereas a regular audit certifies that the individual has verified that the
+crate contents meet the criteria, a wildcard audit certifies that <em>any</em> version
+of the crate published by the given account will meet the criteria. In effect,
+the author is vouching for the integrity of the entire release process, i.e.
+that releases are always cut from a branch for which every change has been
+approved by a trusted individual who will enforce the criteria.</p>
+<p>Wildcard audits can be added with <code>cargo vet certify</code> using the <code>--wildcard</code>
+option. By default, this sets the <code>end</code> date to one year in the future. Once
+added (whether manually or by <code>cargo vet certify --wildcard</code>), the <code>end</code> date
+can be updated to one year in the future using the <code>cargo vet renew CRATE</code>
+command. <code>cargo vet renew --expiring</code> can be used to automatically update <em>all</em>
+audits which would expire in the next six weeks or have already expired, and
+don't have <code>renew = false</code> specified.</p>
+<h2 id="user-id"><a class="header" href="#user-id"><code>user-id</code></a></h2>
+<p>Specifies the crates.io user-id of the user who's published versions should be
+audited. This ID is unfortunately not exposed on the crates.io website, but will
+be filled based on username if using the <code>cargo vet certify --wildcard $USER</code>
+command. This field is required.</p>
+<h2 id="start"><a class="header" href="#start"><code>start</code></a></h2>
+<p>Earliest day of publication which should be considered certified by the wildcard
+audit. Crates published by the user before this date will not be considered as
+certified. This field is required.</p>
+<p>Note that publication dates use UTC rather than local time.</p>
+<h2 id="end"><a class="header" href="#end"><code>end</code></a></h2>
+<p>Latest day of publication which should be considered certified by the wildcard
+audit. Crates published by the user after this date will not be considered as
+certified. This date may be at most 1 year in the future. This field is
+required.</p>
+<p>Note that publication dates use UTC rather than local time.</p>
+<h2 id="renew"><a class="header" href="#renew"><code>renew</code></a></h2>
+<p>Specifies whether <code>cargo vet check</code> should suggest renewal for this audit if the
+<code>end</code> date is going to expire within the next six weeks (or has already
+expired), and whether <code>cargo vet renew --expiring</code> should renew this audit.</p>
+<h2 id="criteria-3"><a class="header" href="#criteria-3"><code>criteria</code></a></h2>
+<p>Specifies the relevant criteria for this wildcard audit. This field is required.</p>
+<h2 id="who-1"><a class="header" href="#who-1"><code>who</code></a></h2>
+<p>A string identifying the auditor. When invoking <code>cargo vet certify</code>, the
+value is auto-populated from the git config.</p>
+<p>See the documentation for <a href="./audit-entries.html#who">Audit Entries</a> for more
+details.</p>
+<p>Note that while the <code>who</code> user may be different than crates.io user specified by
+<code>user-id</code>, they should generally either be the same person, or have a close
+relationship (e.g. a team lead certifying a shared publishing account).</p>
+<h2 id="notes-3"><a class="header" href="#notes-3"><code>notes</code></a></h2>
+<p>An optional free-form string containing any information the auditor may wish to
+record.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="trusted-package-entries"><a class="header" href="#trusted-package-entries">Trusted Package Entries</a></h1>
+<p>This section defines the semantics of the various keys that may be specified in trusted table
+entries.</p>
+<h2 id="criteria-4"><a class="header" href="#criteria-4"><code>criteria</code></a></h2>
+<p>Specifies the relevant criteria under which the crate and publisher is trusted. This field is
+required. This may be a single criteria or an array of criteria.</p>
+<h2 id="user-id-1"><a class="header" href="#user-id-1"><code>user-id</code></a></h2>
+<p>Specified the user id of the user which is trusted. Note that this is the <code>crates.io</code> user id, not
+the user ame.</p>
+<h2 id="start-1"><a class="header" href="#start-1"><code>start</code></a></h2>
+<p>Earliest day of publication which should be considered trusted for the crate and user. Crates
+published by the user before this date will not be considered as certified. This field is required.</p>
+<p>Note that publication dates use UTC rather than local time.</p>
+<h2 id="end-1"><a class="header" href="#end-1"><code>end</code></a></h2>
+<p>Latest day of publication which should be considered trusted for the crate and user. Crates
+published by the user after this date will not be considered as certified. This date may be at most
+1 year in the future. This field is required.</p>
+<p>Note that publication dates use UTC rather than local time.</p>
+<h2 id="notes-4"><a class="header" href="#notes-4"><code>notes</code></a></h2>
+<p>An optional free-form string containing any information regarding the trust of this crate and user.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="built-in-criteria"><a class="header" href="#built-in-criteria">Built-In Criteria</a></h1>
+<p>While you can define whatever criteria you like, <code>cargo vet</code> includes two
+commonly-used audit criteria out of the box. These criteria are automatically
+mapped across projects.</p>
+<h2 id="safe-to-run"><a class="header" href="#safe-to-run">safe-to-run</a></h2>
+<pre><code>This crate can be compiled, run, and tested on a local workstation or in
+controlled automation without surprising consequences, such as:
+* Reading or writing data from sensitive or unrelated parts of the filesystem.
+* Installing software or reconfiguring the device.
+* Connecting to untrusted network endpoints.
+* Misuse of system resources (e.g. cryptocurrency mining).
+</code></pre>
+<h2 id="safe-to-deploy"><a class="header" href="#safe-to-deploy">safe-to-deploy</a></h2>
+<pre><code>This crate will not introduce a serious security vulnerability to production
+software exposed to untrusted input.
+
+Auditors are not required to perform a full logic review of the entire crate.
+Rather, they must review enough to fully reason about the behavior of all unsafe
+blocks and usage of powerful imports. For any reasonable usage of the crate in
+real-world software, an attacker must not be able to manipulate the runtime
+behavior of these sections in an exploitable or surprising way.
+
+Ideally, all unsafe code is fully sound, and ambient capabilities (e.g.
+filesystem access) are hardened against manipulation and consistent with the
+advertised behavior of the crate. However, some discretion is permitted. In such
+cases, the nature of the discretion should be recorded in the `notes` field of
+the audit record.
+
+For crates which generate deployed code (e.g. build dependencies or procedural
+macros), reasonable usage of the crate should output code which meets the above
+criteria.
+</code></pre>
+<p>This implies <code>safe-to-run</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="first-party-code"><a class="header" href="#first-party-code">First-Party Code</a></h1>
+<p>When run, <code>cargo vet</code> invokes the <code>cargo metadata</code> subcommand to learn about the
+crate graph. When traversing the graph, <code>cargo vet</code> enforces audits for all
+crates.io dependencies.</p>
+<p>Generally speaking, all other nodes in the graph are considered trusted and
+therefore non-auditable. This includes root crates, path dependencies, git
+dependencies, and custom (non-crates.io) registry dependencies.</p>
+<p>However, there are some situations which blur the line between first- and
+third-party code. This can occur, for example, when the <code>[patch]</code> table is used
+to replace the contents of a crates.io package with a locally-modified version.
+Sometimes the replacement is rewritten from scratch, but often it's derived from
+the original, sometimes just with a single modification. Insofar as the package
+you're using is still primarily third-party code, you'll want to audit it like
+anything else — but cargo-vet has no foolproof way to mechanically deduce whether
+the replacement is a derived work.</p>
+<p>To ensure the right thing happens, cargo-vet detects these ambiguous situations
+and requires the user to specify the intended behavior. Specifically, if there
+exists a public crate with the same name and version as a given first-party
+crate, cargo-vet will require a policy entry for that crate specifying
+<code>audit-as-crates-io</code> as either true or false<sup class="footnote-reference"><a href="#1">1</a></sup>. If it's set to true, cargo-vet
+will perform audit enforcement.</p>
+<p>When enabled for a git dependency, this enforcement is precise. It requires an
+audit for the base published version that exists on crates.io, and then one or
+more delta audits from that base version to the specific git commit used by the
+build graph. Git commits are identified with an extended <code>x.y.z@git:SHA</code> syntax.
+They may only appear in delta audits and should be performed relative to the
+nearest published version, which ensures that audit information is recorded in
+terms of published versions wherever possible for the sake of reusability by
+others.</p>
+<p>When enabled for a path dependency, this enforcement is not precise, because
+cargo-vet lacks a hash by which to uniquely identify the actual package
+contents. In this case, only an audit for the base published version is required.
+It's important to note that any audits for such crates always correspond to the
+original crates.io version. This is what <code>inspect</code> and <code>certify</code> will display,
+and this is what you should review before certifying, since others in the
+ecosystem may rely on your audits when using the original crate without your
+particular modifications.</p>
+<p>If audit-as-crates-io is enabled for a path dependency with a version which has
+not been published on crates.io, cargo-vet will instead require an audit of the
+latest published version before the local version, ensuring all audits
+correspond to a crate on crates.io<sup class="footnote-reference"><a href="#2">2</a></sup>. If the local version is later published,
+<code>cargo vet</code> will warn you, allowing you to update your audits.</p>
+<h2 id="footnotes-3"><a class="header" href="#footnotes-3">Footnotes</a></h2>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>To enable an easy setup experience, <code>cargo vet init</code> will attempt to guess the
+value of <code>audit-as-crates-io</code> for pre-existing packages during initialization, and
+generate exemptions for the packages for which the generated value is <code>true</code>. At
+present it will guess <code>true</code> if either the <code>description</code> or <code>repository</code> fields in
+<code>Cargo.toml</code> are non-empty and match the current values on crates.io. This behavior
+can also be triggered for newly-added dependencies with <code>cargo vet regenerate audit-as-crates-io</code>, but you should verify the results.</p>
+</div>
+<div class="footnote-definition" id="2"><sup class="footnote-definition-label">2</sup>
+<p>Which version is used for an unpublished crate will be recorded in
+imports.lock to ensure that <code>cargo vet</code> will continue to pass as new versions
+are published. Stale <code>unpublished</code> entries will be cleaned up by <code>prune</code> when
+they are no longer required for <code>cargo vet</code> to pass, and can also be regenerated
+using <code>cargo vet regenerate unpublished</code>, though this may cause <code>cargo vet</code> to
+start failing.</p>
+</div>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="faq"><a class="header" href="#faq">FAQ</a></h1>
+<p>This section aims to address a few frequently-asked questions whose answers
+don't quite fit elsewhere in the book.</p>
+<h2 id="why-does-cargo-vet-init-automatically-exempt-all-existing-dependencies"><a class="header" href="#why-does-cargo-vet-init-automatically-exempt-all-existing-dependencies">Why does <code>cargo vet init</code> automatically exempt all existing dependencies?</a></h2>
+<p>A key goal of <code>cargo vet</code> is to make it very easy to go from first learning
+about the tool to having it running on CI. Having an open-ended task — like
+auditing one or more crates — on that critical path increases the chance that
+the developer gets side-tracked and never completes the setup. So the idea is to
+enable developers to quickly get to a green state, and then use <code>cargo vet suggest</code> to ratchet down the set of exemptions at their own pace.</p>
+<h2 id="how-does-this-relate-to-cargo-crev"><a class="header" href="#how-does-this-relate-to-cargo-crev">How does this relate to <code>cargo crev</code>?</a></h2>
+<p>This work was partially inspired by <code>cargo crev</code>, and borrows some aspects
+from its design. We are grateful for its existence and the hard work behind it.
+<code>cargo vet</code> makes a few design choices that differ from <code>cargo crev</code>:</p>
+<ul>
+<li><strong>Project-Oriented:</strong> <code>cargo vet</code> is geared towards usage by organizations,
+and therefore does not separate audits by individual developer. Consequently,
+it does not have a separate identity and authentication layer.</li>
+<li><strong>No Web-of-Trust:</strong> there is no notion of transitive trust. The decision to
+trust audits performed by another party is independent of that party's trust
+choices, which might be rooted in a different threat model.</li>
+<li><strong>Automated Enforcement:</strong> <code>cargo vet</code> is designed to be run as an enforcement
+tool for projects to manage (rather than just inspect) their supply chains,
+and consequently has a number of affordances in this direction.</li>
+<li><strong>Audit Criteria:</strong> <code>cargo vet</code> supports recording
+<a href="audit-criteria.html">multiple kinds of audits</a>.</li>
+</ul>
+<p>Eventually, it could make sense to implement some form of bridging between the
+two systems.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="commands"><a class="header" href="#commands">Commands</a></h1>
+<p>This section documents the command-line interface of <code>cargo vet</code>. The
+documentation is automatically generated from the implementation, and
+so it may be incomplete in some areas where the code remains under
+development.</p>
+<p>When run without a subcommand, <code>cargo vet</code> will invoke the <code>check</code> subcommand. See <code>cargo vet help check</code> for more details.</p>
+<h3 id="usage"><a class="header" href="#usage">USAGE</a></h3>
+<pre><code>cargo vet [OPTIONS]
+</code></pre>
+<pre><code>cargo vet &lt;SUBCOMMAND&gt;
+</code></pre>
+<h3 id="options"><a class="header" href="#options">OPTIONS</a></h3>
+<h4 id="-h---help"><a class="header" href="#-h---help"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h4 id="-v---version"><a class="header" href="#-v---version"><code>-V, --version</code></a></h4>
+<p>Print version information</p>
+<h3 id="global-options"><a class="header" href="#global-options">GLOBAL OPTIONS</a></h3>
+<h4 id="--manifest-path-path"><a class="header" href="#--manifest-path-path"><code>--manifest-path &lt;PATH&gt;</code></a></h4>
+<p>Path to Cargo.toml</p>
+<h4 id="--store-path-store_path"><a class="header" href="#--store-path-store_path"><code>--store-path &lt;STORE_PATH&gt;</code></a></h4>
+<p>Path to the supply-chain directory</p>
+<h4 id="--no-all-features"><a class="header" href="#--no-all-features"><code>--no-all-features</code></a></h4>
+<p>Don't use --all-features</p>
+<p>We default to passing --all-features to <code>cargo metadata</code> because we want to analyze your
+full dependency tree</p>
+<h4 id="--no-default-features"><a class="header" href="#--no-default-features"><code>--no-default-features</code></a></h4>
+<p>Do not activate the <code>default</code> feature</p>
+<h4 id="--features-features"><a class="header" href="#--features-features"><code>--features &lt;FEATURES&gt;</code></a></h4>
+<p>Space-separated list of features to activate</p>
+<h4 id="--locked"><a class="header" href="#--locked"><code>--locked</code></a></h4>
+<p>Do not fetch new imported audits</p>
+<h4 id="--frozen"><a class="header" href="#--frozen"><code>--frozen</code></a></h4>
+<p>Avoid the network entirely, requiring either that the cargo cache is populated or the
+dependencies are vendored. Requires --locked</p>
+<h4 id="--no-minimize-exemptions"><a class="header" href="#--no-minimize-exemptions"><code>--no-minimize-exemptions</code></a></h4>
+<p>Prevent commands such as <code>check</code> and <code>certify</code> from automatically cleaning up unused
+exemptions</p>
+<h4 id="--no-registry-suggestions"><a class="header" href="#--no-registry-suggestions"><code>--no-registry-suggestions</code></a></h4>
+<p>Prevent commands such as <code>check</code> and <code>suggest</code> from suggesting registry imports</p>
+<h4 id="--verbose-verbose"><a class="header" href="#--verbose-verbose"><code>--verbose &lt;VERBOSE&gt;</code></a></h4>
+<p>How verbose logging should be (log level)</p>
+<p>[default: warn]<br />
+[possible values: off, error, warn, info, debug, trace]</p>
+<h4 id="--output-file-output_file"><a class="header" href="#--output-file-output_file"><code>--output-file &lt;OUTPUT_FILE&gt;</code></a></h4>
+<p>Instead of stdout, write output to this file</p>
+<h4 id="--log-file-log_file"><a class="header" href="#--log-file-log_file"><code>--log-file &lt;LOG_FILE&gt;</code></a></h4>
+<p>Instead of stderr, write logs to this file (only used after successful CLI parsing)</p>
+<h4 id="--output-format-output_format"><a class="header" href="#--output-format-output_format"><code>--output-format &lt;OUTPUT_FORMAT&gt;</code></a></h4>
+<p>The format of the output</p>
+<p>[default: human]<br />
+[possible values: human, json]</p>
+<h4 id="--cache-dir-cache_dir"><a class="header" href="#--cache-dir-cache_dir"><code>--cache-dir &lt;CACHE_DIR&gt;</code></a></h4>
+<p>Use the following path instead of the global cache directory</p>
+<p>The cache stores information such as the summary results used by vet's suggestion
+machinery, cached results from crates.io APIs, and checkouts of crates from crates.io in
+some cases. This is generally automatically managed in the system cache directory.</p>
+<p>This mostly exists for testing vet itself.</p>
+<h4 id="--filter-graph-filter_graph"><a class="header" href="#--filter-graph-filter_graph"><code>--filter-graph &lt;FILTER_GRAPH&gt;</code></a></h4>
+<p>Filter out different parts of the build graph and pretend that's the true graph</p>
+<p>Example: <code>--filter-graph=&quot;exclude(any(eq(is_dev_only(true)),eq(name(serde_derive))))&quot;</code></p>
+<p>This mostly exists to debug or reduce projects that cargo-vet is mishandling.
+Combining this with <code>cargo vet --output-format=json dump-graph</code> can produce an
+input that can be added to vet's test suite.</p>
+<p>The resulting graph is computed as follows:</p>
+<ol>
+<li>First compute the original graph</li>
+<li>Then apply the filters to find the new set of nodes</li>
+<li>Create a new empty graph</li>
+<li>For each workspace member that still exists, recursively add it and its dependencies</li>
+</ol>
+<p>This means that any non-workspace package that becomes &quot;orphaned&quot; by the filters will
+be implicitly discarded even if it passes the filters.</p>
+<p>Possible filters:</p>
+<ul>
+<li><code>include($query)</code>: only include packages that match this filter</li>
+<li><code>exclude($query)</code>: exclude packages that match this filter</li>
+</ul>
+<p>Possible queries:</p>
+<ul>
+<li><code>any($query1, $query2, ...)</code>: true if any of the listed queries are true</li>
+<li><code>all($query1, $query2, ...)</code>: true if all of the listed queries are true</li>
+<li><code>not($query)</code>: true if the query is false</li>
+<li><code>$property</code>: true if the package has this property</li>
+</ul>
+<p>Possible properties:</p>
+<ul>
+<li><code>name($string)</code>: the package's name (i.e. <code>serde</code>)</li>
+<li><code>version($version)</code>: the package's version (i.e. <code>1.2.0</code>)</li>
+<li><code>is_root($bool)</code>: whether it's a root in the original graph (ignoring dev-deps)</li>
+<li><code>is_workspace_member($bool)</code>: whether the package is a workspace-member (can be
+tested)</li>
+<li><code>is_third_party($bool)</code>: whether the package is considered third-party by vet</li>
+<li><code>is_dev_only($bool)</code>: whether it's only used by dev (test) builds in the original
+graph</li>
+</ul>
+<h4 id="--cargo-arg-cargo_arg"><a class="header" href="#--cargo-arg-cargo_arg"><code>--cargo-arg &lt;CARGO_ARG&gt;</code></a></h4>
+<p>Arguments to pass through to cargo. It can be specified multiple times for multiple
+arguments.</p>
+<p>Example: <code>--cargo-arg=-Zbindeps</code></p>
+<p>This allows using unstable options in Cargo if a project's Cargo.toml requires them.</p>
+<h3 id="subcommands"><a class="header" href="#subcommands">SUBCOMMANDS</a></h3>
+<ul>
+<li><a href="commands.html#cargo-vet-check">check</a>: [default] Check that the current project has been vetted</li>
+<li><a href="commands.html#cargo-vet-suggest">suggest</a>: Suggest some low-hanging fruit to review</li>
+<li><a href="commands.html#cargo-vet-init">init</a>: Initialize cargo-vet for your project</li>
+<li><a href="commands.html#cargo-vet-inspect">inspect</a>: Fetch the source of a package</li>
+<li><a href="commands.html#cargo-vet-diff">diff</a>: Yield a diff against the last reviewed version</li>
+<li><a href="commands.html#cargo-vet-certify">certify</a>: Mark a package as audited</li>
+<li><a href="commands.html#cargo-vet-import">import</a>: Import a new peer's imports</li>
+<li><a href="commands.html#cargo-vet-trust">trust</a>: Trust a given crate and publisher</li>
+<li><a href="commands.html#cargo-vet-regenerate">regenerate</a>: Explicitly regenerate various pieces of information</li>
+<li><a href="commands.html#cargo-vet-add-exemption">add-exemption</a>: Mark a package as exempted from review</li>
+<li><a href="commands.html#cargo-vet-record-violation">record-violation</a>: Declare that some versions of a package violate certain audit criteria</li>
+<li><a href="commands.html#cargo-vet-fmt">fmt</a>: Reformat all of vet's files (in case you hand-edited them)</li>
+<li><a href="commands.html#cargo-vet-prune">prune</a>: Prune unnecessary imports and exemptions</li>
+<li><a href="commands.html#cargo-vet-aggregate">aggregate</a>: Fetch and merge audits from multiple sources into a single <code>audits.toml</code> file</li>
+<li><a href="commands.html#cargo-vet-dump-graph">dump-graph</a>: Print the cargo build graph as understood by <code>cargo vet</code></li>
+<li><a href="commands.html#cargo-vet-gc">gc</a>: Clean up old packages from the vet cache</li>
+<li><a href="commands.html#cargo-vet-renew">renew</a>: Renew wildcard audit expirations</li>
+<li><a href="commands.html#cargo-vet-help">help</a>: Print this message or the help of the given subcommand(s)</li>
+</ul>
+<p><br><br><br></p>
+<h2 id="cargo-vet-check"><a class="header" href="#cargo-vet-check">cargo vet check</a></h2>
+<p>[default] Check that the current project has been vetted</p>
+<p>This is the default behaviour if no subcommand is specified.</p>
+<p>If the check fails due to lack of audits, we will do our best to explain why vetting failed, and
+what should be done to fix it. This can involve a certain amount of guesswork, as there are many
+possible solutions and we only want to recommend the &quot;best&quot; one to keep things simple.</p>
+<p>Failures and suggestions can either be &quot;Certain&quot; or &quot;Speculative&quot;. Speculative items are greyed
+out and sorted lower to indicate that the Certain entries should be looked at first. Speculative
+items are for packages that probably need audits too, but only appear as transitive dependencies of
+Certain items.</p>
+<p>During review of Certain issues you may take various actions that change what's needed for the
+Speculative ones. For instance you may discover you're enabling a feature you don't need, and
+that's the only reason the Speculative package is in your tree. Or you may determine that the
+Certain package only needs to be safe-to-run, which may make the Speculative requirements weaker or
+completely resolved. For these reasons we recommend fixing problems &quot;top down&quot;, and Certain items
+are The Top.</p>
+<p>Suggested fixes are grouped by the criteria they should be reviewed for and sorted by how easy the
+review should be (in terms of lines of code). We only ever suggest audits (and provide the command
+you need to run to do it), but there are other possible fixes like an <code>exemption</code> or <code>policy</code>
+change.</p>
+<p>The most aggressive solution is to run <code>cargo vet regenerate exemptions</code> which will add whatever
+exemptions necessary to make <code>check</code> pass (and remove uneeded ones). Ideally you should avoid doing
+this and prefer adding audits, but if you've done all the audits you plan on doing, that's the way
+to finish the job.</p>
+<h3 id="usage-1"><a class="header" href="#usage-1">USAGE</a></h3>
+<pre><code>cargo vet check [OPTIONS]
+</code></pre>
+<h3 id="options-1"><a class="header" href="#options-1">OPTIONS</a></h3>
+<h4 id="-h---help-1"><a class="header" href="#-h---help-1"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-1"><a class="header" href="#global-options-1">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-suggest"><a class="header" href="#cargo-vet-suggest">cargo vet suggest</a></h2>
+<p>Suggest some low-hanging fruit to review</p>
+<p>This is essentially the same as <code>check</code> but with all your <code>exemptions</code> temporarily removed as a way
+to inspect your &quot;review backlog&quot;. As such, we recommend against running this command while <code>check</code>
+is failing, because this will just give you worse information.</p>
+<p>If you don't consider an exemption to be &quot;backlog&quot;, add <code>suggest = false</code> to its entry and we won't
+remove it while suggesting.</p>
+<p>See also <code>regenerate exemptions</code>, which can be used to &quot;garbage collect&quot; your backlog (if you run it
+while <code>check</code> is passing).</p>
+<h3 id="usage-2"><a class="header" href="#usage-2">USAGE</a></h3>
+<pre><code>cargo vet suggest [OPTIONS]
+</code></pre>
+<h3 id="options-2"><a class="header" href="#options-2">OPTIONS</a></h3>
+<h4 id="-h---help-2"><a class="header" href="#-h---help-2"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-2"><a class="header" href="#global-options-2">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-init"><a class="header" href="#cargo-vet-init">cargo vet init</a></h2>
+<p>Initialize cargo-vet for your project</p>
+<p>This will add <code>exemptions</code> and <code>audit-as-crates-io = false</code> for all packages that need it to make
+<code>check</code> pass immediately and make it easy to start using vet with your project.</p>
+<p>At this point you can either configure your project further or start working on your review backlog
+with <code>suggest</code>.</p>
+<h3 id="usage-3"><a class="header" href="#usage-3">USAGE</a></h3>
+<pre><code>cargo vet init [OPTIONS]
+</code></pre>
+<h3 id="options-3"><a class="header" href="#options-3">OPTIONS</a></h3>
+<h4 id="-h---help-3"><a class="header" href="#-h---help-3"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-3"><a class="header" href="#global-options-3">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-inspect"><a class="header" href="#cargo-vet-inspect">cargo vet inspect</a></h2>
+<p>Fetch the source of a package</p>
+<p>We will attempt to guess what criteria you want to audit the package for based on the current check/
+suggest status, and show you the meaning of those criteria ahead of time.</p>
+<h3 id="usage-4"><a class="header" href="#usage-4">USAGE</a></h3>
+<pre><code>cargo vet inspect [OPTIONS] &lt;PACKAGE&gt; &lt;VERSION&gt;
+</code></pre>
+<h3 id="args"><a class="header" href="#args">ARGS</a></h3>
+<h4 id="package"><a class="header" href="#package"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to inspect</p>
+<h4 id="version-2"><a class="header" href="#version-2"><code>&lt;VERSION&gt;</code></a></h4>
+<p>The version to inspect</p>
+<h3 id="options-4"><a class="header" href="#options-4">OPTIONS</a></h3>
+<h4 id="--mode-mode"><a class="header" href="#--mode-mode"><code>--mode &lt;MODE&gt;</code></a></h4>
+<p>How to inspect the source</p>
+<p>[default: sourcegraph]<br />
+[possible values: local, sourcegraph]</p>
+<h4 id="-h---help-4"><a class="header" href="#-h---help-4"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-4"><a class="header" href="#global-options-4">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-diff"><a class="header" href="#cargo-vet-diff">cargo vet diff</a></h2>
+<p>Yield a diff against the last reviewed version</p>
+<p>We will attempt to guess what criteria you want to audit the package for based on the current check/
+suggest status, and show you the meaning of those criteria ahead of time.</p>
+<h3 id="usage-5"><a class="header" href="#usage-5">USAGE</a></h3>
+<pre><code>cargo vet diff [OPTIONS] &lt;PACKAGE&gt; &lt;VERSION1&gt; &lt;VERSION2&gt;
+</code></pre>
+<h3 id="args-1"><a class="header" href="#args-1">ARGS</a></h3>
+<h4 id="package-1"><a class="header" href="#package-1"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to diff</p>
+<h4 id="version1"><a class="header" href="#version1"><code>&lt;VERSION1&gt;</code></a></h4>
+<p>The base version to diff</p>
+<h4 id="version2"><a class="header" href="#version2"><code>&lt;VERSION2&gt;</code></a></h4>
+<p>The target version to diff</p>
+<h3 id="options-5"><a class="header" href="#options-5">OPTIONS</a></h3>
+<h4 id="--mode-mode-1"><a class="header" href="#--mode-mode-1"><code>--mode &lt;MODE&gt;</code></a></h4>
+<p>How to inspect the source</p>
+<p>[default: sourcegraph]<br />
+[possible values: local, sourcegraph]</p>
+<h4 id="-h---help-5"><a class="header" href="#-h---help-5"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-5"><a class="header" href="#global-options-5">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-certify"><a class="header" href="#cargo-vet-certify">cargo vet certify</a></h2>
+<p>Mark a package as audited</p>
+<p>This command will do its best to guess what you want to be certifying.</p>
+<p>If invoked with no args, it will try to certify the last thing you looked at with <code>inspect</code> or
+<code>diff</code>. Otherwise you must either supply the package name and one version (for a full audit) or two
+versions (for a delta audit).</p>
+<p>Once the package+version(s) have been selected, we will try to guess what criteria to certify it
+for. First we will <code>check</code>, and if the check fails and your audit would seemingly fix this package,
+we will use the criteria recommended for that fix. If <code>check</code> passes, we will assume you are working
+on your backlog and instead use the recommendations of <code>suggest</code>.</p>
+<p>If this removes the need for an <code>exemption</code> will we automatically remove it.</p>
+<h3 id="usage-6"><a class="header" href="#usage-6">USAGE</a></h3>
+<pre><code>cargo vet certify [OPTIONS] [ARGS]
+</code></pre>
+<h3 id="args-2"><a class="header" href="#args-2">ARGS</a></h3>
+<h4 id="package-2"><a class="header" href="#package-2"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to certify as audited</p>
+<h4 id="version1-1"><a class="header" href="#version1-1"><code>&lt;VERSION1&gt;</code></a></h4>
+<p>The version to certify as audited</p>
+<h4 id="version2-1"><a class="header" href="#version2-1"><code>&lt;VERSION2&gt;</code></a></h4>
+<p>If present, instead certify a diff from version1-&gt;version2</p>
+<h3 id="options-6"><a class="header" href="#options-6">OPTIONS</a></h3>
+<h4 id="--wildcard-wildcard"><a class="header" href="#--wildcard-wildcard"><code>--wildcard &lt;WILDCARD&gt;</code></a></h4>
+<p>If present, certify a wildcard audit for the user with the given username.</p>
+<p>Use the --start-date and --end-date options to specify the date range to certify for.</p>
+<h4 id="--criteria-criteria"><a class="header" href="#--criteria-criteria"><code>--criteria &lt;CRITERIA&gt;</code></a></h4>
+<p>The criteria to certify for this audit</p>
+<p>If not provided, we will prompt you for this information.</p>
+<h4 id="--who-who"><a class="header" href="#--who-who"><code>--who &lt;WHO&gt;</code></a></h4>
+<p>Who to name as the auditor</p>
+<p>If not provided, we will collect this information from the local git.</p>
+<h4 id="--notes-notes"><a class="header" href="#--notes-notes"><code>--notes &lt;NOTES&gt;</code></a></h4>
+<p>A free-form string to include with the new audit entry</p>
+<p>If not provided, there will be no notes.</p>
+<h4 id="--start-date-start_date"><a class="header" href="#--start-date-start_date"><code>--start-date &lt;START_DATE&gt;</code></a></h4>
+<p>Start date to create a wildcard audit from.</p>
+<p>Only valid with <code>--wildcard</code>.</p>
+<p>If not provided, will be the publication date of the first version published by the
+given user.</p>
+<h4 id="--end-date-end_date"><a class="header" href="#--end-date-end_date"><code>--end-date &lt;END_DATE&gt;</code></a></h4>
+<p>End date to create a wildcard audit from. May be at most 1 year in the future.</p>
+<p>Only valid with <code>--wildcard</code>.</p>
+<p>If not provided, will be 1 year from the current date.</p>
+<h4 id="--accept-all"><a class="header" href="#--accept-all"><code>--accept-all</code></a></h4>
+<p>Accept all criteria without an interactive prompt</p>
+<h4 id="--force"><a class="header" href="#--force"><code>--force</code></a></h4>
+<p>Force the command to ignore whether the package/version makes sense</p>
+<p>To catch typos/mistakes, we check if the thing you're trying to talk about is part of
+your current build, but this flag disables that.</p>
+<h4 id="--no-collapse"><a class="header" href="#--no-collapse"><code>--no-collapse</code></a></h4>
+<p>Prevent combination of the audit with a prior adjacent non-importable git audit, if any.</p>
+<p>This will only have an effect if the supplied <code>from</code> version is a git version.</p>
+<p>For example, normally an existing audit from <code>1.0.0-&gt;1.0.0@git:1111111</code> and a new
+certified audit from <code>1.0.0@git:1111111-&gt;1.0.0@git:2222222</code> would result in a single
+audit from <code>1.0.0-&gt;1.0.0@git:2222222</code>. Passing this flag would prevent this.</p>
+<h4 id="-h---help-6"><a class="header" href="#-h---help-6"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-6"><a class="header" href="#global-options-6">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-import"><a class="header" href="#cargo-vet-import">cargo vet import</a></h2>
+<p>Import a new peer's imports</p>
+<p>If invoked without a URL parameter, it will look up the named peer in the cargo-vet registry, and
+import that peer.</p>
+<h3 id="usage-7"><a class="header" href="#usage-7">USAGE</a></h3>
+<pre><code>cargo vet import [OPTIONS] &lt;NAME&gt; [URL]...
+</code></pre>
+<h3 id="args-3"><a class="header" href="#args-3">ARGS</a></h3>
+<h4 id="name"><a class="header" href="#name"><code>&lt;NAME&gt;</code></a></h4>
+<p>The name of the peer to import</p>
+<h4 id="url-1"><a class="header" href="#url-1"><code>&lt;URL&gt;...</code></a></h4>
+<p>The URL(s) of the peer's audits.toml file(s).</p>
+<p>If a URL is not provided, a peer with the given name will be looked up in the cargo-vet
+registry to determine the import URL(s).</p>
+<h3 id="options-7"><a class="header" href="#options-7">OPTIONS</a></h3>
+<h4 id="-h---help-7"><a class="header" href="#-h---help-7"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-7"><a class="header" href="#global-options-7">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-trust"><a class="header" href="#cargo-vet-trust">cargo vet trust</a></h2>
+<p>Trust a given crate and publisher</p>
+<h3 id="usage-8"><a class="header" href="#usage-8">USAGE</a></h3>
+<pre><code>cargo vet trust [OPTIONS] [ARGS]
+</code></pre>
+<h3 id="args-4"><a class="header" href="#args-4">ARGS</a></h3>
+<h4 id="package-3"><a class="header" href="#package-3"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to trust</p>
+<p>Must be specified unless --all has been specified.</p>
+<h4 id="publisher_login"><a class="header" href="#publisher_login"><code>&lt;PUBLISHER_LOGIN&gt;</code></a></h4>
+<p>The username of the publisher to trust</p>
+<p>If not provided, will be inferred to be the sole known publisher of the given crate.
+If there is more than one publisher for the given crate, the login must be provided
+explicitly.</p>
+<h3 id="options-8"><a class="header" href="#options-8">OPTIONS</a></h3>
+<h4 id="--criteria-criteria-1"><a class="header" href="#--criteria-criteria-1"><code>--criteria &lt;CRITERIA&gt;</code></a></h4>
+<p>The criteria to certify for this trust entry</p>
+<p>If not provided, we will prompt you for this information.</p>
+<h4 id="--start-date-start_date-1"><a class="header" href="#--start-date-start_date-1"><code>--start-date &lt;START_DATE&gt;</code></a></h4>
+<p>Start date to create the trust entry from.</p>
+<p>If not provided, will be the publication date of the first version published by the
+given user.</p>
+<h4 id="--end-date-end_date-1"><a class="header" href="#--end-date-end_date-1"><code>--end-date &lt;END_DATE&gt;</code></a></h4>
+<p>End date to create the trust entry from. May be at most 1 year in the future.</p>
+<p>If not provided, will be 1 year from the current date.</p>
+<h4 id="--notes-notes-1"><a class="header" href="#--notes-notes-1"><code>--notes &lt;NOTES&gt;</code></a></h4>
+<p>A free-form string to include with the new audit entry</p>
+<p>If not provided, there will be no notes.</p>
+<h4 id="--all-all"><a class="header" href="#--all-all"><code>--all &lt;ALL&gt;</code></a></h4>
+<p>If specified, trusts all packages with exemptions or failures which are solely published
+by the given user</p>
+<h4 id="--allow-multiple-publishers"><a class="header" href="#--allow-multiple-publishers"><code>--allow-multiple-publishers</code></a></h4>
+<p>If specified along with --all, also trusts packages with multiple publishers, so long as
+at least one version was published by the given user</p>
+<h4 id="-h---help-8"><a class="header" href="#-h---help-8"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-8"><a class="header" href="#global-options-8">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-regenerate"><a class="header" href="#cargo-vet-regenerate">cargo vet regenerate</a></h2>
+<p>Explicitly regenerate various pieces of information</p>
+<p>There are several things that <code>cargo vet</code> <em>can</em> do for you automatically but we choose to make
+manual just to keep a human in the loop of those decisions. Some of these might one day become
+automatic if we agree they're boring/reliable enough.</p>
+<p>See the subcommands for specifics.</p>
+<h3 id="usage-9"><a class="header" href="#usage-9">USAGE</a></h3>
+<pre><code>cargo vet regenerate [OPTIONS] &lt;SUBCOMMAND&gt;
+</code></pre>
+<h3 id="options-9"><a class="header" href="#options-9">OPTIONS</a></h3>
+<h4 id="-h---help-9"><a class="header" href="#-h---help-9"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-9"><a class="header" href="#global-options-9">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<h3 id="subcommands-1"><a class="header" href="#subcommands-1">SUBCOMMANDS</a></h3>
+<ul>
+<li><a href="commands.html#cargo-vet-exemptions">exemptions</a>: Regenerate your exemptions to make <code>check</code> pass minimally</li>
+<li><a href="commands.html#cargo-vet-imports">imports</a>: Regenerate your imports and accept changes to criteria</li>
+<li><a href="commands.html#cargo-vet-audit-as-crates-io">audit-as-crates-io</a>: Add <code>audit-as-crates-io</code> to the policy entry for all crates which require one</li>
+<li><a href="commands.html#cargo-vet-unpublished">unpublished</a>: Remove all outdated <code>unpublished</code> entries for crates which have since been published, or
+should now be audited as a more-recent version</li>
+<li><a href="commands.html#cargo-vet-help">help</a>: Print this message or the help of the given subcommand(s)</li>
+</ul>
+<p><br><br><br></p>
+<h2 id="cargo-vet-exemptions"><a class="header" href="#cargo-vet-exemptions">cargo vet exemptions</a></h2>
+<p>Regenerate your exemptions to make <code>check</code> pass minimally</p>
+<p>This command can be used for two purposes: to force your supply-chain to pass <code>check</code> when it's
+currently failing, or to minimize/garbage-collect your exemptions when it's already passing. These
+are ultimately the same operation.</p>
+<p>We will try our best to preserve existing exemptions, removing only those that aren't needed,
+and adding only those that are needed. Exemptions that are overbroad may also be weakened (i.e.
+safe-to-deploy may be reduced to safe-to-run).</p>
+<h3 id="usage-10"><a class="header" href="#usage-10">USAGE</a></h3>
+<pre><code>cargo vet regenerate exemptions [OPTIONS]
+</code></pre>
+<h3 id="options-10"><a class="header" href="#options-10">OPTIONS</a></h3>
+<h4 id="-h---help-10"><a class="header" href="#-h---help-10"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-10"><a class="header" href="#global-options-10">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-imports"><a class="header" href="#cargo-vet-imports">cargo vet imports</a></h2>
+<p>Regenerate your imports and accept changes to criteria</p>
+<p>This is equivalent to <code>cargo vet fetch-imports</code> but it won't produce an error if the descriptions of
+foreign criteria change.</p>
+<h3 id="usage-11"><a class="header" href="#usage-11">USAGE</a></h3>
+<pre><code>cargo vet regenerate imports [OPTIONS]
+</code></pre>
+<h3 id="options-11"><a class="header" href="#options-11">OPTIONS</a></h3>
+<h4 id="-h---help-11"><a class="header" href="#-h---help-11"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-11"><a class="header" href="#global-options-11">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-audit-as-crates-io"><a class="header" href="#cargo-vet-audit-as-crates-io">cargo vet audit-as-crates-io</a></h2>
+<p>Add <code>audit-as-crates-io</code> to the policy entry for all crates which require one.</p>
+<p>Crates which have a matching <code>description</code> and <code>repository</code> entry to a published crate on crates.io
+will be marked as <code>audit-as-crates-io = true</code>.</p>
+<h3 id="usage-12"><a class="header" href="#usage-12">USAGE</a></h3>
+<pre><code>cargo vet regenerate audit-as-crates-io [OPTIONS]
+</code></pre>
+<h3 id="options-12"><a class="header" href="#options-12">OPTIONS</a></h3>
+<h4 id="-h---help-12"><a class="header" href="#-h---help-12"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-12"><a class="header" href="#global-options-12">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-unpublished"><a class="header" href="#cargo-vet-unpublished">cargo vet unpublished</a></h2>
+<p>Remove all outdated <code>unpublished</code> entries for crates which have since been published, or should now
+be audited as a more-recent version.</p>
+<p>Unlike <code>cargo vet prune</code>, this will remove outdated <code>unpublished</code> entries even if it will cause
+<code>check</code> to start failing.</p>
+<h3 id="usage-13"><a class="header" href="#usage-13">USAGE</a></h3>
+<pre><code>cargo vet regenerate unpublished [OPTIONS]
+</code></pre>
+<h3 id="options-13"><a class="header" href="#options-13">OPTIONS</a></h3>
+<h4 id="-h---help-13"><a class="header" href="#-h---help-13"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-13"><a class="header" href="#global-options-13">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-help"><a class="header" href="#cargo-vet-help">cargo vet help</a></h2>
+<p>Print this message or the help of the given subcommand(s)</p>
+<h3 id="usage-14"><a class="header" href="#usage-14">USAGE</a></h3>
+<pre><code>cargo vet regenerate help [OPTIONS] [SUBCOMMAND]...
+</code></pre>
+<h3 id="args-5"><a class="header" href="#args-5">ARGS</a></h3>
+<h4 id="subcommand"><a class="header" href="#subcommand"><code>&lt;SUBCOMMAND&gt;...</code></a></h4>
+<p>The subcommand whose help message to display</p>
+<h3 id="global-options-14"><a class="header" href="#global-options-14">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-add-exemption"><a class="header" href="#cargo-vet-add-exemption">cargo vet add-exemption</a></h2>
+<p>Mark a package as exempted from review</p>
+<p>Exemptions are <em>usually</em> just &quot;backlog&quot; and the expectation is that you will review them
+&quot;eventually&quot;. You should usually only be trying to remove them, but sometimes additions are
+necessary to make progress.</p>
+<p><code>regenerate exemptions</code> will do this for your automatically to make <code>check</code> pass (and remove any
+unnecessary ones), so we recommend using that over <code>add-exemption</code>. This command mostly exists as
+&quot;plumbing&quot; for building tools on top of <code>cargo vet</code>.</p>
+<h3 id="usage-15"><a class="header" href="#usage-15">USAGE</a></h3>
+<pre><code>cargo vet add-exemption [OPTIONS] &lt;PACKAGE&gt; &lt;VERSION&gt;
+</code></pre>
+<h3 id="args-6"><a class="header" href="#args-6">ARGS</a></h3>
+<h4 id="package-4"><a class="header" href="#package-4"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to mark as exempted</p>
+<h4 id="version-3"><a class="header" href="#version-3"><code>&lt;VERSION&gt;</code></a></h4>
+<p>The version to mark as exempted</p>
+<h3 id="options-14"><a class="header" href="#options-14">OPTIONS</a></h3>
+<h4 id="--criteria-criteria-2"><a class="header" href="#--criteria-criteria-2"><code>--criteria &lt;CRITERIA&gt;</code></a></h4>
+<p>The criteria to assume (trust)</p>
+<p>If not provided, we will prompt you for this information.</p>
+<h4 id="--notes-notes-2"><a class="header" href="#--notes-notes-2"><code>--notes &lt;NOTES&gt;</code></a></h4>
+<p>A free-form string to include with the new forbid entry</p>
+<p>If not provided, there will be no notes.</p>
+<h4 id="--no-suggest"><a class="header" href="#--no-suggest"><code>--no-suggest</code></a></h4>
+<p>Suppress suggesting this exemption for review</p>
+<h4 id="--force-1"><a class="header" href="#--force-1"><code>--force</code></a></h4>
+<p>Force the command to ignore whether the package/version makes sense</p>
+<p>To catch typos/mistakes, we check if the thing you're trying to talk about is part of
+your current build, but this flag disables that.</p>
+<h4 id="-h---help-14"><a class="header" href="#-h---help-14"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-15"><a class="header" href="#global-options-15">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-record-violation"><a class="header" href="#cargo-vet-record-violation">cargo vet record-violation</a></h2>
+<p>Declare that some versions of a package violate certain audit criteria</p>
+<p><strong>IMPORTANT</strong>: violations take <em>VersionReqs</em> not <em>Versions</em>. This is the same syntax used by
+Cargo.toml when specifying dependencies. A bare <code>1.0.0</code> actually means <code>^1.0.0</code>. If you want to
+forbid a <em>specific</em> version, use <code>=1.0.0</code>. This command can be a bit awkward because syntax like <code>*</code>
+has special meaning in scripts and terminals. It's probably easier to just manually add the entry to
+your audits.toml, but the command's here in case you want it.</p>
+<p>Violations are essentially treated as integrity constraints on your supply-chain, and will only
+result in errors if you have <code>exemptions</code> or <code>audits</code> (including imported ones) that claim criteria
+that are contradicted by the <code>violation</code>. It is not inherently an error to depend on a package with
+a <code>violation</code>.</p>
+<p>For instance, someone may review a package and determine that it's horribly unsound in the face of
+untrusted inputs, and therefore <em>un</em>safe-to-deploy. They would then add a &quot;safe-to-deploy&quot; violation
+for whatever versions of that package seem to have that problem. But if the package basically works
+fine on trusted inputs, it might still be safe-to-run. So if you use it in your tests and have an
+audit that only claims safe-to-run, we won't mention it.</p>
+<p>When a violation <em>does</em> cause an integrity error, it's up to you and your peers to figure out what
+to do about it. There isn't yet a mechanism for dealing with disagreements with a peer's published
+violations.</p>
+<h3 id="usage-16"><a class="header" href="#usage-16">USAGE</a></h3>
+<pre><code>cargo vet record-violation [OPTIONS] &lt;PACKAGE&gt; &lt;VERSIONS&gt;
+</code></pre>
+<h3 id="args-7"><a class="header" href="#args-7">ARGS</a></h3>
+<h4 id="package-5"><a class="header" href="#package-5"><code>&lt;PACKAGE&gt;</code></a></h4>
+<p>The package to forbid</p>
+<h4 id="versions"><a class="header" href="#versions"><code>&lt;VERSIONS&gt;</code></a></h4>
+<p>The versions to forbid</p>
+<h3 id="options-15"><a class="header" href="#options-15">OPTIONS</a></h3>
+<h4 id="--criteria-criteria-3"><a class="header" href="#--criteria-criteria-3"><code>--criteria &lt;CRITERIA&gt;</code></a></h4>
+<p>The criteria that have failed to be satisfied.</p>
+<p>If not provided, we will prompt you for this information(?)</p>
+<h4 id="--who-who-1"><a class="header" href="#--who-who-1"><code>--who &lt;WHO&gt;</code></a></h4>
+<p>Who to name as the auditor</p>
+<p>If not provided, we will collect this information from the local git.</p>
+<h4 id="--notes-notes-3"><a class="header" href="#--notes-notes-3"><code>--notes &lt;NOTES&gt;</code></a></h4>
+<p>A free-form string to include with the new forbid entry</p>
+<p>If not provided, there will be no notes.</p>
+<h4 id="--force-2"><a class="header" href="#--force-2"><code>--force</code></a></h4>
+<p>Force the command to ignore whether the package/version makes sense</p>
+<p>To catch typos/mistakes, we check if the thing you're trying to talk about is part of
+your current build, but this flag disables that.</p>
+<h4 id="-h---help-15"><a class="header" href="#-h---help-15"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-16"><a class="header" href="#global-options-16">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-fmt"><a class="header" href="#cargo-vet-fmt">cargo vet fmt</a></h2>
+<p>Reformat all of vet's files (in case you hand-edited them)</p>
+<p>Most commands will implicitly do this, so this mostly exists as &quot;plumbing&quot; for building tools on top
+of vet, or in case you don't want to run another command.</p>
+<h3 id="usage-17"><a class="header" href="#usage-17">USAGE</a></h3>
+<pre><code>cargo vet fmt [OPTIONS]
+</code></pre>
+<h3 id="options-16"><a class="header" href="#options-16">OPTIONS</a></h3>
+<h4 id="-h---help-16"><a class="header" href="#-h---help-16"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-17"><a class="header" href="#global-options-17">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-prune"><a class="header" href="#cargo-vet-prune">cargo vet prune</a></h2>
+<p>Prune unnecessary imports and exemptions</p>
+<p>This will fetch the updated state of imports, and attempt to remove any now-unnecessary imports or
+exemptions from the supply-chain.</p>
+<h3 id="usage-18"><a class="header" href="#usage-18">USAGE</a></h3>
+<pre><code>cargo vet prune [OPTIONS]
+</code></pre>
+<h3 id="options-17"><a class="header" href="#options-17">OPTIONS</a></h3>
+<h4 id="--no-imports"><a class="header" href="#--no-imports"><code>--no-imports</code></a></h4>
+<p>Don't prune unused imports</p>
+<h4 id="--no-exemptions"><a class="header" href="#--no-exemptions"><code>--no-exemptions</code></a></h4>
+<p>Don't prune unused exemptions</p>
+<h4 id="--no-audits"><a class="header" href="#--no-audits"><code>--no-audits</code></a></h4>
+<p>Don't prune unused non-importable audits</p>
+<h4 id="-h---help-17"><a class="header" href="#-h---help-17"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-18"><a class="header" href="#global-options-18">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-aggregate"><a class="header" href="#cargo-vet-aggregate">cargo vet aggregate</a></h2>
+<p>Fetch and merge audits from multiple sources into a single <code>audits.toml</code> file.</p>
+<p>Will fetch the audits from each URL in the provided file, combining them into a single file. Custom
+criteria will be merged by-name, and must have identical descriptions in each source audit file.</p>
+<h3 id="usage-19"><a class="header" href="#usage-19">USAGE</a></h3>
+<pre><code>cargo vet aggregate [OPTIONS] &lt;SOURCES&gt;
+</code></pre>
+<h3 id="args-8"><a class="header" href="#args-8">ARGS</a></h3>
+<h4 id="sources"><a class="header" href="#sources"><code>&lt;SOURCES&gt;</code></a></h4>
+<p>Path to a file containing a list of URLs to aggregate the audits from</p>
+<h3 id="options-18"><a class="header" href="#options-18">OPTIONS</a></h3>
+<h4 id="-h---help-18"><a class="header" href="#-h---help-18"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-19"><a class="header" href="#global-options-19">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-dump-graph"><a class="header" href="#cargo-vet-dump-graph">cargo vet dump-graph</a></h2>
+<p>Print the cargo build graph as understood by <code>cargo vet</code></p>
+<p>This is a debugging command, the output's format is not guaranteed. Use <code>cargo metadata</code> to get a
+stable version of what <em>cargo</em> thinks the build graph is. Our graph is based on that result.</p>
+<p>With <code>--output-format=human</code> (the default) this will print out mermaid-js diagrams, which things
+like github natively support rendering of.</p>
+<p>With <code>--output-format=json</code> we will print out more raw statistics for you to search/analyze.</p>
+<p>Most projects will have unreadably complex build graphs, so you may want to use the global
+<code>--filter-graph</code> argument to narrow your focus on an interesting subgraph. <code>--filter-graph</code> is
+applied <em>before</em> doing any semantic analysis, so if you filter out a package and it was the problem,
+the problem will disappear. This can be used to bisect a problem if you get ambitious enough with
+your filters.</p>
+<h3 id="usage-20"><a class="header" href="#usage-20">USAGE</a></h3>
+<pre><code>cargo vet dump-graph [OPTIONS]
+</code></pre>
+<h3 id="options-19"><a class="header" href="#options-19">OPTIONS</a></h3>
+<h4 id="--depth-depth"><a class="header" href="#--depth-depth"><code>--depth &lt;DEPTH&gt;</code></a></h4>
+<p>The depth of the graph to print (for a large project, the full graph is a HUGE MESS)</p>
+<p>[default: first-party]<br />
+[possible values: roots, workspace, first-party, first-party-and-directs, full]</p>
+<h4 id="-h---help-19"><a class="header" href="#-h---help-19"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-20"><a class="header" href="#global-options-20">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-gc"><a class="header" href="#cargo-vet-gc">cargo vet gc</a></h2>
+<p>Clean up old packages from the vet cache</p>
+<p>Removes packages which haven't been accessed in a while, and deletes any extra files which aren't
+recognized by cargo-vet.</p>
+<p>In the future, many cargo-vet subcommands will implicitly do this.</p>
+<h3 id="usage-21"><a class="header" href="#usage-21">USAGE</a></h3>
+<pre><code>cargo vet gc [OPTIONS]
+</code></pre>
+<h3 id="options-20"><a class="header" href="#options-20">OPTIONS</a></h3>
+<h4 id="--max-package-age-days-max_package_age_days"><a class="header" href="#--max-package-age-days-max_package_age_days"><code>--max-package-age-days &lt;MAX_PACKAGE_AGE_DAYS&gt;</code></a></h4>
+<p>Packages in the vet cache which haven't been used for this many days will be removed</p>
+<p>[default: 30]</p>
+<h4 id="--clean"><a class="header" href="#--clean"><code>--clean</code></a></h4>
+<p>Remove the entire cache directory, forcing it to be regenerated next time you use cargo
+vet</p>
+<h4 id="-h---help-20"><a class="header" href="#-h---help-20"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-21"><a class="header" href="#global-options-21">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-renew"><a class="header" href="#cargo-vet-renew">cargo vet renew</a></h2>
+<p>Renew wildcard audit expirations</p>
+<p>This will set a wildcard audit expiration to be one year in the future from when it is run. It can
+optionally do this for all audits which are expiring soon.</p>
+<h3 id="usage-22"><a class="header" href="#usage-22">USAGE</a></h3>
+<pre><code>cargo vet renew [OPTIONS] [CRATE]
+</code></pre>
+<h3 id="args-9"><a class="header" href="#args-9">ARGS</a></h3>
+<h4 id="crate"><a class="header" href="#crate"><code>&lt;CRATE&gt;</code></a></h4>
+<p>The name of a crate to renew</p>
+<h3 id="options-21"><a class="header" href="#options-21">OPTIONS</a></h3>
+<h4 id="--expiring"><a class="header" href="#--expiring"><code>--expiring</code></a></h4>
+<p>Renew all wildcard audits which will have expired six weeks from now</p>
+<h4 id="-h---help-21"><a class="header" href="#-h---help-21"><code>-h, --help</code></a></h4>
+<p>Print help information</p>
+<h3 id="global-options-22"><a class="header" href="#global-options-22">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p><br><br><br></p>
+<h2 id="cargo-vet-help-1"><a class="header" href="#cargo-vet-help-1">cargo vet help</a></h2>
+<p>Print this message or the help of the given subcommand(s)</p>
+<h3 id="usage-23"><a class="header" href="#usage-23">USAGE</a></h3>
+<pre><code>cargo vet help [OPTIONS] [SUBCOMMAND]...
+</code></pre>
+<h3 id="args-10"><a class="header" href="#args-10">ARGS</a></h3>
+<h4 id="subcommand-1"><a class="header" href="#subcommand-1"><code>&lt;SUBCOMMAND&gt;...</code></a></h4>
+<p>The subcommand whose help message to display</p>
+<h3 id="global-options-23"><a class="header" href="#global-options-23">GLOBAL OPTIONS</a></h3>
+<p>This subcommand accepts all the <a href="commands.html#global-options">global options</a></p>
+<p>stderr:</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="the-cargo-vet-algorithm"><a class="header" href="#the-cargo-vet-algorithm">The Cargo Vet Algorithm</a></h1>
+<p>The heart of <code>vet</code> is the &quot;<a href="https://github.com/mozilla/cargo-vet/blob/main/src/resolver.rs">resolver</a>&quot; which takes in your build graph and your supply_chain dir, and determines whether <code>vet check</code> should pass.</p>
+<p>If <code>check</code> fails, it tries to determine the reason for that failure (which as we'll see is a non-trivial question). If you request a <code>suggest</code> it will then try to suggest &quot;good&quot; audits that will definitely satisfy <code>check</code> (which is again non-trivial).</p>
+<p>These results are a basic building block that most other commands will defer to:</p>
+<ul>
+<li><code>vet check</code> (the command run with bare <code>vet</code>) is just this operation</li>
+<li><code>vet suggest</code> is this operation with all suggestable exemptions deleted</li>
+<li><code>vet certify</code> fills in any unspecified information using this operation</li>
+<li><code>vet regenerate</code> generally uses this operation to know what to do</li>
+</ul>
+<p>For the sake of clarity, this chapter will also include some discussion of &quot;initialization&quot; which gathers up the input state that the resolver needs.</p>
+<h2 id="initialization-steps"><a class="header" href="#initialization-steps">Initialization Steps</a></h2>
+<p>This phase is generally just a bunch of loading, parsing, and validating. Different commands
+may vary slightly in how they do these steps, as they may implicitly be --locked or --frozen,
+or want to query hypothetical states.</p>
+<ol>
+<li>Acquire the build graph (<a href="https://doc.rust-lang.org/cargo/commands/cargo-metadata.html">cargo metadata</a> via the <a href="https://docs.rs/cargo_metadata/latest/cargo_metadata/">cargo_metadata</a> crate)</li>
+<li>Acquire the store (<code>supply_chain</code>) (load, parse, validate)</li>
+<li>Update the imports (fetch, parse, validate)</li>
+<li>Check <code>audit-as-crates-io</code> (check against local cargo registry)</li>
+</ol>
+<h2 id="resolve-steps"><a class="header" href="#resolve-steps">Resolve Steps</a></h2>
+<p>These are the logical steps of the resolver, although they are more interleaved than this
+initial summary implies:</p>
+<ol>
+<li>Build data structures
+<ol>
+<li>Construct the <code>DepGraph</code></li>
+<li>Construct the <code>CriteriaMapper</code></li>
+</ol>
+</li>
+<li>Determine the required criteria for each package
+<ol>
+<li>Apply requirements for dev-dependencies</li>
+<li>Propagate policy requirements from roots out to leaves</li>
+</ol>
+</li>
+<li>Resolve the validated criteria for each third party (crates.io) package
+<ol>
+<li>Construct the <code>AuditGraphs</code> for each package (and check violations)</li>
+<li>Search for paths in the audit graph validating each requirement</li>
+</ol>
+</li>
+<li>Check if each crate validates for the required criteria
+<ol>
+<li>Record caveats which were required in order to satisfy these criteria</li>
+</ol>
+</li>
+<li>Suggest audits to fix leaf failures (the dance of a thousand diffs)</li>
+</ol>
+<p>Here in all of its glory is the entirety of the resolver algorithm today in
+abbreviated pseudo-rust. Each of these steps will be elaborated on in the
+subsequent sections.</p>
+<pre><code class="language-rust  ignore">// Step 1a: Build the DepGraph
+let graph = DepGraph::new(..);
+// Step 1b: Build the CriteriaMapper
+let mapper = CriteriaMapper::new(..);
+
+// Step 2: Determine the required criteria for each package
+let requirements = resolve_requirements(..);
+
+// Step 3: Resolve the validated criteria for each third-party package
+for package in &amp;graph.nodes {
+    if !package.is_third_party {
+        continue;
+    }
+
+    // Step 3a: Construct the AuditGraph for each package
+    let audit_graph = AuditGraph::build(..);
+    // Step 3b: Search for paths in the audit graph validating each requirement
+    let search_results = all_criteria.map(|criteria| audit_graph.search(criteria, ..));
+
+    // Step 4: Check if the crate validates for the required criteria
+    for criteria in requirements[package] {
+        match &amp;search_results[criteria] {
+            ..
+        }
+    }
+}
+
+// If there were any conflicts with violation entries, bail!
+if !violations.is_empty() {
+    return ResolveReport { conclusion: Conclusion::FailForViolationConflict(..), .. };
+}
+
+// If there were no failures, we're done!
+if failures.is_empty() {
+    return ResolveReport { conclusion: Conclusion::Success(..), .. };
+}
+
+// Step 5: Suggest time! Compute the simplest audits to fix the failures!
+let suggest = compute_suggest(..);
+
+return ResolveReport { conclusion: Conclusion::FailForVet(..), .. };
+</code></pre>
+<p>As we determine the required criteria in an separate pass, all analysis after
+that point can be performed in any order. Requirements analysis starts on root
+nodes and is propagated downwards to leaf nodes.</p>
+<h1 id="step-1a-the-depgraph-processing-cargo-metadata"><a class="header" href="#step-1a-the-depgraph-processing-cargo-metadata">Step 1a: The DepGraph (Processing Cargo Metadata)</a></h1>
+<p>All of our analysis derives from the output of <a href="https://doc.rust-lang.org/cargo/commands/cargo-metadata.html">cargo metadata</a> and our
+interpretation of that, so it's worth discussing how we use it, and what we
+believe to be true of its output.</p>
+<p>Our interpretation of the metadata is the DepGraph. You can dump the DepGraph with
+<code>cargo vet dump-graph</code>. Most commands take a <code>--filter-graph</code> argument which will
+force us to discard certain parts of the DepGraph before performing the operation
+of the command. This can be useful for debugging issues, but we recommend only doing
+this while <code>--locked</code> to avoid corrupting your store.</p>
+<p>By default we run <code>cargo metadata --locked --all-features</code>. If you pass <code>--locked</code> to vet,
+we will instead pass <code>--frozen</code> to <code>cargo metadata</code>. <code>--all-features</code> can be negated
+by passing <code>--no-all-features</code> to vet. We otherwise expose the usual feature flags of
+cargo directly.</p>
+<p>The reason we pass <code>--all-features</code> is because we want the &quot;maximal&quot; build graph, which
+all &quot;real&quot; builds are simply a subset of. Cargo metadata in general provides this, but
+will omit optional dependencies that are locked behind disabled features. By enabling them all,
+we should get every possible dependency for every possible feature and platform.</p>
+<p>By validating that the maximal build graph is vetted, all possible builds should in turn
+be vetted, because they are simply subsets of that graph.</p>
+<p>Cargo metadata produces the build graph in a kind of awkward way where some information
+for the packages is in <code>&quot;packages&quot;</code> and some information is in  <code>&quot;resolve&quot;</code>, and we need
+to manually compute lots of facts like &quot;roots&quot;, &quot;only for tests&quot;, and &quot;<a href="https://en.wikipedia.org/wiki/Topological_sorting">topological sort</a>&quot;
+(metadata has a notion of roots, but it's not what you think, and mostly reflects an 
+internal concept of cargo that isn't useful to us).</p>
+<p>If we knew about it at the time we might have used <a href="https://docs.rs/guppy/latest/guppy/">guppy</a> to handle interpretting
+cargo metadata's results. As it stands, we've hand-rolled all that stuff.</p>
+<p>Cargo metadata largely uses <a href="https://docs.rs/cargo_metadata/latest/cargo_metadata/struct.PackageId.html">PackageId</a>s as primary keys for identifying a package
+in your build, and we largely agree with that internally, but some human-facing interfaces
+like audits also treat (PackageName, <a href="https://docs.rs/semver/latest/semver/struct.Version.html">Version</a>) as a valid key. This is a true
+statement on crates.io itself, but may not hold when you include unpublished packages,
+patches/renames(?), or third party registries. We don't really have a solid disambiguation
+strategy at the moment, we just assume it doesn't happen and don't worry about it.</p>
+<p>The resolver primarily use a PackageIdx as a primary key for packages, which is an interned PackageId.
+The DepGraph holds this interner.</p>
+<h2 id="dealing-with-cycles-from-tests"><a class="header" href="#dealing-with-cycles-from-tests">Dealing With Cycles From Tests</a></h2>
+<p>The resolver assumes the maximal graph is a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph">DAG</a>, which is an almost true statement
+that we can make true with a minor desugaring of the graph. There is only one situation
+where the cargo build graph is not a DAG: the tests for a crate. This can happen very
+easily, and is kind of natural, but also very evil when you first learn about it.</p>
+<p>As a concrete example, there is kind of a conceptual cycle between <a href="https://github.com/serde-rs/serde/blob/master/serde/Cargo.toml">serde</a> and <a href="https://github.com/serde-rs/serde/blob/master/serde_derive/Cargo.toml">serde_derive</a>. However serde_derive is a standalone crate, and serde (optionally)
+pulls in serde_derive as a dependency... unless you're testing serde_derive, and then serde_derive
+quite reasonably depends on serde to test its output, creating a cyclic dependency on itself!</p>
+<p>The way to resolve this monstrosity is to realize that the <em>tests</em> for serde_derive are actually
+a different package from serde_derive, which we call serde_derive_dev (because cargo calls test
+edges &quot;dev dependencies&quot;). So although the graph reported by cargo_metadata looks like a cycle:</p>
+<pre><code>serde &lt;-----+
+  |         |
+  |         |
+  +--&gt; serde_derive
+</code></pre>
+<p>In actuality, serde_derive_dev breaks the cycle and creates a nice clean DAG:</p>
+<pre><code>  +--serde_derive_dev ---+
+  |          |           |
+  v          |           v
+serde        |     test_only_dep
+  |          |           |
+  |          v          ...
+  +--&gt; serde_derive
+</code></pre>
+<p>There is a subtle distinction to be made here for packages <em>only</em> used for tests:
+these wouldn't be part of the build graph without dev-dependencies (dev edges) but
+they are still &quot;real&quot; nodes, and all of their dependencies are &quot;real&quot; and still
+must form a proper DAG. The only packages which can have cycle-causing dev-dependencies,
+and therefore require a desugaring to produce &quot;fake&quot; nodes, are <em>workspace members</em>.
+These are the packages that will be tested if you run <code>cargo test --workspace</code>.</p>
+<p>Actually doing this desugaring is really messy, because a lot of things about the &quot;real&quot;
+node are still true about the &quot;fake&quot; node, and we generally want to talk about the &quot;real&quot;
+node and the &quot;fake&quot; node as if they were one thing. So we actually just analyze the build graph
+in two steps. To understand how this works, we need to first look at how DAGs are analyzed.</p>
+<p>Any analysis on a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph">DAG</a> generally starts with a <a href="https://en.wikipedia.org/wiki/Topological_sorting">topological sort</a>, which is just a fancy way of saying you do depth-first-search (<a href="https://en.wikipedia.org/wiki/Depth-first_search">DFS</a>) on every root and only use a node only after you've searched all its children (this is the post-order, for graph people). Note that each iteration of DFS reuses the
+&quot;visited&quot; from the previous iterations, because we only want to visit each node once.</p>
+<p>Also note that knowing the roots is simply an optimization, you can just run DFS on every node and you will get a valid topological order -- we run it for all the workspace members, which includes all of
+the roots, but none of the test-only packages, which will be useful for identifying test-only packages
+when we get to our desugaring. (You may have workspace members which in fact are only for testing,
+but as far as <code>vet</code> is concerned those are proper packages in their own right -- those packages are
+however good candidates for a <code>safe-to-run</code> policy override.)</p>
+<p>The key property of a DAG is that if you visit every node in a topological
+order, then all the transitive dependencies of a node will be visited before it.
+You can use this fact to compute any property of a node which recursively
+depends on the properties of its dependencies. More plainly, you can just have a
+for-loop that computes the properties of each node, and blindly assume that any
+query about your dependencies will have its results already computed. Nice!</p>
+<p>In our algorithm, however, we actually visit in reverse-topological order, so
+that we know all reverse-dependencies of a node will be visited before it. This
+is because criteria requirements are inherited by reverse-dependency, (or pushed
+out from a crate to its dependencies).</p>
+<p>With that established, here is the <em>actual</em> approach we use to emulate the &quot;fake&quot; node desugaring:</p>
+<ol>
+<li>analyze the build graph without dev deps (edges), which is definitely a DAG</li>
+<li>add back the dev deps and reprocess all the nodes as if they were the &quot;fake&quot; node</li>
+</ol>
+<p>The key insight to this approach is that the implicit dev nodes are all roots -- nothing
+depends on them. As a result, adding these nodes can't change which packages the &quot;real&quot;
+nodes depend on, and any analysis done on them is valid without the dev edges!</p>
+<p>When doing the topological sort, because we only run DFS from workspace members,
+the result of this is that we will visit all the nodes that are part of a &quot;real&quot; build
+in the first pass, and then the test-only packages in the second pass. This makes computing
+&quot;test only&quot; packages a convenient side-effect of the topological sort. Hopefully it's clear
+to you that the resulting ordering functions as a topological sort as long as our recrusive
+analyses take the form of two loops as so:</p>
+<pre><code>for node in topological_sort:
+    analysis_that_DOESNT_query_dev_dependencies(node)
+for node in topological_sort:
+    analysis_that_CAN_query_dev_dependencies(node)
+</code></pre>
+<p>The second loop is essentially handling all the &quot;fake&quot; dev nodes.</p>
+<p>Note that when we run this in a reversed manner to ensure that
+reverse-dependencies have been checked before a crate is visited, we need to do
+the dev-dependency analysis first, as the dev-dependency &quot;fake&quot; nodes are
+effectively appended to the topological sort.</p>
+<h2 id="the-depgraphs-contents"><a class="header" href="#the-depgraphs-contents">The DepGraph's Contents</a></h2>
+<p>The hardest task of the DepGraph is computing the topological sort of the packages as
+described in the previous section, but it also computes the following facts for each package
+(node):</p>
+<ul>
+<li><a href="https://docs.rs/cargo_metadata/latest/cargo_metadata/struct.PackageId.html">PackageId</a> (primary key)</li>
+<li><a href="https://docs.rs/semver/latest/semver/struct.Version.html">Version</a></li>
+<li>name</li>
+<li>is_third_party (is_crates_io)</li>
+<li>is_root</li>
+<li>is_workspace_member</li>
+<li>is_dev_only</li>
+<li>normal_deps</li>
+<li>build_deps</li>
+<li>dev_deps</li>
+<li>reverse_deps</li>
+</ul>
+<p>Whether a package is third party is deferred to <a href="https://docs.rs/cargo_metadata/latest/cargo_metadata/">cargo_metadata</a>'s <a href="https://docs.rs/cargo_metadata/latest/cargo_metadata/struct.Source.html#method.is_crates_io">is_crates_io</a> method
+but overrideable by <code>audit-as-crates-io</code> in config.toml. This completely changes how the
+resolver handles validating criteria for that package. Packages which aren't third party
+are referred to as &quot;first party&quot;.</p>
+<p>Roots are simply packages which have no reverse-deps, which matters because those will
+implicitly be required to pass the default root policy (safe-to-deploy) if no other policy
+is specified for them.</p>
+<p>Workspace members must pass a dev-policy check, which is the only place where
+we query dev-dependencies (in the fabled &quot;second pass&quot; from the previous section).</p>
+<p>Dev-only packages are only used in tests, and therefore will only by queried in
+dev-policy checks (and so by default only need to be safe-to-run).</p>
+<h1 id="step-1b-the-criteriamapper"><a class="header" href="#step-1b-the-criteriamapper">Step 1b: The CriteriaMapper</a></h1>
+<p>The CriteriaMapper handles the process of converting between criteria names and
+CriteriaIndices. It's basically an interner, but made more complicated by the existence
+of builtins, imports, and &quot;implies&quot; relationships.</p>
+<p>The resolver primarily operates on CriteriaSets, which are sets of CriteriaIndices.
+The purpose of this is to try to handle all the subtleties of criteria in one place
+to avoid bugs, and to make everything more efficient.</p>
+<p>Most of the resolver's operations are things like &quot;union these criteria sets&quot; or
+&quot;check if this criteria set is a superset of the required one&quot;.</p>
+<p>There is currently an artificial maximum limit of 64 criteria for you and all
+your imports to make CriteriaSets efficient (they're just a u64 internally).
+The code is designed to allow this limit to be easily raised if anyone ever hits
+it (either with a u128 or a proper BitSet).</p>
+<p>Imported criteria are pre-mapped onto local criteria while acquiring the store,
+by using a CriteriaMapper in the imported namespace to determine implied
+criteria, and then applying the mappings specified in the <code>criteria-map</code> to
+determine the corresponding local criteria. This avoids worrying about imported
+namespaces when running the actual resolver, and helps avoid potential issues
+with large numbers of criteria.</p>
+<p>The biggest complexity of this process is handling &quot;implies&quot;.  This makes a
+criteria like safe-to-deploy <em>actually</em> safe-to-deploy AND safe-to-run in most
+situations. The CriteriaMapper will precompute the <a href="https://en.wikipedia.org/wiki/Transitive_closure">transitive closure</a> of
+implies relationships for each criteria as a CriteriaSet. When mapping the name
+of a criteria to CriteriaIndices, this CriteriaSet is the thing returned.</p>
+<p>When mapping a criteria set to a list of criteria names, we will elide implied criteria
+(so a <code>[&quot;safe-to-deploy&quot;, &quot;safe-to-run&quot;]</code> will just be <code>[&quot;safe-to-deploy&quot;]</code>).</p>
+<h2 id="computing-the-transitive-closure-of-criteria"><a class="header" href="#computing-the-transitive-closure-of-criteria">Computing The Transitive Closure of Criteria</a></h2>
+<p>The <a href="https://en.wikipedia.org/wiki/Transitive_closure">transitive closure</a> of a criteria is the CriteriaSet that would result if you
+add the criteria itself, and every criteria that implies, and every criteria THEY imply,
+and so on. This resulting CriteriaSet is effectively the &quot;true&quot; value of a criteria.</p>
+<p>We do this by constructing a directed &quot;criteria graph&quot; where an &quot;implies&quot; is an edge.
+The transitive closure for each criteria can then be computed by running depth-first-search
+(<a href="https://en.wikipedia.org/wiki/Depth-first_search">DFS</a>) on that node, and adding every reachable node to the CriteriaSet.</p>
+<p>That's it!</p>
+<p>Being able to precompute the transitive closure massively simplifies the resolver,
+as it means we never have to re-evaulate the implies relationships when unioning
+CriteriaSets, making potentially O(n<sup>3</sup>) operations into constant time ones,
+where n is the number of criteria (the criteria graph can have O(n<sup>2</sup>) criteria,
+and a criteria set can have O(n) criteria, and we might have to look at every edge of
+the graph for every criteria whenever we add one).</p>
+<p>The <em>existence</em> of the transitive closure is however not a fundamental truth. It
+exists because we have artifically limited what import maps and implies is allowed to
+do. In particular, if you ever allowed an implies relationship that requires
+<em>two different criteria</em> to imply another, the transitive closure would not be
+a useful concept, and we'd be forced to re-check every implies rule whenever
+a criteria got added to a criteria set (which is happening constantly in the resolver).</p>
+<p><a href="https://github.com/mozilla/cargo-vet/issues/240">See this issue for a detailed example demonstrating this problem</a>.</p>
+<h1 id="step-2-determine-the-required-criteria-for-each-package"><a class="header" href="#step-2-determine-the-required-criteria-for-each-package">Step 2: Determine the required criteria for each package</a></h1>
+<p>In general, every package requires that all dependencies satisfy the same
+criteria which were required for the original package. This is handled by
+starting at the root crates, and propagating the required <code>CriteriaSet</code> outwards
+towards the leaves. In some cases, the <code>policy</code> table will specify alternative
+criteria to place as a requirement on dependencies, which will be used instead
+of normal propagation.</p>
+<p>In order to avoid the cyclic nature of dev-deps, these targets are handled
+first. As all dependencies of dev-dependencies are normal dependencies, we can
+rely on the normal non-cyclic requirement propagation after the first edge, so
+we only need to apply the requirements one-level deep in this first phase. By
+default, this requirement is <code>safe-to-run</code>, though it cna be customized through
+the <code>policy</code>.</p>
+<p>Afterwards, we start at the root crate in the graph and work outwards, checking
+if we need to apply policy requirements, and then propagating requirements to
+dependencies. This results in every crate having a corresponding <code>CritseriaSet</code>
+of the criteria required for the audit.</p>
+<h1 id="step-3a-the-auditgraph"><a class="header" href="#step-3a-the-auditgraph">Step 3a: The AuditGraph</a></h1>
+<p>The AuditGraph is the graph of all audits for a particular package <em>name</em>.
+The nodes of the graph are <a href="https://docs.rs/semver/latest/semver/struct.Version.html">Version</a>s and the edges are delta audits (e.g. <code>0.1.0 -&gt; 0.2.0</code>).
+Each edge has a list of criteria it claims to certify, and dependency criteria that the
+dependencies of this package must satisfy for the edge to be considered &quot;valid&quot; (see
+the next section for details).</p>
+<p>There is an implicit Root Version which represents an empty package, meaning that throughout
+much of the audit graph, versions are represented as <code>Option&lt;Version&gt;</code>.</p>
+<p>When trying to validate whether a particular version of a package is audited, we also add
+a Target Version to the graph (if it doesn't exist already).</p>
+<p>Full audits are desugarred to delta audits from the Root Version (so an audit for <code>0.2.0</code> would
+be lowered to a delta audit from <code>Root -&gt; 0.2.0</code>).</p>
+<p>Exemptions are desugared to full audits (and therefore deltas) with a special
+DeltaEdgeOrigin indicating their origin.  This is used to deprioritize the edges
+so that we can more easily detect exemptions that aren't needed anymore.</p>
+<p>Imported audits are lowered in the exact same way as local criteria, but with
+special DeltaEdgeOrigin to indicate their origin, to allow us to deprioritize
+imported audits, and determine exactly which audits are needed.</p>
+<p>A special DeltaEdgeOrigin is also used for imported wildcard criteria,
+indicating both which wildcard audit is responsible, as well as which publisher
+information is being used.</p>
+<p>With all of this established. the problem of determining whether a package is audited for a given
+criteria can be reduced to determining if there <em>exists</em> a path from the Root Version to the
+Target Version along edges that certify that criteria. Suggesting an audit similarly becomes
+finding the &quot;best&quot; edge to add to make the Root and Target connected for the desired criteria.</p>
+<h2 id="checking-violations"><a class="header" href="#checking-violations">Checking Violations</a></h2>
+<p>During AuditGraph construction violations are also checked. Violations have a <a href="https://docs.rs/semver/latest/semver/struct.VersionReq.html">VersionReq</a> and
+a list of violated criteria. They claim that, for all versions covered by the VersionReq, you believe
+that the listed criteria are explicitly violated. An error is produced if any edge is
+added to the AuditGraph where <em>either</em> endpoint matches the VersionReq and <em>any</em> criteria
+it claims to be an audit for is listed by the violation.</p>
+<p>This is an extremely complicated statement to parse, so let's look at some examples:</p>
+<pre><code>violation: safe-to-deploy, audit: safe-to-deploy -- ERROR!
+violation: safe-to-deploy, audit: safe-to-run    -- OK!
+violation: safe-to-run,    audit: safe-to-deploy -- ERROR!
+violation: [a, b],         audit: [a, c]         -- ERROR!
+</code></pre>
+<p>One very notable implication of this is that a violation for <code>[&quot;safe-to-run&quot;, &quot;safe-to-deploy&quot;]</code>
+is actually equivalent to <code>[&quot;safe-to-run&quot;]</code>, not <code>[&quot;safe-to-deploy&quot;]</code>! This means that the normal
+way of handling things, turning the violation's criteria into one CriteriaSet and checking
+if <code>audit.contains(violation)</code> is incorrect!</p>
+<p>We must instead do this check for each individual item in the violation:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let has_violation = violation.iter().any(|item| audit.contains(item));
+<span class="boring">}
+</span></code></pre></pre>
+<p>It may seem a bit strange to produce an error if <em>any</em> audit is in any way contradicted
+by <em>any</em> violation. Is that necessary? Is that sufficient?</p>
+<p>It's definitely sufficient: it's impossible to validate a version without having an audit edge
+with an end-point in that version.</p>
+<p>I would argue that it's also <em>necessary</em>: the existence of any audit (or exemption)
+that is directly contradicted by a violation is essentially an integrity error on the
+claims that we are working with. Even if you don't even use the audit for anything
+anymore, people who are peering with you and importing your audits might be, so you
+should do something about those audits as soon as you find out they might be wrong!</p>
+<p>There is currently no mechanism for mechanically dealing with such an integrity error,
+even if the audit or violation comes from a foreign import. Such a situation is serious
+enough that it merits direct discussion between humans. That said, if this becomes
+enough of a problem we may eventually add such a feature.</p>
+<h1 id="step-3b-searching-for-paths-in-the-auditgraph"><a class="header" href="#step-3b-searching-for-paths-in-the-auditgraph">Step 3b: Searching for paths in the <code>AuditGraph</code></a></h1>
+<p>A lot of the heavy lifting for this task is in Step 3a (AuditGraph).</p>
+<p>Trying to validate all criteria at once is slightly brain-melty (because
+different criteria may be validated by different paths), so as a simplifying
+step we validate each criteria individually (so everything I'm about to
+describe happens in a for loop).</p>
+<p>If all we care about is finding out if a package has some criteria, then all
+we need to do is run depth-first-search (<a href="https://en.wikipedia.org/wiki/Depth-first_search">DFS</a>) from the Root Node and see if it reaches
+the Target Node, with the constraint that we'll only follow edges that are
+valid (based on the already validated criteria of our dependencies).</p>
+<p>If it does, we've validated the criteria for the Target Version. If it doesn't,
+then we haven't.</p>
+<p>But things are much more complicated because we want to provide more feedback
+about the state of the audits:</p>
+<ul>
+<li>Did this validation require an exemption? (Is it fully audited?)</li>
+<li>Did this validation even use any audits? (Is it at least partially audited?)</li>
+<li>Did this validation need any new imports? (Should we update imports.lock?)</li>
+<li>What nodes were reachable from the Root and reverse-reachable from the Target? (candidates for suggest)</li>
+</ul>
+<p>This is accomplished by running the search off of a priority queue, rather than
+using a stack, such that we only try to use the &quot;best&quot; edges first, and can
+be certain that we don't try to use a &quot;worse&quot; edge until we've tried all of the
+paths using better edges.</p>
+<p>The best edge of all is a local audit. If we can find a path using only
+those edges, then we're fully audited, we don't need any exemptions we
+might have for this package (a lot of caveats to this, so we don't really
+make that conclusion reliably), and the imports.lock doesn't need to be updated.</p>
+<p>If we need to add back in exemptions to find a path, then the exemptions
+were necessary to validate this criteria.</p>
+<p>If we need to add back in new imports to find a path, then we need to update
+imports.lock to cache necessary audits for --locked executions. (The fact
+that this comes after exemptions means we may be slightly imprecise about
+whether something is &quot;fully audited&quot; when updating imports, as subsequent
+runs won't get this far. We think this is worth the upside of minimizing
+imports.lock updates.)</p>
+<p>If any of those succeed, then we return Ok(..), communicating both that the
+package validates this criteria, plus any caveats back to the caller.</p>
+<p>Otherwise, we'll return Err(..), and consider the current node to blame. If this
+criteria is required, this package will require additional audits or exemptions
+to successfully vet.</p>
+<p>In doing this, we also compute the nodes that are reachable from the Root
+Version and the nodes that are reverse-reachable from the Target Version.
+The latter is computed by following all edges backwards, which is to say
+in Step 3a the AuditGraph also contains another directed graph with the edges
+all reversed, and rerun the algorithm with Root and Target reversed.</p>
+<p>This information is useful because in the Err case we want to suggest a diff to
+audit, and any diff from the Root Reachable nodes to the Target Reachable nodes
+is sufficient.</p>
+<p>All search results are stored in the ResolveResult for a node along with
+validated criteria and other fun facts we found along the way. The
+contents of the ResolveResult will be used by our reverse-dependencies
+in steps 2 and 3.</p>
+<p>It's worth noting here that delta audits can &quot;go backwards&quot; (i.e. <code>1.0.1 -&gt; 1.0.0</code>),
+and all of this code handles that perfectly fine without any special cases.
+It <em>does</em> make it possible for there to be cycles in the AuditGraph, but
+<a href="https://en.wikipedia.org/wiki/Depth-first_search">DFS</a> doesn't care about cycles at all since you keep track of nodes you've
+visited to avoid revisits (slightly complicated by us iteratively introducing edges).</p>
+<h1 id="step-4-checking-if-each-crate-validates-for-the-required-criteria"><a class="header" href="#step-4-checking-if-each-crate-validates-for-the-required-criteria">Step 4: Checking if each crate validates for the required criteria</a></h1>
+<p>This step is a fairly trivial combination of the results from Step 2 (computing
+requirements) and Step 3 (resolving validated criteria) - for each package, we
+check if the validated criteria is a superset of the requirements, and if it is
+then we're successful, otherwise we're not.</p>
+<p>We'll record which criteria failed so we can suggest better audits in the
+errored case, and combine the caveats from successful runs in the success case
+to get a combined result for each crate, rather than for each individual
+criteria.</p>
+<h1 id="step-5-suggesting-audits-death-by-a-thousand-diffs"><a class="header" href="#step-5-suggesting-audits-death-by-a-thousand-diffs">Step 5: Suggesting Audits (Death By A Thousand Diffs)</a></h1>
+<p>This step takes the failed packages from Step 4 and recommends audits that will
+fix them. In Step 3b we compute the Root Reachable Nodes and the Target
+Reachable Nodes for a disconnected package.  In this phase we use those as
+candidates and try to find the best possible diff audit.</p>
+<p>More specifically, we use the intersection of all the Root Reachable Nodes
+for every criteria this package failed (ditto for Target Reachable).
+By using the intersection, any diff we recommend from one set to the other
+is guaranteed to cover all required criteria, allowing us to suggest a single
+diff to fix everything. Since the Root and Target are always in their respective
+sets, we are guaranteed that the intersections are non-empty.</p>
+<p>So how do we pick the <em>best</em> diff? Well, we straight up download every version of the package that
+we have audits for and diff-stat all the combinations. Smallest diff wins! Does that sound horrible
+and slow? It is! That's why we have a secret global diff-stat cache on your system.</p>
+<p>Also we don't <em>literally</em> diff every combination. We turn the O(n<sup>2</sup>) diffs
+into only O(n) diffs with a simple heuristic: for each Target Reachable Node,
+we find the package closest version <em>smaller</em> than that version and the closest version
+<em>bigger</em> than that version. We then diff that version against only those two versions.
+This may potentially miss some magical diff where a big change is made and then reverted,
+but this diffing stuff needs some amount of taming!</p>
+<p>It's worth noting that <a href="https://docs.rs/semver/latest/semver/struct.Version.html">Version</a>s don't form a proper metric space: We cannot compute
+the &quot;distance&quot; between two Versions in the abstract, and then compare that to the &quot;distance&quot;
+between two other versions. Versions <em>do</em> however have a total ordering, so we <em>can</em>
+compute minimum and maximum versions, and say whether a version is bigger or smaller
+than another. As a result it's possible to compute &quot;the largest version that's smaller than X&quot;
+and &quot;the smallest version that's larger than X&quot;, which is what we use. There is however
+no way to say whether the smaller-maximum or the bigger-minimum is closer to X, so we must
+try both.</p>
+<p>It's also worth reiterating here that diffs <em>can</em> go backwards. If you're on 1.0.0 and
+have an audit for 1.0.1, we will happily recommend the reverse-diff from <code>1.0.1 -&gt; 1.0.0</code>.
+This is slightly brain melty at first but nothing really needs to specially handle this,
+it Just Works.</p>
+<p>Any diff we recommend from the Root Version is &quot;resugared&quot; into recommending a full audit,
+(and is also computed by diffing against an empty directory). It is impossible
+to recommend a diff to the Root Version, because there cannot be audits of the
+Root Version.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+            </nav>
+
+        </div>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        <script type="text/javascript">
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+    </body>
+</html>
