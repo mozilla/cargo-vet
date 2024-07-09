@@ -2858,6 +2858,39 @@ pub fn update_store(
     get_store_updates(cfg, store, mode).apply(store);
 }
 
+/// Helper function to determine if we should be pruning imports.
+///
+/// We always prune if requested, but will also prune imports if a new audit or
+/// publisher entry is being added for the crate.
+fn should_prune_imports(
+    store: &Store,
+    required_entries: &Option<SortedMap<RequiredEntry, CriteriaSet>>,
+    mode: UpdateMode,
+    pkgname: PackageStr<'_>,
+) -> bool {
+    if mode.prune_imports {
+        true
+    } else if let Some(required_entries) = required_entries {
+        let import = |idx| store.imported_audits().values().nth(idx).unwrap();
+        required_entries.keys().any(|entry| match entry {
+            RequiredEntry::Audit {
+                import_index,
+                audit_index,
+            } => import(*import_index).audits[pkgname][*audit_index].is_fresh_import,
+            RequiredEntry::WildcardAudit {
+                import_index,
+                audit_index,
+            } => import(*import_index).wildcard_audits[pkgname][*audit_index].is_fresh_import,
+            RequiredEntry::Publisher { publisher_index } => {
+                store.publishers()[pkgname][*publisher_index].is_fresh_import
+            }
+            _ => false,
+        })
+    } else {
+        false
+    }
+}
+
 /// The non-mutating core of `update_store` for use in non-mutating situations.
 pub(crate) fn get_store_updates(
     cfg: &Config,
@@ -2932,10 +2965,11 @@ pub(crate) fn get_store_updates(
                 .wildcard_audits
                 .iter()
                 .map(|(pkgname, wildcard_audits)| {
-                    let prune_imports = mode(&pkgname[..]).prune_imports;
                     let required_entries = required_entries
                         .get(&pkgname[..])
                         .unwrap_or(&no_required_entries);
+                    let prune_imports =
+                        should_prune_imports(store, required_entries, mode(&pkgname[..]), pkgname);
                     (
                         pkgname,
                         wildcard_audits
@@ -2974,12 +3008,13 @@ pub(crate) fn get_store_updates(
                 .audits
                 .iter()
                 .map(|(pkgname, audits)| {
-                    let prune_imports = mode(&pkgname[..]).prune_imports;
                     let (uses_package, required_entries) = match required_entries.get(&pkgname[..])
                     {
                         Some(e) => (true, e),
                         None => (false, &no_required_entries),
                     };
+                    let prune_imports =
+                        should_prune_imports(store, required_entries, mode(&pkgname[..]), pkgname);
                     (
                         pkgname,
                         audits
@@ -3029,10 +3064,11 @@ pub(crate) fn get_store_updates(
 
     // Determine which live publisher information to keep in the imports.lock file.
     for (pkgname, publishers) in store.publishers() {
-        let prune_imports = mode(&pkgname[..]).prune_imports;
         let required_entries = required_entries
             .get(&pkgname[..])
             .unwrap_or(&no_required_entries);
+        let prune_imports =
+            should_prune_imports(store, required_entries, mode(&pkgname[..]), pkgname);
         let mut publishers: Vec<_> = publishers
             .iter()
             .enumerate()
