@@ -19,5 +19,5 @@ Error:   × A file in the store is not correctly formatted:
   │  criteria = "safe-to-deploy"
   │ -unknown-field = "hi"
   │ 
-  help: run `cargo vet` without --locked to reformat files in the store
+  help: run `cargo vet fmt` to reformat files in the store
 
