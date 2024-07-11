@@ -68,8 +68,8 @@ themselves, and cargo-vet streamlines this process. Often someone will have
 already audited a different version of the same crate, in which case cargo-vet
 computes the relevant diffs and identifies the smallest one[^1]. After walking
 the developer through the process of determining what to audit, it then presents
-the relevant artifacts for inspection, either locally or on
-[Sourcegraph](https://sourcegraph.com).
+the relevant artifacts for inspection, either locally, on
+[Sourcegraph](https://sourcegraph.com), or on [diff.rs](https://diff.rs).
 
 Cargo-vet minimizes developer friction by storing audits in-tree. This means
 that developers don’t need to navigate or authenticate with an external system.
