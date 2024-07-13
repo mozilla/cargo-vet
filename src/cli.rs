@@ -772,45 +772,6 @@ pub enum Verbose {
     Trace,
 }
 
-#[derive(Clone, Debug)]
-pub struct DependencyCriteriaArg {
-    pub dependency: PackageName,
-    pub criteria: CriteriaName,
-}
-
-impl FromStr for DependencyCriteriaArg {
-    // the error must be owned as well
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use nom::{
-            bytes::complete::{is_not, tag},
-            combinator::all_consuming,
-            error::{convert_error, VerboseError},
-            sequence::tuple,
-            Finish, IResult,
-        };
-        type ParseResult<I, O> = IResult<I, O, VerboseError<I>>;
-
-        fn parse(input: &str) -> ParseResult<&str, DependencyCriteriaArg> {
-            let (rest, (dependency, _, criteria)) =
-                all_consuming(tuple((is_not(":"), tag(":"), is_not(":"))))(input)?;
-            Ok((
-                rest,
-                DependencyCriteriaArg {
-                    dependency: dependency.to_string(),
-                    criteria: criteria.to_string(),
-                },
-            ))
-        }
-
-        match parse(s).finish() {
-            Ok((_remaining, val)) => Ok(val),
-            Err(e) => Err(convert_error(s, e)),
-        }
-    }
-}
-
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum FetchMode {
     Local,

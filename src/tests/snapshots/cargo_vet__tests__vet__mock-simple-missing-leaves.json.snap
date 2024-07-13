@@ -56,7 +56,7 @@ expression: json
       }
     ],
     "suggest_by_criteria": {
-      "reviewed": [
+      "reviewed (or strong-reviewed)": [
         {
           "name": "third-party2",
           "notable_parents": "first-party",

@@ -471,7 +471,7 @@ pub struct InvalidCriteriaError {
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("A file in the store is not correctly formatted:\n\n{unified_diff}")]
-#[diagnostic(help("run `cargo vet` without --locked to reformat files in the store"))]
+#[diagnostic(help("run `cargo vet fmt` to reformat files in the store"))]
 pub struct BadFormatError {
     pub unified_diff: String,
 }

@@ -27,7 +27,7 @@ Error:   × A file in the store is not correctly formatted:
   │  version = "1.0.0"
   │  criteria = "safe-to-deploy"
   │ 
-  help: run `cargo vet` without --locked to reformat files in the store
+  help: run `cargo vet fmt` to reformat files in the store
 Error:   × A file in the store is not correctly formatted:
   │ 
   │ --- old/audits.toml
@@ -46,5 +46,5 @@ Error:   × A file in the store is not correctly formatted:
   │ -notes = "valid field"
   │ +version = "2.0.0"
   │ 
-  help: run `cargo vet` without --locked to reformat files in the store
+  help: run `cargo vet fmt` to reformat files in the store
 

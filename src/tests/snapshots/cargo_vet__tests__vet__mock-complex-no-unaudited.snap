@@ -10,7 +10,7 @@ Vetting Failed!
   thirdA:10.0.0 missing ["reviewed"]
   thirdAB:10.0.0 missing ["reviewed"]
 
-recommended audits for reviewed:
+recommended audits for reviewed (or strong-reviewed):
     Command                              Publisher  Used By                      Audit Size
     cargo vet inspect third-core 5.0.0   UNKNOWN    firstA                       25 lines
     cargo vet inspect third-core 10.0.0  UNKNOWN    firstB, thirdA, and thirdAB  100 lines

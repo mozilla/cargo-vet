@@ -1979,9 +1979,26 @@ impl<'a> ResolveReport<'a> {
 
         let mut suggestions_by_criteria = SortedMap::<CriteriaName, Vec<SuggestItem>>::new();
         for s in suggestions.clone().into_iter() {
+            // Generate a suggestion for which criteria to use for the given
+            // suggestion. For each criteria, also list out others which would
+            // imply the required criteria to surface the full set of options.
             let criteria_names = self
                 .criteria_mapper
-                .criteria_names(&s.suggested_criteria)
+                .minimal_indices(&s.suggested_criteria)
+                .map(|criteria_idx| {
+                    let name = self.criteria_mapper.criteria_name(criteria_idx);
+                    let implied_by = self
+                        .criteria_mapper
+                        .implied_by_indices(criteria_idx)
+                        .map(|idx| format!("or {}", self.criteria_mapper.criteria_name(idx)))
+                        .collect::<Vec<_>>();
+
+                    if implied_by.is_empty() {
+                        name.to_owned()
+                    } else {
+                        format!("{} ({})", name, implied_by.join(", "))
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join(", ");
 
