@@ -35,7 +35,7 @@ impl CargoConfig {
         }
 
         // Once all of the parent directories have been checked, check the home directory
-        if let Some(home) = dirs::home_dir().map(|d| d.join(".cargo/config.toml")) {
+        if let Some(home) = dirs::home_dir() {
             if let Some(config) = Self::load_cargo_config_file_for_directory(&home) {
                 if let Some(config) = Self::get_config_value(&key, &config) {
                     return Some(config);
@@ -62,8 +62,7 @@ impl CargoConfig {
     }
 
     fn load_cargo_config_file_for_directory(dir: &Path) -> Option<toml::Value> {
-        if let Ok(config_file) = std::fs::read_to_string(dir.join(".cargo/config.toml")) {
-            let content = std::fs::read_to_string(config_file).ok()?;
+        if let Ok(content) = std::fs::read_to_string(dir.join(".cargo/config.toml")) {
             return toml::from_str(&content).ok();
         }
         return None;
