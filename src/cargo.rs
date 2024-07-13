@@ -5,7 +5,7 @@ use std::path::Path;
 pub struct CargoConfig;
 
 impl CargoConfig {
-    /// Get the value of the `http.cainfo` configuration value.
+    /// Path to a Certificate Authority (CA) bundle file, used to verify TLS certificates.
     /// See: https://doc.rust-lang.org/cargo/reference/config.html#httpcainfo
     pub fn http_cainfo() -> Option<String> {
         if let Ok(cainfo) = std::env::var("CARGO_HTTP_CAINFO") {
