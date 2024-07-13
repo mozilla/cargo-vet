@@ -1,7 +1,7 @@
 use std::path::Path;
 
 /// A small utility for loading Cargo configuration.
-/// For moreinfo see: https://doc.rust-lang.org/cargo/reference/config.html
+/// For more info see: https://doc.rust-lang.org/cargo/reference/config.html
 pub struct CargoConfig;
 
 impl CargoConfig {
