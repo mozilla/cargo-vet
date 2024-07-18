@@ -2052,10 +2052,8 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
             version2: version2.clone(),
         });
 
-        if matches!(
-            sub_args.mode,
-            DiffFetchMode::Sourcegraph | DiffFetchMode::DiffRs
-        ) && version1.git_rev.is_none()
+        if sub_args.mode != FetchMode::Local
+            && version1.git_rev.is_none()
             && version2.git_rev.is_none()
         {
             let url = match sub_args.mode {
