@@ -313,7 +313,7 @@ The target version to diff
 How to inspect the source
 
 \[default: sourcegraph]  
-\[possible values: local, sourcegraph]  
+\[possible values: local, sourcegraph, diff.rs]  
 
 #### `-h, --help`
 Print help information

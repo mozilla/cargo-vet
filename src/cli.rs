@@ -466,7 +466,7 @@ pub struct InspectArgs {
     pub version: VetVersion,
     /// How to inspect the source
     #[clap(long, action, default_value = "sourcegraph")]
-    pub mode: FetchMode,
+    pub mode: InspectFetchMode,
 }
 
 /// Emits a diff of the two versions
@@ -483,7 +483,7 @@ pub struct DiffArgs {
     pub version2: VetVersion,
     /// How to inspect the source
     #[clap(long, action, default_value = "sourcegraph")]
-    pub mode: FetchMode,
+    pub mode: DiffFetchMode,
 }
 
 /// Certifies a package as audited
@@ -773,9 +773,17 @@ pub enum Verbose {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum FetchMode {
+pub enum InspectFetchMode {
     Local,
     Sourcegraph,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum DiffFetchMode {
+    Local,
+    Sourcegraph,
+    #[clap(name = "diff.rs")]
+    DiffRs,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
