@@ -177,6 +177,16 @@ impl CriteriaMapper {
     pub fn criteria_index(&self, criteria_name: CriteriaStr<'_>) -> usize {
         self.index[criteria_name]
     }
+
+    /// Yields the indices for all criteria which imply the given criteria.
+    pub fn implied_by_indices(&self, criteria_idx: usize) -> impl Iterator<Item = usize> + '_ {
+        self.all_criteria_iter()
+            .enumerate()
+            .filter(move |&(idx, implies_set)| {
+                implies_set.has_criteria(criteria_idx) && criteria_idx != idx
+            })
+            .map(|(idx, _)| idx)
+    }
 }
 
 impl CriteriaSet {

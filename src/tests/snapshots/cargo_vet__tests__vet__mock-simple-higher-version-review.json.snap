@@ -33,7 +33,7 @@ expression: json
       }
     ],
     "suggest_by_criteria": {
-      "reviewed": [
+      "reviewed (or strong-reviewed)": [
         {
           "name": "third-party1",
           "notable_parents": "first-party",

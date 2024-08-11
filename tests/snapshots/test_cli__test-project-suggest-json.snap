@@ -2249,7 +2249,7 @@ stdout:
       }
     ],
     "suggest_by_criteria": {
-      "safe-to-deploy": [
+      "safe-to-deploy (or audited)": [
         {
           "name": "proc-macro2",
           "notable_parents": "test-project",
@@ -3787,7 +3787,7 @@ stdout:
           }
         }
       ],
-      "safe-to-run": [
+      "safe-to-run (or safe-to-deploy, or audited)": [
         {
           "name": "hermit-abi",
           "notable_parents": "atty",
