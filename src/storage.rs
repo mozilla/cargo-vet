@@ -31,13 +31,13 @@ use crate::{
     },
     flock::{FileLock, Filesystem},
     format::{
-        self, AuditEntry, AuditKind, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
-        CratesAPICrate, CratesAPICrateMetadata, CratesCache, CratesCacheEntry, CratesCacheUser,
-        CratesCacheVersionDetails, CratesPublisher, CratesUserId, CriteriaEntry, CriteriaMap,
-        CriteriaName, CriteriaStr, Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand,
-        ForeignAuditsFile, ImportName, ImportsFile, MetaConfig, PackageName, PackageStr,
-        RegistryEntry, RegistryFile, SortedMap, StoreVersion, TrustEntry, TrustedPackages,
-        UnpublishedEntry, VetVersion, WildcardAudits, WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        self, AuditEntry, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
+        CratesAPICrate, CratesCache, CratesCacheEntry, CratesCacheUser, CratesCacheVersionDetails,
+        CratesPublisher, CratesUserId, CriteriaEntry, CriteriaMap, CriteriaName, CriteriaStr,
+        Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName,
+        ImportsFile, MetaConfig, PackageName, PackageStr, RegistryEntry, RegistryFile, SortedMap,
+        StoreVersion, TrustEntry, TrustedPackages, UnpublishedEntry, VetVersion, WildcardAudits,
+        WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{progress_bar, IncProgressOnDrop},
@@ -86,13 +86,6 @@ const DIFF_SKIP_PATHS: &[&str] = &["Cargo.lock", ".cargo_vcs_info.json", ".cargo
 
 // FIXME: This is a completely arbitrary number, and may be too high or too low.
 const MAX_CONCURRENT_DIFFS: usize = 40;
-
-// Check for new crate metadata every 60 days.
-const METADATA_CACHE_EXPIRY_DAYS: i64 = 60;
-// Re-check the set of versions that exist for a specific crate every day.
-const VERSIONS_CACHE_EXPIRY_DAYS: i64 = 1;
-// Check whether a crate which was previously found to not exist now exists every 60 days.
-const NONEXISTENT_CRATE_EXPIRY_DAYS: i64 = 60;
 
 // Url of the registry.
 pub const REGISTRY_URL: &str =
@@ -302,7 +295,6 @@ impl Store {
             &wildcard_audits_packages(&self.audits, &live_imports),
             false,
             &self.config,
-            &self.audits,
             &self.imports,
             &mut live_imports,
         )
@@ -368,7 +360,6 @@ impl Store {
                 &wildcard_audits_packages(&audits, &live_imports),
                 false,
                 &config,
-                &audits,
                 &imports,
                 &mut live_imports,
             ))
@@ -759,7 +750,6 @@ impl Store {
                 &[package.to_owned()].into_iter().collect(),
                 true,
                 &self.config,
-                &self.audits,
                 &self.imports,
                 live_imports,
             ))?;
@@ -842,7 +832,6 @@ impl Store {
             &wildcard_packages,
             false,
             &self.config,
-            &self.audits,
             &self.imports,
             self.live_imports.as_mut().unwrap(),
         )
@@ -1436,14 +1425,14 @@ async fn import_unpublished_entries(
         // If we have no versions for the crate, it cannot be
         // audit-as-crates-io, so treat it as an error.
         // FIXME: better errors here?
-        let versions = cache.get_versions(Some(network), &package.name).await?;
+        let versions = cache.published_versions(network, &package.name).await?;
 
         // Pick which verison of the crate we'd audit as. We prefer the exact
         // version of the crate, followed by the largest version below, and then
         // finally the smallest version above.
-        let max_below = versions.iter().filter(|&v| v <= &package.version).max();
+        let max_below = versions.keys().filter(|&v| v <= &package.version).max();
         let audited_as = max_below
-            .or_else(|| versions.iter().filter(|&v| v > &package.version).min())
+            .or_else(|| versions.keys().filter(|&v| v > &package.version).min())
             .expect("There must be at least one version");
 
         // The exact version is published, no unpublished entries are required.
@@ -1515,82 +1504,39 @@ async fn import_publisher_versions(
     relevant_packages: &FastSet<PackageName>,
     force: bool,
     config_file: &ConfigFile,
-    audits_file: &AuditsFile,
     imports_lock: &ImportsFile,
     live_imports: &mut ImportsFile,
 ) -> Result<(), CrateInfoError> {
-    // We also only care about versions for third-party packages which are
-    // actually used in-tree.
-    let mut relevant_versions: FastMap<PackageStr<'_>, FastSet<&semver::Version>> = FastMap::new();
-    for pkg in &metadata.packages {
-        if relevant_packages.contains(&pkg.name)
-            && (force || pkg.is_third_party(&config_file.policy))
-        {
-            relevant_versions
-                .entry(&pkg.name)
-                .or_default()
-                .insert(&pkg.version);
-        }
-    }
+    // Determine which packages we need publisher information for. Unless
+    // `force` has been passed, we only care about packages which are used by
+    // our dependency tree.
+    let to_fetch: FastSet<&str> = if force {
+        relevant_packages
+            .iter()
+            .map(|pkg_name| &pkg_name[..])
+            .collect()
+    } else {
+        metadata
+            .packages
+            .iter()
+            .filter(|pkg| {
+                relevant_packages.contains(&pkg.name) && pkg.is_third_party(&config_file.policy)
+            })
+            .map(|pkg| &pkg.name[..])
+            .collect()
+    };
 
-    // If we're forcing fetching for this package, ensure an entry exists even
-    // if it isn't in the dependency graph.
-    if force {
-        for package in relevant_packages {
-            relevant_versions.entry(&package[..]).or_default();
-        }
-    }
-
-    // We may care about other versions for these packages as well if they
-    // appear on the `from` side of a delta audit, or if they are named by an
-    // exemption.
-    for (&pkg_name, versions) in relevant_versions.iter_mut() {
-        // If there is a delta audit originating from a specific version, that
-        // version may be relevant, so record it.
-        for audit in [audits_file]
-            .into_iter()
-            .chain(live_imports.audits.values())
-            .flat_map(|audits_file| audits_file.audits.get(pkg_name))
-            .flatten()
-        {
-            if let AuditKind::Delta { from, .. } = &audit.kind {
-                versions.insert(&from.semver);
-            }
-        }
-
-        // If there is an exemption naming a specific version, it is also
-        // potentially relevant.
-        if let Some(exemptions) = config_file.exemptions.get(pkg_name) {
-            for exemption in exemptions {
-                versions.insert(&exemption.version.semver);
-            }
-        }
-
-        // If we have previously cached publisher information, it's relevant.
-        if let Some(publishers) = imports_lock.publisher.get(pkg_name) {
-            for publisher in publishers {
-                versions.insert(&publisher.version.semver);
-            }
-        }
-    }
-
+    // Actually fetch the crates.io information, showing a progress bar.
     let relevant_publishers = {
-        let progress = progress_bar(
-            "Fetching",
-            "crate publishers",
-            relevant_versions.len() as u64,
-        );
-        try_join_all(relevant_versions.into_iter().map(|(pkg_name, versions)| {
+        let progress = progress_bar("Fetching", "crate publishers", to_fetch.len() as u64);
+        try_join_all(to_fetch.into_iter().map(|pkg_name| {
             let progress = &progress;
             async move {
                 let _inc_progress = IncProgressOnDrop(progress, 1);
-                // Access the set of publishers. We provide the set of relevant versions
-                // to help decide whether or not to fetch new publisher information from
-                // crates.io, to reduce API activity.
                 cache
-                    .get_publishers(Some(network), pkg_name, versions)
+                    .crates_io_info(Some(network), pkg_name)
                     .await
-                    .map(|publishers| (pkg_name, publishers))
+                    .map(|entry| (pkg_name, entry))
             }
         }))
         .await?
@@ -1599,7 +1545,7 @@ async fn import_publisher_versions(
     // NOTE: We make sure to process all imports before we look up user
     // information in the cache, to ensure we're fetching consistent user
     // information.
-    for (pkg_name, publishers) in relevant_publishers {
+    for (pkg_name, entry) in relevant_publishers {
         // Fill in the live imports table with the relevant information.
         let nonfresh_versions: FastSet<_> = imports_lock
             .publisher
@@ -1611,15 +1557,16 @@ async fn import_publisher_versions(
 
         live_imports.publisher.insert(
             pkg_name.to_owned(),
-            publishers
-                .into_iter()
+            entry
+                .versions
+                .iter()
                 .filter_map(|(version, details)| {
                     let user_id = details.published_by?;
                     let user_info = cache.get_crates_user_info(user_id)?;
-                    let is_fresh_import = !nonfresh_versions.contains(&version);
+                    let is_fresh_import = !nonfresh_versions.contains(version);
                     Some(CratesPublisher {
                         version: VetVersion {
-                            semver: version,
+                            semver: version.clone(),
                             git_rev: None,
                         },
                         user_id,
@@ -1665,17 +1612,24 @@ pub fn user_info_map(imports: &ImportsFile) -> FastMap<CratesUserId, CratesCache
     user_info
 }
 
+type PublishedVersions = Arc<SortedMap<semver::Version, crates_index::Version>>;
+
 struct CacheState {
-    /// The loaded DiffCache, will be written back on Drop
+    /// The loaded DiffCache, will be persisted between invocations
     diff_cache: DiffCache,
-    /// Command history to provide some persistent magic smarts
+    /// Command history, will be persisted between invocations
     command_history: CommandHistory,
-    /// Cache of fetched info from crates.io.
+    /// Cache of fetched info from crates.io, will be persisted between invocations
     crates_cache: CratesCache,
+    /// Package versions and sha256 checksums from index.crates.io
+    published_versions: FastMap<PackageName, Arc<tokio::sync::OnceCell<PublishedVersions>>>,
+    /// Used to avoid multiple requests to the crates.io API for crate metadata.
+    /// Results are populated into crates_cache.
+    crates_io_info_fetches: FastMap<PackageName, Arc<tokio::sync::OnceCell<Arc<CratesCacheEntry>>>>,
     /// Paths for unpacked packages from this version.
-    fetched_packages: FastMap<(String, VetVersion), Arc<tokio::sync::OnceCell<PathBuf>>>,
+    fetched_packages: FastMap<(PackageName, VetVersion), Arc<tokio::sync::OnceCell<PathBuf>>>,
     /// Computed diffstats from this version.
-    diffed: FastMap<(String, Delta), Arc<tokio::sync::OnceCell<DiffStat>>>,
+    diffed: FastMap<(PackageName, Delta), Arc<tokio::sync::OnceCell<DiffStat>>>,
 }
 
 /// The cache where we store globally shared artifacts like fetched packages and diffstats
@@ -1756,6 +1710,8 @@ impl Cache {
                     diff_cache: DiffCache::default(),
                     command_history: CommandHistory::default(),
                     crates_cache: CratesCache::default(),
+                    published_versions: FastMap::new(),
+                    crates_io_info_fetches: FastMap::new(),
                     fetched_packages: FastMap::new(),
                     diffed: FastMap::new(),
                 }),
@@ -1822,6 +1778,8 @@ impl Cache {
                 diff_cache,
                 command_history,
                 crates_cache: publisher_cache,
+                published_versions: FastMap::new(),
+                crates_io_info_fetches: FastMap::new(),
                 fetched_packages: FastMap::new(),
                 diffed: FastMap::new(),
             }),
@@ -2333,429 +2291,226 @@ impl Cache {
         guard.command_history.last_fetch = Some(last_fetch);
     }
 
-    /// If `versions` is specified, the cached information will be used if all specified versions
-    /// are already present or if the missing versions are _not_ in the crates.io index and the
-    /// last fetched time is less than `NONINDEX_VERSION_PUBLISHER_REFRESH_DAYS`.
+    /// For a given package, fetch the list of versions published on crates.io,
+    /// along with the corresponding index entry.
     ///
-    /// If `versions` is None, the cached information is used _only_ when the last fetched time is
-    /// less than `NONINDEX_VERSION_PUBLISHER_REFRESH_DAYS`.
-    ///
-    /// When this function returns `Ok`, the returned state is guaranteed to have an entry for
-    /// `name` in `crates_cache.crates`.
-    fn update_crates_cache<'a>(&'a self, name: PackageStr<'a>) -> UpdateCratesCache<'a> {
-        UpdateCratesCache::new(self, name)
+    /// This information will be pulled live from index.crates.io each time
+    /// cargo-vet is run, but is cached in-memory.
+    #[tracing::instrument(skip(self, network), err)]
+    pub async fn published_versions(
+        &self,
+        network: &Network,
+        package: PackageStr<'_>,
+    ) -> Result<PublishedVersions, CrateInfoError> {
+        // Lock the mutex to extract a reference to the OnceCell which we'll use
+        // to asynchronously synchronize on and fetch the index metadata only
+        // once in a single execution.
+        let once_cell = {
+            // NOTE: Don't .await while this is held, or we might deadlock!
+            let mut guard = self.state.lock().unwrap();
+            guard
+                .published_versions
+                .entry(package.to_owned())
+                .or_default()
+                .clone()
+        };
+
+        // NOTE: Currently this makes no effort to re-use cargo's local cache,
+        // which might save us some requests. Newer versions of `crates-index`
+        // have some limited support for interacting with this cache.
+        let res: Result<_, CrateInfoError> = once_cell
+            .get_or_try_init(|| async {
+                // Crate names can only be a subset of ascii (valid rust
+                // identifier characters and `-`), so using `len()` and indexing
+                // will result in valid counts/characters.
+                let mut url = String::from("https://index.crates.io/");
+                use std::fmt::Write;
+                match package.len() {
+                    1 => write!(url, "1/{package}"),
+                    2 => write!(url, "2/{package}"),
+                    3 => write!(url, "3/{}/{package}", &package[0..1]),
+                    _ => write!(url, "{}/{}/{package}", &package[0..2], &package[2..4]),
+                }
+                .expect("writing to a String should not fail");
+                // Crate index always use lowercases, but crate name may contain
+                // uppercase characters.
+                url.make_ascii_lowercase();
+                let url = Url::parse(&url).expect("invalid crate name");
+
+                // Fetch the crate's entry from the index
+                let response = match network.download(url).await {
+                    Ok(response) => response,
+                    Err(DownloadError::FailedToStartDownload { error, .. })
+                        if error.status() == Some(reqwest::StatusCode::NOT_FOUND) =>
+                    {
+                        // The crate doesn't exist. We don't want to keep
+                        // checking the URL, so return an empty versions list
+                        // which will be stored in the cache.
+                        return Ok(Arc::new(SortedMap::new()));
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+
+                let crate_entry =
+                    crates_index::Crate::from_slice(&response[..]).map_err(LoadJsonError::from)?;
+
+                let mut result = SortedMap::new();
+                for version_entry in crate_entry.versions() {
+                    match semver::Version::parse(version_entry.version()) {
+                        Ok(version) => {
+                            result.insert(version, version_entry.clone());
+                        }
+                        Err(err) => {
+                            error!(
+                                "bad index version '{}' for crate {package}: {err}",
+                                version_entry.version(),
+                            );
+                        }
+                    }
+                }
+                info!("found {} versions for crate {}", result.len(), package);
+                Ok(Arc::new(result))
+            })
+            .await;
+        let res = res?;
+
+        // If we have no published versions, the crate does not exist, which can
+        // be reported as an error.
+        if res.is_empty() {
+            return Err(CrateInfoError::DoesNotExist {
+                name: package.to_owned(),
+            });
+        }
+        Ok(res.clone())
     }
 
-    /// Synchronous routine to get whatever publisher information is cached
-    /// without hitting the network.
-    pub fn get_cached_publishers(
+    /// Get up-to-date crates.io information for a given crate.
+    ///
+    /// The result is cached to avoid unnecessary calls to the crates.io API,
+    /// and the sparse HTTP index will be used to determine when updated
+    /// information is required.
+    #[tracing::instrument(skip(self, network), err)]
+    pub async fn crates_io_info(
         &self,
-        name: PackageStr<'_>,
-    ) -> SortedMap<semver::Version, CratesCacheVersionDetails> {
-        let guard = self.state.lock().unwrap();
-        guard
-            .crates_cache
-            .crates
-            .get(name)
-            .map(|c| {
-                c.versions
-                    .iter()
-                    .flat_map(|(version, details)| {
-                        details.clone().map(|details| (version.clone(), details))
+        network: Option<&Network>,
+        package: PackageStr<'_>,
+    ) -> Result<Arc<CratesCacheEntry>, CrateInfoError> {
+        // If we don't have network access, we're forced to assume that the
+        // cache is up to date.
+        let Some(network) = network else {
+            let guard = self.state.lock().unwrap();
+            let entry = guard.crates_cache.crates.get(package).ok_or_else(|| {
+                CrateInfoError::DoesNotExist {
+                    name: package.to_owned(),
+                }
+            })?;
+            return Ok(entry.clone());
+        };
+
+        // Check if we already have information for all published versions, if
+        // we do, we don't need to update anything.
+        // This will also check if the crate does not exist, in which case we'll
+        // early-return with an error.
+        let published_versions = self.published_versions(network, package).await?;
+
+        // Lock the mutex. We'll either detect that we already have metadata for
+        // all published versions, or we'll extract a reference to the OnceCell
+        // which can be used to ensure only a single request is made to the
+        // crates.io API for this crate.
+        let once_cell = {
+            // NOTE: Don't .await while this is held, or we might deadlock!
+            let mut guard = self.state.lock().unwrap();
+            if let Some(entry) = guard.crates_cache.crates.get(package) {
+                if entry.versions.len() == published_versions.len()
+                    && entry.versions.keys().eq(published_versions.keys())
+                {
+                    return Ok(entry.clone());
+                }
+            }
+
+            guard
+                .crates_io_info_fetches
+                .entry(package.to_owned())
+                .or_default()
+                .clone()
+        };
+
+        // The crate exists, and some metadata is missing. Perform the fetch and
+        // update crates_cache with the new data from the network.
+        once_cell
+            .get_or_try_init(|| async {
+                info!("fetching crate metadata for crate {}", package);
+                let url = Url::parse(&format!("https://crates.io/api/v1/crates/{}", package))
+                    .expect("invalid crate name");
+                let response = network.download(url).await?;
+                let result = load_json::<CratesAPICrate>(&response[..])?;
+
+                // Update the users cache and individual crates caches, and return our
+                // set of versions.
+                let mut guard = self.state.lock().unwrap();
+                let versions: SortedMap<_, _> = result
+                    .versions
+                    .into_iter()
+                    // If a race occurred and a new version was published since
+                    // `published_versions` was checked, discard it to avoid
+                    // confusing other callers.
+                    .filter(|api_version| published_versions.contains_key(&api_version.num))
+                    .map(|api_version| {
+                        (
+                            api_version.num,
+                            CratesCacheVersionDetails {
+                                created_at: api_version.created_at,
+                                published_by: api_version.published_by.map(|api_user| {
+                                    info!("recording user info for {api_user:?}");
+                                    guard.crates_cache.users.insert(
+                                        api_user.id,
+                                        CratesCacheUser {
+                                            login: api_user.login,
+                                            name: api_user.name,
+                                        },
+                                    );
+                                    api_user.id
+                                }),
+                            },
+                        )
                     })
-                    .collect()
+                    .collect();
+                if versions.len() != published_versions.len() {
+                    panic!(
+                        "crates.io API state inconsistent with index - missing: {:?}",
+                        published_versions
+                            .keys()
+                            .filter(|k| !versions.contains_key(k))
+                            .collect::<Vec<_>>()
+                    );
+                }
+
+                let entry = Arc::new(CratesCacheEntry {
+                    versions,
+                    metadata: result.crate_data,
+                });
+                guard
+                    .crates_cache
+                    .crates
+                    .insert(package.to_owned(), entry.clone());
+
+                Ok::<_, CrateInfoError>(entry)
             })
-            .unwrap_or_default()
-    }
-
-    /// Look up information about who published each version of the specified
-    /// crates. Versions for each crate are also specified in order to avoid
-    /// hitting the network in the case where the cache already has the relevant
-    /// information.
-    pub async fn get_publishers(
-        &self,
-        network: Option<&Network>,
-        name: PackageStr<'_>,
-        versions: FastSet<&semver::Version>,
-    ) -> Result<SortedMap<semver::Version, CratesCacheVersionDetails>, CrateInfoError> {
-        let guard = self
-            .update_crates_cache(name)
-            .versions(versions)
-            .need_version_details()
-            .update(network)
             .await?;
-        Ok(guard
+
+        let guard = self.state.lock().unwrap();
+        let entry = guard
             .crates_cache
             .crates
-            .get(name)
-            .expect("publisher cache update failed")
-            .versions
-            .iter()
-            .flat_map(|(version, details)| {
-                details.clone().map(|details| (version.clone(), details))
-            })
-            .collect())
-    }
-
-    /// Look up crates.io metadata for the given crate.
-    pub async fn get_crate_metadata(
-        &self,
-        network: Option<&Network>,
-        name: PackageStr<'_>,
-    ) -> Result<CratesAPICrateMetadata, CrateInfoError> {
-        let guard = self
-            .update_crates_cache(name)
-            .need_crate_metadata()
-            .invalidate_after(chrono::Duration::days(METADATA_CACHE_EXPIRY_DAYS))
-            .update(network)
-            .await?;
-        Ok(guard
-            .crates_cache
-            .crates
-            .get(name)
-            .expect("crate cache update failed")
-            .metadata
-            .as_ref()
-            .expect("crate cache metadata missing")
-            .clone())
-    }
-
-    /// Get version information from the crates.io index for this package.
-    pub async fn get_versions(
-        &self,
-        network: Option<&Network>,
-        name: PackageStr<'_>,
-    ) -> Result<Vec<semver::Version>, CrateInfoError> {
-        let guard = self
-            .update_crates_cache(name)
-            .invalidate_after(chrono::Duration::days(VERSIONS_CACHE_EXPIRY_DAYS))
-            .update(network)
-            .await?;
-        Ok(guard
-            .crates_cache
-            .crates
-            .get(name)
-            .expect("crate cache update failed")
-            .versions
-            .keys()
-            .cloned()
-            .collect())
+            .get(package)
+            .expect("entry cannot be missing");
+        Ok(entry.clone())
     }
 
     /// Look up user information for a crates.io user from the publisher cache.
     pub fn get_crates_user_info(&self, user_id: u64) -> Option<CratesCacheUser> {
         let guard = self.state.lock().unwrap();
         guard.crates_cache.users.get(&user_id).cloned()
-    }
-}
-
-struct UpdateCratesCache<'a> {
-    cache: &'a Cache,
-    crate_name: PackageStr<'a>,
-    cache_expiration: Option<chrono::Duration>,
-    versions: Option<FastSet<&'a semver::Version>>,
-    need_version_details: bool,
-    need_crate_metadata: bool,
-}
-
-impl<'a> UpdateCratesCache<'a> {
-    pub fn new(cache: &'a Cache, crate_name: PackageStr<'a>) -> Self {
-        assert!(
-            !crate_name.is_empty() && !crate_name.contains('/'),
-            "invalid crate name"
-        );
-        UpdateCratesCache {
-            cache,
-            crate_name,
-            cache_expiration: None,
-            versions: None,
-            need_version_details: false,
-            need_crate_metadata: false,
-        }
-    }
-
-    pub fn invalidate_after(mut self, cache_expiration: chrono::Duration) -> Self {
-        self.cache_expiration = Some(cache_expiration);
-        self
-    }
-
-    pub fn versions(mut self, versions: FastSet<&'a semver::Version>) -> Self {
-        self.versions = Some(versions);
-        self
-    }
-
-    pub fn need_version_details(mut self) -> Self {
-        self.need_version_details = true;
-        self
-    }
-
-    pub fn need_crate_metadata(mut self) -> Self {
-        self.need_crate_metadata = true;
-        self
-    }
-
-    pub async fn update(
-        self,
-        network: Option<&Network>,
-    ) -> Result<std::sync::MutexGuard<'a, CacheState>, CrateInfoError> {
-        let Some(network) = network else {
-            let guard = self.cache.state.lock().unwrap();
-            match guard.crates_cache.crates.get(self.crate_name) {
-                Some(entry) if entry.exists() => return Ok(guard),
-                _ => {
-                    return Err(CrateInfoError::DoesNotExist {
-                        name: self.crate_name.to_owned(),
-                    })
-                }
-            }
-        };
-        // Use the cached response if possible.
-        if let Some(guard) = self.can_use_cache()? {
-            return Ok(guard);
-        }
-
-        if self.need_version_details || self.need_crate_metadata {
-            // If we don't yet have an existing entry in the cache, first update using the index to
-            // check whether the crate exists at all.
-            if !self.crate_exists() {
-                // Returns Err if the crate doesn't exist.
-                drop(self.update_using_index(network).await?);
-            }
-            self.update_using_api(network).await
-        } else {
-            self.update_using_index(network).await
-        }
-    }
-
-    fn crate_exists(&self) -> bool {
-        let guard = self.cache.state.lock().unwrap();
-        guard
-            .crates_cache
-            .crates
-            .get(self.crate_name)
-            .map(|e| e.exists())
-            .unwrap_or(false)
-    }
-
-    /// Returns Ok(Some) if the cache can be used, Ok(None) if not, and Err for errors (such as non
-    /// existent crates).
-    pub fn can_use_cache(
-        &self,
-    ) -> Result<Option<std::sync::MutexGuard<'a, CacheState>>, CrateInfoError> {
-        let guard = self.cache.state.lock().unwrap();
-        if let Some(entry) = guard.crates_cache.crates.get(self.crate_name) {
-            let cache_age = self.cache.now - entry.last_fetched;
-            // If a crate was previously found to not exist...
-            if !entry.exists() {
-                if cache_age < chrono::Duration::days(NONEXISTENT_CRATE_EXPIRY_DAYS) {
-                    return Err(CrateInfoError::DoesNotExist {
-                        name: self.crate_name.to_owned(),
-                    });
-                } else {
-                    return Ok(None);
-                }
-            }
-
-            // If we're missing metadata, return immediately (need update).
-            if entry.metadata.is_none() && self.need_crate_metadata {
-                return Ok(None);
-            }
-
-            // Check if there are any relevant versions which are not present in
-            // the local cache. If none are missing, we have everything cached
-            // and can continue as normal.
-            if let Some(versions) = &self.versions {
-                let mut has_missing_versions = false;
-                for &v in versions {
-                    match entry.versions.get(v) {
-                        None => has_missing_versions = true,
-                        // If we're missing a known version's details, return immediately (need
-                        // update).
-                        Some(None) if self.need_version_details => {
-                            return Ok(None);
-                        }
-                        _ => (),
-                    }
-                }
-
-                // If versions were specified and there were no missing versions, return
-                // immediately.
-                if !has_missing_versions {
-                    info!(
-                        "using cached publisher info for {} - relevant versions in cache",
-                        self.crate_name
-                    );
-                    return Ok(Some(guard));
-                }
-            }
-
-            if let Some(expiration) = self.cache_expiration {
-                if cache_age < expiration {
-                    info!(
-                        "using cached info for {} - entry not expired",
-                        self.crate_name
-                    );
-                    return Ok(Some(guard));
-                }
-            }
-        }
-        Ok(None)
-    }
-
-    /// Use `crates.io/api` to get crate information.
-    ///
-    /// This fully replaces/updates the information in `crates_cache.crates` for `name`.
-    ///
-    /// When this function returns `Ok`, the returned state is guaranteed to have an entry for
-    /// `name` in `crates_cache.crates`.
-    ///
-    /// # Note
-    /// The official scraper policy requests a rate limit of 1 request per second
-    /// <https://crates.io/policies#crawlers>. This wouldn't be a very good user-experience to
-    /// require a multi-second wait to fetch each crate's information, however the local caching
-    /// and infrequent user-driven calls to the API should hopefully ensure we remain under the
-    /// 1 request per second limit over time.
-    ///
-    /// If this ends up being an issue, we can look into adding some form of cross-call tracking
-    /// in the cache to ensure that we don't exceed the rate over a slightly-extended period of
-    /// time, (e.g. by throttling requests from consecutive calls).
-    async fn update_using_api(
-        &self,
-        network: &Network,
-    ) -> Result<std::sync::MutexGuard<'a, CacheState>, CrateInfoError> {
-        let url = Url::parse(&format!(
-            "https://crates.io/api/v1/crates/{}",
-            self.crate_name
-        ))
-        .expect("invalid crate name");
-
-        let response = self.try_download(network, url).await?;
-        let result = load_json::<CratesAPICrate>(&response[..])?;
-
-        // Update the users cache and individual crates caches, and return our
-        // set of versions.
-        let mut guard = self.cache.state.lock().unwrap();
-        let versions: SortedMap<_, _> = result
-            .versions
-            .into_iter()
-            .map(|api_version| {
-                (
-                    api_version.num,
-                    Some(CratesCacheVersionDetails {
-                        created_at: api_version.created_at,
-                        published_by: api_version.published_by.map(|api_user| {
-                            info!("recording user info for {api_user:?}");
-                            guard.crates_cache.users.insert(
-                                api_user.id,
-                                CratesCacheUser {
-                                    login: api_user.login,
-                                    name: api_user.name,
-                                },
-                            );
-                            api_user.id
-                        }),
-                    }),
-                )
-            })
-            .collect();
-        info!(
-            "found {} versions for crate {}",
-            versions.len(),
-            self.crate_name
-        );
-        guard.crates_cache.crates.insert(
-            self.crate_name.to_owned(),
-            CratesCacheEntry {
-                last_fetched: self.cache.now,
-                versions,
-                metadata: Some(result.crate_data),
-            },
-        );
-
-        Ok(guard)
-    }
-
-    /// Use `index.crates.io` to get crate information.
-    ///
-    /// This will only add versions which aren't already present in `crates_cache.crates` for
-    /// `name`.
-    ///
-    /// When this function returns `Ok`, the returned state is guaranteed to have an entry for
-    /// `name` in `crates_cache.crates`.
-    async fn update_using_index(
-        &self,
-        network: &Network,
-    ) -> Result<std::sync::MutexGuard<'a, CacheState>, CrateInfoError> {
-        // Crate names can only be a subset of ascii (valid rust identifier characters and `-`), so
-        // using `len()` and indexing will result in valid counts/characters.
-        let mut url = String::from("https://index.crates.io/");
-        let name = self.crate_name;
-        use std::fmt::Write;
-        match name.len() {
-            1 => write!(url, "1/{name}"),
-            2 => write!(url, "2/{name}"),
-            3 => write!(url, "3/{}/{name}", &name[0..1]),
-            _ => write!(url, "{}/{}/{name}", &name[0..2], &name[2..4]),
-        }
-        .expect("writing to a String should not fail");
-        // Crate index always use lowercases, but crate name may contain uppercase characters.
-        url.make_ascii_lowercase();
-        let url = Url::parse(&url).expect("invalid crate name");
-
-        let response = self.try_download(network, url).await?;
-
-        let result = crates_index::Crate::from_slice(&response[..]).map_err(LoadJsonError::from)?;
-
-        // Update the crates cache with version info (if not already present).
-        let mut guard = self.cache.state.lock().unwrap();
-        info!(
-            "found {} versions for crate {}",
-            result.versions().len(),
-            name
-        );
-
-        let entry = guard
-            .crates_cache
-            .crates
-            .entry(name.to_owned())
-            .or_default();
-        entry.last_fetched = self.cache.now;
-        for version in result
-            .versions()
-            .iter()
-            .filter_map(|v| semver::Version::parse(v.version()).ok())
-        {
-            entry.versions.entry(version).or_default();
-        }
-
-        Ok(guard)
-    }
-
-    async fn try_download(&self, network: &Network, url: Url) -> Result<Vec<u8>, CrateInfoError> {
-        network.download(url).await.map_err(|e| match e {
-            DownloadError::FailedToStartDownload { error, .. }
-                if error.status() == Some(reqwest::StatusCode::NOT_FOUND) =>
-            {
-                self.non_existent_crate();
-                CrateInfoError::DoesNotExist {
-                    name: self.crate_name.to_owned(),
-                }
-            }
-            other => other.into(),
-        })
-    }
-
-    fn non_existent_crate(&self) {
-        let mut guard = self.cache.state.lock().unwrap();
-        info!("crate {} not found in crates.io", self.crate_name);
-        guard.crates_cache.crates.insert(
-            self.crate_name.to_owned(),
-            CratesCacheEntry {
-                last_fetched: self.cache.now,
-                versions: Default::default(),
-                metadata: None,
-            },
-        );
     }
 }
 

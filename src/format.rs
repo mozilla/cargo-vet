@@ -8,6 +8,7 @@ use core::{cmp, fmt};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use cargo_metadata::{semver, Package};
 use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
@@ -93,6 +94,16 @@ impl VetVersion {
     /// no git revision metadata.
     pub fn equals_semver(&self, semver: &semver::Version) -> bool {
         self.git_rev.is_none() && &self.semver == semver
+    }
+
+    /// Get this VetVersion as a semver::Version, returning None if this version
+    /// corresponds to a git revision.
+    pub fn as_semver(&self) -> Option<&semver::Version> {
+        if self.git_rev.is_none() {
+            Some(&self.semver)
+        } else {
+            None
+        }
     }
 }
 impl fmt::Display for VetVersion {
@@ -1178,30 +1189,14 @@ pub struct CratesCacheVersionDetails {
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CratesCacheEntry {
-    pub last_fetched: chrono::DateTime<chrono::Utc>,
-    /// If versions is empty, this indicates that we queried the info and found that the crate has
-    /// no published versions (and thus doesn't exist as of `last_fetched`).
-    ///
-    /// Versions are a sorted map because we sometimes need to iterate in order. We don't use a sorted
-    /// Vec because we may partially update the versions when we access the index (though technically
-    /// that update _should_ only have new versions which would append to a Vec if it were that).
-    pub versions: SortedMap<semver::Version, Option<CratesCacheVersionDetails>>,
-    pub metadata: Option<CratesAPICrateMetadata>,
+    pub versions: SortedMap<semver::Version, CratesCacheVersionDetails>,
+    pub metadata: CratesAPICrateMetadata,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct CratesCache {
     pub users: SortedMap<CratesUserId, CratesCacheUser>,
-    pub crates: SortedMap<PackageName, CratesCacheEntry>,
-}
-
-impl CratesCacheEntry {
-    /// Return whether the crate exists.
-    ///
-    /// The cache stores non-existent results when fetching.
-    pub fn exists(&self) -> bool {
-        !self.versions.is_empty()
-    }
+    pub crates: SortedMap<PackageName, Arc<CratesCacheEntry>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

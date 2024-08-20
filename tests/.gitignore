@@ -1,5 +1,4 @@
 # Don't check in anything in the testing cache directory other than
-# diff-cache.toml and publisher-cache.json
+# diff-cache.toml
 cache/*
 !cache/diff-cache.toml
-!cache/crates-io-cache.json
