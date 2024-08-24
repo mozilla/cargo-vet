@@ -21,7 +21,6 @@ use reqwest::{Client, Url};
 use tokio::io::AsyncWriteExt;
 
 use crate::{
-    cargo::CargoConfig,
     errors::{DownloadError, SourceFile},
     PartialConfig,
 };
@@ -140,14 +139,15 @@ impl Network {
             let timeout = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
             // TODO: make this configurable on the CLI or something
             let mut client_builder = Client::builder().user_agent(USER_AGENT).timeout(timeout);
-
-            // Add the cargo `http.cainfo` to the reqwest client if it is set
-            if let Some(cainfo) = CargoConfig::http_cainfo() {
-                match Network::parse_ca_file(&cainfo) {
-                    Ok(cert) => client_builder = client_builder.add_root_certificate(cert),
-                    Err(e) => println!(
-                        "failed to load certificate from Cargo http.cainfo `{}`, attempting to download without it. Error: {e:?}", cainfo
-                   ),
+            if let Ok(cargo_config) = cargo_config2::Config::load() {
+                // Add the cargo `http.cainfo` to the reqwest client if it is set
+                if let Some(cainfo) = cargo_config.http.cainfo {
+                    match Network::parse_ca_file(&cainfo) {
+                        Ok(cert) => client_builder = client_builder.add_root_certificate(cert),
+                        Err(e) => println!(
+                            "failed to load certificate from Cargo http.cainfo `{}`, attempting to download without it. Error: {e:?}", cainfo
+                       ),
+                    }
                 }
             }
             let client = client_builder

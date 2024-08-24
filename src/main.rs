@@ -46,7 +46,6 @@ use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
 use crate::storage::{Cache, Store};
 
-mod cargo;
 mod cli;
 mod criteria;
 pub mod errors;
