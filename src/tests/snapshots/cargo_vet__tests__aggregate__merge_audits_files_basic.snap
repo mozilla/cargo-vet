@@ -26,13 +26,13 @@ aggregated-from = "https://source2.example.com/supply_chain/audits.toml"
 
 [[audits.package1]]
 criteria = "safe-to-deploy"
-version = "10.0.0"
-aggregated-from = "https://source1.example.com/supply_chain/audits.toml"
+version = "5.0.0"
+aggregated-from = "https://source2.example.com/supply_chain/audits.toml"
 
 [[audits.package1]]
 criteria = "safe-to-deploy"
-version = "5.0.0"
-aggregated-from = "https://source2.example.com/supply_chain/audits.toml"
+version = "10.0.0"
+aggregated-from = "https://source1.example.com/supply_chain/audits.toml"
 
 [[audits.package1]]
 criteria = "safe-to-deploy"

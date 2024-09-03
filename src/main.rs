@@ -28,6 +28,7 @@ use out::{progress_bar, IncProgressOnDrop};
 use reqwest::Url;
 use serde::de::Deserialize;
 use serialization::spanned::Spanned;
+use serialization::Tidyable;
 use storage::fetch_registry;
 use thiserror::Error;
 use tracing::{error, info, trace, warn};
@@ -2553,6 +2554,9 @@ fn do_aggregate_audits(sources: Vec<(String, AuditsFile)>) -> Result<AuditsFile,
                 }));
         }
     }
+
+    aggregate.tidy();
+
     if errors.is_empty() {
         Ok(aggregate)
     } else {

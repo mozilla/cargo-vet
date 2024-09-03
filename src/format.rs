@@ -2,7 +2,7 @@
 
 use crate::errors::{StoreVersionParseError, VersionParseError};
 use crate::resolver::{DiffRecommendation, ViolationConflict};
-use crate::serialization::spanned::Spanned;
+use crate::serialization::{spanned::Spanned, Tidyable};
 use crate::{flock::Filesystem, serialization};
 use core::{cmp, fmt};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -233,6 +233,14 @@ pub struct AuditsFile {
     #[serde(skip_serializing_if = "SortedMap::is_empty")]
     #[serde(default)]
     pub trusted: TrustedPackages,
+}
+
+impl Tidyable for AuditsFile {
+    fn tidy(&mut self) {
+        self.audits.tidy();
+        self.wildcard_audits.tidy();
+        self.trusted.tidy();
+    }
 }
 
 /// Foreign audits.toml with unparsed entries and audits. Should have the same
@@ -581,6 +589,12 @@ pub struct ConfigFile {
     #[serde(default)]
     #[serde(alias = "unaudited")]
     pub exemptions: SortedMap<PackageName, Vec<ExemptedDependency>>,
+}
+
+impl Tidyable for ConfigFile {
+    fn tidy(&mut self) {
+        self.exemptions.tidy();
+    }
 }
 
 pub static SAFE_TO_DEPLOY: CriteriaStr = "safe-to-deploy";
@@ -1011,6 +1025,16 @@ pub struct ImportsFile {
     pub audits: SortedMap<ImportName, AuditsFile>,
 }
 
+impl Tidyable for ImportsFile {
+    fn tidy(&mut self) {
+        self.unpublished.tidy();
+        self.publisher.tidy();
+        for audits_file in self.audits.values_mut() {
+            audits_file.tidy();
+        }
+    }
+}
+
 /// Information about who published a specific version of a crate to be cached
 /// in imports.lock.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -1071,6 +1095,10 @@ pub enum DiffCache {
     V2 {
         diffs: SortedMap<PackageName, SortedMap<Delta, DiffStat>>,
     },
+}
+
+impl Tidyable for DiffCache {
+    fn tidy(&mut self) {}
 }
 
 impl Default for DiffCache {
