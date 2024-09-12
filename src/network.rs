@@ -137,9 +137,19 @@ impl Network {
             // TODO: make this configurable on the CLI or something
             let timeout = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
             // TODO: make this configurable on the CLI or something
-            let client = Client::builder()
-                .user_agent(USER_AGENT)
-                .timeout(timeout)
+            let mut client_builder = Client::builder().user_agent(USER_AGENT).timeout(timeout);
+            if let Ok(cargo_config) = cargo_config2::Config::load() {
+                // Add the cargo `http.cainfo` to the reqwest client if it is set
+                if let Some(cainfo) = cargo_config.http.cainfo {
+                    match Network::parse_ca_file(&cainfo) {
+                        Ok(cert) => client_builder = client_builder.add_root_certificate(cert),
+                        Err(e) => println!(
+                            "failed to load certificate from Cargo http.cainfo `{}`, attempting to download without it. Error: {e:?}", cainfo
+                       ),
+                    }
+                }
+            }
+            let client = client_builder
                 .build()
                 .expect("Couldn't construct HTTP Client?");
             Some(Self {
@@ -150,6 +160,10 @@ impl Network {
                 mock_network: None,
             })
         }
+    }
+
+    fn parse_ca_file(path: &str) -> Result<reqwest::Certificate, Box<dyn std::error::Error>> {
+        Ok(reqwest::Certificate::from_pem(&std::fs::read(path)?)?)
     }
 
     /// Download a file and persist it to disk

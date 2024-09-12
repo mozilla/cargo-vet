@@ -7,7 +7,7 @@ license = "Apache-2.0/MIT"
 repository = "https://github.com/mozilla/cargo-vet"
 homepage = "https://mozilla.github.io/cargo-vet/"
 description = "Supply-chain security for Rust"
-rust-version = "1.65"
+rust-version = "1.70"
 exclude = [
   "book/*",
   "src/snapshots/*",
@@ -51,6 +51,7 @@ thiserror = "1.0.31"
 url = "2.2.2"
 toml = "0.5.9"
 open = "3.0.2"
+cargo-config2 = "0.1.27"
 
 [target.'cfg(windows)'.dependencies.winapi]
 version = "0.3"
