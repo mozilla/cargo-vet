@@ -42,10 +42,6 @@ criteria = "safe-to-deploy"
 version = "0.13.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.bitflags]]
-version = "1.3.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.bytes]]
 version = "1.1.0"
 criteria = "safe-to-deploy"
@@ -166,10 +162,6 @@ criteria = "safe-to-deploy"
 version = "0.3.13"
 criteria = "safe-to-deploy"
 
-[[exemptions.hashbrown]]
-version = "0.11.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.hermit-abi]]
 version = "0.1.19"
 criteria = "safe-to-deploy"
@@ -196,10 +188,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.hyper-rustls]]
 version = "0.23.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.indexmap]]
-version = "1.8.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.indicatif]]
@@ -322,10 +310,6 @@ criteria = "safe-to-deploy"
 version = "1.0.4"
 criteria = "safe-to-deploy"
 
-[[exemptions.proc-macro2]]
-version = "1.0.60"
-criteria = "safe-to-deploy"
-
 [[exemptions.redox_syscall]]
 version = "0.2.13"
 criteria = "safe-to-deploy"
@@ -378,14 +362,6 @@ criteria = "safe-to-deploy"
 version = "1.0.10"
 criteria = "safe-to-deploy"
 
-[[exemptions.serde]]
-version = "1.0.137"
-criteria = "safe-to-deploy"
-
-[[exemptions.serde_derive]]
-version = "1.0.137"
-criteria = "safe-to-deploy"
-
 [[exemptions.serde_json]]
 version = "1.0.82"
 criteria = "safe-to-deploy"
@@ -434,14 +410,6 @@ criteria = "safe-to-deploy"
 version = "2.0.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.syn]]
-version = "1.0.96"
-criteria = "safe-to-deploy"
-
-[[exemptions.syn]]
-version = "2.0.18"
-criteria = "safe-to-deploy"
-
 [[exemptions.tar]]
 version = "0.4.38"
 criteria = "safe-to-deploy"
@@ -456,10 +424,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.terminal_size]]
 version = "0.1.17"
-criteria = "safe-to-deploy"
-
-[[exemptions.textwrap]]
-version = "0.15.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio]]
@@ -480,10 +444,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.toml]]
 version = "0.5.9"
-criteria = "safe-to-deploy"
-
-[[exemptions.toml_edit]]
-version = "0.14.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.tower-service]]
