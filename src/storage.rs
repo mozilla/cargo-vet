@@ -41,7 +41,7 @@ use crate::{
     },
     network::Network,
     out::{progress_bar, IncProgressOnDrop},
-    serialization::{parse_from_value, spanned::Spanned, to_formatted_toml},
+    serialization::{parse_from_value, spanned::Spanned, to_formatted_toml, Tidyable},
     Config, PackageExt, PartialConfig, CARGO_ENV,
 };
 
@@ -2747,12 +2747,14 @@ where
 }
 fn store_toml<T>(
     heading: &str,
-    val: T,
+    mut val: T,
     user_info: Option<&FastMap<CratesUserId, CratesCacheUser>>,
 ) -> Result<String, StoreTomlError>
 where
-    T: Serialize,
+    T: Serialize + Tidyable,
 {
+    val.tidy();
+
     let toml_document = to_formatted_toml(val, user_info)?;
     Ok(format!("{heading}{toml_document}"))
 }
@@ -2774,25 +2776,16 @@ where
     Ok(json_string)
 }
 fn store_audits(
-    mut audits: AuditsFile,
+    audits: AuditsFile,
     user_info: &FastMap<CratesUserId, CratesCacheUser>,
 ) -> Result<String, StoreTomlError> {
     let heading = r###"
 # cargo-vet audits file
 "###;
-    audits
-        .audits
-        .values_mut()
-        .for_each(|entries| entries.sort());
 
     store_toml(heading, audits, Some(user_info))
 }
-fn store_config(mut config: ConfigFile) -> Result<String, StoreTomlError> {
-    config
-        .exemptions
-        .values_mut()
-        .for_each(|entries| entries.sort());
-
+fn store_config(config: ConfigFile) -> Result<String, StoreTomlError> {
     let heading = r###"
 # cargo-vet config file
 "###;

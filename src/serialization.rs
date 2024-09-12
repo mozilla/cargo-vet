@@ -372,6 +372,25 @@ pub mod audit {
     }
 }
 
+/// Trait implemented by format data types which may want to be cleaned up
+/// before they are serialized.
+pub trait Tidyable {
+    /// Ensure that the data structure is tidy and ready to be serialized.
+    /// This may remove empty entries from maps, ensure lists are sorted, etc.
+    fn tidy(&mut self);
+}
+
+/// Helper for tidying the common audit data structure, removing empty entries,
+/// and sorting audit lists.
+impl<K: Ord, E: Ord> Tidyable for SortedMap<K, Vec<E>> {
+    fn tidy(&mut self) {
+        self.retain(|_, entries| {
+            entries.sort();
+            !entries.is_empty()
+        });
+    }
+}
+
 /// Inline arrays which have a representation longer than this will be rendered
 /// over multiple lines.
 const ARRAY_WRAP_THRESHOLD: usize = 80;
