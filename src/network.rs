@@ -24,7 +24,6 @@ use crate::{
     errors::{DownloadError, SourceFile},
     PartialConfig,
 };
-use std::io::Read;
 
 /// Wrapper for the pair of a `reqwest::Response` and the `SemaphorePermit` used
 /// to limit concurrent connections, with a test-only variant for mocking.
@@ -164,10 +163,7 @@ impl Network {
     }
 
     fn parse_ca_file(path: &str) -> Result<reqwest::Certificate, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        std::fs::File::open(path)?.read_to_end(&mut buf)?;
-        let cert = reqwest::Certificate::from_pem(&buf)?;
-        Ok(cert)
+        Ok(reqwest::Certificate::from_pem(&std::fs::read(path)?)?)
     }
 
     /// Download a file and persist it to disk
