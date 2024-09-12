@@ -7,7 +7,7 @@ license = "Apache-2.0/MIT"
 repository = "https://github.com/mozilla/cargo-vet"
 homepage = "https://mozilla.github.io/cargo-vet/"
 description = "Supply-chain security for Rust"
-rust-version = "1.65"
+rust-version = "1.70"
 exclude = [
   "book/*",
   "src/snapshots/*",
