@@ -1962,26 +1962,23 @@ async fn fix_audit_as(
                         // false positives, but is certainly a bit of a loose
                         // comparison. If it turns out to be an issue we can
                         // improve it in the future.
-                        let default_audit_as = if network.is_some() {
-                            // NOTE: Handle all errors silently here, as we can always recover by
-                            // setting `audit-as-crates-io = false`. The error cases below are very
-                            // unlikely to occur since information will be cached from the initial
-                            // checks which generated the NeedsAuditAsErrors.
-                            let crates_api_metadata =
-                                match cache.get_crate_metadata(network, &err.package).await {
-                                    Ok(v) => v,
-                                    Err(e) => {
-                                        warn!("crate metadata error for {}: {e}", &err.package);
-                                        Default::default()
-                                    }
-                                };
-
-                            cfg.metadata.packages.iter().any(|p| {
-                                p.name == err.package && crates_api_metadata.consider_as_same(p)
-                            })
-                        } else {
-                            false
-                        };
+                        //
+                        // NOTE: Handle all errors silently here, as we can
+                        // always recover by setting `audit-as-crates-io =
+                        // false`. The error cases below are very unlikely to
+                        // occur since information will be cached from the
+                        // initial checks which generated the
+                        // NeedsAuditAsErrors.
+                        let default_audit_as =
+                            match cache.crates_io_info(network, &err.package).await {
+                                Ok(entry) => cfg.metadata.packages.iter().any(|p| {
+                                    p.name == err.package && entry.metadata.consider_as_same(p)
+                                }),
+                                Err(e) => {
+                                    warn!("crate metadata error for {}: {e}", &err.package);
+                                    false
+                                }
+                            };
 
                         get_policy_entry(store, cfg, &third_party_packages, &err)
                             .audit_as_crates_io = Some(default_audit_as);
@@ -2937,19 +2934,10 @@ async fn check_audit_as_crates_io(
                     return None;
                 }
 
-                // To avoid unnecessary metadata lookup, only do so for packages which exist in the
-                // index. The case which doesn't work with this logic is if someone is using a
-                // package before it has ever been published, and then later it is published (in
-                // which case a third-party change causes a warning to unexpectedly come up).
-                // However, this case is sufficiently unlikely that for now it's worth the initial
-                // lookup to avoid unnecessarily trying to fetch metadata for unpublished crates.
-                //
-                // The caching logic already does this for us as an optimization, but since we may
-                // need to look at the specific versions later, we fetch it anyway.
-                let mut matches_crates_io_package = false;
-                if let Ok(metadata) = cache.get_crate_metadata(network, &package.name).await {
-                    matches_crates_io_package = metadata.consider_as_same(package);
-                }
+                let matches_crates_io_package = cache
+                    .crates_io_info(network, &package.name)
+                    .await
+                    .map_or(false, |entry| entry.metadata.consider_as_same(package));
 
                 if matches_crates_io_package && audit_policy.is_none() {
                     // We found a package that has similar metadata to one with the same name

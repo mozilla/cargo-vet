@@ -1768,30 +1768,20 @@ impl<'a> ResolveReport<'a> {
                     // Attempt to look up the publisher of the target version
                     // for the suggested diff, and also record whether the given
                     // package has a sole publisher.
-                    let mut is_sole_publisher = false;
-                    let publisher_id =
-                        if let (Some(network), None) = (&network, &suggested_diff.to.git_rev) {
-                            let versions = cache
-                                .get_publishers(
-                                    Some(network),
-                                    package.name,
-                                    [&suggested_diff.to.semver].into_iter().collect(),
-                                )
-                                .await
-                                .unwrap_or_default();
-                            let publisher_count = versions
-                                .iter()
-                                .flat_map(|(_, details)| &details.published_by)
-                                .collect::<FastSet<_>>()
-                                .len();
-                            is_sole_publisher = publisher_count == 1;
-                            versions
-                                .into_iter()
-                                .find(|(v, _)| v == &suggested_diff.to.semver)
-                                .and_then(|(_, d)| d.published_by)
-                        } else {
-                            None
-                        };
+                    let crates_io_info = cache.crates_io_info(network, package.name).await.ok();
+                    let publisher_id = match (suggested_diff.to.as_semver(), &crates_io_info) {
+                        (Some(semver), Some(metadata)) => metadata
+                            .versions
+                            .get(semver)
+                            .and_then(|details| details.published_by),
+                        _ => None,
+                    };
+                    let publisher_count = crates_io_info
+                        .iter()
+                        .flat_map(|m| m.versions.values())
+                        .flat_map(|details| &details.published_by)
+                        .collect::<FastSet<_>>()
+                        .len();
 
                     // Compute the trust hint, which is the information used to generate "consider
                     // cargo trust FOO" messages. There can be multiple potential hints, but we
@@ -1809,12 +1799,14 @@ impl<'a> ResolveReport<'a> {
                             exact_version = true;
                             publisher_id
                         } else if !store.audits.trusted.contains_key(package.name) {
-                            cache
-                                .get_cached_publishers(package.name)
-                                .iter()
-                                .rev()
-                                .filter_map(|(_, details)| details.published_by)
-                                .find(|i| trusted_publishers.contains_key(i))
+                            crates_io_info.as_ref().and_then(|metadata| {
+                                metadata
+                                    .versions
+                                    .iter()
+                                    .rev()
+                                    .filter_map(|(_, details)| details.published_by)
+                                    .find(|i| trusted_publishers.contains_key(i))
+                            })
                         } else {
                             None
                         };
@@ -1930,7 +1922,7 @@ impl<'a> ResolveReport<'a> {
                             notable_parents: notable_parents.clone(),
                             publisher_login,
                             trust_hint,
-                            is_sole_publisher,
+                            is_sole_publisher: publisher_count == 1,
                             registry_suggestion,
                         }])
                         .collect()
@@ -2555,7 +2547,11 @@ async fn suggest_delta(
 ) -> Option<(DiffRecommendation, Option<DiffRecommendation>)> {
     // Fetch the set of known versions from crates.io so we know which versions
     // we'll have sources for.
-    let known_versions = cache.get_versions(network, package_name).await.ok();
+    let known_versions = if let Some(network) = network {
+        cache.published_versions(network, package_name).await.ok()
+    } else {
+        None
+    };
 
     // Collect up the details of how we failed
     struct Reachable<'a> {
@@ -2590,11 +2586,11 @@ async fn suggest_delta(
                 }
                 // We have sources if the version has been published to crates.io.
                 //
-                // For testing fallbacks, assume we always have sources if the
-                // index is unavailable.
+                // For testing fallbacks or when we're offline, assume we always
+                // have sources if the index is unavailable.
                 known_versions
                     .as_ref()
-                    .map_or(true, |versions| versions.contains(&ver.semver))
+                    .map_or(true, |versions| versions.contains_key(&ver.semver))
             };
             reachable = Some(Reachable {
                 from_root: reachable_from_root
@@ -2640,7 +2636,7 @@ async fn suggest_delta(
         // encourage auditing first.
         let closest_below = if let Some(known_versions) = &known_versions {
             known_versions
-                .iter()
+                .keys()
                 .filter(|&v| v <= &package_version.semver)
                 .max()
         } else {
