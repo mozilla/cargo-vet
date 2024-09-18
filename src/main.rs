@@ -570,14 +570,11 @@ fn cmd_inspect(
             version: version.clone(),
         });
 
-        // If an explicit mode was set, record it in the cache, then pull the
-        // most recent explicit mode to use for this call.
-        if let Some(mode) = sub_args.mode {
-            cache.set_last_fetch_mode(mode);
-        }
-        let mode = cache.get_last_fetch_mode().unwrap_or(FetchMode::DiffRs);
+        // Determine the fetch mode to use. We'll need to do a local diff if the
+        // selected version has a git revision.
+        let mode = cache.select_fetch_mode(sub_args.mode, version.git_rev.is_some());
 
-        if mode != FetchMode::Local && version.git_rev.is_none() {
+        if mode != FetchMode::Local {
             let url = match mode {
                 FetchMode::Sourcegraph => {
                     format!("https://sourcegraph.com/crates/{package}@v{version}")
@@ -2065,14 +2062,14 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
             version2: version2.clone(),
         });
 
-        // If an explicit mode was set, record it in the cache, then pull the
-        // most recent explicit mode to use for this call.
-        if let Some(mode) = sub_args.mode {
-            cache.set_last_fetch_mode(mode);
-        }
-        let mode = cache.get_last_fetch_mode().unwrap_or(FetchMode::DiffRs);
+        // Determine the fetch mode to use. We'll need to do a local diff if the
+        // selected version has a git revision.
+        let mode = cache.select_fetch_mode(
+            sub_args.mode,
+            version1.git_rev.is_some() || version2.git_rev.is_some(),
+        );
 
-        if mode != FetchMode::Local && version1.git_rev.is_none() && version2.git_rev.is_none() {
+        if mode != FetchMode::Local {
             let url = match mode {
                 FetchMode::Sourcegraph => {
                     format!(

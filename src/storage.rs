@@ -2292,14 +2292,33 @@ impl Cache {
         guard.command_history.last_fetch = Some(last_fetch);
     }
 
-    pub fn get_last_fetch_mode(&self) -> Option<FetchMode> {
-        let guard = self.state.lock().unwrap();
-        guard.command_history.last_fetch_mode
-    }
+    pub fn select_fetch_mode(
+        &self,
+        chosen_mode: Option<FetchMode>,
+        force_local: bool,
+    ) -> FetchMode {
+        // If we're going to be forced to use a local mode, return it.
+        //
+        // We don't update the cache here so that folks used to manually typing
+        // out `--local` when doing git diffs don't clobber their last fetch
+        // mode settings.
+        if force_local {
+            return FetchMode::Local;
+        }
 
-    pub fn set_last_fetch_mode(&self, mode: FetchMode) {
+        // If an explicit mode was selected on the command line, update the last
+        // fetch mode to reflect it.
         let mut guard = self.state.lock().unwrap();
-        guard.command_history.last_fetch_mode = Some(mode);
+        if let Some(mode) = chosen_mode {
+            guard.command_history.last_fetch_mode = Some(mode);
+        }
+
+        // Return either the most-recently selected fetch mode, or `diff.rs` if
+        // no fetch mode has been explicitly selected.
+        guard
+            .command_history
+            .last_fetch_mode
+            .unwrap_or(FetchMode::DiffRs)
     }
 
     /// For a given package, fetch the list of versions published on crates.io,
