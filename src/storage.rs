@@ -19,6 +19,7 @@ use tar::Archive;
 use tracing::{error, info, log::warn, trace};
 
 use crate::{
+    cli::FetchMode,
     criteria::CriteriaMapper,
     errors::{
         AggregateError, BadFormatError, BadWildcardEndDateError, CacheAcquireError,
@@ -2289,6 +2290,16 @@ impl Cache {
     pub fn set_last_fetch(&self, last_fetch: FetchCommand) {
         let mut guard = self.state.lock().unwrap();
         guard.command_history.last_fetch = Some(last_fetch);
+    }
+
+    pub fn get_last_fetch_mode(&self) -> Option<FetchMode> {
+        let guard = self.state.lock().unwrap();
+        guard.command_history.last_fetch_mode
+    }
+
+    pub fn set_last_fetch_mode(&self, mode: FetchMode) {
+        let mut guard = self.state.lock().unwrap();
+        guard.command_history.last_fetch_mode = Some(mode);
     }
 
     /// For a given package, fetch the list of versions published on crates.io,

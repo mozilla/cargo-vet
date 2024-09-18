@@ -277,8 +277,12 @@ The version to inspect
 #### `--mode <MODE>`
 How to inspect the source
 
-\[default: sourcegraph]  
-\[possible values: local, sourcegraph]  
+Defaults to the most recently used --mode argument, or diff.rs if no mode argument has
+been used.
+
+This option is ignored if a git version is passed.
+
+\[possible values: local, sourcegraph, diff.rs]  
 
 #### `-h, --help`
 Print help information
@@ -310,9 +314,13 @@ The target version to diff
 
 ### OPTIONS
 #### `--mode <MODE>`
-How to inspect the source
+How to inspect the diff
 
-\[default: sourcegraph]  
+Defaults to the most recently used --mode argument, or diff.rs if no mode argument has
+been used.
+
+This option is ignored if a git version is passed.
+
 \[possible values: local, sourcegraph, diff.rs]  
 
 #### `-h, --help`
