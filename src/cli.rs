@@ -1,6 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use clap::{Parser, Subcommand, ValueEnum};
+use serde::{Deserialize, Serialize};
 use tracing::level_filters::LevelFilter;
 
 use crate::format::{CriteriaName, ImportName, PackageName, VersionReq, VetVersion};
@@ -455,7 +456,7 @@ pub struct CheckArgs {}
 #[derive(clap::Args)]
 pub struct InitArgs {}
 
-/// Fetches the crate to a temp location and pushd's to it
+/// Inspect a crate at a specific version
 #[derive(clap::Args)]
 pub struct InspectArgs {
     /// The package to inspect
@@ -465,11 +466,16 @@ pub struct InspectArgs {
     #[clap(action)]
     pub version: VetVersion,
     /// How to inspect the source
-    #[clap(long, action, default_value = "sourcegraph")]
-    pub mode: InspectFetchMode,
+    ///
+    /// Defaults to the most recently used --mode argument, or diff.rs if no
+    /// mode argument has been used.
+    ///
+    /// This option is ignored if a git version is passed.
+    #[clap(long, action)]
+    pub mode: Option<FetchMode>,
 }
 
-/// Emits a diff of the two versions
+/// View a diff between two versions of the given crate
 #[derive(clap::Args)]
 pub struct DiffArgs {
     /// The package to diff
@@ -481,9 +487,14 @@ pub struct DiffArgs {
     /// The target version to diff
     #[clap(action)]
     pub version2: VetVersion,
-    /// How to inspect the source
-    #[clap(long, action, default_value = "sourcegraph")]
-    pub mode: DiffFetchMode,
+    /// How to inspect the diff
+    ///
+    /// Defaults to the most recently used --mode argument, or diff.rs if no
+    /// mode argument has been used.
+    ///
+    /// This option is ignored if a git version is passed.
+    #[clap(long, action)]
+    pub mode: Option<FetchMode>,
 }
 
 /// Certifies a package as audited
@@ -772,14 +783,8 @@ pub enum Verbose {
     Trace,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum InspectFetchMode {
-    Local,
-    Sourcegraph,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum DiffFetchMode {
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum, Serialize, Deserialize)]
+pub enum FetchMode {
     Local,
     Sourcegraph,
     #[clap(name = "diff.rs")]

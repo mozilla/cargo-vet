@@ -570,8 +570,20 @@ fn cmd_inspect(
             version: version.clone(),
         });
 
-        if sub_args.mode == InspectFetchMode::Sourcegraph && version.git_rev.is_none() {
-            let url = format!("https://sourcegraph.com/crates/{package}@v{version}");
+        // Determine the fetch mode to use. We'll need to do a local diff if the
+        // selected version has a git revision.
+        let mode = cache.select_fetch_mode(sub_args.mode, version.git_rev.is_some());
+
+        if mode != FetchMode::Local {
+            let url = match mode {
+                FetchMode::Sourcegraph => {
+                    format!("https://sourcegraph.com/crates/{package}@v{version}")
+                }
+                FetchMode::DiffRs => {
+                    format!("https://diff.rs/{package}/{version}/{version}/")
+                }
+                FetchMode::Local => unreachable!(),
+            };
             tokio::runtime::Handle::current()
                 .block_on(prompt_criteria_eulas(
                     out,
@@ -2050,20 +2062,24 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
             version2: version2.clone(),
         });
 
-        if sub_args.mode != DiffFetchMode::Local
-            && version1.git_rev.is_none()
-            && version2.git_rev.is_none()
-        {
-            let url = match sub_args.mode {
-                DiffFetchMode::Sourcegraph => {
+        // Determine the fetch mode to use. We'll need to do a local diff if the
+        // selected version has a git revision.
+        let mode = cache.select_fetch_mode(
+            sub_args.mode,
+            version1.git_rev.is_some() || version2.git_rev.is_some(),
+        );
+
+        if mode != FetchMode::Local {
+            let url = match mode {
+                FetchMode::Sourcegraph => {
                     format!(
                         "https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}?visible=7000"
                     )
                 }
-                DiffFetchMode::DiffRs => {
+                FetchMode::DiffRs => {
                     format!("https://diff.rs/{package}/{version1}/{version2}/")
                 }
-                DiffFetchMode::Local => unreachable!(),
+                FetchMode::Local => unreachable!(),
             };
             tokio::runtime::Handle::current()
                 .block_on(prompt_criteria_eulas(

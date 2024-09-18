@@ -1,5 +1,6 @@
 //! Details of the file formats used by cargo vet
 
+use crate::cli::FetchMode;
 use crate::errors::{StoreVersionParseError, VersionParseError};
 use crate::resolver::{DiffRecommendation, ViolationConflict};
 use crate::serialization::{spanned::Spanned, Tidyable};
@@ -1182,6 +1183,7 @@ impl FetchCommand {
 pub struct CommandHistory {
     #[serde(flatten)]
     pub last_fetch: Option<FetchCommand>,
+    pub last_fetch_mode: Option<FetchMode>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
