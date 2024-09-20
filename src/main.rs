@@ -580,7 +580,7 @@ fn cmd_inspect(
                     format!("https://sourcegraph.com/crates/{package}@v{version}")
                 }
                 FetchMode::DiffRs => {
-                    format!("https://diff.rs/{package}/{version}/{version}/")
+                    format!("https://diff.rs/browse/{package}/{version}/")
                 }
                 FetchMode::Local => unreachable!(),
             };
