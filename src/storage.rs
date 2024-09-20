@@ -2326,7 +2326,6 @@ impl Cache {
     ///
     /// This information will be pulled live from index.crates.io each time
     /// cargo-vet is run, but is cached in-memory.
-    #[tracing::instrument(skip(self, network), err)]
     pub async fn published_versions(
         &self,
         network: &Network,
@@ -2419,7 +2418,6 @@ impl Cache {
     /// The result is cached to avoid unnecessary calls to the crates.io API,
     /// and the sparse HTTP index will be used to determine when updated
     /// information is required.
-    #[tracing::instrument(skip(self, network), err)]
     pub async fn crates_io_info(
         &self,
         network: Option<&Network>,
