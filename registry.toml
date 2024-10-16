@@ -1,3 +1,6 @@
+[registry.actix]
+url = "https://raw.githubusercontent.com/actix/supply-chain/main/audits.toml"
+
 [registry.bytecode-alliance]
 url = "https://raw.githubusercontent.com/bytecodealliance/wasmtime/main/supply-chain/audits.toml"
 
