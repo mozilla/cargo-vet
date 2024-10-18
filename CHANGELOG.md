@@ -1,0 +1,26 @@
+# Unreleased
+
+Nothing yet
+
+# Version 0.10.0 (2024-10-03)
+
+* Various improvements to the diff and inspect subcommands:
+  * Added support for using [diff.rs](https://diff.rs) with the diff and inspect subcommands (#625, #633, #635)
+  * The diff and inspect subcommands will remember the most recently used mode, and automatically use it next time (#633)
+  * The default mode for diff and inspect was changed to diff.rs (#611, #633)
+
+* Crates.io metadata caching was changed to avoid issues where incorrect crates.io state was being cached locally, leading to confusing results (#631)
+
+* Unnecessary imports and publisher entries will be removed when adding importing another audit or publisher entry for the same crate (#621)
+  * This is intended to reduce churn and unnecessary entries in `imports.lock` without running prune explicitly
+
+* Network requests made by cargo vet will now respect the cargo `http.cainfo` config option (#615)
+
+* Suggest output will now also mention criteria which implies the minimum required criteria (#614)
+
+* Audit files being aggregated with the aggregate subcommand will now be validated before being aggregated, to avoid generating invalid aggregate audits files (#586)
+
+* Local wildcard audits are now preferred over imported wildcard audits when determining audit paths (#588)
+
+* Binary releases are now built in CI and [published to github](https://github.com/mozilla/cargo-vet/releases) using [`cargo dist`](https://github.com/axodotdev/cargo-dist) (#600)
+
