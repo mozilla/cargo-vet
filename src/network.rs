@@ -21,6 +21,7 @@ use reqwest::{Client, Url};
 use tokio::io::AsyncWriteExt;
 
 use crate::{
+    credentials,
     errors::{DownloadError, SourceFile},
     PartialConfig,
 };
@@ -70,6 +71,8 @@ pub struct Network {
     connection_semaphore: tokio::sync::Semaphore,
     /// Cache of source files downloaded by Url
     source_file_cache: Mutex<std::collections::HashMap<Url, SourceFile>>,
+    /// Whether to use git credential helpers for authentication
+    use_git_credentials: bool,
     /// Test-only override for download requests.
     #[cfg(test)]
     mock_network: Option<std::collections::HashMap<Url, Bytes>>,
@@ -149,6 +152,7 @@ impl Network {
                     }
                 }
             }
+
             let client = client_builder
                 .build()
                 .expect("Couldn't construct HTTP Client?");
@@ -156,6 +160,7 @@ impl Network {
                 client,
                 connection_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS),
                 source_file_cache: Default::default(),
+                use_git_credentials: cfg.cli.use_git_credentials,
                 #[cfg(test)]
                 mock_network: None,
             })
@@ -283,9 +288,16 @@ impl Network {
             .await
             .expect("Semaphore dropped?!");
 
-        let res = self
-            .client
-            .get(url.clone())
+        let mut request_builder = self.client.get(url.clone());
+
+        // Try to get credentials from git credential helper if enabled
+        if self.use_git_credentials {
+            if let Ok(Some(credential)) = credentials::get_credentials_from_git(&url).await {
+                request_builder = credential.apply_to_request(request_builder);
+            }
+        }
+
+        let res = request_builder
             .send()
             .await
             .and_then(|res| res.error_for_status())
@@ -306,6 +318,7 @@ impl Network {
             client: Client::new(),
             connection_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS),
             source_file_cache: Default::default(),
+            use_git_credentials: false, // Disable git credentials in tests by default
             #[cfg(test)]
             mock_network: Some(Default::default()),
         };
