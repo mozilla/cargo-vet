@@ -31,7 +31,7 @@ filetime = "0.2.16"
 flate2 = { version = "1.0.3", default-features = false, features = ["zlib"] }
 futures-util = { version = "0.3.21", default-features = false, features = ["std"] }
 home = "0.5.3"
-indicatif = "0.17.0"
+indicatif = "0.17.7"
 lazy_static = "1.4.0"
 libc = "0.2"
 nom = "7.1.1"
