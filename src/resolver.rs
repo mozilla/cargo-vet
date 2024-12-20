@@ -1543,18 +1543,18 @@ fn search_for_path(
             }
         }
     }
-    impl<'a> PartialEq for Node<'a> {
+    impl PartialEq for Node<'_> {
         fn eq(&self, other: &Self) -> bool {
             self.key() == other.key()
         }
     }
-    impl<'a> Eq for Node<'a> {}
-    impl<'a> PartialOrd for Node<'a> {
+    impl Eq for Node<'_> {}
+    impl PartialOrd for Node<'_> {
         fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
             Some(self.cmp(other))
         }
     }
-    impl<'a> Ord for Node<'a> {
+    impl Ord for Node<'_> {
         fn cmp(&self, other: &Self) -> std::cmp::Ordering {
             self.key().cmp(&other.key())
         }
@@ -1665,7 +1665,7 @@ fn search_for_path(
     Err(visited.into_iter().map(|v| v.cloned()).collect())
 }
 
-impl<'a> ResolveReport<'a> {
+impl ResolveReport<'_> {
     pub fn has_errors(&self) -> bool {
         // Just check the conclusion
         !matches!(self.conclusion, Conclusion::Success(_))
