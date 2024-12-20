@@ -343,7 +343,7 @@ impl<'a> Pager<'a> {
     }
 }
 
-impl<'a> io::Write for Pager<'a> {
+impl io::Write for Pager<'_> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match &mut self.child {
             Some(child) => child.stdin.as_mut().unwrap().write(buf),

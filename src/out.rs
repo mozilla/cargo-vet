@@ -20,7 +20,7 @@ pub trait Out: Send + Sync + 'static {
     /// Write to the output
     fn write_fmt(&self, args: fmt::Arguments<'_>) {
         struct AsWrite<'a, T: ?Sized>(&'a T);
-        impl<'a, T: ?Sized + Out> io::Write for AsWrite<'a, T> {
+        impl<T: ?Sized + Out> io::Write for AsWrite<'_, T> {
             fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
                 Out::write(self.0, buf)
             }

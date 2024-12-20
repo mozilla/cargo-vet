@@ -136,7 +136,7 @@ impl<'de> Deserialize<'de> for VetVersion {
     {
         struct VersionVisitor;
 
-        impl<'de> Visitor<'de> for VersionVisitor {
+        impl Visitor<'_> for VersionVisitor {
             type Value = VetVersion;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -441,7 +441,7 @@ impl<'de> Deserialize<'de> for Delta {
     {
         struct DeltaVisitor;
 
-        impl<'de> Visitor<'de> for DeltaVisitor {
+        impl Visitor<'_> for DeltaVisitor {
             type Value = Delta;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -972,7 +972,7 @@ impl<'de> Deserialize<'de> for StoreVersion {
     {
         struct VersionVisitor;
 
-        impl<'de> Visitor<'de> for VersionVisitor {
+        impl Visitor<'_> for VersionVisitor {
             type Value = StoreVersion;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
