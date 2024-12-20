@@ -29,7 +29,7 @@ crates-index = { version = "0.18.8", default-features = false }
 dirs = "4.0.0"
 filetime = "0.2.16"
 flate2 = { version = "1.0.3", default-features = false, features = ["zlib"] }
-futures-util = { version = "0.3.21", default-features = false, features = ["std"] }
+futures-util = { version = "0.3.29", default-features = false, features = ["std"] }
 home = "0.5.3"
 indicatif = "0.17.0"
 lazy_static = "1.4.0"
