@@ -70,8 +70,8 @@ fn unpublished_basic_regenerate(
         .package(
             "descriptive",
             &[
-                reg_published_by(ver(8), Some(1), "2022-12-15"),
-                reg_published_by(ver(9), Some(1), "2022-12-15"),
+                reg_published_by(ver(8), Some(1), mock_weeks_ago(2)),
+                reg_published_by(ver(9), Some(1), mock_weeks_ago(2)),
             ],
         )
         .serve(&mut network);

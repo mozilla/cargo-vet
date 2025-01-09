@@ -25,7 +25,11 @@ fn build_registry(network: &mut Network, extra_packages: &[&str]) {
                 }),
                 repository: None,
             },
-            &[reg_published_by(ver(DEFAULT_VER), Some(1), "2022-01-01")],
+            &[reg_published_by(
+                ver(DEFAULT_VER),
+                Some(1),
+                mock_months_ago(12),
+            )],
         );
     }
     registry.serve(network);

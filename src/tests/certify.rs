@@ -619,7 +619,7 @@ fn mock_wildcard_certify_flow() {
         |_| Ok("\n".to_owned()),
         |_| {
             Ok("\
-            I, testing, certify that any version of third-party1 published by 'testuser' between 2022-12-12 and 2024-01-01 will satisfy the above criteria.\n\
+            I, testing, certify that any version of third-party1 published by 'testuser' between 2022-12-18 and 2024-01-01 will satisfy the above criteria.\n\
             \n\
             These are testing notes. They contain some\n\
             newlines. Trailing whitespace        \n    \
@@ -655,8 +655,8 @@ fn mock_wildcard_certify_flow() {
         .package(
             "third-party1",
             &[
-                reg_published_by(ver(9), Some(5), "2022-10-12"),
-                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+                reg_published_by(ver(9), Some(5), mock_weeks_ago(10)),
+                reg_published_by(ver(DEFAULT_VER), Some(2), mock_weeks_ago(2)),
             ],
         )
         .serve(&mut network);
@@ -709,9 +709,9 @@ fn mock_trust_flow_simple() {
         .package(
             "third-party1",
             &[
-                reg_published_by(ver(1), None, "2022-10-12"),
-                reg_published_by(ver(9), Some(2), "2022-10-12"),
-                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+                reg_published_by(ver(1), None, mock_weeks_ago(10)),
+                reg_published_by(ver(9), Some(2), mock_weeks_ago(10)),
+                reg_published_by(ver(DEFAULT_VER), Some(2), mock_weeks_ago(2)),
             ],
         )
         .serve(&mut network);
@@ -764,9 +764,9 @@ fn mock_trust_flow_ambiguous() {
         .package(
             "third-party1",
             &[
-                reg_published_by(ver(1), None, "2022-10-12"),
-                reg_published_by(ver(9), Some(5), "2022-10-12"),
-                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+                reg_published_by(ver(1), None, mock_weeks_ago(10)),
+                reg_published_by(ver(9), Some(5), mock_weeks_ago(10)),
+                reg_published_by(ver(DEFAULT_VER), Some(2), mock_weeks_ago(2)),
             ],
         )
         .serve(&mut network);
@@ -808,9 +808,9 @@ fn mock_trust_flow_explicit() {
         .package(
             "third-party1",
             &[
-                reg_published_by(ver(1), None, "2022-10-12"),
-                reg_published_by(ver(9), Some(5), "2022-10-12"),
-                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+                reg_published_by(ver(1), None, mock_weeks_ago(10)),
+                reg_published_by(ver(9), Some(5), mock_weeks_ago(10)),
+                reg_published_by(ver(DEFAULT_VER), Some(2), mock_weeks_ago(2)),
             ],
         )
         .serve(&mut network);
@@ -863,22 +863,26 @@ fn mock_trust_flow_all() {
         .package(
             "third-party1",
             &[
-                reg_published_by(ver(1), None, "2022-10-12"),
-                reg_published_by(ver(9), Some(5), "2022-10-12"),
-                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+                reg_published_by(ver(1), None, mock_weeks_ago(10)),
+                reg_published_by(ver(9), Some(5), mock_weeks_ago(10)),
+                reg_published_by(ver(DEFAULT_VER), Some(2), mock_weeks_ago(2)),
             ],
         )
         .package(
             "transitive-third-party1",
             &[
-                reg_published_by(ver(1), None, "2022-10-12"),
-                reg_published_by(ver(9), Some(2), "2022-10-12"),
-                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+                reg_published_by(ver(1), None, mock_weeks_ago(10)),
+                reg_published_by(ver(9), Some(2), mock_weeks_ago(10)),
+                reg_published_by(ver(DEFAULT_VER), Some(2), mock_weeks_ago(2)),
             ],
         )
         .package(
             "third-party2",
-            &[reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12")],
+            &[reg_published_by(
+                ver(DEFAULT_VER),
+                Some(2),
+                mock_weeks_ago(2),
+            )],
         )
         .serve(&mut network);
 
@@ -940,22 +944,26 @@ fn mock_trust_flow_all_allow_multiple() {
         .package(
             "third-party1",
             &[
-                reg_published_by(ver(1), None, "2022-10-12"),
-                reg_published_by(ver(9), Some(5), "2022-10-12"),
-                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+                reg_published_by(ver(1), None, mock_weeks_ago(10)),
+                reg_published_by(ver(9), Some(5), mock_weeks_ago(10)),
+                reg_published_by(ver(DEFAULT_VER), Some(2), mock_weeks_ago(2)),
             ],
         )
         .package(
             "transitive-third-party1",
             &[
-                reg_published_by(ver(1), None, "2022-10-12"),
-                reg_published_by(ver(9), Some(2), "2022-10-12"),
-                reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12"),
+                reg_published_by(ver(1), None, mock_weeks_ago(10)),
+                reg_published_by(ver(9), Some(2), mock_weeks_ago(10)),
+                reg_published_by(ver(DEFAULT_VER), Some(2), mock_weeks_ago(2)),
             ],
         )
         .package(
             "third-party2",
-            &[reg_published_by(ver(DEFAULT_VER), Some(2), "2022-12-12")],
+            &[reg_published_by(
+                ver(DEFAULT_VER),
+                Some(2),
+                mock_weeks_ago(2),
+            )],
         )
         .serve(&mut network);
 

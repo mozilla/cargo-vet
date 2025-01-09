@@ -264,8 +264,8 @@ fn wildcard_audit(user_id: u64, criteria: CriteriaStr) -> WildcardEntry {
         notes: None,
         criteria: vec![criteria.to_string().into()],
         user_id,
-        start: chrono::NaiveDate::from_ymd_opt(2022, 12, 1).unwrap().into(),
-        end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
+        start: mock_months_ago(1).date_naive().into(),
+        end: mock_today().into(),
         renew: None,
         aggregated_from: vec![],
         is_fresh_import: false,
@@ -281,8 +281,8 @@ fn wildcard_audit_m(
         notes: None,
         criteria: criteria.into_iter().map(|s| s.into().into()).collect(),
         user_id,
-        start: chrono::NaiveDate::from_ymd_opt(2022, 12, 1).unwrap().into(),
-        end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
+        start: mock_months_ago(1).date_naive().into(),
+        end: mock_today().into(),
         renew: None,
         aggregated_from: vec![],
         is_fresh_import: false,
@@ -294,8 +294,8 @@ fn trusted_entry(user_id: u64, criteria: CriteriaStr) -> TrustEntry {
         notes: None,
         criteria: vec![criteria.to_string().into()],
         user_id,
-        start: chrono::NaiveDate::from_ymd_opt(2022, 12, 1).unwrap().into(),
-        end: chrono::NaiveDate::from_ymd_opt(2023, 1, 1).unwrap().into(),
+        start: mock_months_ago(1).date_naive().into(),
+        end: mock_today().into(),
         aggregated_from: vec![],
     }
 }
@@ -303,7 +303,7 @@ fn trusted_entry(user_id: u64, criteria: CriteriaStr) -> TrustEntry {
 fn publisher_entry(version: VetVersion, user_id: u64) -> CratesPublisher {
     CratesPublisher {
         version,
-        when: chrono::NaiveDate::from_ymd_opt(2022, 12, 15).unwrap(),
+        when: mock_weeks_ago(2).date_naive(),
         user_id,
         user_login: format!("user{user_id}"),
         user_name: None,
@@ -319,7 +319,7 @@ fn publisher_entry_named(
 ) -> CratesPublisher {
     CratesPublisher {
         version,
-        when: chrono::NaiveDate::from_ymd_opt(2022, 12, 15).unwrap(),
+        when: mock_weeks_ago(2).date_naive(),
         user_id,
         user_login: login.to_owned(),
         user_name: Some(name.to_owned()),
@@ -1078,7 +1078,17 @@ fn mock_now() -> chrono::DateTime<chrono::Utc> {
     )
 }
 
-/// Returns a fixed datetime that should be considered `today`: 2023-01-01.
+/// Returns a fixed datetime that is `months` months ago relative to `mock_now()`
+fn mock_months_ago(months: u32) -> chrono::DateTime<chrono::Utc> {
+    mock_now() - chrono::Months::new(months)
+}
+
+/// Returns a fixed datetime that is `weeks` weeks ago relative to `mock_now()`
+fn mock_weeks_ago(weeks: i64) -> chrono::DateTime<chrono::Utc> {
+    mock_now() - chrono::Duration::weeks(weeks)
+}
+
+/// Returns a fixed date that should be considered `today`: 2023-01-01.
 ///
 /// This is derived from `mock_now()`.
 fn mock_today() -> chrono::NaiveDate {
@@ -1256,7 +1266,7 @@ struct MockRegistryVersion {
 fn reg_published_by(
     version: VetVersion,
     published_by: Option<CratesUserId>,
-    when: &str,
+    when: chrono::DateTime<chrono::Utc>,
 ) -> MockRegistryVersion {
     assert!(
         version.git_rev.is_none(),
@@ -1265,13 +1275,7 @@ fn reg_published_by(
     MockRegistryVersion {
         version: version.semver,
         published_by,
-        created_at: chrono::DateTime::from_utc(
-            chrono::NaiveDateTime::new(
-                when.parse::<chrono::NaiveDate>().unwrap(),
-                chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
-            ),
-            chrono::Utc,
-        ),
+        created_at: when,
     }
 }
 

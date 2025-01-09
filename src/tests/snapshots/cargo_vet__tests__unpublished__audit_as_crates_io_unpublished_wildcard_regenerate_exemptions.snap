@@ -16,7 +16,7 @@ imports.lock:
  [[publisher.descriptive]]
 -version = "8.0.0"
 +version = "9.0.0"
- when = "2022-12-15"
+ when = "2022-12-18"
  user-id = 1
  user-login = "user1"
  user-name = "User One"
