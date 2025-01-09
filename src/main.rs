@@ -155,6 +155,8 @@ const DURATION_DAY: Duration = Duration::from_secs(60 * 60 * 24);
 
 lazy_static! {
     static ref WILDCARD_AUDIT_EXPIRATION_DURATION: chrono::Duration = chrono::Duration::weeks(6);
+    static ref WILDCARD_AUDIT_INACTIVE_CRATE_DURATION: chrono::Duration =
+        chrono::Duration::weeks(16);
 }
 /// This string is always used in a context such as "in the next {STR}".
 const WILDCARD_AUDIT_EXPIRATION_STRING: &str = "six weeks";
@@ -1880,7 +1882,7 @@ fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &
     } else {
         // Find and update all expiring crates.
         assert!(sub_args.expiring);
-        renewing = WildcardAuditRenewal::expiring(cfg, store);
+        renewing = WildcardAuditRenewal::expiring(cfg, store, false);
 
         if renewing.is_empty() {
             info!("no wildcard audits that are eligible for renewal have expired or are expiring in the next {WILDCARD_AUDIT_EXPIRATION_STRING}");
@@ -2268,7 +2270,7 @@ fn cmd_check(
             }
 
             // Warn about wildcard audits which will be expiring soon or have expired.
-            let expiry = WildcardAuditRenewal::expiring(cfg, &mut store);
+            let expiry = WildcardAuditRenewal::expiring(cfg, &mut store, true);
 
             if !expiry.is_empty() {
                 let expired = expiry.expired_crates();
@@ -2305,17 +2307,42 @@ impl<'a> WildcardAuditRenewal<'a> {
     ///
     /// This function _does not_ modify the store, but since the mutable references to the entries
     /// are stored (for potential use by `renew`), it must take a mutable Store.
-    pub fn expiring(cfg: &Config, store: &'a mut Store) -> Self {
+    pub fn expiring(cfg: &Config, store: &'a mut Store, ignore_inactive: bool) -> Self {
         let expire_date = cfg.today() + *WILDCARD_AUDIT_EXPIRATION_DURATION;
 
         let mut crates: SortedMap<PackageStr<'a>, Vec<(&'a mut WildcardEntry, bool)>> =
             Default::default();
         for (name, audits) in store.audits.wildcard_audits.iter_mut() {
+            // Get the most recent publication time for this crate on crates.io,
+            // which will be used to avoid expiry warnings for inactive crates.
+            let last_publish_date = store
+                .live_imports
+                .as_ref()
+                .and_then(|imports| imports.publisher.get(name))
+                .map(|publishers| &publishers[..])
+                .unwrap_or(&[])
+                .iter()
+                .map(|p| p.when)
+                .max()
+                .unwrap_or(cfg.today());
+
             // Check whether there are any audits expiring by the expiration date. Of those
             // audits, check whether all of them are already expired (to change the warning
             // message to be more informative).
             for entry in audits.iter_mut().filter(|e| e.should_renew(expire_date)) {
                 let expired = entry.should_renew(cfg.today());
+
+                // If the crate has not been published since the wildcard audit
+                // expired, and the last published version by that user is over
+                // 4 months ago, we silence the expiring/expired renewal
+                // warning.
+                if ignore_inactive
+                    && last_publish_date < *entry.end
+                    && last_publish_date < cfg.today() - *WILDCARD_AUDIT_INACTIVE_CRATE_DURATION
+                {
+                    continue;
+                }
+
                 crates.entry(name).or_default().push((entry, expired));
             }
         }
