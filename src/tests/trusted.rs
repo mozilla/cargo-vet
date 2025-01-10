@@ -124,7 +124,11 @@ fn trusted_suggest_local() {
         .user(1, "testuser", "Test user")
         .package(
             "transitive-third-party1",
-            &[reg_published_by(ver(DEFAULT_VER), Some(1), "2022-12-12")],
+            &[reg_published_by(
+                ver(DEFAULT_VER),
+                Some(1),
+                mock_weeks_ago(2),
+            )],
         )
         .serve(&mut network);
 
@@ -170,7 +174,11 @@ fn trusted_suggest_import() {
         .user(1, "testuser", "Test user")
         .package(
             "transitive-third-party1",
-            &[reg_published_by(ver(DEFAULT_VER), Some(1), "2022-12-12")],
+            &[reg_published_by(
+                ver(DEFAULT_VER),
+                Some(1),
+                mock_weeks_ago(2),
+            )],
         )
         .serve(&mut network);
 
@@ -225,7 +233,11 @@ fn trusted_suggest_import_multiple() {
         .user(1, "testuser", "Test user")
         .package(
             "transitive-third-party1",
-            &[reg_published_by(ver(DEFAULT_VER), Some(1), "2022-12-12")],
+            &[reg_published_by(
+                ver(DEFAULT_VER),
+                Some(1),
+                mock_weeks_ago(2),
+            )],
         )
         .serve(&mut network);
 
@@ -261,8 +273,8 @@ fn trusted_suggest_local_ambiguous() {
         .package(
             "transitive-third-party1",
             &[
-                reg_published_by(ver(9), Some(2), "2022-12-12"),
-                reg_published_by(ver(DEFAULT_VER), Some(1), "2022-12-12"),
+                reg_published_by(ver(9), Some(2), mock_weeks_ago(2)),
+                reg_published_by(ver(DEFAULT_VER), Some(1), mock_weeks_ago(2)),
             ],
         )
         .serve(&mut network);

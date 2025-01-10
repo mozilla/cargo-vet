@@ -5,14 +5,14 @@ expression: output
  
 +[[publisher.third-party1]]
 +version = "10.0.0"
-+when = "2022-12-12"
++when = "2022-12-18"
 +user-id = 2
 +user-login = "user2"
 +user-name = "User Two"
 +
 +[[publisher.third-party2]]
 +version = "10.0.0"
-+when = "2022-12-12"
++when = "2022-12-18"
 +user-id = 1
 +user-login = "user1"
 +user-name = "User One"

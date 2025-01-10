@@ -136,7 +136,7 @@ pub struct Editor<'a> {
     run_editor: Box<dyn FnOnce(&Path) -> io::Result<bool> + 'a>,
 }
 
-impl<'a> Editor<'a> {
+impl Editor<'_> {
     /// Create a new editor for a temporary file.
     pub fn new(name: &str) -> io::Result<Self> {
         let tempfile = tempfile::Builder::new()
@@ -172,12 +172,6 @@ impl<'a> Editor<'a> {
                 .find(|cc| *cc != '\0')
                 .expect("couldn't find a viable comment character"),
         );
-    }
-
-    #[cfg(test)]
-    /// Test-only method to mock out the actual invocation of the editor.
-    pub fn set_run_editor(&mut self, run_editor: impl FnOnce(&Path) -> io::Result<bool> + 'a) {
-        self.run_editor = Box::new(run_editor);
     }
 
     /// Add comment lines to the editor. Any newlines in the input will be
@@ -257,6 +251,14 @@ impl<'a> Editor<'a> {
         }
 
         Ok(lines.join("\n"))
+    }
+}
+
+#[cfg(test)]
+impl<'a> Editor<'a> {
+    /// Test-only method to mock out the actual invocation of the editor.
+    pub fn set_run_editor(&mut self, run_editor: impl FnOnce(&Path) -> io::Result<bool> + 'a) {
+        self.run_editor = Box::new(run_editor);
     }
 }
 

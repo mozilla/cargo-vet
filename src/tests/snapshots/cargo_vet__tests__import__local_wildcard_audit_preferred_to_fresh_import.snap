@@ -5,7 +5,7 @@ expression: output
 +
 +[[publisher.third-party2]]
 +version = "10.0.0"
-+when = "2022-12-15"
++when = "2022-12-18"
 +user-id = 1
 +user-login = "user1"
 +user-name = "User One"

@@ -269,7 +269,7 @@ fn renew_expiring_selection_logic() {
         "renew-expiring-selection-logic",
         ["--expiring"],
         |cfg, store| {
-            let renewal = WildcardAuditRenewal::expiring(cfg, store);
+            let renewal = WildcardAuditRenewal::expiring(cfg, store, false);
             assert_eq!(renewal.expired_crates(), vec!["foo", "quux"]);
             assert_eq!(renewal.expiring_crates(), vec!["baz", "foo"]);
             renewal
@@ -282,4 +282,131 @@ fn renew_specific_selection_logic() {
     wildcard_audit_renewal_test("renew-specific-selection-logic", ["foo"], |_, store| {
         WildcardAuditRenewal::single_crate("foo", store).expect("store inconsistent")
     });
+}
+
+enum ExpiringStatus {
+    None,
+    Expiring,
+    Expired,
+}
+
+fn expiring_ignore_inactive_test(
+    audit_start: chrono::DateTime<chrono::Utc>,
+    audit_end: chrono::DateTime<chrono::Utc>,
+    last_update: chrono::DateTime<chrono::Utc>,
+    expected_status: ExpiringStatus,
+) {
+    let _enter = TEST_RUNTIME.enter();
+    let metadata = MockMetadata::simple().metadata();
+    let (config, mut audits, imports) = builtin_files_no_exemptions(&metadata);
+
+    let package = "third-party1";
+    let user_id = 1;
+
+    audits.wildcard_audits.insert(
+        package.to_owned(),
+        vec![WildcardEntry {
+            who: vec!["user".to_owned().into()],
+            criteria: vec!["safe-to-deploy".to_owned().into()],
+            user_id,
+            start: audit_start.date_naive().into(),
+            end: audit_end.date_naive().into(),
+            renew: None,
+            notes: None,
+            aggregated_from: Default::default(),
+            is_fresh_import: false,
+        }],
+    );
+
+    let mut network = Network::new_mock();
+    MockRegistryBuilder::new()
+        .user(user_id, "user1", "User One")
+        .package(
+            package,
+            &[
+                reg_published_by(
+                    ver(9),
+                    Some(user_id),
+                    last_update - chrono::Duration::weeks(4),
+                ),
+                reg_published_by(ver(10), Some(user_id), last_update),
+                reg_published_by(
+                    ver(11),
+                    Some(user_id),
+                    last_update - chrono::Duration::weeks(2),
+                ),
+            ],
+        )
+        .serve(&mut network);
+
+    let cfg = mock_cfg(&metadata);
+    let mut store = Store::mock_online(&cfg, config, audits, imports, &network, false)
+        .expect("store acquisition failed");
+
+    let renewal = WildcardAuditRenewal::expiring(&cfg, &mut store, true);
+    match expected_status {
+        ExpiringStatus::None => {
+            assert!(renewal.is_empty(), "expected no audits needing renewal");
+        }
+        ExpiringStatus::Expiring => {
+            assert!(!renewal.is_empty(), "expected an audit needing renewal");
+            assert_eq!(renewal.expiring_crates(), vec![package]);
+            assert!(renewal.expired_crates().is_empty());
+        }
+        ExpiringStatus::Expired => {
+            assert!(!renewal.is_empty(), "expected an audit needing renewal");
+            assert!(renewal.expiring_crates().is_empty());
+            assert_eq!(renewal.expired_crates(), vec![package]);
+        }
+    }
+}
+
+#[test]
+fn expiring_ignore_inactive_test_expired_inactive() {
+    // If the last update was over WILDCARD_AUDIT_INACTIVE_CRATE_DURATION ago,
+    // and was before the end of the audit, don't generate a warning if we're
+    // ignoring inactive.
+    expiring_ignore_inactive_test(
+        mock_months_ago(10),
+        mock_months_ago(6),
+        mock_months_ago(7),
+        ExpiringStatus::None,
+    )
+}
+
+#[test]
+fn expiring_ignore_inactive_test_expired_inactive_after_end() {
+    // If the last update was over WILDCARD_AUDIT_INACTIVE_CRATE_DURATION ago,
+    // but was after the end of the audit, generate a warning as it should be
+    // extended to cover all versions.
+    expiring_ignore_inactive_test(
+        mock_months_ago(10),
+        mock_months_ago(6),
+        mock_months_ago(5),
+        ExpiringStatus::Expired,
+    )
+}
+
+#[test]
+fn expiring_ignore_inactive_test_expiring_inactive() {
+    // If the last update was over WILDCARD_AUDIT_INACTIVE_CRATE_DURATION ago,
+    // and the audit is expiring soon, don't generate a warning.
+    expiring_ignore_inactive_test(
+        mock_months_ago(10),
+        mock_weeks_ago(-1),
+        mock_months_ago(7),
+        ExpiringStatus::None,
+    )
+}
+
+#[test]
+fn expiring_ignore_inactive_test_expiring_active() {
+    // If the last update was less than WILDCARD_AUDIT_INACTIVE_CRATE_DURATION
+    // ago, and the audit is expiring soon, do generate a warning.
+    expiring_ignore_inactive_test(
+        mock_months_ago(10),
+        mock_weeks_ago(-1),
+        mock_months_ago(1),
+        ExpiringStatus::Expiring,
+    )
 }
