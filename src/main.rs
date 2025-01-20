@@ -1848,7 +1848,8 @@ fn cmd_regenerate_unpublished(
 
 fn cmd_renew(out: &Arc<dyn Out>, cfg: &Config, sub_args: &RenewArgs) -> Result<(), miette::Report> {
     trace!("renewing wildcard audits");
-    let mut store = Store::acquire_offline(cfg)?;
+    let network = Network::acquire(cfg);
+    let mut store = Store::acquire(cfg, network.as_ref(), false)?;
     do_cmd_renew(out, cfg, &mut store, sub_args);
     store.commit()?;
     Ok(())
@@ -1882,7 +1883,7 @@ fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &
     } else {
         // Find and update all expiring crates.
         assert!(sub_args.expiring);
-        renewing = WildcardAuditRenewal::expiring(cfg, store, false);
+        renewing = WildcardAuditRenewal::expiring(cfg, store, !sub_args.include_inactive);
 
         if renewing.is_empty() {
             info!("no wildcard audits that are eligible for renewal have expired or are expiring in the next {WILDCARD_AUDIT_EXPIRATION_STRING}");
