@@ -906,6 +906,9 @@ The name of a crate to renew
 #### `--expiring`
 Renew all wildcard audits which will have expired six weeks from now
 
+#### `--include-inactive`
+Renew wildcard audits for inactive crates which have not been updated in 4 months
+
 #### `-h, --help`
 Print help information
 

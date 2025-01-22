@@ -750,6 +750,11 @@ pub struct RenewArgs {
     #[clap(long, action, conflicts_with("crate-name"))]
     pub expiring: bool,
 
+    /// Renew wildcard audits for inactive crates which have not been updated
+    /// in 4 months.
+    #[clap(long, action, requires("expiring"))]
+    pub include_inactive: bool,
+
     /// The name of a crate to renew.
     #[clap(value_name("CRATE"), action, required_unless_present("expiring"))]
     pub crate_name: Option<String>,
