@@ -149,6 +149,7 @@ impl Network {
                     }
                 }
             }
+
             let client = client_builder
                 .build()
                 .expect("Couldn't construct HTTP Client?");
@@ -284,9 +285,15 @@ impl Network {
             .await
             .expect("Semaphore dropped?!");
 
-        let res = self
-            .client
-            .get(url.clone())
+        let mut request_builder = self.client.get(url.clone());
+
+        // Add a header from the environment, if present.
+        if let Ok(header) = std::env::var("CARGO_VET_AUTH_HEADER") {
+            let (name, value) = header.split_once(':').expect("Invalid header format");
+            request_builder = request_builder.header(name, value);
+        }
+
+        let res = request_builder
             .send()
             .await
             .and_then(|res| res.error_for_status())
