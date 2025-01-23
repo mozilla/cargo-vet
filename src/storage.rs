@@ -2784,7 +2784,7 @@ where
     val.tidy();
 
     let toml_document = to_formatted_toml(val, user_info)?;
-    Ok(format!("{heading}{toml_document}"))
+    Ok(format!("{heading}\n{toml_document}"))
 }
 fn load_json<T>(reader: impl Read) -> Result<T, LoadJsonError>
 where

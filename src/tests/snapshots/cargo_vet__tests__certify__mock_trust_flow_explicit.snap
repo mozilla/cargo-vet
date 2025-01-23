@@ -18,7 +18,6 @@ current selection: ["safe-to-deploy"]
 
 
 AUDITS:
-
 [criteria.fuzzed]
 description = "fuzzed"
 
@@ -40,4 +39,3 @@ criteria = "safe-to-deploy"
 user-id = 2
 start = "2022-12-18"
 end = "2024-01-01"
-

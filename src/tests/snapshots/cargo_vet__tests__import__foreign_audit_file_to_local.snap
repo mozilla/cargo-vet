@@ -1,8 +1,7 @@
 ---
 source: src/tests/import.rs
-expression: "crate::serialization::to_formatted_toml(&result.audit_file).unwrap().to_string()"
+expression: "crate::serialization::to_formatted_toml(&result.audit_file,\nNone).unwrap().to_string()"
 ---
-
 [criteria.example]
 description = "Example criteria description"
 
@@ -58,4 +57,3 @@ notes = "will not be removed"
 criteria = "safe-to-deploy"
 violation = "=5.0.0"
 notes = "will not be removed"
-

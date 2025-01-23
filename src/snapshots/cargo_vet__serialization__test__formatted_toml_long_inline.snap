@@ -2,7 +2,6 @@
 source: src/serialization.rs
 expression: formatted
 ---
-
 [cargo-vet]
 version = "1.0"
 
@@ -23,4 +22,3 @@ example-crate-3 = [
 criteria = "short-criteria"
 dependency-criteria = { example-crate-1 = "criteria-one" }
 notes = "notes go here!"
-
