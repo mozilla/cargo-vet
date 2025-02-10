@@ -2,6 +2,11 @@
 
 Nothing yet
 
+# Version 0.10.1 (2025-02-10)
+
+* `cargo vet` will no longer prompt to renew expiring wildcard audits for inactive crates (#648)
+* `cargo vet renew --expiring` will no longer renew expiring wildcard audits for inactive crates (#649)
+
 # Version 0.10.0 (2024-10-03)
 
 * Various improvements to the diff and inspect subcommands:
