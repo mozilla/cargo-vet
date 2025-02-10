@@ -2985,7 +2985,7 @@ async fn check_audit_as_crates_io(
                 let matches_crates_io_package = cache
                     .crates_io_info(network, &package.name)
                     .await
-                    .map_or(false, |entry| entry.metadata.consider_as_same(package));
+                    .is_ok_and(|entry| entry.metadata.consider_as_same(package));
 
                 if matches_crates_io_package && audit_policy.is_none() {
                     // We found a package that has similar metadata to one with the same name
