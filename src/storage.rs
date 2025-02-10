@@ -2176,7 +2176,7 @@ impl Cache {
             if !entry
                 .file_name()
                 .to_str()
-                .map_or(false, |name| CACHE_ALLOWED_FILES.contains(&name))
+                .is_some_and(|name| CACHE_ALLOWED_FILES.contains(&name))
             {
                 remove_dir_entry(&entry).await?;
             }

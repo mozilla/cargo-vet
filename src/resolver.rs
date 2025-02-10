@@ -1793,23 +1793,22 @@ impl ResolveReport<'_> {
                     // those we find, if any.
                     let trust_hint = {
                         let mut exact_version = false;
-                        let id_for_hint = if publisher_id
-                            .map_or(false, |i| trusted_publishers.contains_key(&i))
-                        {
-                            exact_version = true;
-                            publisher_id
-                        } else if !store.audits.trusted.contains_key(package.name) {
-                            crates_io_info.as_ref().and_then(|metadata| {
-                                metadata
-                                    .versions
-                                    .iter()
-                                    .rev()
-                                    .filter_map(|(_, details)| details.published_by)
-                                    .find(|i| trusted_publishers.contains_key(i))
-                            })
-                        } else {
-                            None
-                        };
+                        let id_for_hint =
+                            if publisher_id.is_some_and(|i| trusted_publishers.contains_key(&i)) {
+                                exact_version = true;
+                                publisher_id
+                            } else if !store.audits.trusted.contains_key(package.name) {
+                                crates_io_info.as_ref().and_then(|metadata| {
+                                    metadata
+                                        .versions
+                                        .iter()
+                                        .rev()
+                                        .filter_map(|(_, details)| details.published_by)
+                                        .find(|i| trusted_publishers.contains_key(i))
+                                })
+                            } else {
+                                None
+                            };
 
                         id_for_hint.map(|id| {
                             let mut trusted_by: Vec<String> = trusted_publishers
