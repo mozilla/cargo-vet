@@ -23,6 +23,10 @@ member of a designated set of cryptography experts within the project.
 
 The full feature set is documented [here](config.md#the-criteria-table).
 
+If you are using [aggregated audits](multiple-repositories.md), the
+`description` of each criteria must be **exactly identical** in every
+repository, or the aggregation will fail.
+
 ## Multiple Sets of Criteria
 
 There are a number of reasons you might wish to operate with multiple sets of
@@ -30,10 +34,18 @@ criteria:
 * **Applying extra checks to some crates:** For example, you might define
   `crypto-reviewed` criteria and require them for audits of crates which
   implement cryptographic algorithms that your application depends on.
+
 * **Relaxing your audit requirements for some crates:** For example, you might
   decide that crates not exposed in production can just be `safe-to-run`
   rather than `safe-to-deploy`, since they don't need to be audited for handling
   adversarial input.
+
+    ```
+    [policy.mycrate]
+    criteria = ["safe-to-deploy"]
+    dependency-criteria = { non-exposed-crate = ["safe-to-run"] }
+    ```
+
 * **Improving Sharing:** If one project wants to audit for issues A and B, and
   another project wants to audit for B and C, defining separate sets of criteria
   for A, B, and C allows the two projects to partially share work.
