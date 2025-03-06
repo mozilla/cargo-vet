@@ -51,3 +51,20 @@ criteria:
   for A, B, and C allows the two projects to partially share work.
 
 You can define and use as many separate sets of criteria as you like.
+
+### Example criteria set: Google's `ub-risk-N`
+
+Google's rust crate audits define a set of 7 audit criteria that form an
+implication chain: `ub-risk-0` through `ub-risk-4`, along with
+`ub-risk-1-thorough` and `ub-risk-2-thorough` indicating that two unsafe Rust
+experts performed the audit. Most projects that want to use this critera set
+should specify `ub-risk-2` as the policy criteria and specify per-crate
+policy exceptions for `ub-risk-3` crates.
+
+A notable feature of this criteria set is that it allows you to record an audit
+for a crate that your organization has decided is unacceptable for use
+(`ub-risk-4`), which can assist in tracking whether the issues have been fixed
+when you revisit the crate in the future.
+
+The criteria can be viewed in the `[registry.google]` link in `registry.toml`
+and at <https://github.com/google/rust-crate-audits/blob/main/auditing_standards.md>.
