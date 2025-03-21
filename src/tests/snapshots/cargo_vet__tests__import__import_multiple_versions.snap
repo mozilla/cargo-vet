@@ -2,7 +2,6 @@
 source: src/tests/import.rs
 expression: output
 ---
-+
 +[[audits.peer-company.audits.third-core]]
 +criteria = "safe-to-deploy"
 +version = "5.0.0"
@@ -10,4 +9,3 @@ expression: output
 +[[audits.peer-company.audits.third-core]]
 +criteria = "safe-to-deploy"
 +version = "10.0.0"
-

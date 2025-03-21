@@ -2,7 +2,6 @@
 source: src/tests/aggregate.rs
 expression: output
 ---
-
 [criteria.criteria1]
 description = "Criteria 1"
 aggregated-from = [
@@ -37,4 +36,3 @@ aggregated-from = "https://source2.example.com/supply_chain/audits.toml"
 criteria = "criteria1"
 version = "10.0.0"
 aggregated-from = "https://source2.example.com/supply_chain/audits.toml"
-

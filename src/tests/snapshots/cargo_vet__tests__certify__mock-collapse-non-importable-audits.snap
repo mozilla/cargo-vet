@@ -28,7 +28,6 @@ New notes
 <<<END EDIT>>>
 
 AUDITS:
-
 [criteria.fuzzed]
 description = "fuzzed"
 
@@ -55,4 +54,3 @@ importable = false
 notes = """
 Old notes
 New notes"""
-

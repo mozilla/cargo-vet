@@ -2,7 +2,6 @@
 source: src/tests/import.rs
 expression: output
 ---
- 
 +[[publisher.third-party1]]
 +version = "10.0.0"
 +when = "2022-12-18"
@@ -24,4 +23,3 @@ expression: output
 +end = "2023-01-01"
 +
  [audits.peer-company.audits]
-

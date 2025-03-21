@@ -18,7 +18,6 @@ current selection: ["reviewed"]
 
 
 AUDITS:
-
 [criteria.fuzzed]
 description = "fuzzed"
 
@@ -52,4 +51,3 @@ criteria = "reviewed"
 user-id = 2 # Test user (testuser)
 start = "2022-10-23"
 end = "2024-01-01"
-

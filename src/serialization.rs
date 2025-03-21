@@ -434,7 +434,7 @@ fn table_should_be_inline(key: &str, value: &toml_edit::Item) -> bool {
 pub fn to_formatted_toml<T>(
     val: T,
     user_info: Option<&FastMap<CratesUserId, CratesCacheUser>>,
-) -> Result<toml_edit::Document, toml_edit::ser::Error>
+) -> Result<toml_edit::DocumentMut, toml_edit::ser::Error>
 where
     T: Serialize,
 {

@@ -2,7 +2,6 @@
 source: src/tests/import.rs
 expression: output
 ---
-+
 +[[publisher.third-party2]]
 +version = "10.0.0"
 +when = "2022-12-18"
@@ -11,4 +10,3 @@ expression: output
 +user-name = "User One"
 +
 +[audits.peer-company.audits]
-

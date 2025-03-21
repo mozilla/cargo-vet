@@ -2,7 +2,6 @@
 source: src/tests/import.rs
 expression: output
 ---
- 
  [[audits.peer-company.audits.third-party2]]
  criteria = "safe-to-deploy"
  version = "5.0.0"
@@ -26,4 +25,3 @@ expression: output
 -[[audits.peer-company.audits.unused-violation]]
 -criteria = "safe-to-deploy"
 -violation = "1.*"
-

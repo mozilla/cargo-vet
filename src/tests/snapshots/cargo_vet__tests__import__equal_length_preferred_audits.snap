@@ -2,7 +2,6 @@
 source: src/tests/import.rs
 expression: output
 ---
-+
 +[[audits.peer-company.audits.third-party2]]
 +criteria = "safe-to-deploy"
 +version = "2.0.0"
@@ -10,4 +9,3 @@ expression: output
 +[[audits.peer-company.audits.third-party2]]
 +criteria = "safe-to-deploy"
 +delta = "2.0.0 -> 10.0.0"
-

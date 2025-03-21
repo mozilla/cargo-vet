@@ -43,7 +43,6 @@ newlines. Trailing whitespace
 <<<END EDIT>>>
 
 AUDITS:
-
 [criteria.fuzzed]
 description = "fuzzed"
 
@@ -67,4 +66,3 @@ These are testing notes. They contain some
 newlines. Trailing whitespace
     and leading whitespace
 """
-
