@@ -376,10 +376,11 @@ mod sys {
     use std::mem;
     use std::os::windows::io::AsRawHandle;
 
-    use winapi::shared::minwindef::DWORD;
-    use winapi::shared::winerror::{ERROR_INVALID_FUNCTION, ERROR_LOCK_VIOLATION};
-    use winapi::um::fileapi::{LockFileEx, UnlockFile};
-    use winapi::um::minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::Foundation::{ERROR_INVALID_FUNCTION, ERROR_LOCK_VIOLATION};
+    use windows_sys::Win32::Storage::FileSystem::{
+        LockFileEx, UnlockFile, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
+    };
 
     pub(super) fn lock_shared(file: &File) -> Result<()> {
         lock_file(file, 0)
@@ -409,7 +410,7 @@ mod sys {
 
     pub(super) fn unlock(file: &File) -> Result<()> {
         unsafe {
-            let ret = UnlockFile(file.as_raw_handle(), 0, 0, !0, !0);
+            let ret = UnlockFile(file.as_raw_handle() as HANDLE, 0, 0, !0, !0);
             if ret == 0 {
                 Err(Error::last_os_error())
             } else {
@@ -418,10 +419,17 @@ mod sys {
         }
     }
 
-    fn lock_file(file: &File, flags: DWORD) -> Result<()> {
+    fn lock_file(file: &File, flags: u32) -> Result<()> {
         unsafe {
             let mut overlapped = mem::zeroed();
-            let ret = LockFileEx(file.as_raw_handle(), flags, 0, !0, !0, &mut overlapped);
+            let ret = LockFileEx(
+                file.as_raw_handle() as HANDLE,
+                flags,
+                0,
+                !0,
+                !0,
+                &mut overlapped,
+            );
             if ret == 0 {
                 Err(Error::last_os_error())
             } else {

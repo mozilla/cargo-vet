@@ -237,7 +237,7 @@ impl Editor<'_> {
             let line = line.trim_end();
             // Don't record 2 consecutive empty lines or empty lines at the
             // start of the file.
-            if line.is_empty() && lines.last().map_or(true, |l| l.is_empty()) {
+            if line.is_empty() && lines.last().is_none_or(|l| l.is_empty()) {
                 continue;
             }
             lines.push(line.to_owned());

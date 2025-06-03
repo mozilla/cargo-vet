@@ -269,10 +269,9 @@ impl Network {
                     tracing::warn!("Attempt to fetch unsupported URL from mock network: {url}");
                     DownloadError::FailedToWriteDownload {
                         target: url.to_string().into(),
-                        error: std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("mock network does not support URL: {url}"),
-                        ),
+                        error: std::io::Error::other(format!(
+                            "mock network does not support URL: {url}"
+                        )),
                     }
                 })?;
             return Ok(Response::Mock(Some(chunk)));

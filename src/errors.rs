@@ -8,7 +8,7 @@ use std::{
 };
 
 use cargo_metadata::semver;
-use miette::{Diagnostic, MietteSpanContents, SourceCode, SourceOffset, SourceSpan};
+use miette::{Diagnostic, MietteSpanContents, SourceCode, SourceSpan};
 use thiserror::Error;
 
 use crate::{
@@ -966,13 +966,12 @@ impl Display for AggregateCriteriaImplies {
 //////////////////////////////////////////////////////////
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("Failed to parse toml file")]
+#[error("Failed to parse toml file: {}", error.message())]
 pub struct TomlParseError {
     #[source_code]
     pub source_code: SourceFile,
     #[label("here")]
-    pub span: SourceOffset,
-    #[source]
+    pub span: SourceSpan,
     pub error: toml::de::Error,
 }
 

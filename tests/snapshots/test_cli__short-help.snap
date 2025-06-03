@@ -3,90 +3,52 @@ source: tests/test-cli.rs
 expression: format_outputs(&output)
 ---
 stdout:
-cargo-vet 0.10.1
 Supply-chain security for Rust
 
-USAGE:
-    cargo vet [OPTIONS]
-    cargo vet <SUBCOMMAND>
+Usage: cargo vet [OPTIONS]
+       cargo vet <COMMAND>
 
-OPTIONS:
-    -h, --help       Print help information
-    -V, --version    Print version information
+Commands:
+  check             \[default\] Check that the current project has been vetted
+  suggest           Suggest some low-hanging fruit to review
+  init              Initialize cargo-vet for your project
+  inspect           Fetch the source of a package
+  diff              Yield a diff against the last reviewed version
+  certify           Mark a package as audited
+  import            Import a new peer's imports
+  trust             Trust a given crate and publisher
+  regenerate        Explicitly regenerate various pieces of information
+  add-exemption     Mark a package as exempted from review
+  record-violation  Declare that some versions of a package violate certain audit criteria
+  fmt               Reformat all of vet's files (in case you hand-edited them)
+  prune             Prune unnecessary imports and exemptions
+  aggregate         Fetch and merge audits from multiple sources into a single `audits.toml` file
+  dump-graph        Print the cargo build graph as understood by `cargo vet`
+  gc                Clean up old packages from the vet cache
+  renew             Renew wildcard audit expirations
+  help              Print this message or the help of the given subcommand(s)
 
-GLOBAL OPTIONS:
-        --manifest-path <PATH>
-            Path to Cargo.toml
+Options:
+  -h, --help     Print help (see more with '--help')
+  -V, --version  Print version
 
-        --store-path <STORE_PATH>
-            Path to the supply-chain directory
-
-        --no-all-features
-            Don't use --all-features
-
-        --no-default-features
-            Do not activate the `default` feature
-
-        --features <FEATURES>
-            Space-separated list of features to activate
-
-        --locked
-            Do not fetch new imported audits
-
-        --frozen
-            Avoid the network entirely, requiring either that the cargo cache is populated or the
-            dependencies are vendored. Requires --locked
-
-        --no-minimize-exemptions
-            Prevent commands such as `check` and `certify` from automatically cleaning up unused
-            exemptions
-
-        --no-registry-suggestions
-            Prevent commands such as `check` and `suggest` from suggesting registry imports
-
-        --verbose <VERBOSE>
-            How verbose logging should be (log level) [default: warn] [possible values: off, error,
-            warn, info, debug, trace]
-
-        --output-file <OUTPUT_FILE>
-            Instead of stdout, write output to this file
-
-        --log-file <LOG_FILE>
-            Instead of stderr, write logs to this file (only used after successful CLI parsing)
-
-        --output-format <OUTPUT_FORMAT>
-            The format of the output [default: human] [possible values: human, json]
-
-        --cache-dir <CACHE_DIR>
-            Use the following path instead of the global cache directory
-
-        --filter-graph <FILTER_GRAPH>
-            Filter out different parts of the build graph and pretend that's the true graph
-
-        --cargo-arg <CARGO_ARG>
-            Arguments to pass through to cargo. It can be specified multiple times for multiple
-            arguments
-
-SUBCOMMANDS:
-    check               \[default\] Check that the current project has been vetted
-    suggest             Suggest some low-hanging fruit to review
-    init                Initialize cargo-vet for your project
-    inspect             Fetch the source of a package
-    diff                Yield a diff against the last reviewed version
-    certify             Mark a package as audited
-    import              Import a new peer's imports
-    trust               Trust a given crate and publisher
-    regenerate          Explicitly regenerate various pieces of information
-    add-exemption       Mark a package as exempted from review
-    record-violation    Declare that some versions of a package violate certain audit criteria
-    fmt                 Reformat all of vet's files (in case you hand-edited them)
-    prune               Prune unnecessary imports and exemptions
-    aggregate           Fetch and merge audits from multiple sources into a single `audits.toml`
-                            file
-    dump-graph          Print the cargo build graph as understood by `cargo vet`
-    gc                  Clean up old packages from the vet cache
-    renew               Renew wildcard audit expirations
-    help                Print this message or the help of the given subcommand(s)
+Global Options:
+      --manifest-path <PATH>           Path to Cargo.toml
+      --store-path <STORE_PATH>        Path to the supply-chain directory
+      --no-all-features                Don't use --all-features
+      --no-default-features            Do not activate the `default` feature
+      --features <FEATURES>            Space-separated list of features to activate
+      --locked                         Do not fetch new imported audits
+      --frozen                         Avoid the network entirely, requiring either that the cargo cache is populated or the dependencies are vendored. Requires --locked
+      --no-minimize-exemptions         Prevent commands such as `check` and `certify` from automatically cleaning up unused exemptions
+      --no-registry-suggestions        Prevent commands such as `check` and `suggest` from suggesting registry imports
+      --verbose <VERBOSE>              How verbose logging should be (log level) [default: warn] [possible values: off, error, warn, info, debug, trace]
+      --output-file <OUTPUT_FILE>      Instead of stdout, write output to this file
+      --log-file <LOG_FILE>            Instead of stderr, write logs to this file (only used after successful CLI parsing)
+      --output-format <OUTPUT_FORMAT>  The format of the output [default: human] [possible values: human, json]
+      --cache-dir <CACHE_DIR>          Use the following path instead of the global cache directory
+      --filter-graph <FILTER_GRAPH>    Filter out different parts of the build graph and pretend that's the true graph
+      --cargo-arg <CARGO_ARG>          Arguments to pass through to cargo. It can be specified multiple times for multiple arguments
 
 stderr:
 
