@@ -51,6 +51,7 @@ mod aggregate;
 mod audit_as_crates_io;
 mod certify;
 mod crate_policies;
+mod explain_audit;
 mod import;
 mod regenerate_unaudited;
 mod registry;

@@ -1,0 +1,7 @@
+---
+source: src/tests/explain_audit.rs
+expression: output.to_string()
+---
+The package transitive-third-party1 10.0.0 certifies for safe-to-deploy
+1) [local] wildcard audit for 10.0.0 (published by: user1) by <unspecified>
+

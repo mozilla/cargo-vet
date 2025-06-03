@@ -23,6 +23,7 @@ Commands:
   fmt               Reformat all of vet's files (in case you hand-edited them)
   prune             Prune unnecessary imports and exemptions
   aggregate         Fetch and merge audits from multiple sources into a single `audits.toml` file
+  explain-audit     Print the computed audit path used by cargo-vet to certify a package for a given critera
   dump-graph        Print the cargo build graph as understood by `cargo vet`
   gc                Clean up old packages from the vet cache
   renew             Renew wildcard audit expirations

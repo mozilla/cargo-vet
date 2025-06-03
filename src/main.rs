@@ -26,6 +26,7 @@ use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use network::Network;
 use out::{progress_bar, IncProgressOnDrop};
 use reqwest::Url;
+use resolver::AuditGraph;
 use serde::de::Deserialize;
 use serialization::spanned::Spanned;
 use serialization::Tidyable;
@@ -516,6 +517,7 @@ fn real_main() -> Result<(), miette::Report> {
         Some(Fmt(sub_args)) => cmd_fmt(&out, &cfg, sub_args),
         Some(Prune(sub_args)) => cmd_prune(&out, &cfg, sub_args),
         Some(DumpGraph(sub_args)) => cmd_dump_graph(&out, &cfg, sub_args),
+        Some(ExplainAudit(sub_args)) => cmd_explain_audit(&out, &cfg, sub_args),
         Some(Inspect(sub_args)) => cmd_inspect(&out, &cfg, sub_args),
         Some(Diff(sub_args)) => cmd_diff(&out, &cfg, sub_args),
         Some(Regenerate(Imports(sub_args))) => cmd_regenerate_imports(&out, &cfg, sub_args),
@@ -2622,6 +2624,192 @@ fn cmd_dump_graph(
     }
 
     Ok(())
+}
+
+fn explain_write_edge(
+    out: &Arc<dyn Out>,
+    store: &Store,
+    package: PackageStr<'_>,
+    idx: usize,
+    edge: &resolver::DeltaEdgeOrigin,
+) {
+    fn format_who(who: &[Spanned<String>]) -> String {
+        if who.is_empty() {
+            "<unspecified>".to_owned()
+        } else {
+            string_format::FormatShortList::new(who.to_owned()).to_string()
+        }
+    }
+
+    fn format_freshness(is_fresh_import: bool) -> &'static str {
+        if is_fresh_import {
+            " (uncached)"
+        } else {
+            ""
+        }
+    }
+
+    use resolver::DeltaEdgeOrigin::*;
+    match *edge {
+        StoredLocalAudit { audit_index, .. } => {
+            let audit = &store.audits.audits[package][audit_index];
+            let who = format_who(&audit.who);
+            match &audit.kind {
+                AuditKind::Full { version } => {
+                    writeln!(out, "{idx}) [local] full audit for {version} by {who}");
+                }
+                AuditKind::Delta { from, to } => {
+                    writeln!(out, "{idx}) [local] delta audit for {from}->{to} by {who}");
+                }
+                _ => unreachable!(),
+            }
+        }
+        ImportedAudit {
+            import_index,
+            audit_index,
+        } => {
+            let (import_name, audits_file) =
+                store.imported_audits().iter().nth(import_index).unwrap();
+            let audit = &audits_file.audits[package][audit_index];
+            let freshness = format_freshness(audit.is_fresh_import);
+            let who = format_who(&audit.who);
+            match &audit.kind {
+                AuditKind::Full { version } => {
+                    writeln!(
+                        out,
+                        "{idx}) [{import_name}{freshness}] full audit for {version} by {who}"
+                    );
+                }
+                AuditKind::Delta { from, to } => {
+                    writeln!(
+                        out,
+                        "{idx}) [{import_name}{freshness}] delta audit for {from}->{to} by {who}"
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+        WildcardAudit {
+            import_index,
+            audit_index,
+            publisher_index,
+        } => {
+            let (import_name, audits_file) = match import_index {
+                Some(import_index) => {
+                    let (import_name, audits_file) =
+                        store.imported_audits().iter().nth(import_index).unwrap();
+                    (&import_name[..], audits_file)
+                }
+                None => ("local", &store.audits),
+            };
+
+            let audit = &audits_file.wildcard_audits[package][audit_index];
+            let who = format_who(&audit.who);
+
+            let publisher = &store.publishers()[package][publisher_index];
+            let version = &publisher.version;
+            let login = &publisher.user_login;
+            let freshness = format_freshness(audit.is_fresh_import || publisher.is_fresh_import);
+
+            writeln!(out, "{idx}) [{import_name}{freshness}] wildcard audit for {version} (published by: {login}) by {who}");
+        }
+        Trusted { publisher_index } => {
+            let publisher = &store.publishers()[package][publisher_index];
+            let version = &publisher.version;
+            let login = &publisher.user_login;
+            let freshness = format_freshness(publisher.is_fresh_import);
+
+            writeln!(
+                out,
+                "{idx}) [local{freshness}] trusted entry for {version} (published by: {login})"
+            );
+        }
+        Exemption { exemption_index } => {
+            let exemption = &store.config.exemptions[package][exemption_index];
+            let version = &exemption.version;
+            writeln!(out, "{idx}) [local] exemption for {version}");
+        }
+        Unpublished { unpublished_index } => {
+            let unpublished = &store.unpublished()[package][unpublished_index];
+            let version = &unpublished.version;
+            let audited_as = &unpublished.audited_as;
+            let freshness = format_freshness(unpublished.is_fresh_import);
+
+            writeln!(
+                out,
+                "{idx}) [local{freshness}] auditing unpublished version {version} as {audited_as}"
+            );
+        }
+        FreshExemption { .. } => {
+            unreachable!("Should not observe FreshExemption edge with PreferExemptions mode")
+        }
+    }
+}
+
+fn do_cmd_explain_audit(
+    out: &Arc<dyn Out>,
+    store: &Store,
+    package: PackageStr<'_>,
+    version: &VetVersion,
+    criteria_name: CriteriaStr<'_>,
+) -> Result<(), miette::Report> {
+    let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
+    let audit_graph = AuditGraph::build(store, &criteria_mapper, package, None)
+        .map_err(|_| miette!("This package has violation conflicts"))?;
+
+    match audit_graph.search(
+        criteria_mapper.criteria_index(criteria_name),
+        version,
+        resolver::SearchMode::PreferExemptions,
+    ) {
+        Ok(path) => {
+            writeln!(
+                out,
+                "The package {package} {version} certifies for {criteria_name}"
+            );
+            for (idx, edge) in path.iter().rev().enumerate() {
+                explain_write_edge(out, store, package, idx + 1, edge);
+            }
+        }
+        Err(failure) => {
+            writeln!(
+                out,
+                "The package {package} {version} does not certify for {criteria_name}"
+            );
+            if failure.reachable_from_root.len() > 1 {
+                writeln!(out, "The following versions would certify:");
+                for version in failure.reachable_from_root.iter().flatten() {
+                    writeln!(out, " - {version}");
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn cmd_explain_audit(
+    out: &Arc<dyn Out>,
+    cfg: &Config,
+    sub_args: &ExplainAuditArgs,
+) -> Result<(), miette::Report> {
+    let network = Network::acquire(cfg);
+    let store = Store::acquire(cfg, network.as_ref(), false)?;
+
+    let version = if let Some(version) = &sub_args.version {
+        version.clone()
+    } else {
+        let matching_packages = cfg
+            .metadata
+            .packages
+            .iter()
+            .filter(|pkg| *pkg.name == sub_args.package)
+            .collect::<Vec<_>>();
+        miette::ensure!(matching_packages.len() == 1, "Ambiguous package version");
+        matching_packages[0].vet_version()
+    };
+
+    do_cmd_explain_audit(out, &store, &sub_args.package, &version, &sub_args.criteria)
 }
 
 fn cmd_fmt(_out: &Arc<dyn Out>, cfg: &Config, _sub_args: &FmtArgs) -> Result<(), miette::Report> {

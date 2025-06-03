@@ -1,0 +1,8 @@
+---
+source: src/tests/explain_audit.rs
+expression: output.to_string()
+---
+The package descriptive 10.0.0 certifies for safe-to-deploy
+1) [local] full audit for 8.0.0 by <unspecified>
+2) [local] auditing unpublished version 10.0.0 as 8.0.0
+
