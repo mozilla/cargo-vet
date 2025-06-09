@@ -7,29 +7,49 @@ stdout:
 
 > This manual can be regenerated with `cargo vet help-markdown`
 
-Version: `cargo-vet 0.10.1`
-
+## cargo vet
 Supply-chain security for Rust
 
-When run without a subcommand, `cargo vet` will invoke the `check` subcommand. See `cargo vet help
-check` for more details.
+When run without a subcommand, `cargo vet` will invoke the `check` subcommand. See `cargo vet help check` for more details.
 
-### USAGE
+### Usage
 ```
 cargo vet [OPTIONS]
 ```
 ```
-cargo vet <SUBCOMMAND>
+cargo vet <COMMAND>
 ```
 
-### OPTIONS
+### Commands
+
+* [check](#cargo-vet-check): \[default\] Check that the current project has been vetted
+* [suggest](#cargo-vet-suggest): Suggest some low-hanging fruit to review
+* [init](#cargo-vet-init): Initialize cargo-vet for your project
+* [inspect](#cargo-vet-inspect): Fetch the source of a package
+* [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
+* [certify](#cargo-vet-certify): Mark a package as audited
+* [import](#cargo-vet-import): Import a new peer's imports
+* [trust](#cargo-vet-trust): Trust a given crate and publisher
+* [regenerate](#cargo-vet-regenerate): Explicitly regenerate various pieces of information
+* [add-exemption](#cargo-vet-add-exemption): Mark a package as exempted from review
+* [record-violation](#cargo-vet-record-violation): Declare that some versions of a package violate certain audit criteria
+* [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
+* [prune](#cargo-vet-prune): Prune unnecessary imports and exemptions
+* [aggregate](#cargo-vet-aggregate): Fetch and merge audits from multiple sources into a single `audits.toml` file
+* [dump-graph](#cargo-vet-dump-graph): Print the cargo build graph as understood by `cargo vet`
+* [gc](#cargo-vet-gc): Clean up old packages from the vet cache
+* [renew](#cargo-vet-renew): Renew wildcard audit expirations
+
+### Options
+
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
 #### `-V, --version`
-Print version information
+Print version
 
-### GLOBAL OPTIONS
+### Global Options
+
 #### `--manifest-path <PATH>`
 Path to Cargo.toml
 
@@ -39,8 +59,7 @@ Path to the supply-chain directory
 #### `--no-all-features`
 Don't use --all-features
 
-We default to passing --all-features to `cargo metadata` because we want to analyze your
-full dependency tree
+We default to passing --all-features to `cargo metadata` because we want to analyze your full dependency tree
 
 #### `--no-default-features`
 Do not activate the `default` feature
@@ -52,12 +71,10 @@ Space-separated list of features to activate
 Do not fetch new imported audits
 
 #### `--frozen`
-Avoid the network entirely, requiring either that the cargo cache is populated or the
-dependencies are vendored. Requires --locked
+Avoid the network entirely, requiring either that the cargo cache is populated or the dependencies are vendored. Requires --locked
 
 #### `--no-minimize-exemptions`
-Prevent commands such as `check` and `certify` from automatically cleaning up unused
-exemptions
+Prevent commands such as `check` and `certify` from automatically cleaning up unused exemptions
 
 #### `--no-registry-suggestions`
 Prevent commands such as `check` and `suggest` from suggesting registry imports
@@ -78,14 +95,15 @@ Instead of stderr, write logs to this file (only used after successful CLI parsi
 The format of the output
 
 \[default: human]  
-\[possible values: human, json]  
+
+Possible values:
+- human: Print output in a human-readable form
+- json:  Print output in a machine-readable form with minimal extra context
 
 #### `--cache-dir <CACHE_DIR>`
 Use the following path instead of the global cache directory
 
-The cache stores information such as the summary results used by vet's suggestion
-machinery, cached results from crates.io APIs, and checkouts of crates from crates.io in
-some cases. This is generally automatically managed in the system cache directory.
+The cache stores information such as the summary results used by vet's suggestion machinery, cached results from crates.io APIs, and checkouts of crates from crates.io in some cases. This is generally automatically managed in the system cache directory.
 
 This mostly exists for testing vet itself.
 
@@ -128,39 +146,16 @@ Possible properties:
 * `name($string)`: the package's name (i.e. `serde`)
 * `version($version)`: the package's version (i.e. `1.2.0`)
 * `is_root($bool)`: whether it's a root in the original graph (ignoring dev-deps)
-* `is_workspace_member($bool)`: whether the package is a workspace-member (can be
-tested)
+* `is_workspace_member($bool)`: whether the package is a workspace-member (can be tested)
 * `is_third_party($bool)`: whether the package is considered third-party by vet
-* `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original
-graph
+* `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original graph
 
 #### `--cargo-arg <CARGO_ARG>`
-Arguments to pass through to cargo. It can be specified multiple times for multiple
-arguments.
+Arguments to pass through to cargo. It can be specified multiple times for multiple arguments.
 
 Example: `--cargo-arg=-Zbindeps`
 
 This allows using unstable options in Cargo if a project's Cargo.toml requires them.
-
-### SUBCOMMANDS
-* [check](#cargo-vet-check): \[default\] Check that the current project has been vetted
-* [suggest](#cargo-vet-suggest): Suggest some low-hanging fruit to review
-* [init](#cargo-vet-init): Initialize cargo-vet for your project
-* [inspect](#cargo-vet-inspect): Fetch the source of a package
-* [diff](#cargo-vet-diff): Yield a diff against the last reviewed version
-* [certify](#cargo-vet-certify): Mark a package as audited
-* [import](#cargo-vet-import): Import a new peer's imports
-* [trust](#cargo-vet-trust): Trust a given crate and publisher
-* [regenerate](#cargo-vet-regenerate): Explicitly regenerate various pieces of information
-* [add-exemption](#cargo-vet-add-exemption): Mark a package as exempted from review
-* [record-violation](#cargo-vet-record-violation): Declare that some versions of a package violate certain audit criteria
-* [fmt](#cargo-vet-fmt): Reformat all of vet's files (in case you hand-edited them)
-* [prune](#cargo-vet-prune): Prune unnecessary imports and exemptions
-* [aggregate](#cargo-vet-aggregate): Fetch and merge audits from multiple sources into a single `audits.toml` file
-* [dump-graph](#cargo-vet-dump-graph): Print the cargo build graph as understood by `cargo vet`
-* [gc](#cargo-vet-gc): Clean up old packages from the vet cache
-* [renew](#cargo-vet-renew): Renew wildcard audit expirations
-* [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 
 <br><br><br>
 ## cargo vet check
@@ -168,141 +163,122 @@ This allows using unstable options in Cargo if a project's Cargo.toml requires t
 
 This is the default behaviour if no subcommand is specified.
 
-If the check fails due to lack of audits, we will do our best to explain why vetting failed, and
-what should be done to fix it. This can involve a certain amount of guesswork, as there are many
-possible solutions and we only want to recommend the "best" one to keep things simple.
+If the check fails due to lack of audits, we will do our best to explain why vetting failed, and what should be done to fix it. This can involve a certain amount of guesswork, as there are many possible solutions and we only want to recommend the "best" one to keep things simple.
 
-Failures and suggestions can either be "Certain" or "Speculative". Speculative items are greyed
-out and sorted lower to indicate that the Certain entries should be looked at first. Speculative
-items are for packages that probably need audits too, but only appear as transitive dependencies of
-Certain items.
+Failures and suggestions can either be "Certain" or "Speculative". Speculative items are greyed out and sorted lower to indicate that the Certain entries should be looked at first. Speculative items are for packages that probably need audits too, but only appear as transitive dependencies of Certain items.
 
-During review of Certain issues you may take various actions that change what's needed for the
-Speculative ones. For instance you may discover you're enabling a feature you don't need, and
-that's the only reason the Speculative package is in your tree. Or you may determine that the
-Certain package only needs to be safe-to-run, which may make the Speculative requirements weaker or
-completely resolved. For these reasons we recommend fixing problems "top down", and Certain items
-are The Top.
+During review of Certain issues you may take various actions that change what's needed for the Speculative ones. For instance you may discover you're enabling a feature you don't need, and that's the only reason the Speculative package is in your tree. Or you may determine that the Certain package only needs to be safe-to-run, which may make the Speculative requirements weaker or completely resolved. For these reasons we recommend fixing problems "top down", and Certain items are The Top.
 
-Suggested fixes are grouped by the criteria they should be reviewed for and sorted by how easy the
-review should be (in terms of lines of code). We only ever suggest audits (and provide the command
-you need to run to do it), but there are other possible fixes like an `exemption` or `policy`
-change.
+Suggested fixes are grouped by the criteria they should be reviewed for and sorted by how easy the review should be (in terms of lines of code). We only ever suggest audits (and provide the command you need to run to do it), but there are other possible fixes like an `exemption` or `policy` change.
 
-The most aggressive solution is to run `cargo vet regenerate exemptions` which will add whatever
-exemptions necessary to make `check` pass (and remove uneeded ones). Ideally you should avoid doing
-this and prefer adding audits, but if you've done all the audits you plan on doing, that's the way
-to finish the job.
+The most aggressive solution is to run `cargo vet regenerate exemptions` which will add whatever exemptions necessary to make `check` pass (and remove uneeded ones). Ideally you should avoid doing this and prefer adding audits, but if you've done all the audits you plan on doing, that's the way to finish the job.
 
-### USAGE
+### Usage
 ```
 cargo vet check [OPTIONS]
 ```
 
-### OPTIONS
-#### `-h, --help`
-Print help information
+### Options
 
-### GLOBAL OPTIONS
+#### `-h, --help`
+Print help (see a summary with '-h')
+
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet suggest
 Suggest some low-hanging fruit to review
 
-This is essentially the same as `check` but with all your `exemptions` temporarily removed as a way
-to inspect your "review backlog". As such, we recommend against running this command while `check`
-is failing, because this will just give you worse information.
+This is essentially the same as `check` but with all your `exemptions` temporarily removed as a way to inspect your "review backlog". As such, we recommend against running this command while `check` is failing, because this will just give you worse information.
 
-If you don't consider an exemption to be "backlog", add `suggest = false` to its entry and we won't
-remove it while suggesting.
+If you don't consider an exemption to be "backlog", add `suggest = false` to its entry and we won't remove it while suggesting.
 
-See also `regenerate exemptions`, which can be used to "garbage collect" your backlog (if you run it
-while `check` is passing).
+See also `regenerate exemptions`, which can be used to "garbage collect" your backlog (if you run it while `check` is passing).
 
-### USAGE
+### Usage
 ```
 cargo vet suggest [OPTIONS]
 ```
 
-### OPTIONS
-#### `-h, --help`
-Print help information
+### Options
 
-### GLOBAL OPTIONS
+#### `-h, --help`
+Print help (see a summary with '-h')
+
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet init
 Initialize cargo-vet for your project
 
-This will add `exemptions` and `audit-as-crates-io = false` for all packages that need it to make
-`check` pass immediately and make it easy to start using vet with your project.
+This will add `exemptions` and `audit-as-crates-io = false` for all packages that need it to make `check` pass immediately and make it easy to start using vet with your project.
 
-At this point you can either configure your project further or start working on your review backlog
-with `suggest`.
+At this point you can either configure your project further or start working on your review backlog with `suggest`.
 
-### USAGE
+### Usage
 ```
 cargo vet init [OPTIONS]
 ```
 
-### OPTIONS
-#### `-h, --help`
-Print help information
+### Options
 
-### GLOBAL OPTIONS
+#### `-h, --help`
+Print help (see a summary with '-h')
+
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet inspect
 Fetch the source of a package
 
-We will attempt to guess what criteria you want to audit the package for based on the current check/
-suggest status, and show you the meaning of those criteria ahead of time.
+We will attempt to guess what criteria you want to audit the package for based on the current check/suggest status, and show you the meaning of those criteria ahead of time.
 
-### USAGE
+### Usage
 ```
 cargo vet inspect [OPTIONS] <PACKAGE> <VERSION>
 ```
 
-### ARGS
+### Arguments
+
 #### `<PACKAGE>`
 The package to inspect
 
 #### `<VERSION>`
 The version to inspect
 
-### OPTIONS
+### Options
+
 #### `--mode <MODE>`
 How to inspect the source
 
-Defaults to the most recently used --mode argument, or diff.rs if no mode argument has
-been used.
+Defaults to the most recently used --mode argument, or diff.rs if no mode argument has been used.
 
 This option is ignored if a git version is passed.
 
 \[possible values: local, sourcegraph, diff.rs]  
 
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet diff
 Yield a diff against the last reviewed version
 
-We will attempt to guess what criteria you want to audit the package for based on the current check/
-suggest status, and show you the meaning of those criteria ahead of time.
+We will attempt to guess what criteria you want to audit the package for based on the current check/suggest status, and show you the meaning of those criteria ahead of time.
 
-### USAGE
+### Usage
 ```
 cargo vet diff [OPTIONS] <PACKAGE> <VERSION1> <VERSION2>
 ```
 
-### ARGS
+### Arguments
+
 #### `<PACKAGE>`
 The package to diff
 
@@ -312,21 +288,21 @@ The base version to diff
 #### `<VERSION2>`
 The target version to diff
 
-### OPTIONS
+### Options
+
 #### `--mode <MODE>`
 How to inspect the diff
 
-Defaults to the most recently used --mode argument, or diff.rs if no mode argument has
-been used.
+Defaults to the most recently used --mode argument, or diff.rs if no mode argument has been used.
 
 This option is ignored if a git version is passed.
 
 \[possible values: local, sourcegraph, diff.rs]  
 
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
@@ -335,33 +311,30 @@ Mark a package as audited
 
 This command will do its best to guess what you want to be certifying.
 
-If invoked with no args, it will try to certify the last thing you looked at with `inspect` or
-`diff`. Otherwise you must either supply the package name and one version (for a full audit) or two
-versions (for a delta audit).
+If invoked with no args, it will try to certify the last thing you looked at with `inspect` or `diff`. Otherwise you must either supply the package name and one version (for a full audit) or two versions (for a delta audit).
 
-Once the package+version(s) have been selected, we will try to guess what criteria to certify it
-for. First we will `check`, and if the check fails and your audit would seemingly fix this package,
-we will use the criteria recommended for that fix. If `check` passes, we will assume you are working
-on your backlog and instead use the recommendations of `suggest`.
+Once the package+version(s) have been selected, we will try to guess what criteria to certify it for. First we will `check`, and if the check fails and your audit would seemingly fix this package, we will use the criteria recommended for that fix. If `check` passes, we will assume you are working on your backlog and instead use the recommendations of `suggest`.
 
 If this removes the need for an `exemption` will we automatically remove it.
 
-### USAGE
+### Usage
 ```
-cargo vet certify [OPTIONS] [ARGS]
+cargo vet certify [OPTIONS] [PACKAGE] [VERSION1] [VERSION2]
 ```
 
-### ARGS
-#### `<PACKAGE>`
+### Arguments
+
+#### `[PACKAGE]`
 The package to certify as audited
 
-#### `<VERSION1>`
+#### `[VERSION1]`
 The version to certify as audited
 
-#### `<VERSION2>`
+#### `[VERSION2]`
 If present, instead certify a diff from version1->version2
 
-### OPTIONS
+### Options
+
 #### `--wildcard <WILDCARD>`
 If present, certify a wildcard audit for the user with the given username.
 
@@ -387,8 +360,7 @@ Start date to create a wildcard audit from.
 
 Only valid with `--wildcard`.
 
-If not provided, will be the publication date of the first version published by the
-given user.
+If not provided, will be the publication date of the first version published by the given user.
 
 #### `--end-date <END_DATE>`
 End date to create a wildcard audit from. May be at most 1 year in the future.
@@ -403,76 +375,73 @@ Accept all criteria without an interactive prompt
 #### `--force`
 Force the command to ignore whether the package/version makes sense
 
-To catch typos/mistakes, we check if the thing you're trying to talk about is part of
-your current build, but this flag disables that.
+To catch typos/mistakes, we check if the thing you're trying to talk about is part of your current build, but this flag disables that.
 
 #### `--no-collapse`
 Prevent combination of the audit with a prior adjacent non-importable git audit, if any.
 
 This will only have an effect if the supplied `from` version is a git version.
 
-For example, normally an existing audit from `1.0.0->1.0.0@git:1111111` and a new
-certified audit from `1.0.0@git:1111111->1.0.0@git:2222222` would result in a single
-audit from `1.0.0->1.0.0@git:2222222`. Passing this flag would prevent this.
+For example, normally an existing audit from `1.0.0->1.0.0@git:1111111` and a new certified audit from `1.0.0@git:1111111->1.0.0@git:2222222` would result in a single audit from `1.0.0->1.0.0@git:2222222`. Passing this flag would prevent this.
 
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet import
 Import a new peer's imports
 
-If invoked without a URL parameter, it will look up the named peer in the cargo-vet registry, and
-import that peer.
+If invoked without a URL parameter, it will look up the named peer in the cargo-vet registry, and import that peer.
 
-### USAGE
+### Usage
 ```
 cargo vet import [OPTIONS] <NAME> [URL]...
 ```
 
-### ARGS
+### Arguments
+
 #### `<NAME>`
 The name of the peer to import
 
-#### `<URL>...`
+#### `[URL]...`
 The URL(s) of the peer's audits.toml file(s).
 
-If a URL is not provided, a peer with the given name will be looked up in the cargo-vet
-registry to determine the import URL(s).
+If a URL is not provided, a peer with the given name will be looked up in the cargo-vet registry to determine the import URL(s).
 
-### OPTIONS
+### Options
+
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet trust
 Trust a given crate and publisher
 
-### USAGE
+### Usage
 ```
-cargo vet trust [OPTIONS] [ARGS]
+cargo vet trust [OPTIONS] [PACKAGE] [PUBLISHER_LOGIN]
 ```
 
-### ARGS
-#### `<PACKAGE>`
+### Arguments
+
+#### `[PACKAGE]`
 The package to trust
 
 Must be specified unless --all has been specified.
 
-#### `<PUBLISHER_LOGIN>`
+#### `[PUBLISHER_LOGIN]`
 The username of the publisher to trust
 
-If not provided, will be inferred to be the sole known publisher of the given crate.
-If there is more than one publisher for the given crate, the login must be provided
-explicitly.
+If not provided, will be inferred to be the sole known publisher of the given crate. If there is more than one publisher for the given crate, the login must be provided explicitly.
 
-### OPTIONS
+### Options
+
 #### `--criteria <CRITERIA>`
 The criteria to certify for this trust entry
 
@@ -481,8 +450,7 @@ If not provided, we will prompt you for this information.
 #### `--start-date <START_DATE>`
 Start date to create the trust entry from.
 
-If not provided, will be the publication date of the first version published by the
-given user.
+If not provided, will be the publication date of the first version published by the given user.
 
 #### `--end-date <END_DATE>`
 End date to create the trust entry from. May be at most 1 year in the future.
@@ -495,171 +463,146 @@ A free-form string to include with the new audit entry
 If not provided, there will be no notes.
 
 #### `--all <ALL>`
-If specified, trusts all packages with exemptions or failures which are solely published
-by the given user
+If specified, trusts all packages with exemptions or failures which are solely published by the given user
 
 #### `--allow-multiple-publishers`
-If specified along with --all, also trusts packages with multiple publishers, so long as
-at least one version was published by the given user
+If specified along with --all, also trusts packages with multiple publishers, so long as at least one version was published by the given user
 
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet regenerate
 Explicitly regenerate various pieces of information
 
-There are several things that `cargo vet` *can* do for you automatically but we choose to make
-manual just to keep a human in the loop of those decisions. Some of these might one day become
-automatic if we agree they're boring/reliable enough.
+There are several things that `cargo vet` *can* do for you automatically but we choose to make manual just to keep a human in the loop of those decisions. Some of these might one day become automatic if we agree they're boring/reliable enough.
 
 See the subcommands for specifics.
 
-### USAGE
+### Usage
 ```
-cargo vet regenerate [OPTIONS] <SUBCOMMAND>
+cargo vet regenerate [OPTIONS] <COMMAND>
 ```
 
-### OPTIONS
+### Commands
+
+* [exemptions](#cargo-vet-regenerate-exemptions): Regenerate your exemptions to make `check` pass minimally
+* [imports](#cargo-vet-regenerate-imports): Regenerate your imports and accept changes to criteria
+* [audit-as-crates-io](#cargo-vet-regenerate-audit-as-crates-io): Add `audit-as-crates-io` to the policy entry for all crates which require one
+* [unpublished](#cargo-vet-regenerate-unpublished): Remove all outdated `unpublished` entries for crates which have since been published, or should now be audited as a more-recent version
+
+### Options
+
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
-### SUBCOMMANDS
-* [exemptions](#cargo-vet-exemptions): Regenerate your exemptions to make `check` pass minimally
-* [imports](#cargo-vet-imports): Regenerate your imports and accept changes to criteria
-* [audit-as-crates-io](#cargo-vet-audit-as-crates-io): Add `audit-as-crates-io` to the policy entry for all crates which require one
-* [unpublished](#cargo-vet-unpublished): Remove all outdated `unpublished` entries for crates which have since been published, or
-should now be audited as a more-recent version
-* [help](#cargo-vet-help): Print this message or the help of the given subcommand(s)
 
 <br><br><br>
-## cargo vet exemptions
+## cargo vet regenerate exemptions
 Regenerate your exemptions to make `check` pass minimally
 
-This command can be used for two purposes: to force your supply-chain to pass `check` when it's
-currently failing, or to minimize/garbage-collect your exemptions when it's already passing. These
-are ultimately the same operation.
+This command can be used for two purposes: to force your supply-chain to pass `check` when it's currently failing, or to minimize/garbage-collect your exemptions when it's already passing. These are ultimately the same operation.
 
-We will try our best to preserve existing exemptions, removing only those that aren't needed,
-and adding only those that are needed. Exemptions that are overbroad may also be weakened (i.e.
-safe-to-deploy may be reduced to safe-to-run).
+We will try our best to preserve existing exemptions, removing only those that aren't needed, and adding only those that are needed. Exemptions that are overbroad may also be weakened (i.e. safe-to-deploy may be reduced to safe-to-run).
 
-### USAGE
+### Usage
 ```
 cargo vet regenerate exemptions [OPTIONS]
 ```
 
-### OPTIONS
-#### `-h, --help`
-Print help information
+### Options
 
-### GLOBAL OPTIONS
+#### `-h, --help`
+Print help (see a summary with '-h')
+
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
-## cargo vet imports
+## cargo vet regenerate imports
 Regenerate your imports and accept changes to criteria
 
-This is equivalent to `cargo vet fetch-imports` but it won't produce an error if the descriptions of
-foreign criteria change.
+This is equivalent to `cargo vet fetch-imports` but it won't produce an error if the descriptions of foreign criteria change.
 
-### USAGE
+### Usage
 ```
 cargo vet regenerate imports [OPTIONS]
 ```
 
-### OPTIONS
-#### `-h, --help`
-Print help information
+### Options
 
-### GLOBAL OPTIONS
+#### `-h, --help`
+Print help (see a summary with '-h')
+
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
-## cargo vet audit-as-crates-io
+## cargo vet regenerate audit-as-crates-io
 Add `audit-as-crates-io` to the policy entry for all crates which require one.
 
-Crates which have a matching `description` and `repository` entry to a published crate on crates.io
-will be marked as `audit-as-crates-io = true`.
+Crates which have a matching `description` and `repository` entry to a published crate on crates.io will be marked as `audit-as-crates-io = true`.
 
-### USAGE
+### Usage
 ```
 cargo vet regenerate audit-as-crates-io [OPTIONS]
 ```
 
-### OPTIONS
-#### `-h, --help`
-Print help information
+### Options
 
-### GLOBAL OPTIONS
+#### `-h, --help`
+Print help (see a summary with '-h')
+
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
-## cargo vet unpublished
-Remove all outdated `unpublished` entries for crates which have since been published, or should now
-be audited as a more-recent version.
+## cargo vet regenerate unpublished
+Remove all outdated `unpublished` entries for crates which have since been published, or should now be audited as a more-recent version.
 
-Unlike `cargo vet prune`, this will remove outdated `unpublished` entries even if it will cause
-`check` to start failing.
+Unlike `cargo vet prune`, this will remove outdated `unpublished` entries even if it will cause `check` to start failing.
 
-### USAGE
+### Usage
 ```
 cargo vet regenerate unpublished [OPTIONS]
 ```
 
-### OPTIONS
+### Options
+
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
-This subcommand accepts all the [global options](#global-options)
-
-<br><br><br>
-## cargo vet help
-Print this message or the help of the given subcommand(s)
-
-### USAGE
-```
-cargo vet regenerate help [OPTIONS] [SUBCOMMAND]...
-```
-
-### ARGS
-#### `<SUBCOMMAND>...`
-The subcommand whose help message to display
-
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet add-exemption
 Mark a package as exempted from review
 
-Exemptions are *usually* just "backlog" and the expectation is that you will review them
-"eventually". You should usually only be trying to remove them, but sometimes additions are
-necessary to make progress.
+Exemptions are *usually* just "backlog" and the expectation is that you will review them "eventually". You should usually only be trying to remove them, but sometimes additions are necessary to make progress.
 
-`regenerate exemptions` will do this for your automatically to make `check` pass (and remove any
-unnecessary ones), so we recommend using that over `add-exemption`. This command mostly exists as
-"plumbing" for building tools on top of `cargo vet`.
+`regenerate exemptions` will do this for your automatically to make `check` pass (and remove any unnecessary ones), so we recommend using that over `add-exemption`. This command mostly exists as "plumbing" for building tools on top of `cargo vet`.
 
-### USAGE
+### Usage
 ```
 cargo vet add-exemption [OPTIONS] <PACKAGE> <VERSION>
 ```
 
-### ARGS
+### Arguments
+
 #### `<PACKAGE>`
 The package to mark as exempted
 
 #### `<VERSION>`
 The version to mark as exempted
 
-### OPTIONS
+### Options
+
 #### `--criteria <CRITERIA>`
 The criteria to assume (trust)
 
@@ -676,53 +619,41 @@ Suppress suggesting this exemption for review
 #### `--force`
 Force the command to ignore whether the package/version makes sense
 
-To catch typos/mistakes, we check if the thing you're trying to talk about is part of
-your current build, but this flag disables that.
+To catch typos/mistakes, we check if the thing you're trying to talk about is part of your current build, but this flag disables that.
 
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet record-violation
 Declare that some versions of a package violate certain audit criteria
 
-**IMPORTANT**: violations take *VersionReqs* not *Versions*. This is the same syntax used by
-Cargo.toml when specifying dependencies. A bare `1.0.0` actually means `^1.0.0`. If you want to
-forbid a *specific* version, use `=1.0.0`. This command can be a bit awkward because syntax like `*`
-has special meaning in scripts and terminals. It's probably easier to just manually add the entry to
-your audits.toml, but the command's here in case you want it.
+**IMPORTANT**: violations take *VersionReqs* not *Versions*. This is the same syntax used by Cargo.toml when specifying dependencies. A bare `1.0.0` actually means `^1.0.0`. If you want to forbid a *specific* version, use `=1.0.0`. This command can be a bit awkward because syntax like `*` has special meaning in scripts and terminals. It's probably easier to just manually add the entry to your audits.toml, but the command's here in case you want it.
 
-Violations are essentially treated as integrity constraints on your supply-chain, and will only
-result in errors if you have `exemptions` or `audits` (including imported ones) that claim criteria
-that are contradicted by the `violation`. It is not inherently an error to depend on a package with
-a `violation`.
+Violations are essentially treated as integrity constraints on your supply-chain, and will only result in errors if you have `exemptions` or `audits` (including imported ones) that claim criteria that are contradicted by the `violation`. It is not inherently an error to depend on a package with a `violation`.
 
-For instance, someone may review a package and determine that it's horribly unsound in the face of
-untrusted inputs, and therefore *un*safe-to-deploy. They would then add a "safe-to-deploy" violation
-for whatever versions of that package seem to have that problem. But if the package basically works
-fine on trusted inputs, it might still be safe-to-run. So if you use it in your tests and have an
-audit that only claims safe-to-run, we won't mention it.
+For instance, someone may review a package and determine that it's horribly unsound in the face of untrusted inputs, and therefore *un*safe-to-deploy. They would then add a "safe-to-deploy" violation for whatever versions of that package seem to have that problem. But if the package basically works fine on trusted inputs, it might still be safe-to-run. So if you use it in your tests and have an audit that only claims safe-to-run, we won't mention it.
 
-When a violation *does* cause an integrity error, it's up to you and your peers to figure out what
-to do about it. There isn't yet a mechanism for dealing with disagreements with a peer's published
-violations.
+When a violation *does* cause an integrity error, it's up to you and your peers to figure out what to do about it. There isn't yet a mechanism for dealing with disagreements with a peer's published violations.
 
-### USAGE
+### Usage
 ```
 cargo vet record-violation [OPTIONS] <PACKAGE> <VERSIONS>
 ```
 
-### ARGS
+### Arguments
+
 #### `<PACKAGE>`
 The package to forbid
 
 #### `<VERSIONS>`
 The versions to forbid
 
-### OPTIONS
+### Options
+
 #### `--criteria <CRITERIA>`
 The criteria that have failed to be satisfied.
 
@@ -741,47 +672,46 @@ If not provided, there will be no notes.
 #### `--force`
 Force the command to ignore whether the package/version makes sense
 
-To catch typos/mistakes, we check if the thing you're trying to talk about is part of
-your current build, but this flag disables that.
+To catch typos/mistakes, we check if the thing you're trying to talk about is part of your current build, but this flag disables that.
 
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet fmt
 Reformat all of vet's files (in case you hand-edited them)
 
-Most commands will implicitly do this, so this mostly exists as "plumbing" for building tools on top
-of vet, or in case you don't want to run another command.
+Most commands will implicitly do this, so this mostly exists as "plumbing" for building tools on top of vet, or in case you don't want to run another command.
 
-### USAGE
+### Usage
 ```
 cargo vet fmt [OPTIONS]
 ```
 
-### OPTIONS
-#### `-h, --help`
-Print help information
+### Options
 
-### GLOBAL OPTIONS
+#### `-h, --help`
+Print help (see a summary with '-h')
+
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet prune
 Prune unnecessary imports and exemptions
 
-This will fetch the updated state of imports, and attempt to remove any now-unnecessary imports or
-exemptions from the supply-chain.
+This will fetch the updated state of imports, and attempt to remove any now-unnecessary imports or exemptions from the supply-chain.
 
-### USAGE
+### Usage
 ```
 cargo vet prune [OPTIONS]
 ```
 
-### OPTIONS
+### Options
+
 #### `--no-imports`
 Don't prune unused imports
 
@@ -792,58 +722,54 @@ Don't prune unused exemptions
 Don't prune unused non-importable audits
 
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet aggregate
 Fetch and merge audits from multiple sources into a single `audits.toml` file.
 
-Will fetch the audits from each URL in the provided file, combining them into a single file. Custom
-criteria will be merged by-name, and must have identical descriptions in each source audit file.
+Will fetch the audits from each URL in the provided file, combining them into a single file. Custom criteria will be merged by-name, and must have identical descriptions in each source audit file.
 
-### USAGE
+### Usage
 ```
 cargo vet aggregate [OPTIONS] <SOURCES>
 ```
 
-### ARGS
+### Arguments
+
 #### `<SOURCES>`
 Path to a file containing a list of URLs to aggregate the audits from
 
-### OPTIONS
-#### `-h, --help`
-Print help information
+### Options
 
-### GLOBAL OPTIONS
+#### `-h, --help`
+Print help (see a summary with '-h')
+
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet dump-graph
 Print the cargo build graph as understood by `cargo vet`
 
-This is a debugging command, the output's format is not guaranteed. Use `cargo metadata` to get a
-stable version of what *cargo* thinks the build graph is. Our graph is based on that result.
+This is a debugging command, the output's format is not guaranteed. Use `cargo metadata` to get a stable version of what *cargo* thinks the build graph is. Our graph is based on that result.
 
-With `--output-format=human` (the default) this will print out mermaid-js diagrams, which things
-like github natively support rendering of.
+With `--output-format=human` (the default) this will print out mermaid-js diagrams, which things like github natively support rendering of.
 
 With `--output-format=json` we will print out more raw statistics for you to search/analyze.
 
-Most projects will have unreadably complex build graphs, so you may want to use the global
-`--filter-graph` argument to narrow your focus on an interesting subgraph. `--filter-graph` is
-applied *before* doing any semantic analysis, so if you filter out a package and it was the problem,
-the problem will disappear. This can be used to bisect a problem if you get ambitious enough with
-your filters.
+Most projects will have unreadably complex build graphs, so you may want to use the global `--filter-graph` argument to narrow your focus on an interesting subgraph. `--filter-graph` is applied *before* doing any semantic analysis, so if you filter out a package and it was the problem, the problem will disappear. This can be used to bisect a problem if you get ambitious enough with your filters.
 
-### USAGE
+### Usage
 ```
 cargo vet dump-graph [OPTIONS]
 ```
 
-### OPTIONS
+### Options
+
 #### `--depth <DEPTH>`
 The depth of the graph to print (for a large project, the full graph is a HUGE MESS)
 
@@ -851,58 +777,58 @@ The depth of the graph to print (for a large project, the full graph is a HUGE M
 \[possible values: roots, workspace, first-party, first-party-and-directs, full]  
 
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet gc
 Clean up old packages from the vet cache
 
-Removes packages which haven't been accessed in a while, and deletes any extra files which aren't
-recognized by cargo-vet.
+Removes packages which haven't been accessed in a while, and deletes any extra files which aren't recognized by cargo-vet.
 
 In the future, many cargo-vet subcommands will implicitly do this.
 
-### USAGE
+### Usage
 ```
 cargo vet gc [OPTIONS]
 ```
 
-### OPTIONS
+### Options
+
 #### `--max-package-age-days <MAX_PACKAGE_AGE_DAYS>`
 Packages in the vet cache which haven't been used for this many days will be removed
 
 \[default: 30]  
 
 #### `--clean`
-Remove the entire cache directory, forcing it to be regenerated next time you use cargo
-vet
+Remove the entire cache directory, forcing it to be regenerated next time you use cargo vet
 
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 <br><br><br>
 ## cargo vet renew
 Renew wildcard audit expirations
 
-This will set a wildcard audit expiration to be one year in the future from when it is run. It can
-optionally do this for all audits which are expiring soon.
+This will set a wildcard audit expiration to be one year in the future from when it is run. It can optionally do this for all audits which are expiring soon.
 
-### USAGE
+### Usage
 ```
 cargo vet renew [OPTIONS] [CRATE]
 ```
 
-### ARGS
-#### `<CRATE>`
+### Arguments
+
+#### `[CRATE]`
 The name of a crate to renew
 
-### OPTIONS
+### Options
+
 #### `--expiring`
 Renew all wildcard audits which will have expired six weeks from now
 
@@ -910,25 +836,9 @@ Renew all wildcard audits which will have expired six weeks from now
 Renew wildcard audits for inactive crates which have not been updated in 4 months
 
 #### `-h, --help`
-Print help information
+Print help (see a summary with '-h')
 
-### GLOBAL OPTIONS
-This subcommand accepts all the [global options](#global-options)
-
-<br><br><br>
-## cargo vet help
-Print this message or the help of the given subcommand(s)
-
-### USAGE
-```
-cargo vet help [OPTIONS] [SUBCOMMAND]...
-```
-
-### ARGS
-#### `<SUBCOMMAND>...`
-The subcommand whose help message to display
-
-### GLOBAL OPTIONS
+### Global Options
 This subcommand accepts all the [global options](#global-options)
 
 

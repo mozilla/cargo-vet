@@ -2,14 +2,13 @@
 source: src/tests/store_parsing.rs
 expression: acquire_errors
 ---
-  × Failed to parse toml file
-  ╰─▶ unknown field `unknown-field`, expected one of `description`,
-      `description-url`, `implies`, `aggregated-from` for key `criteria.good`
-      at line 9 column 1
-   ╭─[audits.toml:8:1]
+  × Failed to parse toml file: unknown field `unknown-field`, expected one of
+  │ `description`, `description-url`, `implies`, `aggregated-from`
+   ╭─[audits.toml:6:1]
+ 6 │ implies = "safe-to-deploy"
+ 7 │ unknown-field = "invalid"
+   · ──────┬──────
+   ·       ╰── here
  8 │ 
- 9 │ [audits]
-   · ▲
-   · ╰── here
    ╰────
 

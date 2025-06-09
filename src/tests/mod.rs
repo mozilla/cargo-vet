@@ -937,7 +937,7 @@ fn init_files(
             for package in &metadata.packages {
                 if package.id == *pkgid {
                     config.policy.insert(
-                        package.name.clone(),
+                        package.name.to_string(),
                         PackagePolicyEntry::Unversioned(PolicyEntry {
                             audit_as_crates_io: None,
                             criteria: Some(vec![default_criteria.to_string().into()]),
@@ -1012,7 +1012,7 @@ fn files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, ImportsFi
     for package in &metadata.packages {
         if package.is_third_party(&config.policy) {
             audited
-                .entry(package.name.clone())
+                .entry(package.name.to_string())
                 .or_default()
                 .push(full_audit(package.vet_version(), DEFAULT_CRIT));
         }
@@ -1041,7 +1041,7 @@ fn builtin_files_full_audited(metadata: &Metadata) -> (ConfigFile, AuditsFile, I
     for package in &metadata.packages {
         if package.is_third_party(&config.policy) {
             audited
-                .entry(package.name.clone())
+                .entry(package.name.to_string())
                 .or_default()
                 .push(full_audit(package.vet_version(), SAFE_TO_DEPLOY));
         }

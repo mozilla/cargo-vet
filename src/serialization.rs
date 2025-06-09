@@ -434,7 +434,7 @@ fn table_should_be_inline(key: &str, value: &toml_edit::Item) -> bool {
 pub fn to_formatted_toml<T>(
     val: T,
     user_info: Option<&FastMap<CratesUserId, CratesCacheUser>>,
-) -> Result<toml_edit::Document, toml_edit::ser::Error>
+) -> Result<toml_edit::DocumentMut, toml_edit::ser::Error>
 where
     T: Serialize,
 {
@@ -504,12 +504,27 @@ where
 
     let mut toml_document = toml_edit::ser::to_document(&val)?;
     TomlFormatter { user_info }.visit_document_mut(&mut toml_document);
+
+    // toml_edit's default output previously contained a leading newline if it
+    // begins with a table or array of tables. This logic re-adds it to maintain
+    // TOML formatting consistency.
+    let table = toml_document.as_table_mut();
+    if matches!(
+        table.iter().next(),
+        Some((
+            _,
+            toml_edit::Item::Table(_) | toml_edit::Item::ArrayOfTables(_)
+        ))
+    ) {
+        table.decor_mut().set_prefix("\n");
+    }
+
     Ok(toml_document)
 }
 
-/// Deserialize the given data structure from a toml::Value, without falling
+/// Deserialize the given data structure from a toml::Table, without falling
 /// over due to Spanned failing to parse.
-pub fn parse_from_value<T>(value: toml::Value) -> Result<T, toml::de::Error>
+pub fn parse_from_table<T>(value: toml::Table) -> Result<T, toml::de::Error>
 where
     T: for<'a> Deserialize<'a>,
 {
@@ -536,7 +551,7 @@ pub mod spanned {
 
     thread_local! {
         /// Hack to work around `toml::Spanned` failing to be deserialized when
-        /// used with the `toml::Value` deserializer.
+        /// used with the `toml::Table` deserializer.
         pub(super) static DISABLE_SPANNED_DESERIALIZATION: Cell<bool> = const { Cell::new(false) };
     }
 
@@ -727,8 +742,8 @@ pub mod spanned {
     impl<T> From<toml::Spanned<T>> for Spanned<T> {
         fn from(value: toml::Spanned<T>) -> Self {
             Self {
-                start: value.start(),
-                end: value.end(),
+                start: value.span().start,
+                end: value.span().end,
                 value: value.into_inner(),
             }
         }

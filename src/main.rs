@@ -706,7 +706,7 @@ fn do_cmd_certify(
 
     // FIXME: can/should we check if the version makes sense..?
     if !sub_args.force
-        && !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == *package)
+        && !foreign_packages(&cfg.metadata, &store.config).any(|pkg| *pkg.name == *package)
     {
         return Err(CertifyError::NotAPackage(package));
     }
@@ -1636,7 +1636,7 @@ fn cmd_record_violation(
 
     // FIXME: can/should we check if the version makes sense..?
     if !sub_args.force
-        && !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == sub_args.package)
+        && !foreign_packages(&cfg.metadata, &store.config).any(|pkg| *pkg.name == sub_args.package)
     {
         // ERRORS: immediate fatal diagnostic? should we allow you to forbid random packages?
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
@@ -1698,7 +1698,7 @@ fn cmd_add_exemption(
 
     // FIXME: can/should we check if the version makes sense..?
     if !sub_args.force
-        && !foreign_packages(&cfg.metadata, &store.config).any(|pkg| pkg.name == sub_args.package)
+        && !foreign_packages(&cfg.metadata, &store.config).any(|pkg| *pkg.name == sub_args.package)
     {
         // ERRORS: immediate fatal diagnostic? should we allow you to certify random packages?
         // You're definitely *allowed* to have unused audits, otherwise you'd be constantly deleting
@@ -1934,7 +1934,7 @@ async fn fix_audit_as(
     let mut cache = Cache::acquire(cfg)?;
 
     let third_party_packages = foreign_packages_strict(&cfg.metadata, &store.config)
-        .map(|p| &p.name)
+        .map(|p| &*p.name)
         .collect::<SortedSet<_>>();
 
     let issues = check_audit_as_crates_io(cfg, store, network, &mut cache).await;
@@ -1950,7 +1950,7 @@ async fn fix_audit_as(
                 cfg.metadata
                     .packages
                     .iter()
-                    .filter(|&p| (p.name == error.package))
+                    .filter(|&p| (*p.name == error.package))
                     .map(|p| p.vet_version())
                     .collect()
             };
@@ -1988,7 +1988,7 @@ async fn fix_audit_as(
                         let default_audit_as =
                             match cache.crates_io_info(network, &err.package).await {
                                 Ok(entry) => cfg.metadata.packages.iter().any(|p| {
-                                    p.name == err.package && entry.metadata.consider_as_same(p)
+                                    *p.name == err.package && entry.metadata.consider_as_same(p)
                                 }),
                                 Err(e) => {
                                     warn!("crate metadata error for {}: {e}", &err.package);
@@ -2639,98 +2639,109 @@ fn cmd_help_md(
     _cfg: &PartialConfig,
     _sub_args: &HelpMarkdownArgs,
 ) -> Result<(), miette::Report> {
-    let app_name = "cargo-vet";
-    let pretty_app_name = "cargo vet";
-    // Make a new App to get the help message this time.
-
-    writeln!(out, "# {pretty_app_name} CLI manual");
+    writeln!(out, "# cargo vet CLI manual");
     writeln!(out);
     writeln!(
         out,
-        "> This manual can be regenerated with `{pretty_app_name} help-markdown`"
+        "> This manual can be regenerated with `cargo vet help-markdown`"
     );
     writeln!(out);
 
-    let mut fake_cli = FakeCli::command().term_width(0);
+    let mut fake_cli = FakeCli::command()
+        .term_width(0)
+        .disable_help_subcommand(true);
+    fake_cli.build();
+
     let full_command = fake_cli.get_subcommands_mut().next().unwrap();
-    full_command.build();
-    let mut todo = vec![full_command];
+    let mut todo = vec![("cargo vet".to_owned(), full_command)];
     let mut is_full_command = true;
 
-    while let Some(command) = todo.pop() {
+    while let Some((name, command)) = todo.pop() {
         let mut help_buf = Vec::new();
         command.write_long_help(&mut help_buf).unwrap();
         let help = String::from_utf8(help_buf).unwrap();
 
-        // First line is --version
-        let mut lines = help.lines();
-        let version_line = lines.next().unwrap();
-        let subcommand_name = command.get_name();
-
-        if is_full_command {
-            writeln!(out, "Version: `{version_line}`");
-            writeln!(out);
-        } else {
+        if !is_full_command {
             // Give subcommands some breathing room
             writeln!(out, "<br><br><br>");
-            writeln!(out, "## {pretty_app_name} {subcommand_name}");
         }
 
-        let mut in_subcommands_listing = false;
-        let mut in_usage = false;
-        let mut in_global_options = false;
-        for line in lines {
-            // Use a trailing colon to indicate a heading
-            if let Some(heading) = line.strip_suffix(':') {
-                if !line.starts_with(' ') {
-                    // SCREAMING headers are Main headings
-                    if heading.to_ascii_uppercase() == heading {
-                        in_subcommands_listing = heading == "SUBCOMMANDS";
-                        in_usage = heading == "USAGE";
-                        in_global_options = heading == "GLOBAL OPTIONS";
+        let name_anchor = name.replace(' ', "-");
+        writeln!(out, "## {name}");
 
-                        writeln!(out, "### {heading}");
+        enum Section {
+            None,
+            Usage,
+            Commands,
+            Arguments,
+            Options,
+            GlobalOptions,
+        }
+        let mut section = Section::None;
 
-                        if in_global_options && !is_full_command {
-                            writeln!(
-                                out,
-                                "This subcommand accepts all the [global options](#global-options)"
-                            );
-                        }
-                    } else {
-                        writeln!(out, "### {heading}");
+        for mut line in help.lines() {
+            if let Some((heading, rest)) = line.split_once(':') {
+                let new_section = match heading {
+                    "Usage" => Section::Usage,
+                    "Commands" => Section::Commands,
+                    "Arguments" => Section::Arguments,
+                    "Options" => Section::Options,
+                    "Global Options" => Section::GlobalOptions,
+                    _ => Section::None,
+                };
+                if !matches!(new_section, Section::None) {
+                    writeln!(out, "### {heading}");
+                    section = new_section;
+                    line = rest;
+                    if matches!(section, Section::GlobalOptions) && !is_full_command {
+                        writeln!(
+                            out,
+                            "This subcommand accepts all the [global options](#global-options)"
+                        );
+                        continue;
                     }
-                    continue;
                 }
             }
+            let line = line.trim();
 
-            if in_global_options && !is_full_command {
+            if matches!(section, Section::GlobalOptions) && !is_full_command {
                 // Skip global options for non-primary commands
                 continue;
             }
 
-            if in_subcommands_listing && !line.starts_with("     ") {
-                // subcommand names are list items
-                let own_subcommand_name = line.trim();
-                write!(
-                    out,
-                    "* [{own_subcommand_name}](#{app_name}-{own_subcommand_name}): "
-                );
-                continue;
+            if matches!(section, Section::Commands) {
+                if let Some((sub_name, description)) = line.trim().split_once(' ') {
+                    // subcommand names are list items
+                    let description = description.trim();
+                    writeln!(
+                        out,
+                        "* [{sub_name}](#{name_anchor}-{sub_name}): {description}"
+                    );
+                    continue;
+                }
             }
-            // The rest is indented, get rid of that
-            let line = line.trim();
 
             // Usage strings get wrapped in full code blocks
-            if in_usage && line.starts_with(pretty_app_name) {
+            if matches!(section, Section::Usage) && line.starts_with(&name) {
                 writeln!(out, "```");
                 writeln!(out, "{line}");
                 writeln!(out, "```");
                 continue;
             }
 
+            // option names are subheadings (note: ignore bullets)
+            if matches!(section, Section::Options | Section::GlobalOptions)
+                && line.starts_with('-')
+                && !line.starts_with("- ")
+            {
+                writeln!(out, "#### `{line}`");
+                continue;
+            }
+
             // argument names are subheadings
-            if line.starts_with('-') || line.starts_with('<') {
+            if matches!(section, Section::Arguments)
+                && (line.starts_with('<') || line.starts_with('['))
+            {
                 writeln!(out, "#### `{line}`");
                 continue;
             }
@@ -2753,6 +2764,7 @@ fn cmd_help_md(
             command
                 .get_subcommands_mut()
                 .filter(|cmd| !cmd.is_hide_set())
+                .map(|cmd| (format!("{} {}", name, cmd.get_name()), cmd))
                 .collect::<Vec<_>>()
                 .into_iter()
                 .rev(),
@@ -2940,8 +2952,8 @@ async fn check_audit_as_crates_io(
 
         for package in &first_party_packages {
             // Remove both versioned and unversioned entries
-            unused_audit_as.remove(&(package.name.clone(), Some(package.vet_version())));
-            unused_audit_as.remove(&(package.name.clone(), None));
+            unused_audit_as.remove(&(package.name.to_string(), Some(package.vet_version())));
+            unused_audit_as.remove(&(package.name.to_string(), None));
         }
         if !unused_audit_as.is_empty() {
             errors.push(AuditAsError::UnusedAuditAs(UnusedAuditAsErrors {
@@ -3010,13 +3022,13 @@ async fn check_audit_as_crates_io(
             match action {
                 CheckAction::NeedAuditAs => {
                     needs_audit_as_entry.push(PackageError {
-                        package: package.name.clone(),
+                        package: package.name.to_string(),
                         version: Some(package.vet_version()),
                     });
                 }
                 CheckAction::ShouldntBeAuditAs => {
                     shouldnt_be_audit_as.push(PackageError {
-                        package: package.name.clone(),
+                        package: package.name.to_string(),
                         version: Some(package.vet_version()),
                     });
                 }
@@ -3078,19 +3090,19 @@ fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyEr
     let mut needs_policy_version_errors = Vec::new();
 
     for package in &cfg.metadata.packages {
-        policy_crates.remove(&package.name);
+        policy_crates.remove(&*package.name);
 
         let versioned_policy_exists =
-            versioned_policy_crates.remove(&(package.name.clone(), package.vet_version()));
+            versioned_policy_crates.remove(&(package.name.to_string(), package.vet_version()));
 
         // If a crate has at least one third-party package and some crate policy specifies a
         // `dependency-criteria`, a versioned policy for all used versions must exist.
         if third_party_packages.contains(&package.name)
-            && dependency_criteria_packages.contains(&package.name)
+            && dependency_criteria_packages.contains(&*package.name)
             && !versioned_policy_exists
         {
             needs_policy_version_errors.push(PackageError {
-                package: package.name.clone(),
+                package: package.name.to_string(),
                 version: Some(package.vet_version()),
             });
         }

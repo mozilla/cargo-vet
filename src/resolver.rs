@@ -2589,7 +2589,7 @@ async fn suggest_delta(
                 // have sources if the index is unavailable.
                 known_versions
                     .as_ref()
-                    .map_or(true, |versions| versions.contains_key(&ver.semver))
+                    .is_none_or(|versions| versions.contains_key(&ver.semver))
             };
             reachable = Some(Reachable {
                 from_root: reachable_from_root

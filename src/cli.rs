@@ -17,8 +17,8 @@ pub enum FakeCli {
 #[derive(clap::Args)]
 #[clap(version)]
 #[clap(bin_name = "cargo vet")]
+#[clap(display_name = "cargo-vet")]
 #[clap(args_conflicts_with_subcommands = true)]
-#[clap(global_setting(clap::AppSettings::DeriveDisplayOrder))]
 /// Supply-chain security for Rust
 ///
 /// When run without a subcommand, `cargo vet` will invoke the `check`
@@ -30,13 +30,13 @@ pub struct Cli {
 
     // Top-level flags
     /// Path to Cargo.toml
-    #[clap(long, name = "PATH", parse(from_os_str))]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(long, name = "PATH")]
+    #[clap(help_heading = "Global Options", global = true)]
     pub manifest_path: Option<PathBuf>,
 
     /// Path to the supply-chain directory
-    #[clap(long, name = "STORE_PATH", parse(from_os_str))]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(long, name = "STORE_PATH")]
+    #[clap(help_heading = "Global Options", global = true)]
     pub store_path: Option<PathBuf>,
 
     /// Don't use --all-features
@@ -44,64 +44,63 @@ pub struct Cli {
     /// We default to passing --all-features to `cargo metadata`
     /// because we want to analyze your full dependency tree
     #[clap(long, action)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub no_all_features: bool,
 
     /// Do not activate the `default` feature
     #[clap(long, action)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub no_default_features: bool,
 
     /// Space-separated list of features to activate
-    #[clap(long, action, require_value_delimiter = true, value_delimiter = ' ')]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(long, action, value_delimiter = ' ')]
+    #[clap(help_heading = "Global Options", global = true)]
     pub features: Vec<String>,
 
     /// Do not fetch new imported audits.
     #[clap(long, action)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub locked: bool,
 
     /// Avoid the network entirely, requiring either that the cargo cache is
     /// populated or the dependencies are vendored. Requires --locked.
     #[clap(long, action)]
     #[clap(requires = "locked")]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub frozen: bool,
 
     /// Prevent commands such as `check` and `certify` from automatically
     /// cleaning up unused exemptions.
     #[clap(long, action)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub no_minimize_exemptions: bool,
 
     /// Prevent commands such as `check` and `suggest` from suggesting registry
     /// imports.
     #[clap(long, action)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub no_registry_suggestions: bool,
 
     /// How verbose logging should be (log level)
     #[clap(long, action)]
-    #[clap(default_value_t = LevelFilter::WARN)]
-    #[clap(possible_values = ["off", "error", "warn", "info", "debug", "trace"])]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
-    pub verbose: LevelFilter,
+    #[clap(default_value = "warn")]
+    #[clap(help_heading = "Global Options", global = true)]
+    pub verbose: VetLevelFilter,
 
     /// Instead of stdout, write output to this file
     #[clap(long, action)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub output_file: Option<PathBuf>,
 
     /// Instead of stderr, write logs to this file (only used after successful CLI parsing)
     #[clap(long, action)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub log_file: Option<PathBuf>,
 
     /// The format of the output
     #[clap(long, value_enum, action)]
     #[clap(default_value_t = OutputFormat::Human)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub output_format: OutputFormat,
 
     /// Use the following path instead of the global cache directory
@@ -113,12 +112,12 @@ pub struct Cli {
     ///
     /// This mostly exists for testing vet itself.
     #[clap(long, action)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub cache_dir: Option<PathBuf>,
 
     /// The date and time to use as now.
     #[clap(long, action, hide = true)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub current_time: Option<chrono::DateTime<chrono::Utc>>,
 
     /// Filter out different parts of the build graph and pretend that's the true graph
@@ -164,7 +163,7 @@ pub struct Cli {
     /// * `is_dev_only($bool)`: whether it's only used by dev (test) builds in the original graph
     #[clap(long, action)]
     #[clap(verbatim_doc_comment)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub filter_graph: Option<Vec<GraphFilter>>,
 
     /// Arguments to pass through to cargo. It can be specified multiple times for
@@ -174,7 +173,7 @@ pub struct Cli {
     ///
     /// This allows using unstable options in Cargo if a project's Cargo.toml requires them.
     #[clap(long, action)]
-    #[clap(help_heading = "GLOBAL OPTIONS", global = true)]
+    #[clap(help_heading = "Global Options", global = true)]
     pub cargo_arg: Vec<String>,
 
     // Args for `Check` when the subcommand is not explicitly specified.
@@ -747,7 +746,7 @@ pub struct GcArgs {
 pub struct RenewArgs {
     // Change this doc string if the WILDCARD_AUDIT_EXPIRATION_STRING changes.
     /// Renew all wildcard audits which will have expired six weeks from now.
-    #[clap(long, action, conflicts_with("crate-name"))]
+    #[clap(long, action, conflicts_with("crate_name"))]
     pub expiring: bool,
 
     /// Renew wildcard audits for inactive crates which have not been updated
@@ -958,6 +957,31 @@ impl FromStr for GraphFilter {
         match parse(s).finish() {
             Ok((_remaining, val)) => Ok(val),
             Err(e) => Err(convert_error(s, e)),
+        }
+    }
+}
+
+/// Crate-local definition of the LevelFilter type to support
+/// #[derive(ValueEnum)].
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
+pub enum VetLevelFilter {
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl From<VetLevelFilter> for LevelFilter {
+    fn from(value: VetLevelFilter) -> Self {
+        match value {
+            VetLevelFilter::Off => LevelFilter::OFF,
+            VetLevelFilter::Error => LevelFilter::ERROR,
+            VetLevelFilter::Warn => LevelFilter::WARN,
+            VetLevelFilter::Info => LevelFilter::INFO,
+            VetLevelFilter::Debug => LevelFilter::DEBUG,
+            VetLevelFilter::Trace => LevelFilter::TRACE,
         }
     }
 }

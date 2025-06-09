@@ -260,14 +260,14 @@ impl Tidyable for AuditsFile {
 #[derive(serde::Deserialize, Clone, Debug)]
 pub struct ForeignAuditsFile {
     #[serde(default)]
-    pub criteria: SortedMap<CriteriaName, toml::Value>,
+    pub criteria: SortedMap<CriteriaName, toml::Table>,
     #[serde(default)]
     #[serde(rename = "wildcard-audits")]
-    pub wildcard_audits: SortedMap<PackageName, Vec<toml::Value>>,
+    pub wildcard_audits: SortedMap<PackageName, Vec<toml::Table>>,
     #[serde(default)]
-    pub audits: SortedMap<PackageName, Vec<toml::Value>>,
+    pub audits: SortedMap<PackageName, Vec<toml::Table>>,
     #[serde(default)]
-    pub trusted: SortedMap<PackageName, Vec<toml::Value>>,
+    pub trusted: SortedMap<PackageName, Vec<toml::Table>>,
 }
 
 /// Information on a Criteria

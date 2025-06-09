@@ -2,8 +2,7 @@
 source: src/tests/store_parsing.rs
 expression: acquire_errors
 ---
-  × Failed to parse toml file
-  ╰─▶ missing field `audits`
+  × Failed to parse toml file: missing field `audits`
    ╭─[audits.toml:1:1]
  1 │ 
    · ▲

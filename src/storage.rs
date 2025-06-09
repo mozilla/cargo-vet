@@ -11,7 +11,6 @@ use std::{
 use cargo_metadata::semver;
 use flate2::read::GzDecoder;
 use futures_util::future::{join_all, try_join_all};
-use miette::SourceOffset;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use similar::{udiff::unified_diff, Algorithm};
@@ -42,7 +41,7 @@ use crate::{
     },
     network::Network,
     out::{progress_bar, IncProgressOnDrop},
-    serialization::{parse_from_value, spanned::Spanned, to_formatted_toml, Tidyable},
+    serialization::{parse_from_table, spanned::Spanned, to_formatted_toml, Tidyable},
     Config, PackageExt, PartialConfig, CARGO_ENV,
 };
 
@@ -1282,13 +1281,10 @@ pub(crate) fn foreign_audit_source_to_local_warn(
     audit_source: SourceFile,
 ) -> Result<AuditsFile, LoadTomlError> {
     let foreign_audit_file: ForeignAuditsFile = toml::de::from_str(audit_source.source())
-        .map_err(|error| {
-            let (line, col) = error.line_col().unwrap_or((0, 0));
-            TomlParseError {
-                span: SourceOffset::from_location(audit_source.source(), line + 1, col + 1),
-                source_code: audit_source,
-                error,
-            }
+        .map_err(|error| TomlParseError {
+            span: error.span().unwrap_or(0..0).into(),
+            source_code: audit_source,
+            error,
         })
         .map_err(LoadTomlError::from)?;
     let ForeignAuditFileToLocalResult {
@@ -1324,15 +1320,15 @@ pub(crate) fn foreign_audit_source_to_local_warn(
 }
 
 /// Parse an unparsed criteria entry, validating and returning it.
-fn parse_imported_criteria(value: toml::Value) -> Option<CriteriaEntry> {
-    parse_from_value(value)
+fn parse_imported_criteria(value: toml::Table) -> Option<CriteriaEntry> {
+    parse_from_table(value)
         .map_err(|err| info!("imported criteria parsing failed due to {err}"))
         .ok()
 }
 
 /// Parse an unparsed audit entry, validating and returning it.
-fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> Option<AuditEntry> {
-    let mut audit: AuditEntry = parse_from_value(value)
+fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Table) -> Option<AuditEntry> {
+    let mut audit: AuditEntry = parse_from_table(value)
         .map_err(|err| info!("imported audit parsing failed due to {err}"))
         .ok()?;
 
@@ -1358,9 +1354,9 @@ fn parse_imported_audit(valid_criteria: &[CriteriaName], value: toml::Value) -> 
 /// Parse an unparsed wildcard audit entry, validating and returning it.
 fn parse_imported_wildcard_audit(
     valid_criteria: &[CriteriaName],
-    value: toml::Value,
+    table: toml::Table,
 ) -> Option<WildcardEntry> {
-    let mut audit: WildcardEntry = parse_from_value(value)
+    let mut audit: WildcardEntry = parse_from_table(table)
         .map_err(|err| info!("imported wildcard audit parsing failed due to {err}"))
         .ok()?;
 
@@ -1386,9 +1382,9 @@ fn parse_imported_wildcard_audit(
 /// Parse an unparsed wildcard audit entry, validating and returning it.
 fn parse_imported_trust_entry(
     valid_criteria: &[CriteriaName],
-    value: toml::Value,
+    table: toml::Table,
 ) -> Option<TrustEntry> {
-    let mut audit: TrustEntry = parse_from_value(value)
+    let mut audit: TrustEntry = parse_from_table(table)
         .map_err(|err| info!("imported trust entry audit parsing failed due to {err}"))
         .ok()?;
 
@@ -1443,7 +1439,7 @@ async fn import_unpublished_entries(
 
         let unpublished = live_imports
             .unpublished
-            .entry(package.name.clone())
+            .entry(package.name.to_string())
             .or_default();
 
         // Mark each existing entry for this version as `still_unpublished`, as
@@ -1521,7 +1517,7 @@ async fn import_publisher_versions(
             .packages
             .iter()
             .filter(|pkg| {
-                relevant_packages.contains(&pkg.name) && pkg.is_third_party(&config_file.policy)
+                relevant_packages.contains(&*pkg.name) && pkg.is_third_party(&config_file.policy)
             })
             .map(|pkg| &pkg.name[..])
             .collect()
@@ -1588,13 +1584,10 @@ pub async fn fetch_registry(network: &Network) -> Result<RegistryFile, FetchRegi
     let registry_url = Url::parse(REGISTRY_URL).unwrap();
     let registry_source = network.download_source_file_cached(registry_url).await?;
     let registry_file: RegistryFile = toml::de::from_str(registry_source.source())
-        .map_err(|error| {
-            let (line, col) = error.line_col().unwrap_or((0, 0));
-            TomlParseError {
-                span: SourceOffset::from_location(registry_source.source(), line + 1, col + 1),
-                source_code: registry_source,
-                error,
-            }
+        .map_err(|error| TomlParseError {
+            span: error.span().unwrap_or(0..0).into(),
+            source_code: registry_source,
+            error,
         })
         .map_err(LoadTomlError::from)?;
     Ok(registry_file)
@@ -1874,11 +1867,11 @@ impl Cache {
                 let fetched_package_ = fetched_package.clone();
                 let now = filetime::FileTime::from_system_time(SystemTime::from(self.now));
                 let cached_file = tokio::task::spawn_blocking(move || {
-                    File::open(&fetched_package_).map(|file| {
+                    File::open(&fetched_package_).inspect(|file| {
                         // Update the atime and mtime for this crate to ensure it isn't
                         // collected by the gc.
                         if let Err(err) =
-                            filetime::set_file_handle_times(&file, Some(now), Some(now))
+                            filetime::set_file_handle_times(file, Some(now), Some(now))
                         {
                             warn!(
                                 "failed to update mtime for {}, gc may not function correctly: {}",
@@ -1886,7 +1879,6 @@ impl Cache {
                                 err
                             );
                         }
-                        file
                     })
                 })
                 .await
@@ -2565,7 +2557,7 @@ pub fn locate_local_checkout(
     version: &VetVersion,
 ) -> Option<PathBuf> {
     for pkg in &metadata.packages {
-        if pkg.name == package && &pkg.vet_version() == version {
+        if *pkg.name == package && &pkg.vet_version() == version {
             assert_eq!(
                 pkg.manifest_path.file_name(),
                 Some(CARGO_TOML_FILE),
@@ -2683,7 +2675,7 @@ async fn unpack_checkout(
     try_join_all(stdout.lines().map(|target| async move {
         // We'll be ignoring diffs for each of the skipped paths, so we can
         // ignore these if cargo reports them.
-        if DIFF_SKIP_PATHS.iter().any(|&p| p == target) {
+        if DIFF_SKIP_PATHS.contains(&target) {
             return Ok(());
         }
 
@@ -2761,16 +2753,12 @@ where
     let result = toml::de::from_str(source_code.source());
     match result {
         Ok(toml) => Ok((source_code, toml)),
-        Err(error) => {
-            let (line, col) = error.line_col().unwrap_or((0, 0));
-            let span = SourceOffset::from_location(source_code.source(), line + 1, col);
-            Err(TomlParseError {
-                source_code,
-                span,
-                error,
-            }
-            .into())
+        Err(error) => Err(TomlParseError {
+            source_code,
+            span: error.span().unwrap_or(0..0).into(),
+            error,
         }
+        .into()),
     }
 }
 fn store_toml<T>(
