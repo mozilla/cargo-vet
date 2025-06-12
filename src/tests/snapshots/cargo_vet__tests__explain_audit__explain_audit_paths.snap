@@ -1,0 +1,10 @@
+---
+source: src/tests/explain_audit.rs
+expression: output.to_string()
+---
+The package third-party 10.0.0 certifies for safe-to-deploy
+1) [local] full audit for 5.0.0 by <unspecified>
+2) [local] delta audit for 5.0.0->3.0.0 by <unspecified>
+3) [local] delta audit for 3.0.0->9.0.0 by <unspecified>
+4) [local] delta audit for 9.0.0->10.0.0 by <unspecified>
+

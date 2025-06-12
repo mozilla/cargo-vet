@@ -368,6 +368,13 @@ pub enum Commands {
     #[clap(disable_version_flag = true)]
     Aggregate(AggregateArgs),
 
+    /// Print the computed audit path used by cargo-vet to certify a package for
+    /// a given critera.
+    ///
+    /// This is a debugging command, and the output's format is not guaranteed.
+    #[clap(disable_version_flag = true)]
+    ExplainAudit(ExplainAuditArgs),
+
     /// Print the cargo build graph as understood by `cargo vet`
     ///
     /// This is a debugging command, the output's format is not guaranteed.
@@ -774,6 +781,20 @@ pub enum DumpGraphDepth {
     FirstParty,
     FirstPartyAndDirects,
     Full,
+}
+
+#[derive(clap::Args)]
+pub struct ExplainAuditArgs {
+    /// The package to display the audit path for
+    #[clap(action)]
+    pub package: PackageName,
+    /// The version to display the audit path for
+    #[clap(action)]
+    pub version: Option<VetVersion>,
+    /// The criteria to display the audit path for
+    #[clap(action)]
+    #[clap(default_value = "safe-to-deploy")]
+    pub criteria: CriteriaName,
 }
 
 /// Logging verbosity levels
