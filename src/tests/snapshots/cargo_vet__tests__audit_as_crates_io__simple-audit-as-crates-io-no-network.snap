@@ -1,0 +1,5 @@
+---
+source: src/tests/audit_as_crates_io.rs
+expression: output
+---
+
