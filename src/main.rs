@@ -1951,7 +1951,7 @@ async fn fix_audit_as(
                 cfg.metadata
                     .packages
                     .iter()
-                    .filter(|&p| (*p.name == error.package))
+                    .filter(|&p| *p.name == error.package)
                     .map(|p| p.vet_version())
                     .collect()
             };
@@ -3153,86 +3153,108 @@ async fn check_audit_as_crates_io(
         }
     }
 
-    // We should only check the audit-as-crates-io entries if we have a network, because we
-    // shouldn't make recommendations based on potentially stale information.
-    if network.is_some() {
-        let progress = progress_bar(
-            "Validating",
-            "audit-as-crates-io specifications",
-            first_party_packages.len() as u64,
-        );
+    let progress = progress_bar(
+        "Validating",
+        "audit-as-crates-io specifications",
+        first_party_packages.len() as u64,
+    );
 
-        enum CheckAction {
-            NeedAuditAs,
-            ShouldntBeAuditAs,
-        }
+    enum CheckAction {
+        NeedAuditAs,
+        ShouldntBeAuditAs,
+    }
 
-        let actions: Vec<_> = join_all(first_party_packages.into_iter().map(|package| {
-            let progress = &progress;
-            let cache = &cache;
-            async move {
-                let _inc_progress = IncProgressOnDrop(progress, 1);
+    let actions: Vec<_> = join_all(first_party_packages.into_iter().map(|package| {
+        let progress = &progress;
+        let cache = &cache;
+        async move {
+            let _inc_progress = IncProgressOnDrop(progress, 1);
 
-                let audit_policy = package
-                    .policy_entry(&store.config.policy)
-                    .and_then(|policy| policy.audit_as_crates_io);
-                if audit_policy == Some(false) {
-                    // They've explicitly said this is first-party so we don't care about what's in the
-                    // registry.
-                    return None;
-                }
+            let audit_policy = package
+                .policy_entry(&store.config.policy)
+                .and_then(|policy| policy.audit_as_crates_io);
+            if audit_policy == Some(false) {
+                // They've explicitly said this is first-party so we don't care about what's in the
+                // registry.
+                return None;
+            }
 
-                let matches_crates_io_package = cache
+            let package_name = package.name.as_str();
+
+            // Check for existing audits for the crate, which imply that it exists on
+            // crates.io.
+            let has_existing_audits = || {
+                std::iter::once(&store.audits)
+                    .chain(store.imports.audits.values())
+                    .any(|audits_file| {
+                        audits_file.audits.contains_key(package_name)
+                            || audits_file.wildcard_audits.contains_key(package_name)
+                            || audits_file.trusted.contains_key(package_name)
+                    })
+                    || store.config.exemptions.contains_key(package_name)
+            };
+
+            let matches_crates_io_package = async {
+                cache
                     .crates_io_info(network, &package.name)
                     .await
-                    .is_ok_and(|entry| entry.metadata.consider_as_same(package));
+                    .is_ok_and(|entry| entry.metadata.consider_as_same(package))
+            };
 
-                if matches_crates_io_package && audit_policy.is_none() {
-                    // We found a package that has similar metadata to one with the same name
-                    // on crates.io: having no policy is an error.
-                    return Some((CheckAction::NeedAuditAs, package));
-                }
-                if !matches_crates_io_package && audit_policy == Some(true) {
-                    return Some((CheckAction::ShouldntBeAuditAs, package));
-                }
-                None
+            // To do some validation when no network is available, we assume the crate is on
+            // crates.io if there are any audits for the crate name (to avoid the crate being
+            // missed when e.g. applying local patches).
+            let crate_is_on_crates_io = has_existing_audits() || matches_crates_io_package.await;
+
+            if crate_is_on_crates_io && audit_policy.is_none() {
+                // We found a package that has similar metadata to one with the same name on
+                // crates.io, or we have audits for this crate name: having no policy is an
+                // error.
+                return Some((CheckAction::NeedAuditAs, package));
             }
-        }))
-        .await
-        .into_iter()
-        .flatten()
-        .collect();
 
-        let mut needs_audit_as_entry = vec![];
-        let mut shouldnt_be_audit_as = vec![];
+            // When a network is available (so that we know our information is not stale), if
+            // there is no known crate on crates.io, the policy should not be true.
+            if network.is_some() && !crate_is_on_crates_io && audit_policy == Some(true) {
+                return Some((CheckAction::ShouldntBeAuditAs, package));
+            }
+            None
+        }
+    }))
+    .await
+    .into_iter()
+    .flatten()
+    .collect();
 
-        for (action, package) in actions {
-            match action {
-                CheckAction::NeedAuditAs => {
-                    needs_audit_as_entry.push(PackageError {
-                        package: package.name.to_string(),
-                        version: Some(package.vet_version()),
-                    });
-                }
-                CheckAction::ShouldntBeAuditAs => {
-                    shouldnt_be_audit_as.push(PackageError {
-                        package: package.name.to_string(),
-                        version: Some(package.vet_version()),
-                    });
-                }
+    let mut needs_audit_as_entry = vec![];
+    let mut shouldnt_be_audit_as = vec![];
+
+    for (action, package) in actions {
+        match action {
+            CheckAction::NeedAuditAs => {
+                needs_audit_as_entry.push(PackageError {
+                    package: package.name.to_string(),
+                    version: Some(package.vet_version()),
+                });
+            }
+            CheckAction::ShouldntBeAuditAs => {
+                shouldnt_be_audit_as.push(PackageError {
+                    package: package.name.to_string(),
+                    version: Some(package.vet_version()),
+                });
             }
         }
+    }
 
-        if !needs_audit_as_entry.is_empty() {
-            errors.push(AuditAsError::NeedsAuditAs(NeedsAuditAsErrors {
-                errors: needs_audit_as_entry,
-            }));
-        }
-        if !shouldnt_be_audit_as.is_empty() {
-            errors.push(AuditAsError::ShouldntBeAuditAs(ShouldntBeAuditAsErrors {
-                errors: shouldnt_be_audit_as,
-            }));
-        }
+    if !needs_audit_as_entry.is_empty() {
+        errors.push(AuditAsError::NeedsAuditAs(NeedsAuditAsErrors {
+            errors: needs_audit_as_entry,
+        }));
+    }
+    if !shouldnt_be_audit_as.is_empty() {
+        errors.push(AuditAsError::ShouldntBeAuditAs(ShouldntBeAuditAsErrors {
+            errors: shouldnt_be_audit_as,
+        }));
     }
 
     if !errors.is_empty() {
