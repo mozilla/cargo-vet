@@ -2189,12 +2189,13 @@ fn cmd_check(
     let network = Network::acquire(cfg);
     let mut store = Store::acquire(cfg, network.as_ref(), false)?;
 
+    // Check crate policies prior to audit_as_crates_io because the suggestions of
+    // check_audit_as_crates_io will rely on the correct structure of crate policies.
+    check_crate_policies(cfg, &store)?;
+
     if !cfg.cli.locked {
         // Check if any of our first-parties are in the crates.io registry
         let mut cache = Cache::acquire(cfg).into_diagnostic()?;
-        // Check crate policies prior to audit_as_crates_io because the suggestions of
-        // check_audit_as_crates_io will rely on the correct structure of crate policies.
-        check_crate_policies(cfg, &store)?;
         tokio::runtime::Handle::current().block_on(check_audit_as_crates_io(
             cfg,
             &store,
