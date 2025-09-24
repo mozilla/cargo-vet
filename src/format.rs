@@ -704,7 +704,7 @@ impl Policy {
     }
 
     /// Return an iterator over defined policies.
-    pub fn iter(&self) -> PolicyIter {
+    pub fn iter(&self) -> PolicyIter<'_> {
         PolicyIter {
             iter: self.package.iter(),
             versioned: None,
@@ -1171,7 +1171,7 @@ pub enum FetchCommand {
 }
 
 impl FetchCommand {
-    pub fn package(&self) -> PackageStr {
+    pub fn package(&self) -> PackageStr<'_> {
         match self {
             FetchCommand::Inspect { package, .. } => package,
             FetchCommand::Diff { package, .. } => package,

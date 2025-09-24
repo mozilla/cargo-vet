@@ -258,7 +258,7 @@ impl Network {
 
     /// Internal core implementation of network fetching which is shared between
     /// `download` and `download_and_persist`.
-    async fn fetch_core(&self, url: Url) -> Result<Response, DownloadError> {
+    async fn fetch_core(&self, url: Url) -> Result<Response<'_>, DownloadError> {
         #[cfg(test)]
         if let Some(mock_network) = &self.mock_network {
             let chunk = mock_network
