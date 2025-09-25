@@ -3,7 +3,7 @@
 use crate::cli::FetchMode;
 use crate::errors::{StoreVersionParseError, VersionParseError};
 use crate::resolver::{DiffRecommendation, ViolationConflict};
-use crate::serialization::{spanned::Spanned, Tidyable};
+use crate::serialization::{spanned::Spanned, CacheFileVersion, Tidyable};
 use crate::{flock::Filesystem, serialization};
 use core::{cmp, fmt};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -1094,31 +1094,14 @@ pub struct UnpublishedEntry {
 //                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
 
-/// The current DiffCache file format in a tagged enum.
-///
-/// If we fail to read the DiffCache it will be silently re-built, meaning that
-/// the version enum tag can be changed to force the DiffCache to be
-/// re-generated after a breaking change to the format, such as a change to how
-/// diffs are computed or identified.
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(tag = "version")]
-pub enum DiffCache {
-    #[serde(rename = "2")]
-    V2 {
-        diffs: SortedMap<PackageName, SortedMap<Delta, DiffStat>>,
-    },
+#[derive(Serialize, Deserialize, Default, Clone)]
+pub struct DiffCache {
+    pub version: CacheFileVersion<2>,
+    pub diffs: SortedMap<PackageName, SortedMap<Delta, DiffStat>>,
 }
 
 impl Tidyable for DiffCache {
     fn tidy(&mut self) {}
-}
-
-impl Default for DiffCache {
-    fn default() -> Self {
-        DiffCache::V2 {
-            diffs: SortedMap::new(),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
@@ -1181,6 +1164,7 @@ impl FetchCommand {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CommandHistory {
+    pub version: CacheFileVersion<1>,
     #[serde(flatten)]
     pub last_fetch: Option<FetchCommand>,
     pub last_fetch_mode: Option<FetchMode>,
@@ -1225,6 +1209,7 @@ pub struct CratesCacheEntry {
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct CratesCache {
+    pub version: CacheFileVersion<1>,
     pub users: SortedMap<CratesUserId, CratesCacheUser>,
     pub crates: SortedMap<PackageName, Arc<CratesCacheEntry>>,
 }

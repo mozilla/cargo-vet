@@ -2062,8 +2062,9 @@ impl Cache {
             let mut guard = self.state.lock().unwrap();
 
             // Check if the value has already been cached.
-            let DiffCache::V2 { diffs } = &guard.diff_cache;
-            if let Some(cached) = diffs
+            if let Some(cached) = guard
+                .diff_cache
+                .diffs
                 .get(package)
                 .and_then(|cache| cache.get(delta))
                 .cloned()
@@ -2117,8 +2118,9 @@ impl Cache {
                 // Record the cache result in the diffcache
                 {
                     let mut guard = self.state.lock().unwrap();
-                    let DiffCache::V2 { diffs } = &mut guard.diff_cache;
-                    diffs
+                    guard
+                        .diff_cache
+                        .diffs
                         .entry(package.to_string())
                         .or_default()
                         .insert(delta.clone(), diffstat.clone());
