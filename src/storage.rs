@@ -33,11 +33,12 @@ use crate::{
     format::{
         self, AuditEntry, AuditedDependencies, AuditsFile, CommandHistory, ConfigFile,
         CratesAPICrate, CratesCache, CratesCacheEntry, CratesCacheUser, CratesCacheVersionDetails,
-        CratesPublisher, CratesUserId, CriteriaEntry, CriteriaMap, CriteriaName, CriteriaStr,
-        Delta, DiffCache, DiffStat, FastMap, FastSet, FetchCommand, ForeignAuditsFile, ImportName,
-        ImportsFile, MetaConfig, PackageName, PackageStr, RegistryEntry, RegistryFile, SortedMap,
-        StoreVersion, TrustEntry, TrustedPackages, UnpublishedEntry, VetVersion, WildcardAudits,
-        WildcardEntry, SAFE_TO_DEPLOY, SAFE_TO_RUN,
+        CratesPublisher, CratesPublisherSource, CratesSourceId, CratesUserId, CriteriaEntry,
+        CriteriaMap, CriteriaName, CriteriaStr, Delta, DiffCache, DiffStat, FastMap, FastSet,
+        FetchCommand, ForeignAuditsFile, ImportName, ImportsFile, MetaConfig, PackageName,
+        PackageStr, RegistryEntry, RegistryFile, SortedMap, StoreVersion, TrustEntry,
+        TrustedPackages, UnpublishedEntry, VetVersion, WildcardAudits, WildcardEntry,
+        SAFE_TO_DEPLOY, SAFE_TO_RUN,
     },
     network::Network,
     out::{progress_bar, IncProgressOnDrop},
@@ -1558,17 +1559,15 @@ async fn import_publisher_versions(
                 .versions
                 .iter()
                 .filter_map(|(version, details)| {
-                    let user_id = details.published_by?;
-                    let user_info = cache.get_crates_user_info(user_id)?;
+                    let source_id = details.source.as_ref()?;
+                    let source = cache.publisher_id_to_source(source_id)?;
                     let is_fresh_import = !nonfresh_versions.contains(version);
                     Some(CratesPublisher {
                         version: VetVersion {
                             semver: version.clone(),
                             git_rev: None,
                         },
-                        user_id,
-                        user_login: user_info.login,
-                        user_name: user_info.name,
+                        source,
                         when: details.created_at.date_naive(),
                         is_fresh_import,
                     })
@@ -1596,12 +1595,19 @@ pub async fn fetch_registry(network: &Network) -> Result<RegistryFile, FetchRegi
 pub fn user_info_map(imports: &ImportsFile) -> FastMap<CratesUserId, CratesCacheUser> {
     let mut user_info = FastMap::new();
     for publisher in imports.publisher.values().flatten() {
-        user_info
-            .entry(publisher.user_id)
-            .or_insert_with(|| CratesCacheUser {
-                login: publisher.user_login.clone(),
-                name: publisher.user_name.clone(),
-            });
+        if let CratesPublisherSource::User {
+            user_id,
+            user_login,
+            user_name,
+        } = &publisher.source
+        {
+            user_info
+                .entry(*user_id)
+                .or_insert_with(|| CratesCacheUser {
+                    login: user_login.clone(),
+                    name: user_name.clone(),
+                });
+        }
     }
     user_info
 }
@@ -2482,17 +2488,28 @@ impl Cache {
                             api_version.num,
                             CratesCacheVersionDetails {
                                 created_at: api_version.created_at,
-                                published_by: api_version.published_by.map(|api_user| {
-                                    info!("recording user info for {api_user:?}");
-                                    guard.crates_cache.users.insert(
-                                        api_user.id,
-                                        CratesCacheUser {
-                                            login: api_user.login,
-                                            name: api_user.name,
-                                        },
-                                    );
-                                    api_user.id
-                                }),
+                                source: api_version
+                                    .published_by
+                                    .map(|api_user| {
+                                        info!("recording user info for {api_user:?}");
+                                        guard.crates_cache.users.insert(
+                                            api_user.id,
+                                            CratesCacheUser {
+                                                login: api_user.login,
+                                                name: api_user.name,
+                                            },
+                                        );
+                                        CratesSourceId::User {
+                                            user_id: api_user.id,
+                                        }
+                                    })
+                                    .or_else(|| {
+                                        Some(CratesSourceId::TrustedPublisher {
+                                            trusted_publisher: api_version
+                                                .trustpub_data?
+                                                .as_signature()?,
+                                        })
+                                    }),
                             },
                         )
                     })
@@ -2527,6 +2544,26 @@ impl Cache {
             .get(package)
             .expect("entry cannot be missing");
         Ok(entry.clone())
+    }
+
+    /// Hydrate a CratesSourceId into a CratesPublisherSource based on
+    /// user information for a crates.io user from the publisher cache.
+    pub fn publisher_id_to_source(&self, source: &CratesSourceId) -> Option<CratesPublisherSource> {
+        match source {
+            CratesSourceId::User { user_id } => {
+                let user_info = self.get_crates_user_info(*user_id)?;
+                Some(CratesPublisherSource::User {
+                    user_id: *user_id,
+                    user_login: user_info.login.clone(),
+                    user_name: user_info.name.clone(),
+                })
+            }
+            CratesSourceId::TrustedPublisher { trusted_publisher } => {
+                Some(CratesPublisherSource::TrustedPublisher {
+                    trusted_publisher: trusted_publisher.clone(),
+                })
+            }
+        }
     }
 
     /// Look up user information for a crates.io user from the publisher cache.

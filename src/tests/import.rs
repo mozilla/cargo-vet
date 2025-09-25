@@ -2066,3 +2066,44 @@ fn local_wildcard_audit_preferred_to_fresh_import() {
     let output = get_imports_file_changes_noprune(&metadata, &store);
     insta::assert_snapshot!(output);
 }
+
+#[test]
+fn wildcard_audit_trustpub_import() {
+    // (Pass) If we have a wildcard audit for a crate using a trusted publisher,
+    // it should be correctly fetched from the API.
+
+    let _enter = TEST_RUNTIME.enter();
+    let mock = MockMetadata::simple();
+
+    let metadata = mock.metadata();
+    let (config, mut audits, imports) = builtin_files_full_audited(&metadata);
+
+    audits.audits.remove("third-party2");
+
+    audits.wildcard_audits.insert(
+        "third-party2".to_owned(),
+        vec![wildcard_audit_trustpub(
+            "github:testing/third-party2",
+            SAFE_TO_DEPLOY,
+        )],
+    );
+
+    let cfg = mock_cfg(&metadata);
+
+    let mut network = Network::new_mock();
+    MockRegistryBuilder::new()
+        .package(
+            "third-party2",
+            &[reg_trustpub_by(
+                ver(DEFAULT_VER),
+                "github:testing/third-party2",
+                mock_weeks_ago(2),
+            )],
+        )
+        .serve(&mut network);
+
+    let store = Store::mock_online(&cfg, config, audits, imports, &network, true).unwrap();
+
+    let output = get_imports_file_changes_noprune(&metadata, &store);
+    insta::assert_snapshot!(output);
+}
