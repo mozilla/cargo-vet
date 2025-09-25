@@ -1,0 +1,6 @@
+---
+source: src/tests/wildcard.rs
+expression: human
+---
+Vetting Succeeded (3 fully audited)
+

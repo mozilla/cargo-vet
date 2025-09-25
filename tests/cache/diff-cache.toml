@@ -360,6 +360,11 @@ insertions = 16141
 deletions = 0
 files_changed = 27
 
+[diffs.serde."1.0.197 -> 1.0.136"]
+insertions = 1500
+deletions = 1933
+files_changed = 26
+
 [diffs.serde_json."1.0.79"]
 insertions = 22848
 deletions = 0
@@ -439,6 +444,11 @@ files_changed = 6
 insertions = 10950
 deletions = 0
 files_changed = 32
+
+[diffs.tracing."0.1.37 -> 0.1.33"]
+insertions = 806
+deletions = 950
+files_changed = 27
 
 [diffs.tracing-attributes."0.1.20"]
 insertions = 3957

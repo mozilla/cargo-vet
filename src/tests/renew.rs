@@ -66,7 +66,7 @@ impl ExpireTest {
                     vec![WildcardEntry {
                         who: vec!["user".to_owned().into()],
                         criteria: vec!["safe-to-deploy".to_owned().into()],
-                        user_id: 1,
+                        source: CratesSourceId::User { user_id: 1 },
                         start: me.start.into(),
                         end: me.end.into(),
                         renew: None,
@@ -120,7 +120,7 @@ fn renew_specific_crate() {
                 vec![WildcardEntry {
                     who: vec!["user".to_owned().into()],
                     criteria: vec!["safe-to-deploy".to_owned().into()],
-                    user_id: 1,
+                    source: CratesSourceId::User { user_id: 1 },
                     start: et.start.into(),
                     end: et.end.into(),
                     renew: None,
@@ -134,7 +134,7 @@ fn renew_specific_crate() {
                 vec![WildcardEntry {
                     who: vec!["user".to_owned().into()],
                     criteria: vec!["safe-to-deploy".to_owned().into()],
-                    user_id: 1,
+                    source: CratesSourceId::User { user_id: 1 },
                     start: et.start.into(),
                     end: et.end.into(),
                     renew: None,
@@ -168,7 +168,7 @@ fn renew_expiring_set_false() {
                 vec![WildcardEntry {
                     who: vec!["user".to_owned().into()],
                     criteria: vec!["safe-to-deploy".to_owned().into()],
-                    user_id: 1,
+                    source: CratesSourceId::User { user_id: 1 },
                     start: et.start.into(),
                     end: et.end.into(),
                     renew: Some(false),
@@ -182,7 +182,7 @@ fn renew_expiring_set_false() {
                 vec![WildcardEntry {
                     who: vec!["user".to_owned().into()],
                     criteria: vec!["safe-to-deploy".to_owned().into()],
-                    user_id: 1,
+                    source: CratesSourceId::User { user_id: 1 },
                     start: et.start.into(),
                     end: et.end.into(),
                     renew: None,
@@ -224,7 +224,7 @@ where
         WildcardEntry {
             who: vec!["user".to_owned().into()],
             criteria: vec!["safe-to-deploy".to_owned().into()],
-            user_id,
+            source: CratesSourceId::User { user_id },
             start: start.into(),
             end: end.into(),
             renew,
@@ -308,7 +308,7 @@ fn expiring_ignore_inactive_test(
         vec![WildcardEntry {
             who: vec!["user".to_owned().into()],
             criteria: vec!["safe-to-deploy".to_owned().into()],
-            user_id,
+            source: CratesSourceId::User { user_id },
             start: audit_start.date_naive().into(),
             end: audit_end.date_naive().into(),
             renew: None,
