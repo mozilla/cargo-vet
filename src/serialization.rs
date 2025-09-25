@@ -372,6 +372,55 @@ pub mod audit {
     }
 }
 
+/// Helper type which can be used to require that a given version is specified
+/// in a deserialized file. This is generally used to make deserialization fail
+/// on outdated cache files, forcing them to be regenerated if e.g. the diff
+/// algorithm or crates.io cache changes.
+///
+/// NOTE: As `const V: &'static str` is unstable, this type is generic over u64,
+/// but serializes and de-serializes the value as a string to keep compatibility
+/// with the previous versioning approach, and give us more flexibility.
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CacheFileVersion<const V: u64>;
+
+impl<const V: u64> serde::Serialize for CacheFileVersion<V> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&V.to_string())
+    }
+}
+
+impl<'de, const V: u64> serde::Deserialize<'de> for CacheFileVersion<V> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct MustBe<const V: u64>;
+        impl<'de, const V: u64> serde::de::Visitor<'de> for MustBe<V> {
+            type Value = CacheFileVersion<V>;
+
+            fn expecting(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+                write!(fmt, "version \"{}\"", V)
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                if v == V.to_string() {
+                    Ok(CacheFileVersion::<V>)
+                } else {
+                    Err(E::invalid_value(serde::de::Unexpected::Str(v), &self))
+                }
+            }
+        }
+
+        deserializer.deserialize_str(MustBe::<V>)
+    }
+}
+
 /// Trait implemented by format data types which may want to be cleaned up
 /// before they are serialized.
 pub trait Tidyable {

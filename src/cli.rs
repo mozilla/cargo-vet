@@ -515,10 +515,15 @@ pub struct CertifyArgs {
     /// If present, instead certify a diff from version1->version2
     #[clap(action)]
     pub version2: Option<VetVersion>,
-    /// If present, certify a wildcard audit for the user with the given username.
+    /// If present, certify a wildcard audit for the user with the given
+    /// username, or trusted publisher with the given signature.
     ///
     /// Use the --start-date and --end-date options to specify the date range to
     /// certify for.
+    ///
+    /// NOTE: Trusted publisher signatures have a provider-specific format:
+    ///
+    ///  * GitHub Actions: `github:organization/repository`
     #[clap(long, action, conflicts_with("version1"), requires("package"))]
     pub wildcard: Option<String>,
     /// The criteria to certify for this audit
@@ -593,13 +598,13 @@ pub struct TrustArgs {
     /// Must be specified unless --all has been specified.
     #[clap(action, required_unless_present("all"))]
     pub package: Option<PackageName>,
-    /// The username of the publisher to trust
+    /// The username or trusted publisher signature of the publisher to trust
     ///
     /// If not provided, will be inferred to be the sole known publisher of the
     /// given crate. If there is more than one publisher for the given crate,
     /// the login must be provided explicitly.
     #[clap(action)]
-    pub publisher_login: Option<String>,
+    pub publisher_identifier: Option<String>,
     /// The criteria to certify for this trust entry
     ///
     /// If not provided, we will prompt you for this information.
@@ -622,7 +627,7 @@ pub struct TrustArgs {
     #[clap(long, action)]
     pub notes: Option<String>,
     /// If specified, trusts all packages with exemptions or failures which are
-    /// solely published by the given user.
+    /// solely published by the given user or trusted publisher signature.
     #[clap(long, action, conflicts_with("package"))]
     pub all: Option<String>,
     /// If specified along with --all, also trusts packages with multiple

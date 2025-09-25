@@ -337,9 +337,13 @@ If present, instead certify a diff from version1->version2
 ### Options
 
 #### `--wildcard <WILDCARD>`
-If present, certify a wildcard audit for the user with the given username.
+If present, certify a wildcard audit for the user with the given username, or trusted publisher with the given signature.
 
 Use the --start-date and --end-date options to specify the date range to certify for.
+
+NOTE: Trusted publisher signatures have a provider-specific format:
+
+* GitHub Actions: `github:organization/repository`
 
 #### `--criteria <CRITERIA>`
 The criteria to certify for this audit
@@ -426,7 +430,7 @@ Trust a given crate and publisher
 
 ### Usage
 ```
-cargo vet trust [OPTIONS] [PACKAGE] [PUBLISHER_LOGIN]
+cargo vet trust [OPTIONS] [PACKAGE] [PUBLISHER_IDENTIFIER]
 ```
 
 ### Arguments
@@ -436,8 +440,8 @@ The package to trust
 
 Must be specified unless --all has been specified.
 
-#### `[PUBLISHER_LOGIN]`
-The username of the publisher to trust
+#### `[PUBLISHER_IDENTIFIER]`
+The username or trusted publisher signature of the publisher to trust
 
 If not provided, will be inferred to be the sole known publisher of the given crate. If there is more than one publisher for the given crate, the login must be provided explicitly.
 
@@ -464,7 +468,7 @@ A free-form string to include with the new audit entry
 If not provided, there will be no notes.
 
 #### `--all <ALL>`
-If specified, trusts all packages with exemptions or failures which are solely published by the given user
+If specified, trusts all packages with exemptions or failures which are solely published by the given user or trusted publisher signature
 
 #### `--allow-multiple-publishers`
 If specified along with --all, also trusts packages with multiple publishers, so long as at least one version was published by the given user
