@@ -54,11 +54,11 @@ use crate::cli::{DumpGraphArgs, GraphFilter, GraphFilterProperty, GraphFilterQue
 use crate::criteria::{CriteriaMapper, CriteriaSet};
 use crate::errors::SuggestError;
 use crate::format::{
-    self, AuditEntry, AuditKind, AuditsFile, CratesCacheUser, CratesPublisher, CriteriaName, Delta,
-    DiffStat, ExemptedDependency, FastMap, FastSet, ImportName, ImportsFile, JsonPackage,
-    JsonReport, JsonReportConclusion, JsonReportFailForVet, JsonReportFailForViolationConflict,
-    JsonReportSuccess, JsonSuggest, JsonSuggestItem, JsonVetFailure, PackageName, PackageStr,
-    Policy, UnpublishedEntry, VetVersion, WildcardEntry,
+    self, AuditEntry, AuditKind, AuditsFile, CratesPublisher, CratesPublisherSource,
+    CratesSourceId, CriteriaName, Delta, DiffStat, ExemptedDependency, FastMap, FastSet,
+    ImportName, ImportsFile, JsonPackage, JsonReport, JsonReportConclusion, JsonReportFailForVet,
+    JsonReportFailForViolationConflict, JsonReportSuccess, JsonSuggest, JsonSuggestItem,
+    JsonVetFailure, PackageName, PackageStr, Policy, UnpublishedEntry, VetVersion, WildcardEntry,
 };
 use crate::format::{SortedMap, SortedSet};
 use crate::network::Network;
@@ -143,7 +143,7 @@ pub struct Suggest {
 #[derive(Debug, Clone)]
 pub struct TrustHint {
     trusted_by: Vec<String>,
-    publisher: CratesCacheUser,
+    publisher: CratesPublisherSource,
     exact_version: bool,
 }
 
@@ -1196,7 +1196,7 @@ impl<'a> AuditGraph<'a> {
         // do.
         for (publisher_index, publisher) in publishers.iter().enumerate() {
             for (_, import_index, audit_index, entry) in all_wildcard_audits.clone() {
-                if entry.user_id == publisher.user_id
+                if entry.source == publisher.source
                     && *entry.start <= publisher.when
                     && publisher.when < *entry.end
                 {
@@ -1227,7 +1227,7 @@ impl<'a> AuditGraph<'a> {
             }
 
             for entry in trusteds {
-                if entry.user_id == publisher.user_id
+                if entry.source == publisher.source
                     && *entry.start <= publisher.when
                     && publisher.when < *entry.end
                 {
@@ -1709,17 +1709,17 @@ impl ResolveReport<'_> {
 
         const THIS_PROJECT: &str = "this project";
 
-        let mut trusted_publishers: FastMap<u64, SortedSet<ImportName>> = FastMap::new();
+        let mut trusted_publishers: FastMap<CratesSourceId, SortedSet<ImportName>> = FastMap::new();
         for trusted_entry in store.audits.trusted.values().flatten() {
             trusted_publishers
-                .entry(trusted_entry.user_id)
+                .entry(trusted_entry.source.clone())
                 .or_default()
                 .insert(THIS_PROJECT.to_owned());
         }
         for (import_name, audits_file) in store.imported_audits() {
             for trusted_entry in audits_file.trusted.values().flatten() {
                 trusted_publishers
-                    .entry(trusted_entry.user_id)
+                    .entry(trusted_entry.source.clone())
                     .or_default()
                     .insert(import_name.clone());
             }
@@ -1769,17 +1769,17 @@ impl ResolveReport<'_> {
                     // for the suggested diff, and also record whether the given
                     // package has a sole publisher.
                     let crates_io_info = cache.crates_io_info(network, package.name).await.ok();
-                    let publisher_id = match (suggested_diff.to.as_semver(), &crates_io_info) {
+                    let publisher_source = match (suggested_diff.to.as_semver(), &crates_io_info) {
                         (Some(semver), Some(metadata)) => metadata
                             .versions
                             .get(semver)
-                            .and_then(|details| details.published_by),
+                            .and_then(|details| details.source.as_ref()),
                         _ => None,
                     };
                     let publisher_count = crates_io_info
                         .iter()
                         .flat_map(|m| m.versions.values())
-                        .flat_map(|details| &details.published_by)
+                        .flat_map(|details| &details.source)
                         .collect::<FastSet<_>>()
                         .len();
 
@@ -1793,26 +1793,27 @@ impl ResolveReport<'_> {
                     // those we find, if any.
                     let trust_hint = {
                         let mut exact_version = false;
-                        let id_for_hint =
-                            if publisher_id.is_some_and(|i| trusted_publishers.contains_key(&i)) {
-                                exact_version = true;
-                                publisher_id
-                            } else if !store.audits.trusted.contains_key(package.name) {
-                                crates_io_info.as_ref().and_then(|metadata| {
-                                    metadata
-                                        .versions
-                                        .iter()
-                                        .rev()
-                                        .filter_map(|(_, details)| details.published_by)
-                                        .find(|i| trusted_publishers.contains_key(i))
-                                })
-                            } else {
-                                None
-                            };
+                        let source_for_hint = if publisher_source
+                            .is_some_and(|i| trusted_publishers.contains_key(i))
+                        {
+                            exact_version = true;
+                            publisher_source
+                        } else if !store.audits.trusted.contains_key(package.name) {
+                            crates_io_info.as_ref().and_then(|metadata| {
+                                metadata
+                                    .versions
+                                    .iter()
+                                    .rev()
+                                    .filter_map(|(_, details)| details.source.as_ref())
+                                    .find(|i| trusted_publishers.contains_key(i))
+                            })
+                        } else {
+                            None
+                        };
 
-                        id_for_hint.map(|id| {
+                        source_for_hint.map(|source| {
                             let mut trusted_by: Vec<String> = trusted_publishers
-                                .get(&id)
+                                .get(source)
                                 .unwrap()
                                 .iter()
                                 .cloned()
@@ -1822,7 +1823,7 @@ impl ResolveReport<'_> {
                             if trusted_by.iter().any(|s| s == THIS_PROJECT) {
                                 trusted_by.retain(|s| s == THIS_PROJECT);
                             }
-                            let publisher = cache.get_crates_user_info(id).unwrap();
+                            let publisher = cache.publisher_id_to_source(source).unwrap();
                             TrustHint {
                                 trusted_by,
                                 publisher,
@@ -1831,9 +1832,10 @@ impl ResolveReport<'_> {
                         })
                     };
 
-                    let publisher_login = publisher_id
-                        .and_then(|user_id| cache.get_crates_user_info(user_id))
-                        .map(|pi| pi.login);
+                    let publisher_login = publisher_source
+                        .as_ref()
+                        .and_then(|source| cache.publisher_id_to_source(source))
+                        .map(|pi| pi.as_identifier().to_owned());
 
                     let mut registry_suggestion: Vec<_> = join_all(registry.iter().flatten().map(
                         |(name, entry, audits)| async {
@@ -2355,7 +2357,7 @@ impl Suggest {
                     } else {
                         ""
                     };
-                    let publisher = hint.publisher.clone();
+                    let publisher = &hint.publisher;
                     let trusted_by = FormatShortList::new(hint.trusted_by.clone());
                     writeln!(
                         out,
@@ -2365,7 +2367,8 @@ impl Suggest {
                         )),
                         if item.is_sole_publisher {
                             let this_cmd = format!("cargo vet trust {}", package.name);
-                            let all_cmd = format!("cargo vet trust --all {}", publisher.login);
+                            let all_cmd =
+                                format!("cargo vet trust --all {}", publisher.as_identifier());
                             format!(
                                 "{} {} {}",
                                 dim.clone().cyan().apply_to(this_cmd),
@@ -2373,8 +2376,11 @@ impl Suggest {
                                 dim.clone().cyan().apply_to(all_cmd),
                             )
                         } else {
-                            let cmd =
-                                format!("cargo vet trust {} {}", package.name, publisher.login);
+                            let cmd = format!(
+                                "cargo vet trust {} {}",
+                                package.name,
+                                publisher.as_identifier()
+                            );
                             dim.clone().cyan().apply_to(cmd).to_string()
                         }
                     );
