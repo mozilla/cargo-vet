@@ -1,0 +1,11 @@
+---
+source: src/tests/audit_as_crates_io.rs
+expression: output
+---
+  × There are some issues with your policy.audit-as-crates-io entries
+
+Error:   × Some non-crates.io-fetched packages match published crates.io versions
+  │   root-package:10.0.0
+  │   first-party:10.0.0
+  help: Add a `policy.*.audit-as-crates-io` entry for them
+
