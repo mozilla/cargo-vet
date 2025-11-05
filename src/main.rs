@@ -1947,6 +1947,13 @@ async fn fix_audit_as(
             error: &PackageError,
         ) -> &'a mut PolicyEntry {
             let is_third_party = third_party_packages.contains(&error.package);
+            let has_versioned_entries = store
+                .config
+                .policy
+                .package
+                .get(&error.package)
+                .map(|e| matches!(e, format::PackagePolicyEntry::Versioned { .. }))
+                .unwrap_or(false);
             let all_versions = || {
                 cfg.metadata
                     .packages
@@ -1961,7 +1968,9 @@ async fn fix_audit_as(
                 .policy
                 .get_mut_or_default(
                     error.package.clone(),
-                    is_third_party.then_some(error.version.as_ref()).flatten(),
+                    (is_third_party || has_versioned_entries)
+                        .then_some(error.version.as_ref())
+                        .flatten(),
                     all_versions,
                 )
                 .expect("unexpected crate policy state")

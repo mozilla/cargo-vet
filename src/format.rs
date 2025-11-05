@@ -683,12 +683,13 @@ impl Policy {
         version: Option<&VetVersion>,
         all_versions: F,
     ) -> Option<&mut PolicyEntry> {
+        let mut all_versions = Some(all_versions);
         let pkg_policy = self.package.entry(name).or_insert_with(|| {
             if version.is_none() {
                 PackagePolicyEntry::Unversioned(Default::default())
             } else {
                 PackagePolicyEntry::Versioned {
-                    version: all_versions()
+                    version: (all_versions.take().unwrap())()
                         .into_iter()
                         .map(|v| (v, Default::default()))
                         .collect(),
@@ -698,7 +699,16 @@ impl Policy {
 
         match (pkg_policy, version) {
             (PackagePolicyEntry::Unversioned(e), None) => Some(e),
-            (PackagePolicyEntry::Versioned { version }, Some(v)) => version.get_mut(v),
+            (PackagePolicyEntry::Versioned { version }, Some(v)) => {
+                // If the version is missing, we may be missing others. Ensure they are all
+                // populated.
+                if let (false, Some(all_versions)) = (version.contains_key(v), all_versions) {
+                    for each_version in all_versions() {
+                        version.entry(each_version).or_default();
+                    }
+                }
+                version.get_mut(v)
+            }
             _ => None,
         }
     }
