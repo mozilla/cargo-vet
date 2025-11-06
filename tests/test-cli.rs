@@ -44,17 +44,22 @@ fn format_diff_outputs(output: &Output) -> String {
         .lines()
         .filter(|line| !line.starts_with("diff --git"))
         .map(|line| {
+            fn simple_path(path: &str) -> &str {
+                // We trim `"` because the git diff paths may be quoted and escaped as described in
+                // `core.quotePath` if the parent directories have unusual characters. We don't
+                // need to worry about handling the escape sequences: the filenames that we use
+                // have no such characters, and we just use the filename.
+                Path::new(path.trim_matches('"'))
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+            }
             if let Some(path) = line.strip_prefix("--- ") {
-                return format!(
-                    "--- a/{}",
-                    Path::new(path).file_name().unwrap().to_str().unwrap()
-                );
+                return format!("--- a/{}", simple_path(path));
             }
             if let Some(path) = line.strip_prefix("+++ ") {
-                return format!(
-                    "+++ b/{}",
-                    Path::new(path).file_name().unwrap().to_str().unwrap()
-                );
+                return format!("+++ b/{}", simple_path(path));
             }
             line.to_owned()
         })
