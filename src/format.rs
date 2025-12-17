@@ -671,35 +671,54 @@ impl Policy {
 
     /// Get the mutable policy entry for the given crate, creating a default if none exists.
     ///
-    /// Unlike `get_mut`, this guarantees that the policy is represented as versioned or
-    /// unversioned based on the whether the `version` is provided. If the `version` passed is
-    /// incompatible with the current policy, None is returned.
+    /// Unlike `get_mut`, if `require_versions` is provided, this guarantees that the policy is
+    /// represented as versioned. This will never convert a versioned policy entry to an
+    /// unversioned one.
     ///
-    /// `all_versions` is required to maintain proper structure of the policy map if the entry is
-    /// missing: if one policy version is provided, they all must be.
-    pub fn get_mut_or_default<F: FnOnce() -> Vec<VetVersion>>(
+    /// When converting an unversioned policy entry to a versioned one, the existing unversioned
+    /// entry will be used for all new versioned entries which are being inserted.
+    pub fn get_mut_or_default(
         &mut self,
         name: PackageName,
-        version: Option<&VetVersion>,
-        all_versions: F,
-    ) -> Option<&mut PolicyEntry> {
-        let pkg_policy = self.package.entry(name).or_insert_with(|| {
-            if version.is_none() {
-                PackagePolicyEntry::Unversioned(Default::default())
-            } else {
-                PackagePolicyEntry::Versioned {
-                    version: all_versions()
-                        .into_iter()
-                        .map(|v| (v, Default::default()))
-                        .collect(),
-                }
-            }
-        });
+        version: &VetVersion,
+        require_versions: Option<Vec<VetVersion>>,
+    ) -> &mut PolicyEntry {
+        // Ensure a policy entry exists for this package, inserting a default (unversioned) entry
+        // if it doesn't. This will be converted to a versioned entry below if necessary.
+        let pkg_policy = self.package.entry(name).or_default();
 
-        match (pkg_policy, version) {
-            (PackagePolicyEntry::Unversioned(e), None) => Some(e),
-            (PackagePolicyEntry::Versioned { version }, Some(v)) => version.get_mut(v),
-            _ => None,
+        // If we need a versioned entry, make sure all necessary versioned entries exist.
+        if let Some(require_versions) = require_versions {
+            // By default we insert an empty policy, but if there was an
+            // existing unversioned entry, we'll use that as the policy for all
+            // entries.
+            let mut default = PolicyEntry::default();
+            let versions_map = loop {
+                match pkg_policy {
+                    PackagePolicyEntry::Unversioned(entry) => {
+                        default = std::mem::take(entry);
+                        *pkg_policy = PackagePolicyEntry::Versioned {
+                            version: Default::default(),
+                        }
+                    }
+                    PackagePolicyEntry::Versioned { version } => break version,
+                }
+            };
+            for version in require_versions {
+                versions_map
+                    .entry(version)
+                    .or_insert_with(|| default.clone());
+            }
+        }
+
+        match pkg_policy {
+            PackagePolicyEntry::Unversioned(e) => e,
+            PackagePolicyEntry::Versioned {
+                version: versions_map,
+            } => {
+                // If the version is missing, create it
+                versions_map.entry(version.clone()).or_default()
+            }
         }
     }
 
@@ -784,6 +803,12 @@ pub enum PackagePolicyEntry {
         version: SortedMap<VetVersion, PolicyEntry>,
     },
     Unversioned(PolicyEntry),
+}
+
+impl Default for PackagePolicyEntry {
+    fn default() -> Self {
+        PackagePolicyEntry::Unversioned(Default::default())
+    }
 }
 
 /// Policies that crates must pass.

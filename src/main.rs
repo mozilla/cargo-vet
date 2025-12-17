@@ -14,9 +14,9 @@ use errors::{
     AggregateCriteriaDescription, AggregateCriteriaDescriptionMismatchError,
     AggregateCriteriaImplies, AggregateError, AggregateErrors, AggregateImpliesMismatchError,
     AuditAsError, AuditAsErrors, CacheAcquireError, CertifyError, CratePolicyError,
-    CratePolicyErrors, FetchAuditError, LoadTomlError, NeedsAuditAsErrors,
-    NeedsPolicyVersionErrors, PackageError, ShouldntBeAuditAsErrors, UnusedAuditAsErrors,
-    UnusedPolicyVersionErrors, UserInfoError,
+    CratePolicyErrors, DependencyCriteriaNeedsPolicyVersionErrors, FetchAuditError, LoadTomlError,
+    NeedsAuditAsErrors, PackageError, ShouldntBeAuditAsErrors, ThirdPartyNeedsPolicyVersionErrors,
+    UnusedAuditAsErrors, UnusedPolicyVersionErrors, UserInfoError, VersionedPackageError,
 };
 use format::{CriteriaName, CriteriaStr, PackageName, Policy, PolicyEntry, SortedSet, VetVersion};
 use futures_util::future::{join_all, try_join_all};
@@ -1944,27 +1944,23 @@ async fn fix_audit_as(
             store: &'a mut Store,
             cfg: &Config,
             third_party_packages: &SortedSet<&String>,
-            error: &PackageError,
+            error: &VersionedPackageError,
         ) -> &'a mut PolicyEntry {
             let is_third_party = third_party_packages.contains(&error.package);
-            let all_versions = || {
+            // Require versions if any version of this crate is third-party.
+            let require_versions = is_third_party.then(|| {
                 cfg.metadata
                     .packages
                     .iter()
                     .filter(|&p| *p.name == error.package)
                     .map(|p| p.vet_version())
                     .collect()
-            };
-            // This can only fail if there's a logical error in `check_audit_as_crates_io`.
-            store
-                .config
-                .policy
-                .get_mut_or_default(
-                    error.package.clone(),
-                    is_third_party.then_some(error.version.as_ref()).flatten(),
-                    all_versions,
-                )
-                .expect("unexpected crate policy state")
+            });
+            store.config.policy.get_mut_or_default(
+                error.package.clone(),
+                &error.version,
+                require_versions,
+            )
         }
 
         for error in errors {
@@ -3232,15 +3228,15 @@ async fn check_audit_as_crates_io(
     for (action, package) in actions {
         match action {
             CheckAction::NeedAuditAs => {
-                needs_audit_as_entry.push(PackageError {
+                needs_audit_as_entry.push(VersionedPackageError {
                     package: package.name.to_string(),
-                    version: Some(package.vet_version()),
+                    version: package.vet_version(),
                 });
             }
             CheckAction::ShouldntBeAuditAs => {
-                shouldnt_be_audit_as.push(PackageError {
+                shouldnt_be_audit_as.push(VersionedPackageError {
                     package: package.name.to_string(),
-                    version: Some(package.vet_version()),
+                    version: package.vet_version(),
                 });
             }
         }
@@ -3266,11 +3262,12 @@ async fn check_audit_as_crates_io(
 
 /// Check crate policies for correctness.
 ///
-/// This verifies two rules:
+/// This verifies the following rules:
 /// 1. Policies using `dependency-criteria` which relate to third-party crates must have associated
 ///    version(s). If a crate has any `dependency-criteria` specified and exists as a third-party
 ///    dependency anywhere in the dependency graph, all versions must be specified.
 /// 2. Any versioned policies must correspond to a crate in the graph.
+/// 3. If any version of a crate is third-party, policy entries must be versioned.
 fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyErrors> {
     // All defined policy package names (to be removed).
     let mut policy_crates: SortedSet<&PackageName> = store.config.policy.package.keys().collect();
@@ -3283,10 +3280,18 @@ fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyEr
         .filter_map(|(name, version, _)| version.map(|version| (name.clone(), version.clone())))
         .collect();
 
+    // All unversioned policy package names.
+    let unversioned_policy_crates: SortedSet<&str> = store
+        .config
+        .policy
+        .iter()
+        .filter_map(|(name, version, _)| version.is_none().then_some(name.as_str()))
+        .collect();
+
     // The set of all third-party packages (for lookup of whether a crate has any third-party
     // versions in use).
     let third_party_packages = foreign_packages_strict(&cfg.metadata, &store.config)
-        .map(|p| &p.name)
+        .map(|p| p.name.as_str())
         .collect::<SortedSet<_>>();
 
     // The set of all packages which have a `dependency-criteria` specified in a policy.
@@ -3297,23 +3302,36 @@ fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyEr
         .filter_map(|(name, _, entry)| (!entry.dependency_criteria.is_empty()).then_some(name))
         .collect::<SortedSet<_>>();
 
+    let mut must_be_versioned_errors = Vec::new();
     let mut needs_policy_version_errors = Vec::new();
 
     for package in &cfg.metadata.packages {
         policy_crates.remove(&*package.name);
+
+        let has_third_party = third_party_packages.contains(package.name.as_str());
+
+        let unversioned_policy_exists = unversioned_policy_crates.contains(package.name.as_str());
 
         let versioned_policy_exists =
             versioned_policy_crates.remove(&(package.name.to_string(), package.vet_version()));
 
         // If a crate has at least one third-party package and some crate policy specifies a
         // `dependency-criteria`, a versioned policy for all used versions must exist.
-        if third_party_packages.contains(&package.name)
+        if has_third_party
             && dependency_criteria_packages.contains(&*package.name)
             && !versioned_policy_exists
         {
-            needs_policy_version_errors.push(PackageError {
+            needs_policy_version_errors.push(VersionedPackageError {
                 package: package.name.to_string(),
-                version: Some(package.vet_version()),
+                version: package.vet_version(),
+            });
+        // If a crate has an unversioned policy but has at least one third-party package, policy
+        // entries must be versioned. We check this after the prior check to avoid duplicate
+        // similar errors (and the prior is a more specific case).
+        } else if has_third_party && unversioned_policy_exists {
+            must_be_versioned_errors.push(VersionedPackageError {
+                package: package.name.to_string(),
+                version: package.vet_version(),
             });
         }
     }
@@ -3334,18 +3352,27 @@ fn check_crate_policies(cfg: &Config, store: &Store) -> Result<(), CratePolicyEr
         )
         .collect();
 
-    if !needs_policy_version_errors.is_empty() || !unused_policy_version_errors.is_empty() {
-        let mut errors = Vec::new();
-        if !needs_policy_version_errors.is_empty() {
-            errors.push(CratePolicyError::NeedsVersion(NeedsPolicyVersionErrors {
+    let mut errors = Vec::new();
+    if !needs_policy_version_errors.is_empty() {
+        errors.push(CratePolicyError::DependencyCriteriaNeedsVersion(
+            DependencyCriteriaNeedsPolicyVersionErrors {
                 errors: needs_policy_version_errors,
-            }));
-        }
-        if !unused_policy_version_errors.is_empty() {
-            errors.push(CratePolicyError::UnusedVersion(UnusedPolicyVersionErrors {
-                errors: unused_policy_version_errors,
-            }));
-        }
+            },
+        ));
+    }
+    if !unused_policy_version_errors.is_empty() {
+        errors.push(CratePolicyError::UnusedVersion(UnusedPolicyVersionErrors {
+            errors: unused_policy_version_errors,
+        }));
+    }
+    if !must_be_versioned_errors.is_empty() {
+        errors.push(CratePolicyError::ThirdPartyNeedsVersion(
+            ThirdPartyNeedsPolicyVersionErrors {
+                errors: must_be_versioned_errors,
+            },
+        ));
+    }
+    if !errors.is_empty() {
         Err(CratePolicyErrors { errors })
     } else {
         Ok(())

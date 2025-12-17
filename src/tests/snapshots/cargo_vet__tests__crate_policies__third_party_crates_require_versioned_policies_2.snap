@@ -1,0 +1,13 @@
+---
+source: src/tests/crate_policies.rs
+expression: "format!(\"{:?}\", miette::Report::new(e))"
+---
+  × There are some issues with your third-party policy entries
+
+Error:   × some crates have unversioned policies that must be versioned
+  │   third-party:1.0.0
+  │   third-party:2.0.0
+  help: Crates with a third-party version must use versioned policy entries.
+        Replace the `policy.<crate>` entry with `policy."<crate>:<version>"`
+        entries as desired.
+

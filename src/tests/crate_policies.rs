@@ -37,7 +37,7 @@ impl CratePolicyTest {
     }
 }
 
-/// Checks that if a third-party crate is present, and an unversioned policy is used _without_
+/// Checks that if a third-party crate is present, and a versioned policy is used _without_
 /// `dependency-criteria`, no error occurs.
 #[test]
 fn simple_crate_policies_third_party_crates_dont_need_versions() {
@@ -46,7 +46,9 @@ fn simple_crate_policies_third_party_crates_dont_need_versions() {
     CratePolicyTest(MockMetadata::overlapping()).no_errors(|config| {
         config.policy.insert(
             "third-party".into(),
-            PackagePolicyEntry::Unversioned(Default::default()),
+            PackagePolicyEntry::Versioned {
+                version: [(ver(1), Default::default())].into(),
+            },
         );
     });
 }
@@ -93,6 +95,27 @@ fn simple_crate_policies_third_party_crates_need_all_versions() {
                     PackagePolicyEntry::Versioned {
                         version: [(ver(which), dep_criteria_policy_entry())].into(),
                     },
+                );
+            },
+        );
+    }
+}
+
+/// Checks that if a third-party crate is present and an unversioned policy is set, an error occurs
+/// indicating that the policy should be versioned.
+#[test]
+fn simple_crate_policies_third_party_crates_require_versioned_policies() {
+    let _enter = TEST_RUNTIME.enter();
+
+    let test = CratePolicyTest(MockMetadata::overlapping());
+
+    for which in [1, 2] {
+        test.insta_crate_policy_errors(
+            format!("third_party_crates_require_versioned_policies_{which}"),
+            |config| {
+                config.policy.insert(
+                    "third-party".into(),
+                    PackagePolicyEntry::Unversioned(PolicyEntry::default()),
                 );
             },
         );
