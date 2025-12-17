@@ -295,23 +295,29 @@ fn real_main() -> Result<(), miette::Report> {
             "something went wrong"
         };
 
-        #[derive(Debug, Error, Diagnostic)]
-        #[error("{message}")]
-        pub struct PanicError {
-            pub message: String,
-            #[help]
-            pub help: Option<String>,
-        }
+        // The `#[derive(Diagnostic)]` proc macro unfortunately currently generates
+        // spurious `unused_assignemnts` diagnostics in rust 1.92+, which cannot be
+        // easily annotated. (see https://github.com/zkat/miette/issues/458)
+        #[allow(unused_assignments)]
+        {
+            #[derive(Debug, Error, Diagnostic)]
+            #[error("{message}")]
+            pub struct PanicError {
+                pub message: String,
+                #[help]
+                pub help: Option<String>,
+            }
 
-        report_error(
-            &miette::Report::from(PanicError {
-                message: message.to_owned(),
-                help: panic_info
-                    .location()
-                    .map(|loc| format!("at {}:{}:{}", loc.file(), loc.line(), loc.column())),
-            })
-            .wrap_err("cargo vet panicked"),
-        );
+            report_error(
+                &miette::Report::from(PanicError {
+                    message: message.to_owned(),
+                    help: panic_info
+                        .location()
+                        .map(|loc| format!("at {}:{}:{}", loc.file(), loc.line(), loc.column())),
+                })
+                .wrap_err("cargo vet panicked"),
+            );
+        }
     }));
 
     // Initialize the MULTIPROGRESS's draw target, so that future progress

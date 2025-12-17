@@ -1,3 +1,8 @@
+// The `#[derive(Diagnostic)]` proc macro unfortunately currently generates
+// spurious `unused_assignemnts` diagnostics in rust 1.92+, which cannot be
+// easily annotated. (see https://github.com/zkat/miette/issues/458)
+#![allow(unused_assignments)]
+
 use std::{
     ffi::OsString,
     fmt::{Debug, Display},
