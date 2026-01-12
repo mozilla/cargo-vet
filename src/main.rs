@@ -40,9 +40,9 @@ use crate::errors::{
     CommandError, DownloadError, FetchAndDiffError, FetchError, MetadataAcquireError, SourceFile,
 };
 use crate::format::{
-    AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesUserId, CriteriaEntry, ExemptedDependency,
-    FetchCommand, MetaConfig, MetaConfigInstance, PackageStr, SortedMap, StoreInfo, TrustEntry,
-    WildcardEntry,
+    AuditEntry, AuditKind, AuditsFile, ConfigFile, CratesPublisherSource, CratesSourceId,
+    CriteriaEntry, ExemptedDependency, FetchCommand, MetaConfig, MetaConfigInstance, PackageStr,
+    SortedMap, StoreInfo, TrustEntry, WildcardEntry,
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
@@ -723,24 +723,23 @@ fn do_cmd_certify(
             version: VetVersion,
         },
         Wildcard {
-            user_login: String,
-            user_id: CratesUserId,
+            source: CratesPublisherSource,
             start: chrono::NaiveDate,
             end: chrono::NaiveDate,
             set_renew_false: bool,
         },
     }
 
-    let kind = if let Some(login) = &sub_args.wildcard {
+    let kind = if let Some(identifier) = &sub_args.wildcard {
         // Fetch publisher information for relevant versions of `package`.
         let publishers = store.ensure_publisher_versions(cfg, network, &package)?;
         let published_versions = publishers
             .iter()
-            .filter(|publisher| &publisher.user_login == login);
+            .filter(|publisher| publisher.source.as_identifier() == identifier);
 
-        let earliest = published_versions
-            .min_by_key(|p| p.when)
-            .ok_or_else(|| CertifyError::NotAPublisher(login.to_owned(), package.to_owned()))?;
+        let earliest = published_versions.min_by_key(|p| p.when).ok_or_else(|| {
+            CertifyError::NotAPublisher(identifier.to_owned(), package.to_owned())
+        })?;
 
         // Get the from and to dates, defaulting to a from date of the earliest
         // published package by the user, and a to date of 12 months from today.
@@ -754,8 +753,7 @@ fn do_cmd_certify(
         }
 
         CertifyKind::Wildcard {
-            user_login: earliest.user_login.to_owned(),
-            user_id: earliest.user_id,
+            source: earliest.source.clone(),
             start,
             end,
             set_renew_false,
@@ -854,13 +852,11 @@ fn do_cmd_certify(
                 )
         }
         CertifyKind::Wildcard {
-            user_login,
-            start,
-            end,
-            ..
+            source, start, end, ..
         } => {
+            let identifier = source.as_identifier();
             format!(
-                    "I, {username}, certify that any version of {package} published by '{user_login}' between {start} and {end} will satisfy the above criteria.",
+                    "I, {username}, certify that any version of {package} published by '{identifier}' between {start} and {end} will satisfy the above criteria.",
                 )
         }
     };
@@ -1038,7 +1034,7 @@ fn do_cmd_certify(
                 .push(entry);
         }
         CertifyKind::Wildcard {
-            user_id,
+            source,
             start,
             end,
             set_renew_false,
@@ -1052,7 +1048,7 @@ fn do_cmd_certify(
                 .push(WildcardEntry {
                     who,
                     criteria,
-                    user_id,
+                    source: source.as_wildcard_source(),
                     start: start.into(),
                     end: end.into(),
                     renew: set_renew_false.then_some(false),
@@ -1359,14 +1355,14 @@ fn do_cmd_trust(
         // Fetch publisher information for relevant versions of `package`.
         let publishers = store.ensure_publisher_versions(cfg, network, package)?;
 
-        let publisher_login = if let Some(login) = &sub_args.publisher_login {
+        let publisher_identifier = if let Some(login) = &sub_args.publisher_identifier {
             login.clone()
         } else if let Some(first) = publishers.first() {
             if publishers
                 .iter()
-                .all(|publisher| publisher.user_id == first.user_id)
+                .all(|publisher| publisher.source == first.source)
             {
-                first.user_login.clone()
+                first.source.as_identifier().to_owned()
             } else {
                 return Err(miette!(
                     "The package '{}' has multiple known publishers, \
@@ -1387,13 +1383,13 @@ fn do_cmd_trust(
             store,
             network,
             package,
-            &publisher_login,
+            &publisher_identifier,
             sub_args.start_date,
             sub_args.end_date,
             &sub_args.criteria,
             sub_args.notes.as_ref(),
         )
-    } else if let Some(publisher_login) = &sub_args.all {
+    } else if let Some(publisher_identifier) = &sub_args.all {
         // Run the resolver against the store in "suggest" mode to discover the
         // set of packages which either fail to audit or need exemptions.
         let suggest_store = store.clone_for_suggest(true);
@@ -1418,7 +1414,7 @@ fn do_cmd_trust(
             let publishers = store.ensure_publisher_versions(cfg, network, package.name)?;
             let by_user = publishers
                 .iter()
-                .filter(|p| &p.user_login == publisher_login)
+                .filter(|p| p.source.as_identifier() == publisher_identifier)
                 .count();
             if by_user == 0 {
                 continue; // never published by this user
@@ -1452,7 +1448,7 @@ fn do_cmd_trust(
         if trust.is_empty() {
             maybe_warn_skipped();
             return Err(miette!(
-                "No failing or exempted packages published by {publisher_login}"
+                "No failing or exempted packages published by {publisher_identifier}"
             ));
         }
 
@@ -1470,7 +1466,7 @@ fn do_cmd_trust(
             },
             if sub_args.criteria.is_empty() {
                 Some(format!(
-                    "choose trusted criteria for packages published by {publisher_login} ({})",
+                    "choose trusted criteria for packages published by {publisher_identifier} ({})",
                     string_format::FormatShortList::new(trust.clone())
                 ))
             } else {
@@ -1488,7 +1484,7 @@ fn do_cmd_trust(
                 store,
                 network,
                 package,
-                publisher_login,
+                publisher_identifier,
                 sub_args.start_date,
                 sub_args.end_date,
                 &criteria_names,
@@ -1509,7 +1505,7 @@ fn apply_cmd_trust(
     store: &mut Store,
     network: Option<&Network>,
     package: &str,
-    publisher_login: &str,
+    publisher_identifier: &str,
     start_date: Option<chrono::NaiveDate>,
     end_date: Option<chrono::NaiveDate>,
     criteria: &[CriteriaName],
@@ -1520,12 +1516,12 @@ fn apply_cmd_trust(
 
     let published_versions = publishers
         .iter()
-        .filter(|publisher| publisher.user_login == publisher_login);
+        .filter(|publisher| publisher.source.as_identifier() == publisher_identifier);
 
     let earliest = published_versions.min_by_key(|p| p.when).ok_or_else(|| {
-        CertifyError::NotAPublisher(publisher_login.to_owned(), package.to_owned())
+        CertifyError::NotAPublisher(publisher_identifier.to_owned(), package.to_owned())
     })?;
-    let user_id = earliest.user_id;
+    let source = earliest.source.as_wildcard_source();
 
     // Get the from and to dates, defaulting to a from date of the earliest
     // published package by the user, and a to date of 12 months from today.
@@ -1543,7 +1539,7 @@ fn apply_cmd_trust(
         },
         if criteria.is_empty() {
             Some(format!(
-                "choose trusted criteria for {package}:* published by {publisher_login}"
+                "choose trusted criteria for {package}:* published by {publisher_identifier}"
             ))
         } else {
             None
@@ -1557,7 +1553,7 @@ fn apply_cmd_trust(
     let trust_entries = store.audits.trusted.entry(package.to_owned()).or_default();
     if let Some(trust_entry) = trust_entries.iter_mut().find(|trust_entry| {
         trust_entry.criteria == criteria
-            && trust_entry.user_id == user_id
+            && trust_entry.source == source
             && start <= *trust_entry.start
             && *trust_entry.end <= end
             && notes.is_none()
@@ -1567,7 +1563,7 @@ fn apply_cmd_trust(
     } else {
         trust_entries.push(TrustEntry {
             criteria,
-            user_id,
+            source,
             start: start.into(),
             end: end.into(),
             notes: notes.cloned(),
@@ -1900,12 +1896,15 @@ fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &
         "Updated wildcard audits for the following crates and publishers to expire on {new_end_date}:"
     );
 
-    let user_string = |user_id: u64| -> String {
-        cache
-            .as_ref()
-            .and_then(|c| c.get_crates_user_info(user_id))
-            .map(|n| n.to_string())
-            .unwrap_or_else(|| format!("id={}", user_id))
+    let user_string = |source: &CratesSourceId| -> String {
+        match source {
+            CratesSourceId::User { user_id } => cache
+                .as_ref()
+                .and_then(|c| c.get_crates_user_info(*user_id))
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| format!("id={}", user_id)),
+            CratesSourceId::TrustedPublisher { trusted_publisher } => trusted_publisher.clone(),
+        }
     };
     for (name, entries) in renewing.crates {
         writeln!(
@@ -1915,7 +1914,7 @@ fn do_cmd_renew(out: &Arc<dyn Out>, cfg: &Config, store: &mut Store, sub_args: &
             string_format::FormatShortList::new(
                 entries
                     .iter()
-                    .map(|(entry, _)| user_string(entry.user_id))
+                    .map(|(entry, _)| user_string(&entry.source))
                     .collect()
             )
         );
@@ -2708,20 +2707,20 @@ fn explain_write_edge(
 
             let publisher = &store.publishers()[package][publisher_index];
             let version = &publisher.version;
-            let login = &publisher.user_login;
+            let identifier = publisher.source.as_identifier();
             let freshness = format_freshness(audit.is_fresh_import || publisher.is_fresh_import);
 
-            writeln!(out, "{idx}) [{import_name}{freshness}] wildcard audit for {version} (published by: {login}) by {who}");
+            writeln!(out, "{idx}) [{import_name}{freshness}] wildcard audit for {version} (published by: {identifier}) by {who}");
         }
         Trusted { publisher_index } => {
             let publisher = &store.publishers()[package][publisher_index];
             let version = &publisher.version;
-            let login = &publisher.user_login;
+            let identifier = publisher.source.as_identifier();
             let freshness = format_freshness(publisher.is_fresh_import);
 
             writeln!(
                 out,
-                "{idx}) [local{freshness}] trusted entry for {version} (published by: {login})"
+                "{idx}) [local{freshness}] trusted entry for {version} (published by: {identifier})"
             );
         }
         Exemption { exemption_index } => {

@@ -1,0 +1,10 @@
+---
+source: src/tests/import.rs
+expression: output
+---
++
++[[publisher.third-party2]]
++version = "10.0.0"
++when = "2022-12-18"
++trusted-publisher = "github:testing/third-party2"
+
