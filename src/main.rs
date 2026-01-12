@@ -1957,7 +1957,7 @@ async fn fix_audit_as(
                 cfg.metadata
                     .packages
                     .iter()
-                    .filter(|&p| (*p.name == error.package))
+                    .filter(|&p| *p.name == error.package)
                     .map(|p| p.vet_version())
                     .collect()
             };
