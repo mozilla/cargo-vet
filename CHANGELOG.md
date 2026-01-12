@@ -1,5 +1,7 @@
 # Unreleased
 
+# Version 0.10.2 (2026-01-12)
+
 * Added support for declaring wildcard audits and trusted entries for crates published using ["Trusted Publishing"](https://crates.io/docs/trusted-publishing) (#671)
 
 # Version 0.10.1 (2025-02-10)
