@@ -168,7 +168,7 @@ pub enum AuditAsError {
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(help("Add a `policy.*.audit-as-crates-io` entry for them"))]
 pub struct NeedsAuditAsErrors {
-    pub errors: Vec<PackageError>,
+    pub errors: Vec<VersionedPackageError>,
 }
 
 impl Display for NeedsAuditAsErrors {
@@ -184,7 +184,7 @@ impl Display for NeedsAuditAsErrors {
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(help("Remove the audit-as-crates-io entries or make them `false`"))]
 pub struct ShouldntBeAuditAsErrors {
-    pub errors: Vec<PackageError>,
+    pub errors: Vec<VersionedPackageError>,
 }
 
 impl Display for ShouldntBeAuditAsErrors {
@@ -220,6 +220,13 @@ pub struct PackageError {
     pub version: Option<VetVersion>,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("{package}:{version}")]
+pub struct VersionedPackageError {
+    pub package: PackageName,
+    pub version: VetVersion,
+}
+
 ///////////////////////////////////////////////////////////
 // CratePolicyErrors
 ///////////////////////////////////////////////////////////
@@ -236,10 +243,13 @@ pub struct CratePolicyErrors {
 pub enum CratePolicyError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    NeedsVersion(NeedsPolicyVersionErrors),
+    DependencyCriteriaNeedsVersion(DependencyCriteriaNeedsPolicyVersionErrors),
     #[error(transparent)]
     #[diagnostic(transparent)]
     UnusedVersion(UnusedPolicyVersionErrors),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ThirdPartyNeedsVersion(ThirdPartyNeedsPolicyVersionErrors),
 }
 
 #[derive(Debug, Error, Diagnostic, PartialEq, Eq)]
@@ -247,11 +257,11 @@ pub enum CratePolicyError {
     "Specifing `dependency-criteria` requires explicit policies for each version of \
      a crate. Add a `policy.\"<crate>:<version>\"` entry for them."
 ))]
-pub struct NeedsPolicyVersionErrors {
-    pub errors: Vec<PackageError>,
+pub struct DependencyCriteriaNeedsPolicyVersionErrors {
+    pub errors: Vec<VersionedPackageError>,
 }
 
-impl Display for NeedsPolicyVersionErrors {
+impl Display for DependencyCriteriaNeedsPolicyVersionErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("some crates have policies that are missing an associated version")?;
         for e in &self.errors {
@@ -270,6 +280,25 @@ pub struct UnusedPolicyVersionErrors {
 impl Display for UnusedPolicyVersionErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("some versioned policy entries don't correspond to crates being used")?;
+        for e in &self.errors {
+            f.write_fmt(format_args!("\n  {e}"))?
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Error, Diagnostic, PartialEq, Eq)]
+#[diagnostic(help(
+    "Crates with a third-party version must use versioned policy entries. Replace the \
+    `policy.<crate>` entry with `policy.\"<crate>:<version>\"` entries as desired."
+))]
+pub struct ThirdPartyNeedsPolicyVersionErrors {
+    pub errors: Vec<VersionedPackageError>,
+}
+
+impl Display for ThirdPartyNeedsPolicyVersionErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("some crates have unversioned policies that must be versioned")?;
         for e in &self.errors {
             f.write_fmt(format_args!("\n  {e}"))?
         }
