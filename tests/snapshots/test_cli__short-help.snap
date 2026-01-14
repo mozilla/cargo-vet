@@ -41,6 +41,7 @@ Global Options:
       --features <FEATURES>            Space-separated list of features to activate
       --locked                         Do not fetch new imported audits
       --frozen                         Avoid the network entirely, requiring either that the cargo cache is populated or the dependencies are vendored. Requires --locked
+      --use-git-credentials            Use git credential helpers for authentication when downloading remote resources. This enables integration with system credential stores
       --no-minimize-exemptions         Prevent commands such as `check` and `certify` from automatically cleaning up unused exemptions
       --no-registry-suggestions        Prevent commands such as `check` and `suggest` from suggesting registry imports
       --verbose <VERBOSE>              How verbose logging should be (log level) [default: warn] [possible values: off, error, warn, info, debug, trace]
@@ -52,4 +53,3 @@ Global Options:
       --cargo-arg <CARGO_ARG>          Arguments to pass through to cargo. It can be specified multiple times for multiple arguments
 
 stderr:
-

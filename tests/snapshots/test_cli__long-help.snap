@@ -62,6 +62,9 @@ Global Options:
       --frozen
           Avoid the network entirely, requiring either that the cargo cache is populated or the dependencies are vendored. Requires --locked
 
+      --use-git-credentials
+          Use git credential helpers for authentication when downloading remote resources. This enables integration with system credential stores
+
       --no-minimize-exemptions
           Prevent commands such as `check` and `certify` from automatically cleaning up unused exemptions
 
@@ -147,4 +150,3 @@ Global Options:
           This allows using unstable options in Cargo if a project's Cargo.toml requires them.
 
 stderr:
-
