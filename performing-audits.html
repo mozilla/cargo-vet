@@ -1,0 +1,300 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Performing Audits - Cargo Vet</title>
+        <!-- Custom HTML head -->
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="src/custom.css">
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="index.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="motivation.html"><strong aria-hidden="true">1.1.</strong> Motivation</a></li><li class="chapter-item expanded "><a href="how-it-works.html"><strong aria-hidden="true">1.2.</strong> How it Works</a></li></ol></li><li class="chapter-item expanded "><a href="tutorial.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="setup.html"><strong aria-hidden="true">2.2.</strong> Setup</a></li><li class="chapter-item expanded "><a href="audit-criteria.html"><strong aria-hidden="true">2.3.</strong> Audit Criteria</a></li><li class="chapter-item expanded "><a href="importing-audits.html"><strong aria-hidden="true">2.4.</strong> Importing Audits</a></li><li class="chapter-item expanded "><a href="recording-audits.html"><strong aria-hidden="true">2.5.</strong> Recording Audits</a></li><li class="chapter-item expanded "><a href="performing-audits.html" class="active"><strong aria-hidden="true">2.6.</strong> Performing Audits</a></li><li class="chapter-item expanded "><a href="trusting-publishers.html"><strong aria-hidden="true">2.7.</strong> Trusting Publishers</a></li><li class="chapter-item expanded "><a href="specifying-policies.html"><strong aria-hidden="true">2.8.</strong> Specifying Policies</a></li><li class="chapter-item expanded "><a href="multiple-repositories.html"><strong aria-hidden="true">2.9.</strong> Multiple Repositories</a></li><li class="chapter-item expanded "><a href="configuring-ci.html"><strong aria-hidden="true">2.10.</strong> Configuring CI</a></li><li class="chapter-item expanded "><a href="curating-your-audit-set.html"><strong aria-hidden="true">2.11.</strong> Curating Your Audit Set</a></li></ol></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">3.</strong> Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="config.html"><strong aria-hidden="true">3.1.</strong> Configuration</a></li><li class="chapter-item expanded "><a href="audit-entries.html"><strong aria-hidden="true">3.2.</strong> Audit Entries</a></li><li class="chapter-item expanded "><a href="wildcard-audit-entries.html"><strong aria-hidden="true">3.3.</strong> Wildcard Audit Entries</a></li><li class="chapter-item expanded "><a href="trusted-entries.html"><strong aria-hidden="true">3.4.</strong> Trusted Entries</a></li><li class="chapter-item expanded "><a href="built-in-criteria.html"><strong aria-hidden="true">3.5.</strong> Built-In Criteria</a></li><li class="chapter-item expanded "><a href="first-party-code.html"><strong aria-hidden="true">3.6.</strong> First-Party Code</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.7.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="commands.html"><strong aria-hidden="true">3.8.</strong> Commands</a></li><li class="chapter-item expanded "><a href="algorithm.html"><strong aria-hidden="true">3.9.</strong> The Algorithm</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Cargo Vet</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/mozilla/cargo-vet" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="performing-audits"><a class="header" href="#performing-audits">Performing Audits</a></h1>
+<p>Human attention is a precious resource, so <code>cargo vet</code> provides several features
+to spend that attention as efficiently as possible.</p>
+<h2 id="managing-dependency-changes"><a class="header" href="#managing-dependency-changes">Managing Dependency Changes</a></h2>
+<p>When you run <code>cargo update</code>, you generally pull in new crates or new versions of
+existing crates, which may cause <code>cargo vet</code> to fail. In this situation,
+<code>cargo vet</code> identifies the relevant crates and recommends how to audit them:</p>
+<pre><code>$ cargo update
+  ....
+
+$ cargo vet
+  Vetting Failed!
+
+  3 unvetted dependencies:
+      bar:1.5 missing [&quot;safe-to-deploy&quot;]
+      baz:1.3 missing [&quot;safe-to-deploy&quot;]
+      foo:1.2.1 missing [&quot;safe-to-deploy&quot;]
+
+  recommended audits for safe-to-deploy:
+      cargo vet diff foo 1.2 1.2.1  (10 lines)
+      cargo vet diff bar 2.1.1 1.5  (253 lines)
+      cargo vet inspect baz 1.3     (2033 lines)
+
+  estimated audit backlog: 2296 lines
+
+  Use |cargo vet certify| to record the audits.
+</code></pre>
+<p>Note that if other versions of a given crate have already been verified, there
+will be multiple ways to perform the review: either from scratch, or relative to
+one or more already-audited versions. In these cases, <code>cargo vet</code>
+computes all the possible approaches and selects the smallest one.</p>
+<p>You can, of course, choose to add one or more unvetted dependencies to the
+<code>exemptions</code> list instead of auditing them. This may be expedient in some
+situations, though doing so frequently undermines the value provided by the
+tool.</p>
+<h2 id="inspecting-crates"><a class="header" href="#inspecting-crates">Inspecting Crates</a></h2>
+<p>Once you've identified the audit you wish to perform, the next step is to
+produce the artifacts for inspection. This is less trivial than it might sound:
+even if the project is hosted somewhere like GitHub, there's no guarantee that
+the code in the repository matches the bits submitted to crates.io. And the
+packages on crates.io aren't easy to download manually.</p>
+<p>To make this easy, the <code>cargo vet inspect</code> subcommand will give you a link to
+the exact version of the crate hosted on <a href="https://about.sourcegraph.com/">Sourcegraph</a>.</p>
+<p>When you finish the audit, you can use <code>cargo vet certify</code> to add the entry to
+<code>audits.toml</code>:</p>
+<pre><code>$ cargo vet inspect baz 1.3
+You are about to inspect version 1.3 of 'baz', likely to certify it for &quot;safe-to-deploy&quot;, which means:
+
+   ...
+
+You can inspect the crate here: https://sourcegraph.com/crates/baz@v1.3
+
+(press ENTER to open in your browser, or re-run with --mode=local)
+
+$ cargo vet certify baz 1.3
+
+  I, Alice, certify that I have audited version 1.3 of baz in accordance with
+  the following criteria:
+
+  ...
+
+ (type &quot;yes&quot; to certify): yes
+
+  Recorded full audit of baz version 1.3
+</code></pre>
+<p>You can also use the <code>--mode=local</code> flag to have <code>inspect</code> download the crate
+source code and drop you into a nested shell to inspect it.</p>
+<p>Similarly, <code>cargo vet diff</code> will give you a <a href="https://about.sourcegraph.com/">Sourcegraph</a>
+link that will display the diff between the two versions.</p>
+<pre><code>$ cargo vet diff foo 1.2 1.2.1
+
+You are about to diff versions 1.2 and 1.2.1 of 'foo', likely to certify it for &quot;safe-to-deploy&quot;, which means:
+
+   ...
+
+You can inspect the diff here: https://sourcegraph.com/crates/foo/-/compare/v1.2...v1.2.1
+
+$ cargo vet certify foo 1.2 1.2.1
+
+  I, Alice, certify that I have audited the changes between versions 1.2 and
+  1.2.1 of baz in accordance with the following criteria:
+
+  ...
+
+  (type &quot;yes&quot; to certify): yes
+
+  Recorded relative audit between foo versions 1.2 and 1.2.1
+</code></pre>
+<p>You can also use <code>--mode=local</code> flag to have <code>diff</code> download the two crates and display a
+git-compatible diff between the two.</p>
+<h2 id="shrinking-the-exemptions-table"><a class="header" href="#shrinking-the-exemptions-table">Shrinking the <code>exemptions</code> Table</a></h2>
+<p>Even when your project is passing <code>cargo vet</code>, lingering entries in <code>exemptions</code>
+could still leave you vulnerable. As such, shrinking it is a worthwhile endeavor.</p>
+<p>Any malicious crate can compromise your program, but not every crate requires
+the same amount of effort to verify. Some crates are larger than others, and
+different versions of the same crate are usually quite similar. To take
+advantage of this, <code>cargo vet suggest</code> can estimate the lowest-effort audits
+you can perform to reduce the number of entries in <code>exemptions</code>, and
+consequently, your attack surface.</p>
+<p>More precisely, <code>cargo vet suggest</code> computes the number of lines that would need
+to be reviewed for each exemptions dependency, and displays them in order. This
+is the same information you'd get if you emptied out <code>exemptions</code> and re-ran
+<code>cargo vet</code>.</p>
+<h2 id="suggestions-from-the-registry"><a class="header" href="#suggestions-from-the-registry">Suggestions from the Registry</a></h2>
+<p>When <code>cargo vet</code> suggests audits — either after a failed vet or during <code>cargo vet suggest</code> — it also fetches the contents of the
+<a href="importing-audits.html#the-registry">registry</a> and checks whether any of the
+available sets contain audits which would fill some or all of the gap. If so, it
+enumerates them so that the developer can consider importing them in lieu of
+performing the entire audit themselves:</p>
+<pre><code>$ cargo vet suggest
+  recommended audits for safe-to-deploy:
+      cargo vet inspect baz 1.3   (used by mycrate)  (2033 lines)
+        NOTE: cargo vet import mozilla would reduce this to a 17-line diff
+      cargo vet inspect quxx 2.0  (used by baz)      (1000 lines)
+        NOTE: cargo vet import mozilla would eliminate this
+
+  estimated audit backlog: 3033 lines
+
+  Use |cargo vet certify| to record the audits.
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="recording-audits.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                            <a rel="next" href="trusting-publishers.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="recording-audits.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                    <a rel="next" href="trusting-publishers.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+    </body>
+</html>
