@@ -366,6 +366,7 @@ fn default_policy() -> PolicyEntry {
         criteria: None,
         dev_criteria: None,
         dependency_criteria: SortedMap::new(),
+        first_party: None,
         notes: None,
     }
 }
@@ -976,6 +977,7 @@ fn init_files(
                             criteria: Some(vec![default_criteria.to_string().into()]),
                             dev_criteria: Some(vec![default_criteria.to_string().into()]),
                             dependency_criteria: CriteriaMap::new(),
+                            first_party: None,
                             notes: None,
                         }),
                     );

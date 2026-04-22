@@ -6,7 +6,9 @@ crates.io dependencies.
 
 Generally speaking, all other nodes in the graph are considered trusted and
 therefore non-auditable. This includes root crates, path dependencies, git
-dependencies, and custom (non-crates.io) registry dependencies.
+dependencies, and custom (non-crates.io) registry dependencies. This behavior
+can be overridden with a policy entry for that crate with `first-party` as
+either true or false.
 
 However, there are some situations which blur the line between first- and
 third-party code. This can occur, for example, when the `[patch]` table is used

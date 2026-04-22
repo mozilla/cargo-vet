@@ -112,7 +112,9 @@ impl PackageExt for Package {
     fn is_third_party(&self, policy: &Policy) -> bool {
         let forced_third_party = self
             .policy_entry(policy)
-            .and_then(|policy| policy.audit_as_crates_io)
+            .map(|policy| {
+                (policy.first_party == Some(false)) || (policy.audit_as_crates_io == Some(true))
+            })
             .unwrap_or(false);
 
         forced_third_party || self.is_crates_io()
@@ -2617,7 +2619,12 @@ fn cmd_dump_graph(
     // Dump a mermaid-js graph
     trace!("dumping...");
 
-    let graph = resolver::DepGraph::new(&cfg.metadata, cfg.cli.filter_graph.as_ref(), None);
+    let store = Store::acquire_offline(cfg)?;
+    let graph = resolver::DepGraph::new(
+        &cfg.metadata,
+        cfg.cli.filter_graph.as_ref(),
+        &store.config.policy,
+    );
     match cfg.cli.output_format {
         OutputFormat::Human => graph.print_mermaid(out, sub_args).into_diagnostic()?,
         OutputFormat::Json => {
@@ -3100,24 +3107,28 @@ fn foreign_packages<'a>(
 /// (because it's used for validating that field's value).
 fn first_party_packages_strict<'a>(
     metadata: &'a Metadata,
-    _config: &'a ConfigFile,
+    config: &'a ConfigFile,
 ) -> impl Iterator<Item = &'a Package> + 'a {
-    metadata
-        .packages
-        .iter()
-        .filter(move |package| !package.is_crates_io())
+    metadata.packages.iter().filter(move |package| {
+        package
+            .policy_entry(&config.policy)
+            .and_then(|policy_entry| policy_entry.first_party)
+            .unwrap_or(!package.is_crates_io())
+    })
 }
 
 /// All third-party packages, **without** the audit-as-crates-io policy applied (used in crate
 /// policy verification).
-fn foreign_packages_strict<'a>(
+fn foreign_packages_strict<'a: 'b, 'b>(
     metadata: &'a Metadata,
-    _config: &ConfigFile,
-) -> impl Iterator<Item = &'a Package> + 'a {
-    metadata
-        .packages
-        .iter()
-        .filter(move |package| package.is_crates_io())
+    config: &'b ConfigFile,
+) -> impl Iterator<Item = &'a Package> + 'b {
+    metadata.packages.iter().filter(move |package| {
+        package
+            .policy_entry(&config.policy)
+            .and_then(|policy_entry| policy_entry.first_party.map(<bool as core::ops::Not>::not))
+            .unwrap_or(package.is_crates_io())
+    })
 }
 
 async fn check_audit_as_crates_io(
