@@ -1,6 +1,6 @@
 ---
 source: tests/test-cli.rs
-expression: formatted
+expression: format_diff_outputs(&output)
 ---
 stdout:
 You are about to diff versions 1.0.90 and 1.0.91 of 'syn'
@@ -78,20 +78,21 @@ index b6d0616..276c016 100644
 +                let lit = input.parse()?;
 +                return Ok(GenericMethodArgument::Const(Expr::Lit(lit)));
 +            }
-+
+ 
+-        if input.peek(token::Brace) {
+-            let block: ExprBlock = input.parse()?;
+-            return Ok(GenericMethodArgument::Const(Expr::Block(block)));
+-        }
 +            if input.peek(token::Brace) {
 +                let block: ExprBlock = input.parse()?;
 +                return Ok(GenericMethodArgument::Const(Expr::Block(block)));
 +            }
  
--        if input.peek(token::Brace) {
--            let block: ExprBlock = input.parse()?;
--            return Ok(GenericMethodArgument::Const(Expr::Block(block)));
-+            input.parse().map(GenericMethodArgument::Type)
-         }
-+    }
- 
 -        input.parse().map(GenericMethodArgument::Type)
++            input.parse().map(GenericMethodArgument::Type)
++        }
++    }
++
 +    #[cfg(feature = "full")]
 +    #[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
 +    impl Parse for MethodTurbofish {
@@ -147,29 +148,31 @@ index b6d0616..276c016 100644
      }
  
      #[cfg(feature = "full")]
-@@ -3346,14 +3358,22 @@ pub(crate) mod printing {
+@@ -3344,16 +3356,24 @@ pub(crate) mod printing {
+         }
+     }
  
-     #[cfg(feature = "full")]
-     #[cfg_attr(doc_cfg, doc(cfg(feature = "printing")))]
--    impl ToTokens for ExprRange {
++    #[cfg(feature = "full")]
++    #[cfg_attr(doc_cfg, doc(cfg(feature = "printing")))]
 +    impl ToTokens for RangeLimits {
-         fn to_tokens(&self, tokens: &mut TokenStream) {
--            outer_attrs_to_tokens(&self.attrs, tokens);
--            self.from.to_tokens(tokens);
--            match &self.limits {
++        fn to_tokens(&self, tokens: &mut TokenStream) {
 +            match self {
-                 RangeLimits::HalfOpen(t) => t.to_tokens(tokens),
-                 RangeLimits::Closed(t) => t.to_tokens(tokens),
-             }
++                RangeLimits::HalfOpen(t) => t.to_tokens(tokens),
++                RangeLimits::Closed(t) => t.to_tokens(tokens),
++            }
 +        }
 +    }
 +
-+    #[cfg(feature = "full")]
-+    #[cfg_attr(doc_cfg, doc(cfg(feature = "printing")))]
-+    impl ToTokens for ExprRange {
-+        fn to_tokens(&self, tokens: &mut TokenStream) {
-+            outer_attrs_to_tokens(&self.attrs, tokens);
-+            self.from.to_tokens(tokens);
+     #[cfg(feature = "full")]
+     #[cfg_attr(doc_cfg, doc(cfg(feature = "printing")))]
+     impl ToTokens for ExprRange {
+         fn to_tokens(&self, tokens: &mut TokenStream) {
+             outer_attrs_to_tokens(&self.attrs, tokens);
+             self.from.to_tokens(tokens);
+-            match &self.limits {
+-                RangeLimits::HalfOpen(t) => t.to_tokens(tokens),
+-                RangeLimits::Closed(t) => t.to_tokens(tokens),
+-            }
 +            self.limits.to_tokens(tokens);
              self.to.to_tokens(tokens);
          }

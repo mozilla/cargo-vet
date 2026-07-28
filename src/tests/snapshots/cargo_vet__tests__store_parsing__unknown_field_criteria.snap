@@ -4,11 +4,10 @@ expression: acquire_errors
 ---
   × Failed to parse toml file: unknown field `unknown-field`, expected one of
   │ `description`, `description-url`, `implies`, `aggregated-from`
-   ╭─[audits.toml:6:1]
+   ╭─[audits.toml:7:1]
  6 │ implies = "safe-to-deploy"
  7 │ unknown-field = "invalid"
    · ──────┬──────
    ·       ╰── here
  8 │ 
    ╰────
-

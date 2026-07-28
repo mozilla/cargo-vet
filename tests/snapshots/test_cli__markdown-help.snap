@@ -95,11 +95,11 @@ Instead of stderr, write logs to this file (only used after successful CLI parsi
 #### `--output-format <OUTPUT_FORMAT>`
 The format of the output
 
-\[default: human]  
-
 Possible values:
 - human: Print output in a human-readable form
 - json:  Print output in a machine-readable form with minimal extra context
+
+\[default: human]  
 
 #### `--cache-dir <CACHE_DIR>`
 Use the following path instead of the global cache directory
@@ -880,4 +880,3 @@ This subcommand accepts all the [global options](#global-options)
 
 
 stderr:
-

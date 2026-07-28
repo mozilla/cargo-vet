@@ -5,10 +5,9 @@ expression: acquire_errors
   × Failed to parse toml file: unknown field `unknown-field`, expected one of
   │ `who`, `criteria`, `version`, `delta`, `violation`, `importable`, `notes`,
   │ `aggregated-from`
-   ╭─[audits.toml:6:1]
+   ╭─[audits.toml:7:1]
  6 │ version = "2.0.0"
  7 │ unknown-field = "invalid"
    · ──────┬──────
    ·       ╰── here
    ╰────
-

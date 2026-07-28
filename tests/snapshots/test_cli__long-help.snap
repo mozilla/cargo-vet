@@ -82,12 +82,12 @@ Global Options:
 
       --output-format <OUTPUT_FORMAT>
           The format of the output
-          
-          [default: human]
 
           Possible values:
           - human: Print output in a human-readable form
           - json:  Print output in a machine-readable form with minimal extra context
+          
+          [default: human]
 
       --cache-dir <CACHE_DIR>
           Use the following path instead of the global cache directory
@@ -147,4 +147,3 @@ Global Options:
           This allows using unstable options in Cargo if a project's Cargo.toml requires them.
 
 stderr:
-
