@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - name: Run cargo fmt
         run: |
           cargo fmt --all -- --check
@@ -25,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - name: Run cargo clippy
         run: |
           cargo clippy --workspace --tests --examples
@@ -35,6 +39,8 @@ jobs:
       RUSTDOCFLAGS: -Dwarnings
     steps:
       - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - name: Run cargo doc
         run: |
           cargo doc --workspace --no-deps
@@ -46,6 +52,8 @@ jobs:
         os: [ubuntu-latest, windows-latest, macOS-latest]
     steps:
       - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - name: Run cargo test
         run: |
           cargo test --workspace --all-targets
@@ -54,6 +62,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: 1.65.0
@@ -66,6 +76,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
      - uses: actions/checkout@v2
+       with:
+         persist-credentials: false
      - name: Run cargo vet
        run: |
         cargo run -- vet --locked
