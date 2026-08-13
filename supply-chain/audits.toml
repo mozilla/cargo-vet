@@ -49,6 +49,12 @@ who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"
 delta = "0.19.2 -> 0.20.0"
 
+[[audits.cargo_metadata]]
+who = "Felix Gohla <felix@felixgohla.de>"
+criteria = "safe-to-deploy"
+delta = "0.20.0 -> 0.21.0"
+notes = "The change primarily contains simple type changes, formatting changes and an unused unstable feature.`"
+
 [[audits.dirs]]
 who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"

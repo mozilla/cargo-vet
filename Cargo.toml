@@ -20,7 +20,7 @@ exclude = [
 [dependencies]
 base64-stream = "1.2.7"
 bytes = "1.1.0"
-cargo_metadata = "0.20.0"
+cargo_metadata = "0.21.0"
 chrono = { version = "0.4.23", default-features = false, features = ["alloc", "std", "serde"] }
 clap = { version = "4.5.39", features = ["derive"] }
 clap-cargo = "0.15.2"
