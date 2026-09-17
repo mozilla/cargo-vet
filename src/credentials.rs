@@ -30,6 +30,11 @@ impl GitCredential {
         request_builder: reqwest::RequestBuilder,
     ) -> reqwest::RequestBuilder {
         match self {
+            GitCredential::UsernamePassword { username, password }
+                if username == "oauth2" || username == "access_token" =>
+            {
+                request_builder.header("Authorization", format!("Bearer {password}"))
+            }
             GitCredential::UsernamePassword { username, password } => {
                 request_builder.basic_auth(username, Some(password))
             }
