@@ -50,6 +50,7 @@ async fn execute_git_credential_fill(
     // Execute git credential fill
     let mut child = tokio::process::Command::new("git")
         .args(&["credential", "fill"])
+        .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
