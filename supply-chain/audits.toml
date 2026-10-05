@@ -199,6 +199,11 @@ who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"
 delta = "0.13.1 -> 0.13.2"
 
+[[audits.tar]]
+who = "Alex Franchuk <afranchuk@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.38 -> 0.4.45"
+
 [[audits.tempfile]]
 who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"
