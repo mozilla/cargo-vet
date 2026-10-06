@@ -49,6 +49,7 @@ use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
 use crate::storage::{Cache, Store};
 
 mod cli;
+mod credentials;
 mod criteria;
 pub mod errors;
 mod flock;
