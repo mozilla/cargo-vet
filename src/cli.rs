@@ -816,7 +816,6 @@ pub enum Verbose {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum, Serialize, Deserialize)]
 pub enum FetchMode {
     Local,
-    Sourcegraph,
     #[clap(name = "diff.rs")]
     DiffRs,
 }

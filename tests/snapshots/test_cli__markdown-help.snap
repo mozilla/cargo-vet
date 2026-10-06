@@ -259,7 +259,7 @@ Defaults to the most recently used --mode argument, or diff.rs if no mode argume
 
 This option is ignored if a git version is passed.
 
-\[possible values: local, sourcegraph, diff.rs]  
+\[possible values: local, diff.rs]  
 
 #### `-h, --help`
 Print help (see a summary with '-h')
@@ -298,7 +298,7 @@ Defaults to the most recently used --mode argument, or diff.rs if no mode argume
 
 This option is ignored if a git version is passed.
 
-\[possible values: local, sourcegraph, diff.rs]  
+\[possible values: local, diff.rs]  
 
 #### `-h, --help`
 Print help (see a summary with '-h')
@@ -880,4 +880,3 @@ This subcommand accepts all the [global options](#global-options)
 
 
 stderr:
-

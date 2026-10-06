@@ -586,9 +586,6 @@ fn cmd_inspect(
 
         if mode != FetchMode::Local {
             let url = match mode {
-                FetchMode::Sourcegraph => {
-                    format!("https://sourcegraph.com/crates/{package}@v{version}")
-                }
                 FetchMode::DiffRs => {
                     format!("https://diff.rs/browse/{package}/{version}/")
                 }
@@ -2077,11 +2074,6 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
 
         if mode != FetchMode::Local {
             let url = match mode {
-                FetchMode::Sourcegraph => {
-                    format!(
-                        "https://sourcegraph.com/crates/{package}/-/compare/v{version1}...v{version2}?visible=7000"
-                    )
-                }
                 FetchMode::DiffRs => {
                     format!("https://diff.rs/{package}/{version1}/{version2}/")
                 }
