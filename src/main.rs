@@ -46,7 +46,7 @@ use crate::format::{
 };
 use crate::git_tool::Pager;
 use crate::out::{indeterminate_spinner, Out, StderrLogWriter, MULTIPROGRESS};
-use crate::storage::{Cache, Store};
+use crate::storage::{Cache, FetchModeCommand, Store};
 
 mod cli;
 mod criteria;
@@ -582,13 +582,20 @@ fn cmd_inspect(
 
         // Determine the fetch mode to use. We'll need to do a local diff if the
         // selected version has a git revision.
-        let mode = cache.select_fetch_mode(sub_args.mode, version.git_rev.is_some());
+        let mode = cache.select_fetch_mode(
+            FetchModeCommand::Inspect,
+            &sub_args.mode,
+            version.git_rev.is_some(),
+        );
 
         if mode != FetchMode::Local {
             let url = match mode {
                 FetchMode::DiffRs => {
                     format!("https://diff.rs/browse/{package}/{version}/")
                 }
+                FetchMode::CustomUrl(template) => template
+                    .replace("{package}", package)
+                    .replace("{version}", &version.to_string()),
                 FetchMode::Local => unreachable!(),
             };
             tokio::runtime::Handle::current()
@@ -2068,7 +2075,8 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
         // Determine the fetch mode to use. We'll need to do a local diff if the
         // selected version has a git revision.
         let mode = cache.select_fetch_mode(
-            sub_args.mode,
+            FetchModeCommand::Diff,
+            &sub_args.mode,
             version1.git_rev.is_some() || version2.git_rev.is_some(),
         );
 
@@ -2077,6 +2085,10 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
                 FetchMode::DiffRs => {
                     format!("https://diff.rs/{package}/{version1}/{version2}/")
                 }
+                FetchMode::CustomUrl(template) => template
+                    .replace("{package}", package)
+                    .replace("{version1}", &version1.to_string())
+                    .replace("{version2}", &version2.to_string()),
                 FetchMode::Local => unreachable!(),
             };
             tokio::runtime::Handle::current()

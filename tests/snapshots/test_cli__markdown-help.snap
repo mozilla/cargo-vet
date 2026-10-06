@@ -255,11 +255,15 @@ The version to inspect
 #### `--mode <MODE>`
 How to inspect the source
 
-Defaults to the most recently used --mode argument, or diff.rs if no mode argument has been used.
+May be one of 'local', 'diff.rs', or 'custom_url=URL', where `URL` will be treated as a
+template with the following substrings replaced:
+- '{package}': the name of the crate
+- '{version}': the version of the crate
+
+Defaults to the most recently used --mode argument, or diff.rs if no
+mode argument has been used.
 
 This option is ignored if a git version is passed.
-
-\[possible values: local, diff.rs]  
 
 #### `-h, --help`
 Print help (see a summary with '-h')
@@ -294,11 +298,16 @@ The target version to diff
 #### `--mode <MODE>`
 How to inspect the diff
 
-Defaults to the most recently used --mode argument, or diff.rs if no mode argument has been used.
+May be one of 'local', 'diff.rs', or 'custom_url=URL', where `URL` will be treated as a
+template with the following substrings replaced:
+- '{package}': the name of the crate
+- '{version1}': the base version of the crate
+- '{version2}': the target version of the crate
+
+Defaults to the most recently used --mode argument, or diff.rs if no
+mode argument has been used.
 
 This option is ignored if a git version is passed.
-
-\[possible values: local, diff.rs]  
 
 #### `-h, --help`
 Print help (see a summary with '-h')

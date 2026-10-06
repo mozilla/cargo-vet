@@ -473,11 +473,16 @@ pub struct InspectArgs {
     pub version: VetVersion,
     /// How to inspect the source
     ///
+    /// May be one of 'local', 'diff.rs', or 'custom_url=URL', where `URL` will be treated as a
+    /// template with the following substrings replaced:
+    /// - '{package}': the name of the crate
+    /// - '{version}': the version of the crate
+    ///
     /// Defaults to the most recently used --mode argument, or diff.rs if no
     /// mode argument has been used.
     ///
     /// This option is ignored if a git version is passed.
-    #[clap(long, action)]
+    #[clap(long, action, verbatim_doc_comment)]
     pub mode: Option<FetchMode>,
 }
 
@@ -495,11 +500,17 @@ pub struct DiffArgs {
     pub version2: VetVersion,
     /// How to inspect the diff
     ///
+    /// May be one of 'local', 'diff.rs', or 'custom_url=URL', where `URL` will be treated as a
+    /// template with the following substrings replaced:
+    /// - '{package}': the name of the crate
+    /// - '{version1}': the base version of the crate
+    /// - '{version2}': the target version of the crate
+    ///
     /// Defaults to the most recently used --mode argument, or diff.rs if no
     /// mode argument has been used.
     ///
     /// This option is ignored if a git version is passed.
-    #[clap(long, action)]
+    #[clap(long, action, verbatim_doc_comment)]
     pub mode: Option<FetchMode>,
 }
 
@@ -813,11 +824,33 @@ pub enum Verbose {
     Trace,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub enum FetchMode {
     Local,
-    #[clap(name = "diff.rs")]
+    CustomUrl(String),
     DiffRs,
+}
+
+impl Default for FetchMode {
+    fn default() -> Self {
+        Self::DiffRs
+    }
+}
+
+impl FromStr for FetchMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "local" {
+            Ok(Self::Local)
+        } else if s == "diff.rs" {
+            Ok(Self::DiffRs)
+        } else if let Some(suffix) = s.strip_prefix("custom_url=") {
+            Ok(Self::CustomUrl(suffix.to_owned()))
+        } else {
+            Err("invalid fetch mode".into())
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
