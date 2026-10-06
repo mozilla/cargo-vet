@@ -322,10 +322,6 @@ criteria = "safe-to-deploy"
 version = "0.1.21"
 criteria = "safe-to-deploy"
 
-[[exemptions.tracing-core]]
-version = "0.1.27"
-criteria = "safe-to-deploy"
-
 [[exemptions.tracing-subscriber]]
 version = "0.3.11"
 criteria = "safe-to-deploy"
