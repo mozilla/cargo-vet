@@ -1,0 +1,638 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>The Algorithm - Cargo Vet</title>
+        <!-- Custom HTML head -->
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="src/custom.css">
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="index.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="motivation.html"><strong aria-hidden="true">1.1.</strong> Motivation</a></li><li class="chapter-item expanded "><a href="how-it-works.html"><strong aria-hidden="true">1.2.</strong> How it Works</a></li></ol></li><li class="chapter-item expanded "><a href="tutorial.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="setup.html"><strong aria-hidden="true">2.2.</strong> Setup</a></li><li class="chapter-item expanded "><a href="audit-criteria.html"><strong aria-hidden="true">2.3.</strong> Audit Criteria</a></li><li class="chapter-item expanded "><a href="importing-audits.html"><strong aria-hidden="true">2.4.</strong> Importing Audits</a></li><li class="chapter-item expanded "><a href="recording-audits.html"><strong aria-hidden="true">2.5.</strong> Recording Audits</a></li><li class="chapter-item expanded "><a href="performing-audits.html"><strong aria-hidden="true">2.6.</strong> Performing Audits</a></li><li class="chapter-item expanded "><a href="trusting-publishers.html"><strong aria-hidden="true">2.7.</strong> Trusting Publishers</a></li><li class="chapter-item expanded "><a href="specifying-policies.html"><strong aria-hidden="true">2.8.</strong> Specifying Policies</a></li><li class="chapter-item expanded "><a href="multiple-repositories.html"><strong aria-hidden="true">2.9.</strong> Multiple Repositories</a></li><li class="chapter-item expanded "><a href="configuring-ci.html"><strong aria-hidden="true">2.10.</strong> Configuring CI</a></li><li class="chapter-item expanded "><a href="curating-your-audit-set.html"><strong aria-hidden="true">2.11.</strong> Curating Your Audit Set</a></li></ol></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">3.</strong> Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="config.html"><strong aria-hidden="true">3.1.</strong> Configuration</a></li><li class="chapter-item expanded "><a href="audit-entries.html"><strong aria-hidden="true">3.2.</strong> Audit Entries</a></li><li class="chapter-item expanded "><a href="wildcard-audit-entries.html"><strong aria-hidden="true">3.3.</strong> Wildcard Audit Entries</a></li><li class="chapter-item expanded "><a href="trusted-entries.html"><strong aria-hidden="true">3.4.</strong> Trusted Entries</a></li><li class="chapter-item expanded "><a href="built-in-criteria.html"><strong aria-hidden="true">3.5.</strong> Built-In Criteria</a></li><li class="chapter-item expanded "><a href="first-party-code.html"><strong aria-hidden="true">3.6.</strong> First-Party Code</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.7.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="commands.html"><strong aria-hidden="true">3.8.</strong> Commands</a></li><li class="chapter-item expanded "><a href="algorithm.html" class="active"><strong aria-hidden="true">3.9.</strong> The Algorithm</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Cargo Vet</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/mozilla/cargo-vet" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="the-cargo-vet-algorithm"><a class="header" href="#the-cargo-vet-algorithm">The Cargo Vet Algorithm</a></h1>
+<p>The heart of <code>vet</code> is the &quot;<a href="https://github.com/mozilla/cargo-vet/blob/main/src/resolver.rs">resolver</a>&quot; which takes in your build graph and your supply_chain dir, and determines whether <code>vet check</code> should pass.</p>
+<p>If <code>check</code> fails, it tries to determine the reason for that failure (which as we'll see is a non-trivial question). If you request a <code>suggest</code> it will then try to suggest &quot;good&quot; audits that will definitely satisfy <code>check</code> (which is again non-trivial).</p>
+<p>These results are a basic building block that most other commands will defer to:</p>
+<ul>
+<li><code>vet check</code> (the command run with bare <code>vet</code>) is just this operation</li>
+<li><code>vet suggest</code> is this operation with all suggestable exemptions deleted</li>
+<li><code>vet certify</code> fills in any unspecified information using this operation</li>
+<li><code>vet regenerate</code> generally uses this operation to know what to do</li>
+</ul>
+<p>For the sake of clarity, this chapter will also include some discussion of &quot;initialization&quot; which gathers up the input state that the resolver needs.</p>
+<h2 id="initialization-steps"><a class="header" href="#initialization-steps">Initialization Steps</a></h2>
+<p>This phase is generally just a bunch of loading, parsing, and validating. Different commands
+may vary slightly in how they do these steps, as they may implicitly be --locked or --frozen,
+or want to query hypothetical states.</p>
+<ol>
+<li>Acquire the build graph (<a href="https://doc.rust-lang.org/cargo/commands/cargo-metadata.html">cargo metadata</a> via the <a href="https://docs.rs/cargo_metadata/latest/cargo_metadata/">cargo_metadata</a> crate)</li>
+<li>Acquire the store (<code>supply_chain</code>) (load, parse, validate)</li>
+<li>Update the imports (fetch, parse, validate)</li>
+<li>Check <code>audit-as-crates-io</code> (check against local cargo registry)</li>
+</ol>
+<h2 id="resolve-steps"><a class="header" href="#resolve-steps">Resolve Steps</a></h2>
+<p>These are the logical steps of the resolver, although they are more interleaved than this
+initial summary implies:</p>
+<ol>
+<li>Build data structures
+<ol>
+<li>Construct the <code>DepGraph</code></li>
+<li>Construct the <code>CriteriaMapper</code></li>
+</ol>
+</li>
+<li>Determine the required criteria for each package
+<ol>
+<li>Apply requirements for dev-dependencies</li>
+<li>Propagate policy requirements from roots out to leaves</li>
+</ol>
+</li>
+<li>Resolve the validated criteria for each third party (crates.io) package
+<ol>
+<li>Construct the <code>AuditGraphs</code> for each package (and check violations)</li>
+<li>Search for paths in the audit graph validating each requirement</li>
+</ol>
+</li>
+<li>Check if each crate validates for the required criteria
+<ol>
+<li>Record caveats which were required in order to satisfy these criteria</li>
+</ol>
+</li>
+<li>Suggest audits to fix leaf failures (the dance of a thousand diffs)</li>
+</ol>
+<p>Here in all of its glory is the entirety of the resolver algorithm today in
+abbreviated pseudo-rust. Each of these steps will be elaborated on in the
+subsequent sections.</p>
+<pre><code class="language-rust  ignore">// Step 1a: Build the DepGraph
+let graph = DepGraph::new(..);
+// Step 1b: Build the CriteriaMapper
+let mapper = CriteriaMapper::new(..);
+
+// Step 2: Determine the required criteria for each package
+let requirements = resolve_requirements(..);
+
+// Step 3: Resolve the validated criteria for each third-party package
+for package in &amp;graph.nodes {
+    if !package.is_third_party {
+        continue;
+    }
+
+    // Step 3a: Construct the AuditGraph for each package
+    let audit_graph = AuditGraph::build(..);
+    // Step 3b: Search for paths in the audit graph validating each requirement
+    let search_results = all_criteria.map(|criteria| audit_graph.search(criteria, ..));
+
+    // Step 4: Check if the crate validates for the required criteria
+    for criteria in requirements[package] {
+        match &amp;search_results[criteria] {
+            ..
+        }
+    }
+}
+
+// If there were any conflicts with violation entries, bail!
+if !violations.is_empty() {
+    return ResolveReport { conclusion: Conclusion::FailForViolationConflict(..), .. };
+}
+
+// If there were no failures, we're done!
+if failures.is_empty() {
+    return ResolveReport { conclusion: Conclusion::Success(..), .. };
+}
+
+// Step 5: Suggest time! Compute the simplest audits to fix the failures!
+let suggest = compute_suggest(..);
+
+return ResolveReport { conclusion: Conclusion::FailForVet(..), .. };
+</code></pre>
+<p>As we determine the required criteria in an separate pass, all analysis after
+that point can be performed in any order. Requirements analysis starts on root
+nodes and is propagated downwards to leaf nodes.</p>
+<h1 id="step-1a-the-depgraph-processing-cargo-metadata"><a class="header" href="#step-1a-the-depgraph-processing-cargo-metadata">Step 1a: The DepGraph (Processing Cargo Metadata)</a></h1>
+<p>All of our analysis derives from the output of <a href="https://doc.rust-lang.org/cargo/commands/cargo-metadata.html">cargo metadata</a> and our
+interpretation of that, so it's worth discussing how we use it, and what we
+believe to be true of its output.</p>
+<p>Our interpretation of the metadata is the DepGraph. You can dump the DepGraph with
+<code>cargo vet dump-graph</code>. Most commands take a <code>--filter-graph</code> argument which will
+force us to discard certain parts of the DepGraph before performing the operation
+of the command. This can be useful for debugging issues, but we recommend only doing
+this while <code>--locked</code> to avoid corrupting your store.</p>
+<p>By default we run <code>cargo metadata --locked --all-features</code>. If you pass <code>--locked</code> to vet,
+we will instead pass <code>--frozen</code> to <code>cargo metadata</code>. <code>--all-features</code> can be negated
+by passing <code>--no-all-features</code> to vet. We otherwise expose the usual feature flags of
+cargo directly.</p>
+<p>The reason we pass <code>--all-features</code> is because we want the &quot;maximal&quot; build graph, which
+all &quot;real&quot; builds are simply a subset of. Cargo metadata in general provides this, but
+will omit optional dependencies that are locked behind disabled features. By enabling them all,
+we should get every possible dependency for every possible feature and platform.</p>
+<p>By validating that the maximal build graph is vetted, all possible builds should in turn
+be vetted, because they are simply subsets of that graph.</p>
+<p>Cargo metadata produces the build graph in a kind of awkward way where some information
+for the packages is in <code>&quot;packages&quot;</code> and some information is in  <code>&quot;resolve&quot;</code>, and we need
+to manually compute lots of facts like &quot;roots&quot;, &quot;only for tests&quot;, and &quot;<a href="https://en.wikipedia.org/wiki/Topological_sorting">topological sort</a>&quot;
+(metadata has a notion of roots, but it's not what you think, and mostly reflects an 
+internal concept of cargo that isn't useful to us).</p>
+<p>If we knew about it at the time we might have used <a href="https://docs.rs/guppy/latest/guppy/">guppy</a> to handle interpretting
+cargo metadata's results. As it stands, we've hand-rolled all that stuff.</p>
+<p>Cargo metadata largely uses <a href="https://docs.rs/cargo_metadata/latest/cargo_metadata/struct.PackageId.html">PackageId</a>s as primary keys for identifying a package
+in your build, and we largely agree with that internally, but some human-facing interfaces
+like audits also treat (PackageName, <a href="https://docs.rs/semver/latest/semver/struct.Version.html">Version</a>) as a valid key. This is a true
+statement on crates.io itself, but may not hold when you include unpublished packages,
+patches/renames(?), or third party registries. We don't really have a solid disambiguation
+strategy at the moment, we just assume it doesn't happen and don't worry about it.</p>
+<p>The resolver primarily use a PackageIdx as a primary key for packages, which is an interned PackageId.
+The DepGraph holds this interner.</p>
+<h2 id="dealing-with-cycles-from-tests"><a class="header" href="#dealing-with-cycles-from-tests">Dealing With Cycles From Tests</a></h2>
+<p>The resolver assumes the maximal graph is a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph">DAG</a>, which is an almost true statement
+that we can make true with a minor desugaring of the graph. There is only one situation
+where the cargo build graph is not a DAG: the tests for a crate. This can happen very
+easily, and is kind of natural, but also very evil when you first learn about it.</p>
+<p>As a concrete example, there is kind of a conceptual cycle between <a href="https://github.com/serde-rs/serde/blob/master/serde/Cargo.toml">serde</a> and <a href="https://github.com/serde-rs/serde/blob/master/serde_derive/Cargo.toml">serde_derive</a>. However serde_derive is a standalone crate, and serde (optionally)
+pulls in serde_derive as a dependency... unless you're testing serde_derive, and then serde_derive
+quite reasonably depends on serde to test its output, creating a cyclic dependency on itself!</p>
+<p>The way to resolve this monstrosity is to realize that the <em>tests</em> for serde_derive are actually
+a different package from serde_derive, which we call serde_derive_dev (because cargo calls test
+edges &quot;dev dependencies&quot;). So although the graph reported by cargo_metadata looks like a cycle:</p>
+<pre><code>serde &lt;-----+
+  |         |
+  |         |
+  +--&gt; serde_derive
+</code></pre>
+<p>In actuality, serde_derive_dev breaks the cycle and creates a nice clean DAG:</p>
+<pre><code>  +--serde_derive_dev ---+
+  |          |           |
+  v          |           v
+serde        |     test_only_dep
+  |          |           |
+  |          v          ...
+  +--&gt; serde_derive
+</code></pre>
+<p>There is a subtle distinction to be made here for packages <em>only</em> used for tests:
+these wouldn't be part of the build graph without dev-dependencies (dev edges) but
+they are still &quot;real&quot; nodes, and all of their dependencies are &quot;real&quot; and still
+must form a proper DAG. The only packages which can have cycle-causing dev-dependencies,
+and therefore require a desugaring to produce &quot;fake&quot; nodes, are <em>workspace members</em>.
+These are the packages that will be tested if you run <code>cargo test --workspace</code>.</p>
+<p>Actually doing this desugaring is really messy, because a lot of things about the &quot;real&quot;
+node are still true about the &quot;fake&quot; node, and we generally want to talk about the &quot;real&quot;
+node and the &quot;fake&quot; node as if they were one thing. So we actually just analyze the build graph
+in two steps. To understand how this works, we need to first look at how DAGs are analyzed.</p>
+<p>Any analysis on a <a href="https://en.wikipedia.org/wiki/Directed_acyclic_graph">DAG</a> generally starts with a <a href="https://en.wikipedia.org/wiki/Topological_sorting">topological sort</a>, which is just a fancy way of saying you do depth-first-search (<a href="https://en.wikipedia.org/wiki/Depth-first_search">DFS</a>) on every root and only use a node only after you've searched all its children (this is the post-order, for graph people). Note that each iteration of DFS reuses the
+&quot;visited&quot; from the previous iterations, because we only want to visit each node once.</p>
+<p>Also note that knowing the roots is simply an optimization, you can just run DFS on every node and you will get a valid topological order -- we run it for all the workspace members, which includes all of
+the roots, but none of the test-only packages, which will be useful for identifying test-only packages
+when we get to our desugaring. (You may have workspace members which in fact are only for testing,
+but as far as <code>vet</code> is concerned those are proper packages in their own right -- those packages are
+however good candidates for a <code>safe-to-run</code> policy override.)</p>
+<p>The key property of a DAG is that if you visit every node in a topological
+order, then all the transitive dependencies of a node will be visited before it.
+You can use this fact to compute any property of a node which recursively
+depends on the properties of its dependencies. More plainly, you can just have a
+for-loop that computes the properties of each node, and blindly assume that any
+query about your dependencies will have its results already computed. Nice!</p>
+<p>In our algorithm, however, we actually visit in reverse-topological order, so
+that we know all reverse-dependencies of a node will be visited before it. This
+is because criteria requirements are inherited by reverse-dependency, (or pushed
+out from a crate to its dependencies).</p>
+<p>With that established, here is the <em>actual</em> approach we use to emulate the &quot;fake&quot; node desugaring:</p>
+<ol>
+<li>analyze the build graph without dev deps (edges), which is definitely a DAG</li>
+<li>add back the dev deps and reprocess all the nodes as if they were the &quot;fake&quot; node</li>
+</ol>
+<p>The key insight to this approach is that the implicit dev nodes are all roots -- nothing
+depends on them. As a result, adding these nodes can't change which packages the &quot;real&quot;
+nodes depend on, and any analysis done on them is valid without the dev edges!</p>
+<p>When doing the topological sort, because we only run DFS from workspace members,
+the result of this is that we will visit all the nodes that are part of a &quot;real&quot; build
+in the first pass, and then the test-only packages in the second pass. This makes computing
+&quot;test only&quot; packages a convenient side-effect of the topological sort. Hopefully it's clear
+to you that the resulting ordering functions as a topological sort as long as our recrusive
+analyses take the form of two loops as so:</p>
+<pre><code>for node in topological_sort:
+    analysis_that_DOESNT_query_dev_dependencies(node)
+for node in topological_sort:
+    analysis_that_CAN_query_dev_dependencies(node)
+</code></pre>
+<p>The second loop is essentially handling all the &quot;fake&quot; dev nodes.</p>
+<p>Note that when we run this in a reversed manner to ensure that
+reverse-dependencies have been checked before a crate is visited, we need to do
+the dev-dependency analysis first, as the dev-dependency &quot;fake&quot; nodes are
+effectively appended to the topological sort.</p>
+<h2 id="the-depgraphs-contents"><a class="header" href="#the-depgraphs-contents">The DepGraph's Contents</a></h2>
+<p>The hardest task of the DepGraph is computing the topological sort of the packages as
+described in the previous section, but it also computes the following facts for each package
+(node):</p>
+<ul>
+<li><a href="https://docs.rs/cargo_metadata/latest/cargo_metadata/struct.PackageId.html">PackageId</a> (primary key)</li>
+<li><a href="https://docs.rs/semver/latest/semver/struct.Version.html">Version</a></li>
+<li>name</li>
+<li>is_third_party (is_crates_io)</li>
+<li>is_root</li>
+<li>is_workspace_member</li>
+<li>is_dev_only</li>
+<li>normal_deps</li>
+<li>build_deps</li>
+<li>dev_deps</li>
+<li>reverse_deps</li>
+</ul>
+<p>Whether a package is third party is deferred to <a href="https://docs.rs/cargo_metadata/latest/cargo_metadata/">cargo_metadata</a>'s <a href="https://docs.rs/cargo_metadata/latest/cargo_metadata/struct.Source.html#method.is_crates_io">is_crates_io</a> method
+but overrideable by <code>audit-as-crates-io</code> in config.toml. This completely changes how the
+resolver handles validating criteria for that package. Packages which aren't third party
+are referred to as &quot;first party&quot;.</p>
+<p>Roots are simply packages which have no reverse-deps, which matters because those will
+implicitly be required to pass the default root policy (safe-to-deploy) if no other policy
+is specified for them.</p>
+<p>Workspace members must pass a dev-policy check, which is the only place where
+we query dev-dependencies (in the fabled &quot;second pass&quot; from the previous section).</p>
+<p>Dev-only packages are only used in tests, and therefore will only by queried in
+dev-policy checks (and so by default only need to be safe-to-run).</p>
+<h1 id="step-1b-the-criteriamapper"><a class="header" href="#step-1b-the-criteriamapper">Step 1b: The CriteriaMapper</a></h1>
+<p>The CriteriaMapper handles the process of converting between criteria names and
+CriteriaIndices. It's basically an interner, but made more complicated by the existence
+of builtins, imports, and &quot;implies&quot; relationships.</p>
+<p>The resolver primarily operates on CriteriaSets, which are sets of CriteriaIndices.
+The purpose of this is to try to handle all the subtleties of criteria in one place
+to avoid bugs, and to make everything more efficient.</p>
+<p>Most of the resolver's operations are things like &quot;union these criteria sets&quot; or
+&quot;check if this criteria set is a superset of the required one&quot;.</p>
+<p>There is currently an artificial maximum limit of 64 criteria for you and all
+your imports to make CriteriaSets efficient (they're just a u64 internally).
+The code is designed to allow this limit to be easily raised if anyone ever hits
+it (either with a u128 or a proper BitSet).</p>
+<p>Imported criteria are pre-mapped onto local criteria while acquiring the store,
+by using a CriteriaMapper in the imported namespace to determine implied
+criteria, and then applying the mappings specified in the <code>criteria-map</code> to
+determine the corresponding local criteria. This avoids worrying about imported
+namespaces when running the actual resolver, and helps avoid potential issues
+with large numbers of criteria.</p>
+<p>The biggest complexity of this process is handling &quot;implies&quot;.  This makes a
+criteria like safe-to-deploy <em>actually</em> safe-to-deploy AND safe-to-run in most
+situations. The CriteriaMapper will precompute the <a href="https://en.wikipedia.org/wiki/Transitive_closure">transitive closure</a> of
+implies relationships for each criteria as a CriteriaSet. When mapping the name
+of a criteria to CriteriaIndices, this CriteriaSet is the thing returned.</p>
+<p>When mapping a criteria set to a list of criteria names, we will elide implied criteria
+(so a <code>[&quot;safe-to-deploy&quot;, &quot;safe-to-run&quot;]</code> will just be <code>[&quot;safe-to-deploy&quot;]</code>).</p>
+<h2 id="computing-the-transitive-closure-of-criteria"><a class="header" href="#computing-the-transitive-closure-of-criteria">Computing The Transitive Closure of Criteria</a></h2>
+<p>The <a href="https://en.wikipedia.org/wiki/Transitive_closure">transitive closure</a> of a criteria is the CriteriaSet that would result if you
+add the criteria itself, and every criteria that implies, and every criteria THEY imply,
+and so on. This resulting CriteriaSet is effectively the &quot;true&quot; value of a criteria.</p>
+<p>We do this by constructing a directed &quot;criteria graph&quot; where an &quot;implies&quot; is an edge.
+The transitive closure for each criteria can then be computed by running depth-first-search
+(<a href="https://en.wikipedia.org/wiki/Depth-first_search">DFS</a>) on that node, and adding every reachable node to the CriteriaSet.</p>
+<p>That's it!</p>
+<p>Being able to precompute the transitive closure massively simplifies the resolver,
+as it means we never have to re-evaulate the implies relationships when unioning
+CriteriaSets, making potentially O(n<sup>3</sup>) operations into constant time ones,
+where n is the number of criteria (the criteria graph can have O(n<sup>2</sup>) criteria,
+and a criteria set can have O(n) criteria, and we might have to look at every edge of
+the graph for every criteria whenever we add one).</p>
+<p>The <em>existence</em> of the transitive closure is however not a fundamental truth. It
+exists because we have artifically limited what import maps and implies is allowed to
+do. In particular, if you ever allowed an implies relationship that requires
+<em>two different criteria</em> to imply another, the transitive closure would not be
+a useful concept, and we'd be forced to re-check every implies rule whenever
+a criteria got added to a criteria set (which is happening constantly in the resolver).</p>
+<p><a href="https://github.com/mozilla/cargo-vet/issues/240">See this issue for a detailed example demonstrating this problem</a>.</p>
+<h1 id="step-2-determine-the-required-criteria-for-each-package"><a class="header" href="#step-2-determine-the-required-criteria-for-each-package">Step 2: Determine the required criteria for each package</a></h1>
+<p>In general, every package requires that all dependencies satisfy the same
+criteria which were required for the original package. This is handled by
+starting at the root crates, and propagating the required <code>CriteriaSet</code> outwards
+towards the leaves. In some cases, the <code>policy</code> table will specify alternative
+criteria to place as a requirement on dependencies, which will be used instead
+of normal propagation.</p>
+<p>In order to avoid the cyclic nature of dev-deps, these targets are handled
+first. As all dependencies of dev-dependencies are normal dependencies, we can
+rely on the normal non-cyclic requirement propagation after the first edge, so
+we only need to apply the requirements one-level deep in this first phase. By
+default, this requirement is <code>safe-to-run</code>, though it cna be customized through
+the <code>policy</code>.</p>
+<p>Afterwards, we start at the root crate in the graph and work outwards, checking
+if we need to apply policy requirements, and then propagating requirements to
+dependencies. This results in every crate having a corresponding <code>CritseriaSet</code>
+of the criteria required for the audit.</p>
+<h1 id="step-3a-the-auditgraph"><a class="header" href="#step-3a-the-auditgraph">Step 3a: The AuditGraph</a></h1>
+<p>The AuditGraph is the graph of all audits for a particular package <em>name</em>.
+The nodes of the graph are <a href="https://docs.rs/semver/latest/semver/struct.Version.html">Version</a>s and the edges are delta audits (e.g. <code>0.1.0 -&gt; 0.2.0</code>).
+Each edge has a list of criteria it claims to certify, and dependency criteria that the
+dependencies of this package must satisfy for the edge to be considered &quot;valid&quot; (see
+the next section for details).</p>
+<p>There is an implicit Root Version which represents an empty package, meaning that throughout
+much of the audit graph, versions are represented as <code>Option&lt;Version&gt;</code>.</p>
+<p>When trying to validate whether a particular version of a package is audited, we also add
+a Target Version to the graph (if it doesn't exist already).</p>
+<p>Full audits are desugarred to delta audits from the Root Version (so an audit for <code>0.2.0</code> would
+be lowered to a delta audit from <code>Root -&gt; 0.2.0</code>).</p>
+<p>Exemptions are desugared to full audits (and therefore deltas) with a special
+DeltaEdgeOrigin indicating their origin.  This is used to deprioritize the edges
+so that we can more easily detect exemptions that aren't needed anymore.</p>
+<p>Imported audits are lowered in the exact same way as local criteria, but with
+special DeltaEdgeOrigin to indicate their origin, to allow us to deprioritize
+imported audits, and determine exactly which audits are needed.</p>
+<p>A special DeltaEdgeOrigin is also used for imported wildcard criteria,
+indicating both which wildcard audit is responsible, as well as which publisher
+information is being used.</p>
+<p>With all of this established. the problem of determining whether a package is audited for a given
+criteria can be reduced to determining if there <em>exists</em> a path from the Root Version to the
+Target Version along edges that certify that criteria. Suggesting an audit similarly becomes
+finding the &quot;best&quot; edge to add to make the Root and Target connected for the desired criteria.</p>
+<h2 id="checking-violations"><a class="header" href="#checking-violations">Checking Violations</a></h2>
+<p>During AuditGraph construction violations are also checked. Violations have a <a href="https://docs.rs/semver/latest/semver/struct.VersionReq.html">VersionReq</a> and
+a list of violated criteria. They claim that, for all versions covered by the VersionReq, you believe
+that the listed criteria are explicitly violated. An error is produced if any edge is
+added to the AuditGraph where <em>either</em> endpoint matches the VersionReq and <em>any</em> criteria
+it claims to be an audit for is listed by the violation.</p>
+<p>This is an extremely complicated statement to parse, so let's look at some examples:</p>
+<pre><code>violation: safe-to-deploy, audit: safe-to-deploy -- ERROR!
+violation: safe-to-deploy, audit: safe-to-run    -- OK!
+violation: safe-to-run,    audit: safe-to-deploy -- ERROR!
+violation: [a, b],         audit: [a, c]         -- ERROR!
+</code></pre>
+<p>One very notable implication of this is that a violation for <code>[&quot;safe-to-run&quot;, &quot;safe-to-deploy&quot;]</code>
+is actually equivalent to <code>[&quot;safe-to-run&quot;]</code>, not <code>[&quot;safe-to-deploy&quot;]</code>! This means that the normal
+way of handling things, turning the violation's criteria into one CriteriaSet and checking
+if <code>audit.contains(violation)</code> is incorrect!</p>
+<p>We must instead do this check for each individual item in the violation:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let has_violation = violation.iter().any(|item| audit.contains(item));
+<span class="boring">}
+</span></code></pre></pre>
+<p>It may seem a bit strange to produce an error if <em>any</em> audit is in any way contradicted
+by <em>any</em> violation. Is that necessary? Is that sufficient?</p>
+<p>It's definitely sufficient: it's impossible to validate a version without having an audit edge
+with an end-point in that version.</p>
+<p>I would argue that it's also <em>necessary</em>: the existence of any audit (or exemption)
+that is directly contradicted by a violation is essentially an integrity error on the
+claims that we are working with. Even if you don't even use the audit for anything
+anymore, people who are peering with you and importing your audits might be, so you
+should do something about those audits as soon as you find out they might be wrong!</p>
+<p>There is currently no mechanism for mechanically dealing with such an integrity error,
+even if the audit or violation comes from a foreign import. Such a situation is serious
+enough that it merits direct discussion between humans. That said, if this becomes
+enough of a problem we may eventually add such a feature.</p>
+<h1 id="step-3b-searching-for-paths-in-the-auditgraph"><a class="header" href="#step-3b-searching-for-paths-in-the-auditgraph">Step 3b: Searching for paths in the <code>AuditGraph</code></a></h1>
+<p>A lot of the heavy lifting for this task is in Step 3a (AuditGraph).</p>
+<p>Trying to validate all criteria at once is slightly brain-melty (because
+different criteria may be validated by different paths), so as a simplifying
+step we validate each criteria individually (so everything I'm about to
+describe happens in a for loop).</p>
+<p>If all we care about is finding out if a package has some criteria, then all
+we need to do is run depth-first-search (<a href="https://en.wikipedia.org/wiki/Depth-first_search">DFS</a>) from the Root Node and see if it reaches
+the Target Node, with the constraint that we'll only follow edges that are
+valid (based on the already validated criteria of our dependencies).</p>
+<p>If it does, we've validated the criteria for the Target Version. If it doesn't,
+then we haven't.</p>
+<p>But things are much more complicated because we want to provide more feedback
+about the state of the audits:</p>
+<ul>
+<li>Did this validation require an exemption? (Is it fully audited?)</li>
+<li>Did this validation even use any audits? (Is it at least partially audited?)</li>
+<li>Did this validation need any new imports? (Should we update imports.lock?)</li>
+<li>What nodes were reachable from the Root and reverse-reachable from the Target? (candidates for suggest)</li>
+</ul>
+<p>This is accomplished by running the search off of a priority queue, rather than
+using a stack, such that we only try to use the &quot;best&quot; edges first, and can
+be certain that we don't try to use a &quot;worse&quot; edge until we've tried all of the
+paths using better edges.</p>
+<p>The best edge of all is a local audit. If we can find a path using only
+those edges, then we're fully audited, we don't need any exemptions we
+might have for this package (a lot of caveats to this, so we don't really
+make that conclusion reliably), and the imports.lock doesn't need to be updated.</p>
+<p>If we need to add back in exemptions to find a path, then the exemptions
+were necessary to validate this criteria.</p>
+<p>If we need to add back in new imports to find a path, then we need to update
+imports.lock to cache necessary audits for --locked executions. (The fact
+that this comes after exemptions means we may be slightly imprecise about
+whether something is &quot;fully audited&quot; when updating imports, as subsequent
+runs won't get this far. We think this is worth the upside of minimizing
+imports.lock updates.)</p>
+<p>If any of those succeed, then we return Ok(..), communicating both that the
+package validates this criteria, plus any caveats back to the caller.</p>
+<p>Otherwise, we'll return Err(..), and consider the current node to blame. If this
+criteria is required, this package will require additional audits or exemptions
+to successfully vet.</p>
+<p>In doing this, we also compute the nodes that are reachable from the Root
+Version and the nodes that are reverse-reachable from the Target Version.
+The latter is computed by following all edges backwards, which is to say
+in Step 3a the AuditGraph also contains another directed graph with the edges
+all reversed, and rerun the algorithm with Root and Target reversed.</p>
+<p>This information is useful because in the Err case we want to suggest a diff to
+audit, and any diff from the Root Reachable nodes to the Target Reachable nodes
+is sufficient.</p>
+<p>All search results are stored in the ResolveResult for a node along with
+validated criteria and other fun facts we found along the way. The
+contents of the ResolveResult will be used by our reverse-dependencies
+in steps 2 and 3.</p>
+<p>It's worth noting here that delta audits can &quot;go backwards&quot; (i.e. <code>1.0.1 -&gt; 1.0.0</code>),
+and all of this code handles that perfectly fine without any special cases.
+It <em>does</em> make it possible for there to be cycles in the AuditGraph, but
+<a href="https://en.wikipedia.org/wiki/Depth-first_search">DFS</a> doesn't care about cycles at all since you keep track of nodes you've
+visited to avoid revisits (slightly complicated by us iteratively introducing edges).</p>
+<h1 id="step-4-checking-if-each-crate-validates-for-the-required-criteria"><a class="header" href="#step-4-checking-if-each-crate-validates-for-the-required-criteria">Step 4: Checking if each crate validates for the required criteria</a></h1>
+<p>This step is a fairly trivial combination of the results from Step 2 (computing
+requirements) and Step 3 (resolving validated criteria) - for each package, we
+check if the validated criteria is a superset of the requirements, and if it is
+then we're successful, otherwise we're not.</p>
+<p>We'll record which criteria failed so we can suggest better audits in the
+errored case, and combine the caveats from successful runs in the success case
+to get a combined result for each crate, rather than for each individual
+criteria.</p>
+<h1 id="step-5-suggesting-audits-death-by-a-thousand-diffs"><a class="header" href="#step-5-suggesting-audits-death-by-a-thousand-diffs">Step 5: Suggesting Audits (Death By A Thousand Diffs)</a></h1>
+<p>This step takes the failed packages from Step 4 and recommends audits that will
+fix them. In Step 3b we compute the Root Reachable Nodes and the Target
+Reachable Nodes for a disconnected package.  In this phase we use those as
+candidates and try to find the best possible diff audit.</p>
+<p>More specifically, we use the intersection of all the Root Reachable Nodes
+for every criteria this package failed (ditto for Target Reachable).
+By using the intersection, any diff we recommend from one set to the other
+is guaranteed to cover all required criteria, allowing us to suggest a single
+diff to fix everything. Since the Root and Target are always in their respective
+sets, we are guaranteed that the intersections are non-empty.</p>
+<p>So how do we pick the <em>best</em> diff? Well, we straight up download every version of the package that
+we have audits for and diff-stat all the combinations. Smallest diff wins! Does that sound horrible
+and slow? It is! That's why we have a secret global diff-stat cache on your system.</p>
+<p>Also we don't <em>literally</em> diff every combination. We turn the O(n<sup>2</sup>) diffs
+into only O(n) diffs with a simple heuristic: for each Target Reachable Node,
+we find the package closest version <em>smaller</em> than that version and the closest version
+<em>bigger</em> than that version. We then diff that version against only those two versions.
+This may potentially miss some magical diff where a big change is made and then reverted,
+but this diffing stuff needs some amount of taming!</p>
+<p>It's worth noting that <a href="https://docs.rs/semver/latest/semver/struct.Version.html">Version</a>s don't form a proper metric space: We cannot compute
+the &quot;distance&quot; between two Versions in the abstract, and then compare that to the &quot;distance&quot;
+between two other versions. Versions <em>do</em> however have a total ordering, so we <em>can</em>
+compute minimum and maximum versions, and say whether a version is bigger or smaller
+than another. As a result it's possible to compute &quot;the largest version that's smaller than X&quot;
+and &quot;the smallest version that's larger than X&quot;, which is what we use. There is however
+no way to say whether the smaller-maximum or the bigger-minimum is closer to X, so we must
+try both.</p>
+<p>It's also worth reiterating here that diffs <em>can</em> go backwards. If you're on 1.0.0 and
+have an audit for 1.0.1, we will happily recommend the reverse-diff from <code>1.0.1 -&gt; 1.0.0</code>.
+This is slightly brain melty at first but nothing really needs to specially handle this,
+it Just Works.</p>
+<p>Any diff we recommend from the Root Version is &quot;resugared&quot; into recommending a full audit,
+(and is also computed by diffing against an empty directory). It is impossible
+to recommend a diff to the Root Version, because there cannot be audits of the
+Root Version.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="commands.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="commands.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+    </body>
+</html>
