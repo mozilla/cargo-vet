@@ -90,10 +90,6 @@ criteria = "safe-to-deploy"
 version = "0.3.21"
 criteria = "safe-to-deploy"
 
-[[exemptions.futures-core]]
-version = "0.3.21"
-criteria = "safe-to-deploy"
-
 [[exemptions.futures-sink]]
 version = "0.3.21"
 criteria = "safe-to-deploy"
@@ -120,10 +116,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.h2]]
 version = "0.3.13"
-criteria = "safe-to-deploy"
-
-[[exemptions.hermit-abi]]
-version = "0.1.19"
 criteria = "safe-to-deploy"
 
 [[exemptions.hermit-abi]]
