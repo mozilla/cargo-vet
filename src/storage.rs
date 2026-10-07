@@ -1632,6 +1632,21 @@ struct CacheState {
     diffed: FastMap<(PackageName, Delta), Arc<tokio::sync::OnceCell<DiffStat>>>,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum FetchModeCommand {
+    Diff,
+    Inspect,
+}
+
+impl FetchModeCommand {
+    fn default_fetch_mode(self) -> FetchMode {
+        match self {
+            Self::Diff => FetchMode::DiffRs,
+            Self::Inspect => FetchMode::CratesIo,
+        }
+    }
+}
+
 /// The cache where we store globally shared artifacts like fetched packages and diffstats
 ///
 /// All access to this directory should be managed by this type to avoid races.
@@ -2294,7 +2309,8 @@ impl Cache {
 
     pub fn select_fetch_mode(
         &self,
-        chosen_mode: Option<FetchMode>,
+        command: FetchModeCommand,
+        chosen_mode: &Option<FetchMode>,
         force_local: bool,
     ) -> FetchMode {
         // If we're going to be forced to use a local mode, return it.
@@ -2309,16 +2325,17 @@ impl Cache {
         // If an explicit mode was selected on the command line, update the last
         // fetch mode to reflect it.
         let mut guard = self.state.lock().unwrap();
+        let fetch_mode = match command {
+            FetchModeCommand::Diff => &mut guard.command_history.last_diff_fetch_mode,
+            FetchModeCommand::Inspect => &mut guard.command_history.last_inspect_fetch_mode,
+        };
         if let Some(mode) = chosen_mode {
-            guard.command_history.last_fetch_mode = Some(mode);
+            *fetch_mode = Some(mode.clone());
         }
 
-        // Return either the most-recently selected fetch mode, or `diff.rs` if
-        // no fetch mode has been explicitly selected.
-        guard
-            .command_history
-            .last_fetch_mode
-            .unwrap_or(FetchMode::DiffRs)
+        // Return either the most-recently selected fetch mode, or the default for the command if no
+        // fetch mode has been explicitly selected.
+        fetch_mode.clone().unwrap_or(command.default_fetch_mode())
     }
 
     /// For a given package, fetch the list of versions published on crates.io,
