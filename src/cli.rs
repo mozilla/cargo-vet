@@ -473,15 +473,15 @@ pub struct InspectArgs {
     pub version: VetVersion,
     /// How to inspect the source
     ///
-    /// May be one of 'local', 'diff.rs', or 'custom_url=URL', where `URL` will be treated as a
-    /// template with the following substrings replaced:
-    /// - '{package}': the name of the crate
-    /// - '{version}': the version of the crate
+    /// May be one of `local`, `diff.rs`, `crates.io`, or `custom_url=URL`, where `URL` will be
+    /// treated as a template with the following substrings replaced:
+    /// - `{package}`: the name of the crate
+    /// - `{version}`: the version of the crate
     ///
-    /// Defaults to the most recently used --mode argument, or diff.rs if no
-    /// mode argument has been used.
+    /// Defaults to the most recently used --mode argument, or crates.io if no mode argument has
+    /// been used.
     ///
-    /// This option is ignored if a git version is passed.
+    /// This option is ignored and `local` is used if a git version is passed.
     #[clap(long, action, verbatim_doc_comment)]
     pub mode: Option<FetchMode>,
 }
@@ -500,17 +500,17 @@ pub struct DiffArgs {
     pub version2: VetVersion,
     /// How to inspect the diff
     ///
-    /// May be one of 'local', 'diff.rs', or 'custom_url=URL', where `URL` will be treated as a
+    /// May be one of `local`, `diff.rs`, or `custom_url=URL`, where `URL` will be treated as a
     /// template with the following substrings replaced:
-    /// - '{package}': the name of the crate
-    /// - '{version1}': the base version of the crate
-    /// - '{version2}': the target version of the crate
+    /// - `{package}`: the name of the crate
+    /// - `{version1}`: the base version of the crate
+    /// - `{version2}`: the target version of the crate
     ///
-    /// Defaults to the most recently used --mode argument, or diff.rs if no
-    /// mode argument has been used.
+    /// Defaults to the most recently used --mode argument, or diff.rs if no mode argument has been
+    /// used.
     ///
-    /// This option is ignored if a git version is passed.
-    #[clap(long, action, verbatim_doc_comment)]
+    /// This option is ignored and `local` is used if a git version is passed.
+    #[clap(long, action, verbatim_doc_comment, value_parser = FetchMode::diff_from_str)]
     pub mode: Option<FetchMode>,
 }
 
@@ -829,11 +829,52 @@ pub enum FetchMode {
     Local,
     CustomUrl(String),
     DiffRs,
+    CratesIo,
 }
 
-impl Default for FetchMode {
-    fn default() -> Self {
-        Self::DiffRs
+impl FetchMode {
+    /// A FromStr equivalent for the diff command.
+    pub fn diff_from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
+        let val = Self::from_str(s)?;
+        if val == FetchMode::CratesIo {
+            // crates.io doesn't yet support diffs
+            return Err("invalid fetch mode".into());
+        }
+        Ok(val)
+    }
+
+    /// Get the inspect url for the given package name and version.
+    pub fn inspect_url(&self, package: &str, version: &str) -> Option<String> {
+        match self {
+            Self::Local => None,
+            Self::CustomUrl(template) => Some(
+                template
+                    .replace("{package}", package)
+                    .replace("{version}", version),
+            ),
+            Self::DiffRs => Some(format!("https://diff.rs/browse/{package}/{version}/")),
+            Self::CratesIo => Some(format!("https://crates.io/crates/{package}/{version}/code")),
+        }
+    }
+
+    /// Get the inspect url for the given package name and version.
+    pub fn diff_url(&self, package: &str, version1: &str, version2: &str) -> Option<String> {
+        match self {
+            Self::Local => None,
+            Self::CustomUrl(template) => Some(
+                template
+                    .replace("{package}", package)
+                    .replace("{version1}", version1)
+                    .replace("{version2}", version2),
+            ),
+            Self::DiffRs => Some(format!("https://diff.rs/{package}/{version1}/{version2}/")),
+            // This could panic instead since we shouldn't parse a CratesIo for diffs, but returning
+            // None is safer.
+            Self::CratesIo => {
+                tracing::warn!("unexpected FetchMode::CratesIo value for diff fetch mode");
+                None
+            }
+        }
     }
 }
 
@@ -845,6 +886,8 @@ impl FromStr for FetchMode {
             Ok(Self::Local)
         } else if s == "diff.rs" {
             Ok(Self::DiffRs)
+        } else if s == "crates.io" {
+            Ok(Self::CratesIo)
         } else if let Some(suffix) = s.strip_prefix("custom_url=") {
             Ok(Self::CustomUrl(suffix.to_owned()))
         } else {

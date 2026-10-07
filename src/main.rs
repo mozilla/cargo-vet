@@ -588,16 +588,7 @@ fn cmd_inspect(
             version.git_rev.is_some(),
         );
 
-        if mode != FetchMode::Local {
-            let url = match mode {
-                FetchMode::DiffRs => {
-                    format!("https://diff.rs/browse/{package}/{version}/")
-                }
-                FetchMode::CustomUrl(template) => template
-                    .replace("{package}", package)
-                    .replace("{version}", &version.to_string()),
-                FetchMode::Local => unreachable!(),
-            };
+        if let Some(url) = mode.inspect_url(package, &version.to_string()) {
             tokio::runtime::Handle::current()
                 .block_on(prompt_criteria_eulas(
                     out,
@@ -2080,17 +2071,7 @@ fn cmd_diff(out: &Arc<dyn Out>, cfg: &Config, sub_args: &DiffArgs) -> Result<(),
             version1.git_rev.is_some() || version2.git_rev.is_some(),
         );
 
-        if mode != FetchMode::Local {
-            let url = match mode {
-                FetchMode::DiffRs => {
-                    format!("https://diff.rs/{package}/{version1}/{version2}/")
-                }
-                FetchMode::CustomUrl(template) => template
-                    .replace("{package}", package)
-                    .replace("{version1}", &version1.to_string())
-                    .replace("{version2}", &version2.to_string()),
-                FetchMode::Local => unreachable!(),
-            };
+        if let Some(url) = mode.diff_url(package, &version1.to_string(), &version2.to_string()) {
             tokio::runtime::Handle::current()
                 .block_on(prompt_criteria_eulas(
                     out,

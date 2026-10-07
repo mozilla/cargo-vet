@@ -1638,6 +1638,15 @@ pub enum FetchModeCommand {
     Inspect,
 }
 
+impl FetchModeCommand {
+    fn default_fetch_mode(self) -> FetchMode {
+        match self {
+            Self::Diff => FetchMode::DiffRs,
+            Self::Inspect => FetchMode::CratesIo,
+        }
+    }
+}
+
 /// The cache where we store globally shared artifacts like fetched packages and diffstats
 ///
 /// All access to this directory should be managed by this type to avoid races.
@@ -2324,9 +2333,9 @@ impl Cache {
             *fetch_mode = Some(mode.clone());
         }
 
-        // Return either the most-recently selected fetch mode, or the default if no fetch mode has
-        // been explicitly selected.
-        fetch_mode.clone().unwrap_or_default()
+        // Return either the most-recently selected fetch mode, or the default for the command if no
+        // fetch mode has been explicitly selected.
+        fetch_mode.clone().unwrap_or(command.default_fetch_mode())
     }
 
     /// For a given package, fetch the list of versions published on crates.io,

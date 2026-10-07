@@ -8,6 +8,7 @@
   - A `custom_url` option has been added, which allows providing a url template.
   - The previous mode is independently cached for the two commands (previously, they shared a single
     cached value).
+  - `crates.io` is now supported (only for `inspect`).
 
 # Version 0.10.2 (2026-01-12)
 
