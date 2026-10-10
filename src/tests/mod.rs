@@ -54,6 +54,7 @@ mod certify;
 mod crate_policies;
 mod explain_audit;
 mod import;
+mod network;
 mod regenerate_unaudited;
 mod registry;
 mod renew;
