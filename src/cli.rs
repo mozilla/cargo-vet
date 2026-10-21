@@ -69,6 +69,12 @@ pub struct Cli {
     #[clap(help_heading = "Global Options", global = true)]
     pub frozen: bool,
 
+    /// Use git credential helpers for authentication when downloading remote
+    /// resources. This enables integration with system credential stores.
+    #[clap(long, action)]
+    #[clap(help_heading = "Global Options", global = true)]
+    pub use_git_credentials: bool,
+
     /// Prevent commands such as `check` and `certify` from automatically
     /// cleaning up unused exemptions.
     #[clap(long, action)]
