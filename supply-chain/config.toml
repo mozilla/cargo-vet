@@ -78,10 +78,6 @@ criteria = "safe-to-deploy"
 version = "3.1.12"
 criteria = "safe-to-deploy"
 
-[[exemptions.filetime]]
-version = "0.2.16"
-criteria = "safe-to-deploy"
-
 [[exemptions.flate2]]
 version = "1.0.24"
 criteria = "safe-to-deploy"
@@ -122,26 +118,6 @@ criteria = "safe-to-deploy"
 version = "0.3.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.http]]
-version = "0.2.8"
-criteria = "safe-to-deploy"
-
-[[exemptions.http-body]]
-version = "0.4.5"
-criteria = "safe-to-deploy"
-
-[[exemptions.httparse]]
-version = "1.7.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.hyper]]
-version = "0.14.19"
-criteria = "safe-to-deploy"
-
-[[exemptions.hyper-rustls]]
-version = "0.23.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.indicatif]]
 version = "0.17.0"
 criteria = "safe-to-deploy"
@@ -152,10 +128,6 @@ criteria = "safe-to-run"
 
 [[exemptions.ipnet]]
 version = "2.5.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.js-sys]]
-version = "0.3.57"
 criteria = "safe-to-deploy"
 
 [[exemptions.libredox]]
@@ -242,18 +214,6 @@ criteria = "safe-to-deploy"
 version = "0.6.26"
 criteria = "safe-to-deploy"
 
-[[exemptions.reqwest]]
-version = "0.11.11"
-criteria = "safe-to-deploy"
-
-[[exemptions.ring]]
-version = "0.16.20"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls]]
-version = "0.20.6"
-criteria = "safe-to-deploy"
-
 [[exemptions.rustls-pemfile]]
 version = "1.0.0"
 criteria = "safe-to-deploy"
@@ -302,10 +262,6 @@ criteria = "safe-to-deploy"
 version = "0.1.17"
 criteria = "safe-to-deploy"
 
-[[exemptions.tokio-rustls]]
-version = "0.23.4"
-criteria = "safe-to-deploy"
-
 [[exemptions.tokio-util]]
 version = "0.7.3"
 criteria = "safe-to-deploy"
@@ -326,20 +282,12 @@ criteria = "safe-to-deploy"
 version = "0.3.11"
 criteria = "safe-to-deploy"
 
-[[exemptions.try-lock]]
-version = "0.2.3"
-criteria = "safe-to-deploy"
-
 [[exemptions.typenum]]
 version = "1.15.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.unicode-linebreak]]
 version = "0.1.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasm-bindgen]]
-version = "0.2.80"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-backend]]
@@ -350,24 +298,12 @@ criteria = "safe-to-deploy"
 version = "0.4.30"
 criteria = "safe-to-deploy"
 
-[[exemptions.wasm-bindgen-macro]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasm-bindgen-macro-support]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-
 [[exemptions.web-sys]]
 version = "0.3.57"
 criteria = "safe-to-deploy"
 
 [[exemptions.webpki]]
 version = "0.22.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.webpki-roots]]
-version = "0.22.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.winapi]]
