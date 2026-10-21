@@ -1282,7 +1282,8 @@ pub struct CommandHistory {
     pub version: CacheFileVersion<1>,
     #[serde(flatten)]
     pub last_fetch: Option<FetchCommand>,
-    pub last_fetch_mode: Option<FetchMode>,
+    pub last_diff_fetch_mode: Option<FetchMode>,
+    pub last_inspect_fetch_mode: Option<FetchMode>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
