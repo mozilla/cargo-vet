@@ -9,6 +9,7 @@
   - The previous mode is independently cached for the two commands (previously, they shared a single
     cached value).
   - `crates.io` is now supported (only for `inspect`).
+* `cargo vet suggest --locked` no longer suggests registry imports, which made it panic (#705)
 
 # Version 0.10.2 (2026-01-12)
 

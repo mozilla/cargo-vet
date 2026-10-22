@@ -1694,7 +1694,10 @@ impl ResolveReport<'_> {
         let warnings = RefCell::new(Vec::new());
 
         let mut store = store.clone_for_suggest(false);
-        let registry = if let (false, OutputFormat::Human, Some(network)) = (
+        // Don't suggest registry imports when locked, as new imported audits
+        // aren't fetched.
+        let registry = if let (false, false, OutputFormat::Human, Some(network)) = (
+            cfg.cli.locked,
             cfg.cli.no_registry_suggestions,
             cfg.cli.output_format,
             network,
