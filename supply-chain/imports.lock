@@ -505,13 +505,6 @@ user-login = "mbrubeck"
 user-name = "Matt Brubeck"
 
 [[publisher.socket2]]
-version = "0.4.4"
-when = "2022-01-27"
-user-id = 6025
-user-login = "Thomasdezeeuw"
-user-name = "Thomas de Zeeuw"
-
-[[publisher.socket2]]
 version = "0.5.10"
 when = "2025-05-26"
 user-id = 6025
@@ -943,16 +936,6 @@ criteria = "safe-to-deploy"
 version = "1.1.2"
 notes = "Contains `unsafe` code but it's well-documented and scoped to what it's intended to be doing. Otherwise a well-focused and straightforward crate."
 
-[[audits.bytecodealliance.audits.atty]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-version = "0.2.14"
-notes = """
-Contains only unsafe code for what this crate's purpose is and only accesses
-the environment's terminal information when asked. Does its stated purpose and
-no more.
-"""
-
 [[audits.bytecodealliance.audits.backtrace]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1066,12 +1049,6 @@ criteria = "safe-to-deploy"
 delta = "0.4.1 -> 0.5.0"
 notes = "Minor changes for a `no_std` upgrade but otherwise everything looks as expected."
 
-[[audits.bytecodealliance.audits.httpdate]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-version = "1.0.2"
-notes = "No unsafety, no io"
-
 [[audits.bytecodealliance.audits.idna]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1126,11 +1103,6 @@ criteria = "safe-to-deploy"
 delta = "0.2.13 -> 0.2.14"
 notes = "No substantive changes in this update"
 
-[[audits.bytecodealliance.audits.pin-utils]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-version = "0.1.0"
-
 [[audits.bytecodealliance.audits.pkg-config]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1148,12 +1120,6 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.1.21"
 notes = "I am the author of this crate."
-
-[[audits.bytecodealliance.audits.sct]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-version = "0.7.0"
-notes = "no unsafe, no build, no ambient capabilities"
 
 [[audits.bytecodealliance.audits.sharded-slab]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -1402,12 +1368,6 @@ criteria = "safe-to-deploy"
 delta = "0.1.0 -> 0.1.2"
 notes = "Addition of safe comparison APIs since last audit"
 aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
-
-[[audits.google.audits.proc-macro-error-attr]]
-who = "George Burgess IV <gbiv@google.com>"
-criteria = "safe-to-deploy"
-version = "1.0.4"
-aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/refs/heads/main/cargo-vet/audits.toml?format=TEXT"
 
 [[audits.google.audits.quote]]
 who = "Lukasz Anforowicz <lukasza@chromium.org>"
@@ -1805,13 +1765,6 @@ delta = "0.1.1 -> 0.2.1"
 notes = "Very minor changes."
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
 
-[[audits.mozilla.audits.encoding_rs]]
-who = "Henri Sivonen <hsivonen@hsivonen.fi>"
-criteria = "safe-to-deploy"
-version = "0.8.31"
-notes = "I, Henri Sivonen, wrote encoding_rs for Gecko and have reviewed contributions by others. There are two caveats to the certification: 1) The crate does things that are documented to be UB but that do not appear to actually be UB due to integer types differing from the general rule; https://github.com/hsivonen/encoding_rs/issues/79 . 2) It would be prudent to re-review the code that reinterprets buffers of integers as SIMD vectors; see https://github.com/hsivonen/encoding_rs/issues/87 ."
-aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
-
 [[audits.mozilla.audits.fastrand]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
@@ -1842,13 +1795,6 @@ who = "Emilio Cobos Álvarez <emilio@crisal.io>"
 criteria = "safe-to-deploy"
 delta = "0.1.8 -> 0.1.12"
 notes = "Pretty minor changes, no new unsafe code."
-aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.fnv]]
-who = "Bobby Holley <bobbyholley@gmail.com>"
-criteria = "safe-to-deploy"
-version = "1.0.7"
-notes = "Simple hasher implementation with no unsafe code."
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.form_urlencoded]]
