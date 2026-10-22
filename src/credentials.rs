@@ -1,7 +1,7 @@
 //! Git credential helper integration
 //!
 //! This module provides integration with git credential helpers as documented in
-//! https://git-scm.com/docs/git-credential and https://git-scm.com/docs/api-credentials
+//! <https://git-scm.com/docs/git-credential> and <https://git-scm.com/docs/api-credentials>
 //!
 //! It supports both traditional username/password authentication and the newer
 //! authtype/credential format for more advanced authentication schemes.
@@ -54,7 +54,7 @@ async fn execute_git_credential_fill(
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
     // Execute git credential fill
     let mut child = tokio::process::Command::new("git")
-        .args(&["credential", "fill"])
+        .args(["credential", "fill"])
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
