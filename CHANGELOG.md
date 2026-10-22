@@ -1,14 +1,20 @@
 # Unreleased
 
+# Version 0.10.3 (2026-10-22)
+
 * `cargo vet check --frozen` (a disabled network) will infer the existence of crates using versions
   in audits when checking audit-as-crates-io policies (#661)
 * The `--mode` argument to `cargo vet diff` and `cargo vet inspect` has changed in the following
-  ways:
+  ways (#701):
   - `sourcegraph` is no longer supported
   - A `custom_url` option has been added, which allows providing a url template.
   - The previous mode is independently cached for the two commands (previously, they shared a single
     cached value).
   - `crates.io` is now supported (only for `inspect`).
+* Authorization can now be done via git-credential helpers (#640).
+* reqwest and other dependencies have been updated and audited to eliminate RUSTSEC vulnerabilities
+  (#700, #704).
+* MSRV has been updated to 1.85.
 
 # Version 0.10.2 (2026-01-12)
 
