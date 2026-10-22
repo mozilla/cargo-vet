@@ -1,0 +1,243 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Wildcard Audit Entries - Cargo Vet</title>
+        <!-- Custom HTML head -->
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="src/custom.css">
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="index.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="motivation.html"><strong aria-hidden="true">1.1.</strong> Motivation</a></li><li class="chapter-item expanded "><a href="how-it-works.html"><strong aria-hidden="true">1.2.</strong> How it Works</a></li></ol></li><li class="chapter-item expanded "><a href="tutorial.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="setup.html"><strong aria-hidden="true">2.2.</strong> Setup</a></li><li class="chapter-item expanded "><a href="audit-criteria.html"><strong aria-hidden="true">2.3.</strong> Audit Criteria</a></li><li class="chapter-item expanded "><a href="importing-audits.html"><strong aria-hidden="true">2.4.</strong> Importing Audits</a></li><li class="chapter-item expanded "><a href="recording-audits.html"><strong aria-hidden="true">2.5.</strong> Recording Audits</a></li><li class="chapter-item expanded "><a href="performing-audits.html"><strong aria-hidden="true">2.6.</strong> Performing Audits</a></li><li class="chapter-item expanded "><a href="trusting-publishers.html"><strong aria-hidden="true">2.7.</strong> Trusting Publishers</a></li><li class="chapter-item expanded "><a href="specifying-policies.html"><strong aria-hidden="true">2.8.</strong> Specifying Policies</a></li><li class="chapter-item expanded "><a href="multiple-repositories.html"><strong aria-hidden="true">2.9.</strong> Multiple Repositories</a></li><li class="chapter-item expanded "><a href="configuring-ci.html"><strong aria-hidden="true">2.10.</strong> Configuring CI</a></li><li class="chapter-item expanded "><a href="curating-your-audit-set.html"><strong aria-hidden="true">2.11.</strong> Curating Your Audit Set</a></li></ol></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">3.</strong> Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="config.html"><strong aria-hidden="true">3.1.</strong> Configuration</a></li><li class="chapter-item expanded "><a href="audit-entries.html"><strong aria-hidden="true">3.2.</strong> Audit Entries</a></li><li class="chapter-item expanded "><a href="wildcard-audit-entries.html" class="active"><strong aria-hidden="true">3.3.</strong> Wildcard Audit Entries</a></li><li class="chapter-item expanded "><a href="trusted-entries.html"><strong aria-hidden="true">3.4.</strong> Trusted Entries</a></li><li class="chapter-item expanded "><a href="built-in-criteria.html"><strong aria-hidden="true">3.5.</strong> Built-In Criteria</a></li><li class="chapter-item expanded "><a href="first-party-code.html"><strong aria-hidden="true">3.6.</strong> First-Party Code</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.7.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="commands.html"><strong aria-hidden="true">3.8.</strong> Commands</a></li><li class="chapter-item expanded "><a href="algorithm.html"><strong aria-hidden="true">3.9.</strong> The Algorithm</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Cargo Vet</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/mozilla/cargo-vet" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="wildcard-audit-entries"><a class="header" href="#wildcard-audit-entries">Wildcard Audit Entries</a></h1>
+<p>Wildcard audits are a special type of audit intended as a convenience mechanism
+for organizations that
+<a href="curating-your-audit-set.html#self-certification">self-certify</a> their own crates.
+Using this feature, an organization can publish an audit which applies to all
+versions published by a given account, avoiding the need to add a new entry to
+<code>audits.toml</code> for each new version of the package.</p>
+<p>Wildcard audits live at the top of <code>audits.toml</code> and look like this:</p>
+<pre><code>[[wildcard-audits.foo]]
+who = ...
+criteria = ...
+user-id = ...
+start = ...
+end = ...
+renew = ...
+notes = ...
+</code></pre>
+<p>Whereas a regular audit certifies that the individual has verified that the
+crate contents meet the criteria, a wildcard audit certifies that <em>any</em> version
+of the crate published by the given account will meet the criteria. In effect,
+the author is vouching for the integrity of the entire release process, i.e.
+that releases are always cut from a branch for which every change has been
+approved by a trusted individual who will enforce the criteria.</p>
+<p>Wildcard audits can be added with <code>cargo vet certify</code> using the <code>--wildcard</code>
+option. By default, this sets the <code>end</code> date to one year in the future. Once
+added (whether manually or by <code>cargo vet certify --wildcard</code>), the <code>end</code> date
+can be updated to one year in the future using the <code>cargo vet renew CRATE</code>
+command. <code>cargo vet renew --expiring</code> can be used to automatically update <em>all</em>
+audits which would expire in the next six weeks or have already expired, and
+don't have <code>renew = false</code> specified.</p>
+<h2 id="user-id"><a class="header" href="#user-id"><code>user-id</code></a></h2>
+<p>Specifies the crates.io user-id of the user who's published versions should be
+audited. This ID is unfortunately not exposed on the crates.io website, but will
+be filled based on username if using the <code>cargo vet certify --wildcard $USER</code>
+command. This field is required.</p>
+<h2 id="start"><a class="header" href="#start"><code>start</code></a></h2>
+<p>Earliest day of publication which should be considered certified by the wildcard
+audit. Crates published by the user before this date will not be considered as
+certified. This field is required.</p>
+<p>Note that publication dates use UTC rather than local time.</p>
+<h2 id="end"><a class="header" href="#end"><code>end</code></a></h2>
+<p>Latest day of publication which should be considered certified by the wildcard
+audit. Crates published by the user after this date will not be considered as
+certified. This date may be at most 1 year in the future. This field is
+required.</p>
+<p>Note that publication dates use UTC rather than local time.</p>
+<h2 id="renew"><a class="header" href="#renew"><code>renew</code></a></h2>
+<p>Specifies whether <code>cargo vet check</code> should suggest renewal for this audit if the
+<code>end</code> date is going to expire within the next six weeks (or has already
+expired), and whether <code>cargo vet renew --expiring</code> should renew this audit.</p>
+<h2 id="criteria"><a class="header" href="#criteria"><code>criteria</code></a></h2>
+<p>Specifies the relevant criteria for this wildcard audit. This field is required.</p>
+<h2 id="who"><a class="header" href="#who"><code>who</code></a></h2>
+<p>A string identifying the auditor. When invoking <code>cargo vet certify</code>, the
+value is auto-populated from the git config.</p>
+<p>See the documentation for <a href="./audit-entries.html#who">Audit Entries</a> for more
+details.</p>
+<p>Note that while the <code>who</code> user may be different than crates.io user specified by
+<code>user-id</code>, they should generally either be the same person, or have a close
+relationship (e.g. a team lead certifying a shared publishing account).</p>
+<h2 id="notes"><a class="header" href="#notes"><code>notes</code></a></h2>
+<p>An optional free-form string containing any information the auditor may wish to
+record.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="audit-entries.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                            <a rel="next" href="trusted-entries.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="audit-entries.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                    <a rel="next" href="trusted-entries.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+    </body>
+</html>

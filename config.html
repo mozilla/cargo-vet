@@ -1,0 +1,333 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Configuration - Cargo Vet</title>
+        <!-- Custom HTML head -->
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="src/custom.css">
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="index.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="motivation.html"><strong aria-hidden="true">1.1.</strong> Motivation</a></li><li class="chapter-item expanded "><a href="how-it-works.html"><strong aria-hidden="true">1.2.</strong> How it Works</a></li></ol></li><li class="chapter-item expanded "><a href="tutorial.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="install.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="setup.html"><strong aria-hidden="true">2.2.</strong> Setup</a></li><li class="chapter-item expanded "><a href="audit-criteria.html"><strong aria-hidden="true">2.3.</strong> Audit Criteria</a></li><li class="chapter-item expanded "><a href="importing-audits.html"><strong aria-hidden="true">2.4.</strong> Importing Audits</a></li><li class="chapter-item expanded "><a href="recording-audits.html"><strong aria-hidden="true">2.5.</strong> Recording Audits</a></li><li class="chapter-item expanded "><a href="performing-audits.html"><strong aria-hidden="true">2.6.</strong> Performing Audits</a></li><li class="chapter-item expanded "><a href="trusting-publishers.html"><strong aria-hidden="true">2.7.</strong> Trusting Publishers</a></li><li class="chapter-item expanded "><a href="specifying-policies.html"><strong aria-hidden="true">2.8.</strong> Specifying Policies</a></li><li class="chapter-item expanded "><a href="multiple-repositories.html"><strong aria-hidden="true">2.9.</strong> Multiple Repositories</a></li><li class="chapter-item expanded "><a href="configuring-ci.html"><strong aria-hidden="true">2.10.</strong> Configuring CI</a></li><li class="chapter-item expanded "><a href="curating-your-audit-set.html"><strong aria-hidden="true">2.11.</strong> Curating Your Audit Set</a></li></ol></li><li class="chapter-item expanded "><a href="reference.html"><strong aria-hidden="true">3.</strong> Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="config.html" class="active"><strong aria-hidden="true">3.1.</strong> Configuration</a></li><li class="chapter-item expanded "><a href="audit-entries.html"><strong aria-hidden="true">3.2.</strong> Audit Entries</a></li><li class="chapter-item expanded "><a href="wildcard-audit-entries.html"><strong aria-hidden="true">3.3.</strong> Wildcard Audit Entries</a></li><li class="chapter-item expanded "><a href="trusted-entries.html"><strong aria-hidden="true">3.4.</strong> Trusted Entries</a></li><li class="chapter-item expanded "><a href="built-in-criteria.html"><strong aria-hidden="true">3.5.</strong> Built-In Criteria</a></li><li class="chapter-item expanded "><a href="first-party-code.html"><strong aria-hidden="true">3.6.</strong> First-Party Code</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.7.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="commands.html"><strong aria-hidden="true">3.8.</strong> Commands</a></li><li class="chapter-item expanded "><a href="algorithm.html"><strong aria-hidden="true">3.9.</strong> The Algorithm</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Cargo Vet</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/mozilla/cargo-vet" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="configuration"><a class="header" href="#configuration">Configuration</a></h1>
+<p>This section describes the structure and semantics of the various configuration
+files used by <code>cargo vet</code>.</p>
+<h2 id="location"><a class="header" href="#location">Location</a></h2>
+<p>By default, <code>cargo vet</code> data lives in a <code>supply-chain</code> directory next to
+<code>Cargo.lock</code>. This location is configurable via the <code>[package.metadata.vet]</code>
+directive in Cargo.toml, as well as via <code>[workspace.metadata.vet]</code> when using a
+workspace with a virtual root.</p>
+<p>The default configuration is equivalent to the following:</p>
+<pre><code class="language-toml">[package.metadata.vet]
+store = { path = './supply-chain' }
+</code></pre>
+<h2 id="auditstoml"><a class="header" href="#auditstoml"><code>audits.toml</code></a></h2>
+<p>This file contains the audits performed by the project members and descriptions
+of the audit criteria. The information in this file can be imported by other
+projects.</p>
+<h3 id="the-criteria-table"><a class="header" href="#the-criteria-table">The <code>criteria</code> Table</a></h3>
+<p>This table defines different sets of custom criteria. Entries have several
+potential fields:</p>
+<h4 id="description"><a class="header" href="#description"><code>description</code></a></h4>
+<p>A concise description of the criteria. This field (or <code>description-url</code>) is
+required.</p>
+<h4 id="description-url"><a class="header" href="#description-url"><code>description-url</code></a></h4>
+<p>An alternative to <code>description</code> which locates the criteria text at a
+publicly-accessible URL. This can be useful for sharing criteria descriptions
+across multiple repositories.</p>
+<h4 id="implies"><a class="header" href="#implies"><code>implies</code></a></h4>
+<p>An optional string or array of other criteria that are subsumed by this entry.
+Audit entries that are certified with these criteria are also implicitly
+certified with any implied criteria.</p>
+<p>For example, specifying the <a href="built-in-criteria.html">built-in criteria</a> as custom
+criteria would look like this:</p>
+<pre><code>[criteria.safe-to-run]
+description = '...'
+
+[criteria.safe-to-deploy]
+description = '...'
+implies = 'safe-to-run'
+</code></pre>
+<h3 id="the-audits-table"><a class="header" href="#the-audits-table">The <code>audits</code> Table</a></h3>
+<p>This table contains the audit entries, indexed by crate name. Because there are
+often multiple audits per crate (different versions, delta audits, etc), audit
+entries are specified as table arrays, i.e. <code>[[audits.foo]]</code>.</p>
+<p>The semantics of the various audit entries keys are described
+<a href="audit-entries.html">here</a>.</p>
+<h3 id="the-trusted-table"><a class="header" href="#the-trusted-table">The <code>trusted</code> Table</a></h3>
+<p>This table contains the trusted publisher entries, indexed by crate name. Because there may be
+multiple publishers per crate, trusted entries are specified as table arrays, i.e.
+<code>[[trusted.foo]]</code>.</p>
+<p>The semantics of the various trusted entries keys are described <a href="trusted-entries.html">here</a>.</p>
+<h2 id="configtoml"><a class="header" href="#configtoml"><code>config.toml</code></a></h2>
+<p>This file contains configuration information for this specific project. This
+file cannot be imported by other projects.</p>
+<h3 id="default-criteria"><a class="header" href="#default-criteria"><code>default-criteria</code></a></h3>
+<p>This top-level key specifies the default criteria that <code>cargo vet certify</code> will
+use when recording audits. If unspecified, this defaults to <code>safe-to-deploy</code>.</p>
+<h3 id="the-cargo-vet-table"><a class="header" href="#the-cargo-vet-table">The <code>cargo-vet</code> Table</a></h3>
+<p>This table contains metadata used to track the version of cargo-vet used to
+create the store, and may be used in the future to allow other global
+configuration details to be specified.</p>
+<h3 id="the-imports-table"><a class="header" href="#the-imports-table">The <code>imports</code> Table</a></h3>
+<p>This table enumerates the external audit sets that are imported into this
+project. The key is a user-defined nickname, so entries are specified as
+<code>[imports.foo]</code>.</p>
+<h4 id="url"><a class="header" href="#url"><code>url</code></a></h4>
+<p>Specifies an HTTPS url from which the remote <code>audits.toml</code> can be fetched. This
+field is required.</p>
+<h4 id="criteria-map"><a class="header" href="#criteria-map"><code>criteria-map</code></a></h4>
+<p>A table specifying mappings from the imported audit set to local criteria. Each
+imported audit's criteria is mapped through these import maps, considering the
+peer's <code>implies</code> relationships, and transformed into a set of local criteria
+when importing.</p>
+<pre><code>[imports.peer.criteria-map]
+peer-criteria = &quot;local-criteria&quot;
+their-super-audited = [&quot;safe-to-deploy&quot;, &quot;audited&quot;]
+</code></pre>
+<p>Unless otherwise specified, the peer's <code>safe-to-run</code> and <code>safe-to-deploy</code>
+criteria will be implicitly mapped to the local <code>safe-to-run</code> and
+<code>safe-to-deploy</code> criteria. This can be overridden by specifying the mapping for
+<code>safe-to-run</code> or <code>safe-to-deploy</code> in the criteria map.</p>
+<pre><code>[imports.peer.criteria-map]
+safe-to-run = []
+safe-to-deploy = &quot;safe-to-run&quot;
+</code></pre>
+<p>Other unmapped criteria will be discarded when importing.</p>
+<h4 id="exclude"><a class="header" href="#exclude"><code>exclude</code></a></h4>
+<p>A list of crates whose audit entries should not be imported from this source.
+This can be used as a last resort to resolve disagreements over the suitability
+of a given crate.</p>
+<h3 id="the-policy-table"><a class="header" href="#the-policy-table">The <code>policy</code> Table</a></h3>
+<p>This table allows projects to configure the audit requirements that <code>cargo vet</code>
+should enforce on various dependencies. When unspecified, non-top-level crates
+inherit most policy attributes from their parents, whereas top-level crates get
+the defaults described below.</p>
+<p>In this context, &quot;top-level&quot; generally refers to crates with no
+reverse-dependencies — except when evaluating dev-dependencies, in which case
+every workspace member is considered a root.</p>
+<p>Keys of this table can be crate names (in which case the policy is applied to
+<em>all</em> versions of the crate) or strings of the form <code>&quot;CRATE:VERSION&quot;</code> (you'll
+more than likely need to add quotes in TOML because the version string will have
+periods). If you specify versions, they may only refer to crate versions which
+are in the graph.</p>
+<h4 id="criteria"><a class="header" href="#criteria"><code>criteria</code></a></h4>
+<p>A string or array of strings specifying the criteria that should be enforced for
+this crate and its dependency subtree.</p>
+<p>This may only be specified for first-party crates. Requirements for third-party
+crates should be applied via inheritance or <code>dependency-criteria</code>.</p>
+<p>For top-level crates, defaults to <code>safe-to-deploy</code>.</p>
+<h4 id="dev-criteria"><a class="header" href="#dev-criteria"><code>dev-criteria</code></a></h4>
+<p>Same as the above, but applied to dev-dependencies.</p>
+<p>For top-level crates, defaults to <code>safe-to-run</code>.</p>
+<h4 id="dependency-criteria"><a class="header" href="#dependency-criteria"><code>dependency-criteria</code></a></h4>
+<p>Allows overriding the above values on a per-dependency basis.</p>
+<pre><code>[policy.foo]
+dependency-criteria = { bar = [] }
+notes = &quot;bar is only used to implement a foo feature we never plan to enable.&quot;
+</code></pre>
+<p>Unlike <code>criteria</code> and <code>dev-criteria</code>, <code>dependency-criteria</code> may apply directly
+to third-party crates (both <code>foo</code> and <code>bar</code> may be third-party in the above
+example). Specifying <code>criteria</code> is disallowed for third-party crates because a
+given third-party crate can often be used in multiple unrelated places in a
+project's dependency graph. So in the above example, we want to exempt <code>bar</code>
+from auditing insofar as it's used by <code>foo</code>, but not necessarily if it crops up
+somewhere else.</p>
+<p>Third-party crates with <code>dependency-criteria</code> must be associated with specific
+versions in the policy table (see the description of policy table keys above).
+Additionally, if a crate has any <code>dependency-criteria</code> specified and any version
+exists as a third-party crate in the graph, all versions of the crate must be
+explicitly specified in the policy table keys.</p>
+<p>Defaults to the empty set and is not inherited.</p>
+<h4 id="audit-as-crates-io"><a class="header" href="#audit-as-crates-io"><code>audit-as-crates-io</code></a></h4>
+<p>Specifies whether first-party packages with this crate name should receive audit
+enforcement as if they were fetched from crates.io. See <a href="first-party-code.html">First-Party
+Code</a> for more details.</p>
+<h4 id="notes"><a class="header" href="#notes"><code>notes</code></a></h4>
+<p>Free-form string for recording rationale or other relevant information.</p>
+<h3 id="the-exemptions-table"><a class="header" href="#the-exemptions-table">The <code>exemptions</code> Table</a></h3>
+<p>This table enumerates the set of crates which are being used despite missing the
+required audits. It has a similar structure to the <code>audits</code> table in
+<code>audits.toml</code>, but each entry has fewer supported fields.</p>
+<h4 id="version"><a class="header" href="#version"><code>version</code></a></h4>
+<p>Specifies the exact version which should be exempted.</p>
+<h4 id="criteria-1"><a class="header" href="#criteria-1"><code>criteria</code></a></h4>
+<p>Specifies the criteria covered by the exemption.</p>
+<h4 id="notes-1"><a class="header" href="#notes-1"><code>notes</code></a></h4>
+<p>Free-form string for recording rationale or other relevant information.</p>
+<h4 id="suggest"><a class="header" href="#suggest"><code>suggest</code></a></h4>
+<p>A boolean indicating whether this entry is eligible to be surfaced by <code>cargo vet suggest</code>.</p>
+<p>Defaults to true. This exists to allow you silence certain suggestions that, for
+whatever reason, you don't plan to act on in the immediate future.</p>
+<h2 id="importslock"><a class="header" href="#importslock"><code>imports.lock</code></a></h2>
+<p>This file is auto-generated by <code>cargo vet</code> and its format should be treated as
+an implementation detail.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="reference.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                            <a rel="next" href="audit-entries.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="reference.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                    <a rel="next" href="audit-entries.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+    </body>
+</html>
