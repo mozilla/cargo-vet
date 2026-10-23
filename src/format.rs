@@ -872,6 +872,13 @@ pub struct PolicyEntry {
     #[serde(default)]
     pub dependency_criteria: CriteriaMap,
 
+    /// Whether or not this crate should be explicitly considered as first or third party,
+    /// regardless of the default heuristic for if this is from `crates.io` or not.
+    ///
+    /// This field is always optional.
+    #[serde(rename = "first-party")]
+    pub first_party: Option<bool>,
+
     /// Freeform notes
     pub notes: Option<String>,
 }

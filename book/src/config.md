@@ -198,6 +198,11 @@ Specifies whether first-party packages with this crate name should receive audit
 enforcement as if they were fetched from crates.io. See [First-Party
 Code](first-party-code.md) for more details.
 
+#### `first-party`
+
+Overrides the detection of if a package is first-party or not. See
+[First-Party Code](first-party-code.md) for more details.
+
 #### `notes`
 
 Free-form string for recording rationale or other relevant information.

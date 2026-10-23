@@ -869,6 +869,7 @@ mod test {
                 criteria: Some(vec!["long-criteria".to_owned().into()]),
                 dev_criteria: None,
                 dependency_criteria: dc_long,
+                first_party: None,
                 notes: Some("notes go here!".to_owned()),
             }),
         );
@@ -879,6 +880,7 @@ mod test {
                 criteria: Some(vec!["short-criteria".to_owned().into()]),
                 dev_criteria: None,
                 dependency_criteria: dc_short,
+                first_party: None,
                 notes: Some("notes go here!".to_owned()),
             }),
         );

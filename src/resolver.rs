@@ -400,10 +400,8 @@ impl<'a> DepGraph<'a> {
     pub fn new(
         metadata: &'a Metadata,
         filter_graph: Option<&Vec<GraphFilter>>,
-        policy: Option<&Policy>,
+        policy: &Policy,
     ) -> Self {
-        let default_policy = Policy::default();
-        let policy = policy.unwrap_or(&default_policy);
         let package_list = &*metadata.packages;
         let resolve_list = &*metadata
             .resolve
@@ -868,7 +866,7 @@ pub fn resolve<'a>(
 ) -> ResolveReport<'a> {
     // A large part of our algorithm is unioning and intersecting criteria, so we map all
     // the criteria into indexed boolean sets (*whispers* an integer with lots of bits).
-    let graph = DepGraph::new(metadata, filter_graph, Some(&store.config.policy));
+    let graph = DepGraph::new(metadata, filter_graph, &store.config.policy);
     // trace!("built DepGraph: {:#?}", graph);
     trace!("built DepGraph!");
 
@@ -2903,7 +2901,7 @@ pub(crate) fn get_store_updates(
     let graph = DepGraph::new(
         &cfg.metadata,
         cfg.cli.filter_graph.as_ref(),
-        Some(&store.config.policy),
+        &store.config.policy,
     );
     let criteria_mapper = CriteriaMapper::new(&store.audits.criteria);
     let requirements = resolve_requirements(&graph, &store.config.policy, &criteria_mapper);
