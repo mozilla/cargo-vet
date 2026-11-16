@@ -12,7 +12,7 @@ use tokio::io::AsyncWriteExt;
 use tracing::debug;
 
 /// Represents credential information returned by git credential helper
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum GitCredential {
     /// Username and password for basic authentication
     UsernamePassword { username: String, password: String },
@@ -21,6 +21,21 @@ pub enum GitCredential {
         auth_type: String,
         credential: String,
     },
+}
+
+impl std::fmt::Debug for GitCredential {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            GitCredential::UsernamePassword { username, .. } => f
+                .debug_struct("GitCredential::UsernamePassword")
+                .field("username", username)
+                .finish_non_exhaustive(),
+            GitCredential::Formatted { auth_type, .. } => f
+                .debug_struct("GitCredential::Formatted")
+                .field("auth_type", auth_type)
+                .finish_non_exhaustive(),
+        }
+    }
 }
 
 impl GitCredential {
