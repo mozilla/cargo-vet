@@ -216,7 +216,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-vet"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "base64-stream",
  "bytes",
