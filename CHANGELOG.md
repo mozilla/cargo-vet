@@ -1,5 +1,11 @@
 # Unreleased
 
+# Version 0.10.4 (2026-11-17)
+
+* Debug logs are sanitized of sensitive git credentials. These could be accidentally leaked into
+  logs if the logging verbosity is increased (`--verbose debug` or `--verbose trace`) and
+  `--use-git-credentials` is passed. (#708)
+
 # Version 0.10.3 (2026-10-22)
 
 * `cargo vet check --frozen` (a disabled network) will infer the existence of crates using versions
