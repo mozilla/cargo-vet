@@ -64,6 +64,11 @@ impl Response<'_> {
     }
 }
 
+/// Shared client for downloading audit files and crate archives.
+///
+/// Both download methods decode HTTP `Content-Encoding: gzip` before returning
+/// or writing bytes. Gzip files served without that header, such as `.crate`
+/// archives, remain compressed.
 pub struct Network {
     /// The HTTP client all requests go through
     client: Client,
@@ -312,6 +317,19 @@ impl Network {
 
 #[cfg(test)]
 impl Network {
+    /// Create a real HTTP client for direct connections in download tests,
+    /// without proxies or credential helpers. HTTP decoding uses reqwest's defaults,
+    /// including the gzip support enabled in Cargo.toml.
+    pub(crate) fn new_direct() -> Self {
+        Self {
+            client: Client::builder().no_proxy().build().unwrap(),
+            connection_semaphore: tokio::sync::Semaphore::new(MAX_CONCURRENT_CONNECTIONS),
+            source_file_cache: Default::default(),
+            use_git_credentials: false,
+            mock_network: None,
+        }
+    }
+
     /// Create a new Network which is serving mocked out resources.
     pub(crate) fn new_mock() -> Self {
         let mut network = Network {
